@@ -583,7 +583,7 @@ Objective-C and Objective-C++ Dialects}.
 -mno-wide-multiply  -mrtd  -malign-double @gol
 -mpreferred-stack-boundary=@var{num}
 -mincoming-stack-boundary=@var{num}
--mcld -mcx16 -msahf -mrecip @gol
+-mcld -mcx16 -msahf -mmovbe -mrecip @gol
 -mmmx  -msse  -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -msse4 -mavx @gol
 -maes -mpclmul @gol
 -msse4a -m3dnow -mpopcnt -mabm -msse5 @gol
@@ -593,7 +593,7 @@ Objective-C and Objective-C++ Dialects}.
 -m128bit-long-double -m96bit-long-double -mregparm=@var{num} -msseregparm @gol
 -mveclibabi=@var{type} -mpc32 -mpc64 -mpc80 -mstackrealign @gol
 -momit-leaf-frame-pointer  -mno-red-zone -mno-tls-direct-seg-refs @gol
--mcmodel=@var{code-model} @gol
+-mcmodel=@var{code-model} -mabi=@var{name} @gol
 -m32  -m64 -mlarge-data-threshold=@var{num} @gol
 -mfused-madd -mno-fused-madd -msse2avx}
 
@@ -2918,6 +2918,9 @@ aspects of format checking, the options @option{-Wformat-y2k},
 @option{-Wformat-nonliteral}, @option{-Wformat-security}, and
 @option{-Wformat=2} are available, but are not included in @option{-Wall}.
 
+NOTE: In Gentoo, this option is enabled by default for C, C++, ObjC, ObjC++.
+To disable, use @option{-Wformat=0}.
+
 @item -Wformat-y2k
 @opindex Wformat-y2k
 @opindex Wno-format-y2k
@@ -2970,6 +2973,11 @@ string came from untrusted input and contains @samp{%n}.  (This is
 currently a subset of what @option{-Wformat-nonliteral} warns about, but
 in future warnings may be added to @option{-Wformat-security} that are not
 included in @option{-Wformat-nonliteral}.)
+
+NOTE: In Gentoo, this option is enabled by default for C, C++, ObjC, ObjC++.
+To disable, use @option{-Wno-format-security}, or disable all format warnings
+with @option{-Wformat=0}.  To make format security warnings fatal, specify
+@option{-Werror=format-security}.
 
 @item -Wformat=2
 @opindex Wformat=2
@@ -5610,6 +5618,11 @@ also turns on the following optimization flags:
 Please note the warning under @option{-fgcse} about
 invoking @option{-O2} on programs that use computed gotos.
 
+NOTE: In Gentoo, @option{-D_FORTIFY_SOURCE=2} is set by default, and is
+activated when @option{-O} is set to 2 or higher.  This enables additional
+compile-time and run-time checks for several libc functions.  To disable,
+specify either @option{-U_FORTIFY_SOURCE} or @option{-D_FORTIFY_SOURCE=0}.
+
 @item -O3
 @opindex O3
 Optimize yet more.  @option{-O3} turns on all optimizations specified
@@ -7401,6 +7414,11 @@ If a guard check fails, an error message is printed and the program exits.
 @opindex fstack-protector-all
 Like @option{-fstack-protector} except that all functions are protected.
 
+NOTE: When --enable-esp this option is enabled by default 
+for C, C++, ObjC, ObjC++, if neither @option{-fno-stack-protector}
+or @option{-nostdlib} or @option{-nodefaultlibs} or 
+@option{-fstack-protector} are found.
+
 @item -fsection-anchors
 @opindex fsection-anchors
 Try to reduce the number of symbolic address calculations by using
@@ -8320,6 +8338,12 @@ Produce a position independent executable on targets which support it.
 For predictable results, you must also specify the same set of options
 that were used to generate code (@option{-fpie}, @option{-fPIE},
 or model suboptions) when you specify this option.
+
+NOTE: When --enable-esp this option is enabled by default
+for C, C++, ObjC, ObjC++, if neither @option{-fno-pie} or @option{-fno-PIE}
+or @option{-fno-pic} or @option{-fno-PIC} or @option{-nostdlib} or
+@option{-nostartfiles} or @option{-shared} or @option{-pg} or @option{-p}
+are found.
 
 @item -rdynamic
 @opindex rdynamic
@@ -11346,6 +11370,9 @@ SSE2 and SSE3 instruction set support.
 @item core2
 Intel Core2 CPU with 64-bit extensions, MMX, SSE, SSE2, SSE3 and SSSE3
 instruction set support.
+@item atom
+Intel Atom CPU with 64-bit extensions, MMX, SSE, SSE2, SSE3 and SSSE3
+instruction set support.
 @item k6
 AMD K6 CPU with MMX instruction set support.
 @item k6-2, k6-3
@@ -11745,6 +11772,11 @@ SAHF are load and store instructions, respectively, for certain status flags.
 In 64-bit mode, SAHF instruction is used to optimize @code{fmod}, @code{drem}
 or @code{remainder} built-in functions: see @ref{Other Builtins} for details.
 
+@item -mmovbe
+@opindex mmovbe
+This option will enable GCC to use movbe instruction to implement
+@code{__builtin_bswap32} and @code{__builtin_bswap64}.
+
 @item -mrecip
 @opindex mrecip
 This option will enable GCC to use RCPSS and RSQRTSS instructions (and their
@@ -11780,6 +11812,16 @@ function type when @option{-mveclibabi=svml} is used and @code{__vrd2_sin},
 when @option{-mveclibabi=acml} is used. Both @option{-ftree-vectorize} and
 @option{-funsafe-math-optimizations} have to be enabled. A SVML or ACML ABI
 compatible library will have to be specified at link time.
+
+@item -mabi=@var{name}
+@opindex mabi
+Generate code for the specified calling convention.  Permissible values
+are: @samp{sysv} for the ABI used on GNU/Linux and other systems and
+@samp{ms} for the Microsoft ABI.  The default is to use the Microsoft
+ABI when targeting Windows.  On all other systems, the default is the
+SYSV ABI.  You can control this behavior for a specific function by
+using the function attribute @samp{ms_abi}/@samp{sysv_abi}.
+@xref{Function Attributes}.
 
 @item -mpush-args
 @itemx -mno-push-args
@@ -16281,6 +16323,11 @@ used during linking.
 @option{-fpie} and @option{-fPIE} both define the macros
 @code{__pie__} and @code{__PIE__}.  The macros have the value 1
 for @option{-fpie} and 2 for @option{-fPIE}.
+
+NOTE: When --enable-esp this option is enabled by default
+for C, C++, ObjC, ObjC++, if neither @option{-fno-pie} or @option{-fno-PIE}
+or @option{-fno-pic} or @option{-fno-PIC} or @option{-nostdlib} or
+@option{-nostartfiles} or @option{-shared} are found.
 
 @item -fno-jump-tables
 @opindex fno-jump-tables

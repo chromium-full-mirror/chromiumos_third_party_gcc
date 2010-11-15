@@ -61,6 +61,8 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 	builtin_assert ("system=unix");					\
 	builtin_assert ("system=bsd");					\
 	builtin_assert ("system=FreeBSD");				\
+	if(!(flag_iso && (c_dialect_cxx () ? cxx_dialect == cxx98 : !flag_isoc99)))	\
+		builtin_define("_LONGLONG");				\
 	FBSD_TARGET_CPU_CPP_BUILTINS();					\
     }									\
   while (0)
@@ -84,9 +86,10 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #define FBSD_STARTFILE_SPEC \
   "%{!shared: \
      %{pg:gcrt1.o%s} %{!pg:%{p:gcrt1.o%s} \
-		       %{!p:%{profile:gcrt1.o%s} \
-			 %{!profile:crt1.o%s}}}} \
-   crti.o%s %{!shared:crtbegin.o%s} %{shared:crtbeginS.o%s}"
+	%{!p:%{profile:gcrt1.o%s} \
+	 %{!profile:crt1.o%s}}}} \
+   crti.o%s \
+   %{static:crtbeginT.o%s;shared:crtbeginS.o%s;:crtbegin.o%s}"
 
 /* Provide a ENDFILE_SPEC appropriate for FreeBSD.  Here we tack on
    the magical crtend.o file (see crtstuff.c) which provides part of 
@@ -124,7 +127,8 @@ is built with the --enable-threads configure-time option.}		\
     %{pg:  -lc_p}							\
   }"
 #else
-#if FBSD_MAJOR < 5
+#include <sys/param.h>
+#if __FreeBSD_version < 500016
 #define FBSD_LIB_SPEC "							\
   %{!shared:								\
     %{!pg:								\
@@ -134,17 +138,34 @@ is built with the --enable-threads configure-time option.}		\
       %{!pthread:-lc_p}							\
       %{pthread:-lc_r_p}}						\
   }"
-#else
+#elif __FreeBSD_version < 700022
 #define FBSD_LIB_SPEC "							\
   %{!shared:								\
     %{!pg: %{pthread:-lpthread} -lc}					\
     %{pg:  %{pthread:-lpthread_p} -lc_p}				\
   }"
+#else
+#define FBSD_LIB_SPEC "							\
+  %{!shared:								\
+    %{!pg: %{pthread:-lpthread} -lc}					\
+    %{pg:  %{pthread:-lpthread_p} -lc_p}}				\
+  %{shared:								\
+    %{pthread:-lpthread} -lc}						\
+  "
 #endif
 #endif
 
-#if FBSD_MAJOR < 6
+#if FBSD_MAJOR < 5
 #define FBSD_DYNAMIC_LINKER "/usr/libexec/ld-elf.so.1"
 #else
 #define FBSD_DYNAMIC_LINKER "/libexec/ld-elf.so.1"
+#endif
+
+#if defined(HAVE_LD_EH_FRAME_HDR)
+#define LINK_EH_SPEC "%{!static:--eh-frame-hdr} "
+#endif
+
+/* Use --as-needed -lgcc_s for eh support.  */
+#ifdef HAVE_LD_AS_NEEDED
+#define USE_LD_AS_NEEDED 1
 #endif

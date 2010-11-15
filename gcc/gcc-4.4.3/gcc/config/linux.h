@@ -43,7 +43,11 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
    object constructed before entering `main'.  */
    
 #undef	STARTFILE_SPEC
-#if defined HAVE_LD_PIE
+#if defined (HAVE_LD_PIE) && defined (ENABLE_CRTBEGINTS)
+#define STARTFILE_SPEC \
+  "%{!shared: %{pg|p|profile:gcrt1.o%s;pie:Scrt1.o%s;:crt1.o%s}} crti.o%s \
+   %{static:%{pie:crtbeginTS.o%s;:crtbeginT.o%s}} %{!static:%{shared|pie:crtbeginS.o%s;:crtbegin.o%s}}"
+#elif defined (HAVE_LD_PIE) && ! defined (ENABLE_CRTBEGINTS)
 #define STARTFILE_SPEC \
   "%{!shared: %{pg|p|profile:gcrt1.o%s;pie:Scrt1.o%s;:crt1.o%s}} \
    crti.o%s %{static:crtbeginT.o%s;shared|pie:crtbeginS.o%s;:crtbegin.o%s}"

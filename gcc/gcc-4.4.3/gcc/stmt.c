@@ -2379,7 +2379,11 @@ expand_case (tree exp)
 	  use_cost_table
 	    = (TREE_CODE (orig_type) != ENUMERAL_TYPE
 	       && estimate_case_costs (case_list));
-	  balance_case_nodes (&case_list, NULL);
+	  /* When optimizing for size, we want a straight list to avoid
+	     jumps as much as possible. This basically creates an if-else
+	     chain.  */
+	  if (!optimize_size)
+	    balance_case_nodes (&case_list, NULL);
 	  emit_case_nodes (index, case_list, default_label, index_type);
 	  if (default_label)
 	    emit_jump (default_label);
@@ -2945,6 +2949,7 @@ emit_case_nodes (rtx index, case_node_ptr node, rtx default_label,
 	    {
 	      if (!node_has_low_bound (node, index_type))
 		{
+		  if (!optimize_size) /* don't jl to the .default_label. */
 		  emit_cmp_and_jump_insns (index,
 					   convert_modes
 					   (mode, imode,

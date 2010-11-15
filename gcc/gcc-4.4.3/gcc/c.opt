@@ -244,7 +244,7 @@ C ObjC C++ ObjC++ Var(warn_format_contains_nul) Warning
 Warn about format strings that contain NUL bytes
 
 Wformat-security
-C ObjC C++ ObjC++ Var(warn_format_security) Warning
+C ObjC C++ ObjC++ Var(warn_format_security) Init(1) Warning
 Warn about possible security problems with format functions
 
 Wformat-y2k

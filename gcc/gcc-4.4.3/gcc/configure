@@ -458,7 +458,7 @@ ac_includes_default="\
 # include <unistd.h>
 #endif"
 
-ac_subst_vars='SHELL PATH_SEPARATOR PACKAGE_NAME PACKAGE_TARNAME PACKAGE_VERSION PACKAGE_STRING PACKAGE_BUGREPORT exec_prefix prefix program_transform_name bindir sbindir libexecdir datadir sysconfdir sharedstatedir localstatedir libdir includedir oldincludedir infodir mandir build_alias host_alias target_alias DEFS ECHO_C ECHO_N ECHO_T LIBS build build_cpu build_vendor build_os host host_cpu host_vendor host_os target target_cpu target_vendor target_os target_noncanonical build_libsubdir build_subdir host_subdir target_subdir GENINSRC CC CFLAGS LDFLAGS CPPFLAGS ac_ct_CC EXEEXT OBJEXT GNATBIND ac_ct_GNATBIND GNATMAKE ac_ct_GNATMAKE NO_MINUS_C_MINUS_O OUTPUT_OPTION CPP EGREP loose_warn strict_warn warn_cflags nocommon_flag TREEBROWSER valgrind_path valgrind_path_defines valgrind_command coverage_flags enable_multilib enable_decimal_float enable_fixed_point enable_shared NATIVE_SYSTEM_HEADER_DIR RUNTIME_ROOT_PREFIX_DEFINE SYSROOT_CFLAGS_FOR_TARGET TARGET_SYSTEM_ROOT TARGET_SYSTEM_ROOT_DEFINE CROSS_SYSTEM_HEADER_DIR onestep PKGVERSION REPORT_BUGS_TO REPORT_BUGS_TEXI datarootdir docdir htmldir SET_MAKE AWK LN_S LN RANLIB ac_ct_RANLIB ranlib_flags INSTALL INSTALL_PROGRAM INSTALL_DATA make_compare_target have_mktemp_command MAKEINFO BUILD_INFO GENERATED_MANPAGES FLEX BISON NM AR COLLECT2_LIBS GNAT_LIBEXC LDEXP_LIB TARGET_GETGROUPS_T LIBICONV LTLIBICONV LIBICONV_DEP manext objext gthread_flags extra_modes_file extra_opt_files USE_NLS LIBINTL LIBINTL_DEP INCINTL XGETTEXT GMSGFMT POSUB CATALOGS DATADIRNAME INSTOBJEXT GENCAT CATOBJEXT CROSS ALL SYSTEM_HEADER_DIR inhibit_libc CC_FOR_BUILD BUILD_CFLAGS BUILD_LDFLAGS STMP_FIXINC STMP_FIXPROTO collect2 LIBTOOL SED FGREP GREP LD DUMPBIN ac_ct_DUMPBIN OBJDUMP ac_ct_OBJDUMP ac_ct_AR STRIP ac_ct_STRIP lt_ECHO DSYMUTIL ac_ct_DSYMUTIL NMEDIT ac_ct_NMEDIT LIPO ac_ct_LIPO OTOOL ac_ct_OTOOL OTOOL64 ac_ct_OTOOL64 objdir enable_fast_install gcc_cv_as ORIGINAL_AS_FOR_TARGET gcc_cv_ld ORIGINAL_LD_FOR_TARGET ORIGINAL_GOLD_FOR_TARGET gcc_cv_nm ORIGINAL_NM_FOR_TARGET gcc_cv_objdump gcc_cv_readelf libgcc_visibility GGC zlibdir zlibinc MAINT gcc_tooldir dollar slibdir subdirs srcdir all_compilers all_gtfiles all_lang_makefrags all_lang_makefiles all_languages all_selected_languages build_exeext build_install_headers_dir build_xm_file_list build_xm_include_list build_xm_defines build_file_translate check_languages cpp_install_dir xmake_file tmake_file extra_gcc_objs extra_headers_list extra_objs extra_parts extra_passes extra_programs float_h_file gcc_config_arguments gcc_gxx_include_dir host_exeext host_xm_file_list host_xm_include_list host_xm_defines out_host_hook_obj install lang_opt_files lang_specs_files lang_tree_files local_prefix md_file objc_boehm_gc out_file out_object_file thread_file tm_file_list tm_include_list tm_defines tm_p_file_list tm_p_include_list xm_file_list xm_include_list xm_defines c_target_objs cxx_target_objs fortran_target_objs target_cpu_default GMPLIBS GMPINC PPLLIBS PPLINC CLOOGLIBS CLOOGINC pluginlibs enable_plugin LIBOBJS LTLIBOBJS'
+ac_subst_vars='SHELL PATH_SEPARATOR PACKAGE_NAME PACKAGE_TARNAME PACKAGE_VERSION PACKAGE_STRING PACKAGE_BUGREPORT exec_prefix prefix program_transform_name bindir sbindir libexecdir datadir sysconfdir sharedstatedir localstatedir libdir includedir oldincludedir infodir mandir build_alias host_alias target_alias DEFS ECHO_C ECHO_N ECHO_T LIBS build build_cpu build_vendor build_os host host_cpu host_vendor host_os target target_cpu target_vendor target_os target_noncanonical build_libsubdir build_subdir host_subdir target_subdir GENINSRC CC CFLAGS LDFLAGS CPPFLAGS ac_ct_CC EXEEXT OBJEXT GNATBIND ac_ct_GNATBIND GNATMAKE ac_ct_GNATMAKE NO_MINUS_C_MINUS_O OUTPUT_OPTION CPP EGREP loose_warn strict_warn warn_cflags nocommon_flag TREEBROWSER valgrind_path valgrind_path_defines valgrind_command coverage_flags enable_multilib enable_decimal_float enable_fixed_point enable_shared NATIVE_SYSTEM_HEADER_DIR RUNTIME_ROOT_PREFIX_DEFINE SYSROOT_CFLAGS_FOR_TARGET TARGET_SYSTEM_ROOT TARGET_SYSTEM_ROOT_DEFINE CROSS_SYSTEM_HEADER_DIR onestep PKGVERSION REPORT_BUGS_TO REPORT_BUGS_TEXI datarootdir docdir htmldir SET_MAKE AWK LN_S LN RANLIB ac_ct_RANLIB ranlib_flags INSTALL INSTALL_PROGRAM INSTALL_DATA make_compare_target have_mktemp_command MAKEINFO BUILD_INFO GENERATED_MANPAGES FLEX BISON NM AR COLLECT2_LIBS GNAT_LIBEXC LDEXP_LIB TARGET_GETGROUPS_T LIBICONV LTLIBICONV LIBICONV_DEP manext objext gthread_flags extra_modes_file extra_opt_files USE_NLS LIBINTL LIBINTL_DEP INCINTL XGETTEXT GMSGFMT POSUB CATALOGS DATADIRNAME INSTOBJEXT GENCAT CATOBJEXT CROSS ALL SYSTEM_HEADER_DIR inhibit_libc CC_FOR_BUILD BUILD_CFLAGS BUILD_LDFLAGS STMP_FIXINC STMP_FIXPROTO collect2 LIBTOOL SED FGREP GREP LD DUMPBIN ac_ct_DUMPBIN OBJDUMP ac_ct_OBJDUMP ac_ct_AR STRIP ac_ct_STRIP lt_ECHO DSYMUTIL ac_ct_DSYMUTIL NMEDIT ac_ct_NMEDIT LIPO ac_ct_LIPO OTOOL ac_ct_OTOOL OTOOL64 ac_ct_OTOOL64 objdir enable_fast_install gcc_cv_as ORIGINAL_AS_FOR_TARGET gcc_cv_ld ORIGINAL_LD_FOR_TARGET ORIGINAL_GOLD_FOR_TARGET gcc_cv_nm ORIGINAL_NM_FOR_TARGET gcc_cv_objdump gcc_cv_readelf libgcc_visibility enable_esp enable_crtbeginTS GGC zlibdir zlibinc MAINT gcc_tooldir dollar slibdir subdirs srcdir all_compilers all_gtfiles all_lang_makefrags all_lang_makefiles all_languages all_selected_languages build_exeext build_install_headers_dir build_xm_file_list build_xm_include_list build_xm_defines build_file_translate check_languages cpp_install_dir xmake_file tmake_file extra_gcc_objs extra_headers_list extra_objs extra_parts extra_passes extra_programs float_h_file gcc_config_arguments gcc_gxx_include_dir host_exeext host_xm_file_list host_xm_include_list host_xm_defines out_host_hook_obj install lang_opt_files lang_specs_files lang_tree_files local_prefix md_file objc_boehm_gc out_file out_object_file thread_file tm_file_list tm_include_list tm_defines tm_p_file_list tm_p_include_list xm_file_list xm_include_list xm_defines c_target_objs cxx_target_objs fortran_target_objs target_cpu_default GMPLIBS GMPINC PPLLIBS PPLINC CLOOGLIBS CLOOGINC pluginlibs enable_plugin LIBOBJS LTLIBOBJS'
 ac_subst_files='language_hooks'
 ac_pwd=`pwd`
 
@@ -14082,7 +14082,7 @@ then
 	    | powerpc*-*-*,powerpc64*-*-*)
 		CROSS="$CROSS -DNATIVE_CROSS" ;;
 	esac
-elif test "x$TARGET_SYSTEM_ROOT" != x; then
+elif test "x$TARGET_SYSTEM_ROOT" != x -o $build != $host; then
         SYSTEM_HEADER_DIR=$build_system_header_dir
 fi
 
@@ -22416,7 +22416,7 @@ foo:	.long	25
 	tls_first_minor=14
 	tls_as_opt="-m64 -Aesame --fatal-warnings"
 	;;
-  sh-*-* | sh[34]-*-*)
+  sh-*-* | sh[34]*-*-*)
     conftest_s='
 	.section ".tdata","awT",@progbits
 foo:	.long	25
@@ -24438,6 +24438,50 @@ echo "$as_me: WARNING: --build-id is not supported by your linker; --enable-link
   fi
 fi
 
+echo "$as_me:$LINENO: checking linker -z now support" >&5
+echo $ECHO_N "checking linker -z now support... $ECHO_C" >&6
+if test "${gcc_cv_ld_now+set}" = set; then
+  echo $ECHO_N "(cached) $ECHO_C" >&6
+else
+  gcc_cv_ld_now=no
+if test $in_tree_ld = yes ; then
+  if test "$gcc_cv_gld_major_version" -eq 2 -a "$gcc_cv_gld_minor_version" -ge 16 -o "$gcc_cv_gld_major_version" -gt 2 \
+     && test $in_tree_ld_is_elf = yes; then
+    gcc_cv_ld_now=yes
+  fi
+elif test x$gcc_cv_ld != x; then
+	# Check if linker supports -z now options
+	if $gcc_cv_ld --help 2>/dev/null | grep now > /dev/null; then
+		gcc_cv_ld_now=yes
+	fi
+fi
+
+fi
+echo "$as_me:$LINENO: result: $gcc_cv_ld_now" >&5
+echo "${ECHO_T}$gcc_cv_ld_now" >&6
+
+echo "$as_me:$LINENO: checking linker -z relro support" >&5
+echo $ECHO_N "checking linker -z relro support... $ECHO_C" >&6
+if test "${gcc_cv_ld_relro+set}" = set; then
+  echo $ECHO_N "(cached) $ECHO_C" >&6
+else
+  gcc_cv_ld_relro=no
+if test $in_tree_ld = yes ; then
+  if test "$gcc_cv_gld_major_version" -eq 2 -a "$gcc_cv_gld_minor_version" -ge 16 -o "$gcc_cv_gld_major_version" -gt 2 \
+     && test $in_tree_ld_is_elf = yes; then
+    gcc_cv_ld_relro=yes
+  fi
+elif test x$gcc_cv_ld != x; then
+	# Check if linker supports -z relro and -z norelro options
+	if $gcc_cv_ld --help 2>/dev/null | grep relro > /dev/null; then
+		gcc_cv_ld_relro=yes
+	fi
+fi
+
+fi
+echo "$as_me:$LINENO: result: $gcc_cv_ld_relro" >&5
+echo "${ECHO_T}$gcc_cv_ld_relro" >&6
+
 echo "$as_me:$LINENO: checking linker --sysroot support" >&5
 echo $ECHO_N "checking linker --sysroot support... $ECHO_C" >&6
 if test "${gcc_cv_ld_sysroot+set}" = set; then
@@ -24632,6 +24676,40 @@ if test x$gcc_cv_libc_provides_ssp = xyes; then
 
 cat >>confdefs.h <<\_ACEOF
 #define TARGET_LIBC_PROVIDES_SSP 1
+_ACEOF
+
+fi
+
+if test x$enable_esp = xyes ; then
+	if test x$gcc_cv_ld_relro = xyes && test x$gcc_cv_ld_now = xyes; then
+
+cat >>confdefs.h <<\_ACEOF
+#define ENABLE_ESP 1
+_ACEOF
+
+	else
+		{ { echo "$as_me:$LINENO: error: *** --enable-esp Need a linker that support -z now and -z relro." >&5
+echo "$as_me: error: *** --enable-esp Need a linker that support -z now and -z relro." >&2;}
+   { (exit 1); exit 1; }; }
+	fi
+fi
+
+
+if test x$enable_esp = xyes ; then
+	case "$target" in
+      *-*-linux*)
+		if test x$gcc_cv_ld_pie = xyes && test x$lt_cv_prog_compiler_static_works = xyes; then
+			enable_crtbeginTS=yes
+     	fi
+		;;
+  	  *) enable_crtbeginTS=no ;;
+    esac
+fi
+
+if test x$enable_crtbeginTS = xyes; then
+
+cat >>confdefs.h <<\_ACEOF
+#define ENABLE_CRTBEGINTS 1
 _ACEOF
 
 fi
@@ -26060,6 +26138,8 @@ s,@ORIGINAL_NM_FOR_TARGET@,$ORIGINAL_NM_FOR_TARGET,;t t
 s,@gcc_cv_objdump@,$gcc_cv_objdump,;t t
 s,@gcc_cv_readelf@,$gcc_cv_readelf,;t t
 s,@libgcc_visibility@,$libgcc_visibility,;t t
+s,@enable_esp@,$enable_esp,;t t
+s,@enable_crtbeginTS@,$enable_crtbeginTS,;t t
 s,@GGC@,$GGC,;t t
 s,@zlibdir@,$zlibdir,;t t
 s,@zlibinc@,$zlibinc,;t t

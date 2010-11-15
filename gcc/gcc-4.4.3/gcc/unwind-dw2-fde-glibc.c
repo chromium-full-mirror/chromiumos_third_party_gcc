@@ -46,8 +46,9 @@
 #include "gthr.h"
 
 #if !defined(inhibit_libc) && defined(HAVE_LD_EH_FRAME_HDR) \
-    && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 2) \
-	|| (__GLIBC__ == 2 && __GLIBC_MINOR__ == 2 && defined(DT_CONFIG)))
+    && ((__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 2) \
+	|| (__GLIBC__ == 2 && __GLIBC_MINOR__ == 2 && defined(DT_CONFIG))) \
+    || (__FreeBSD_version >= 700022 ))
 
 #ifndef __RELOC_POINTER
 # define __RELOC_POINTER(ptr, base) ((ptr) + (base))
@@ -61,6 +62,13 @@ static const fde * _Unwind_Find_registered_FDE (void *pc, struct dwarf_eh_bases 
 
 #ifndef PT_GNU_EH_FRAME
 #define PT_GNU_EH_FRAME (PT_LOOS + 0x474e550)
+#endif
+
+/* Support FreeBSD */
+#ifndef ElfW
+# ifdef __ElfN
+#  define ElfW __ElfN
+# endif
 #endif
 
 struct unw_eh_callback_data

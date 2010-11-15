@@ -46,7 +46,7 @@ along with GCC; see the file COPYING3.  If not see
 #define CC1_SPEC  "%{G*}"
 
 #undef  ASM_SPEC
-#define ASM_SPEC  "%{G*} %{relax:-relax} %{!gstabs*:-no-mdebug}%{gstabs*:-mdebug}"
+#define ASM_SPEC  "%{G*} %{relax:-relax} %{!gstabs*:-no-mdebug}%{gstabs*:-mdebug} %{mcpu=*:-m%*}"
 
 #undef  IDENT_ASM_OP
 #define IDENT_ASM_OP "\t.ident\t"

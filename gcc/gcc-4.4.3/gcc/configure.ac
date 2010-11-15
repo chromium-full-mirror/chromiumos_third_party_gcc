@@ -1783,7 +1783,7 @@ then
 	    | powerpc*-*-*,powerpc64*-*-*)
 		CROSS="$CROSS -DNATIVE_CROSS" ;;
 	esac
-elif test "x$TARGET_SYSTEM_ROOT" != x; then
+elif test "x$TARGET_SYSTEM_ROOT" != x -o $build != $host; then
         SYSTEM_HEADER_DIR=$build_system_header_dir 
 fi
 
@@ -2785,7 +2785,7 @@ foo:	.long	25
 	tls_first_minor=14
 	tls_as_opt="-m64 -Aesame --fatal-warnings"
 	;;
-  sh-*-* | sh[34]-*-*)
+  sh-*-* | sh[34]*-*-*)
     conftest_s='
 	.section ".tdata","awT",@progbits
 foo:	.long	25
@@ -3651,6 +3651,38 @@ if test x"$enable_linker_build_id" = xyes; then
   fi
 fi
 
+AC_CACHE_CHECK(linker -z now support,
+gcc_cv_ld_now,
+[gcc_cv_ld_now=no
+if test $in_tree_ld = yes ; then
+  if test "$gcc_cv_gld_major_version" -eq 2 -a "$gcc_cv_gld_minor_version" -ge 16 -o "$gcc_cv_gld_major_version" -gt 2 \
+     && test $in_tree_ld_is_elf = yes; then
+    gcc_cv_ld_now=yes
+  fi
+elif test x$gcc_cv_ld != x; then
+	# Check if linker supports -z now options
+	if $gcc_cv_ld --help 2>/dev/null | grep now > /dev/null; then
+		gcc_cv_ld_now=yes
+	fi
+fi
+])
+
+AC_CACHE_CHECK(linker -z relro support,
+gcc_cv_ld_relro,
+[gcc_cv_ld_relro=no
+if test $in_tree_ld = yes ; then
+  if test "$gcc_cv_gld_major_version" -eq 2 -a "$gcc_cv_gld_minor_version" -ge 16 -o "$gcc_cv_gld_major_version" -gt 2 \
+     && test $in_tree_ld_is_elf = yes; then
+    gcc_cv_ld_relro=yes
+  fi
+elif test x$gcc_cv_ld != x; then
+	# Check if linker supports -z relro and -z norelro options
+	if $gcc_cv_ld --help 2>/dev/null | grep relro > /dev/null; then
+		gcc_cv_ld_relro=yes
+	fi
+fi
+])
+
 AC_CACHE_CHECK(linker --sysroot support,
   gcc_cv_ld_sysroot,
   [gcc_cv_ld_sysroot=no
@@ -3732,6 +3764,32 @@ AC_CACHE_CHECK(__stack_chk_fail in target C library,
 if test x$gcc_cv_libc_provides_ssp = xyes; then
   AC_DEFINE(TARGET_LIBC_PROVIDES_SSP, 1,
 	    [Define if your target C library provides stack protector support])
+fi
+
+if test x$enable_esp = xyes ; then
+	if test x$gcc_cv_ld_relro = xyes && test x$gcc_cv_ld_now = xyes; then
+		AC_DEFINE(ENABLE_ESP, 1,
+	    [Define if your target support esp and you have enable it.])
+	else
+		AC_MSG_ERROR([*** --enable-esp Need a linker that support -z now and -z relro.])
+	fi
+fi
+AC_SUBST([enable_esp])
+
+if test x$enable_esp = xyes ; then
+	case "$target" in
+      *-*-linux*)
+		if test x$gcc_cv_ld_pie = xyes && test x$lt_cv_prog_compiler_static_works = xyes; then
+			enable_crtbeginTS=yes
+     	fi
+		;;
+  	  *) enable_crtbeginTS=no ;;
+    esac
+fi
+AC_SUBST([enable_crtbeginTS])
+if test x$enable_crtbeginTS = xyes; then
+  AC_DEFINE(ENABLE_CRTBEGINTS, 1,
+	    [Define if your target crtbeginTS support])
 fi
 
 # Check if TFmode long double should be used by default or not.

@@ -730,7 +730,7 @@ info-am:
 
 install-data-am: install-data-local
 
-install-exec-am: install-toolexeclibLTLIBRARIES
+install-exec-am: install-toolexeclibLTLIBRARIES install-exec-local
 
 install-info: install-info-am
 
@@ -769,7 +769,7 @@ uninstall-am: uninstall-info-am uninstall-toolexeclibLTLIBRARIES
 	maintainer-clean-generic mostlyclean mostlyclean-compile \
 	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
 	tags uninstall uninstall-am uninstall-info-am \
-	uninstall-toolexeclibLTLIBRARIES
+	uninstall-toolexeclibLTLIBRARIES install-exec-local
 
 
 # Symbol versioning for shared libraries.
@@ -951,6 +951,14 @@ build_debug: stamp-debug
 install_debug:
 	(cd ${debugdir} && $(MAKE) \
 	toolexeclibdir=$(glibcxx_toolexeclibdir)/debug install)
+
+install-exec-local:
+	pic_objs=`sed -n "s:'::g;s:^pic_object=::p" *.lo | grep -v '^none$$'`; \
+	if [ x"$$pic_objs" != x ]; then \
+		$(AR) cru libstdc++_pic.a $$pic_objs $(top_builddir)/libsupc++/*.o || exit 1; \
+		$(INSTALL_DATA) libstdc++_pic.a $(DESTDIR)$(toolexeclibdir) || exit 1; \
+	fi
+
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.
 .NOEXPORT:

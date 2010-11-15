@@ -329,8 +329,10 @@ _Unwind_GetTextRelBase (struct _Unwind_Context *context)
 }
 #endif
 
+#ifndef inhibit_libc
 #ifdef MD_UNWIND_SUPPORT
 #include MD_UNWIND_SUPPORT
+#endif
 #endif
 
 /* Extract any interesting information from the CIE for the translation

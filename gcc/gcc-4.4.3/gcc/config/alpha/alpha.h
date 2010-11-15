@@ -95,6 +95,8 @@ along with GCC; see the file COPYING3.  If not see
   while (0)
 #endif
 
+#define CPP_SPEC "%{!no-ieee:-mieee}"
+
 #define WORD_SWITCH_TAKES_ARG(STR)		\
  (!strcmp (STR, "rpath") || DEFAULT_WORD_SWITCH_TAKES_ARG(STR))
 

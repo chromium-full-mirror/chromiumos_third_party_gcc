@@ -85,13 +85,15 @@ call_ ## FUNC (void)					\
     && !defined(OBJECT_FORMAT_FLAT) \
     && defined(HAVE_LD_EH_FRAME_HDR) \
     && !defined(inhibit_libc) && !defined(CRTSTUFFT_O) \
-    && defined(__GLIBC__) && __GLIBC__ >= 2
+    && ((defined(__GLIBC__) && __GLIBC__ >= 2) \
+    || (defined(__FreeBSD_version) && __FreeBSD_version >= 700022))
 #include <link.h>
 /* uClibc pretends to be glibc 2.2 and DT_CONFIG is defined in its link.h.
    But it doesn't use PT_GNU_EH_FRAME ELF segment currently.  */
 # if !defined(__UCLIBC__) \
-     && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 2) \
-     || (__GLIBC__ == 2 && __GLIBC_MINOR__ == 2 && defined(DT_CONFIG)))
+     || (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 2) \
+     || (__GLIBC__ == 2 && __GLIBC_MINOR__ == 2 && defined(DT_CONFIG))) \
+     || (__FreeBSD_version >= 700022)
 #  define USE_PT_GNU_EH_FRAME
 # endif
 #endif

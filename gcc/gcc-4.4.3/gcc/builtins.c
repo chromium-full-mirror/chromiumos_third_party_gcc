@@ -5776,6 +5776,9 @@ expand_builtin_init_trampoline (tree exp)
   trampolines_created = 1;
   INITIALIZE_TRAMPOLINE (r_tramp, r_func, r_chain);
 
+  if (warn_trampolines)
+    warning (OPT_Wtrampolines, "generating trampoline in object (requires executable stack)");
+
   return const0_rtx;
 }
 
