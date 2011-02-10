@@ -178,6 +178,10 @@ instrument_values (histogram_values values)
 	  t = GCOV_COUNTER_V_SINGLE;
 	  break;
 
+	case HIST_TYPE_SINGLE_FLOAT_VALUE:
+	  t = GCOV_COUNTER_V_SINGLE_FLOAT;
+	  break;
+
 	case HIST_TYPE_CONST_DELTA:
 	  t = GCOV_COUNTER_V_DELTA;
 	  break;
@@ -216,6 +220,10 @@ instrument_values (histogram_values values)
 
 	case HIST_TYPE_SINGLE_VALUE:
 	  (profile_hooks->gen_one_value_profiler) (hist, t, 0);
+	  break;
+
+	case HIST_TYPE_SINGLE_FLOAT_VALUE:
+	  (profile_hooks->gen_one_float_value_profiler) (hist, t, 0);
 	  break;
 
 	case HIST_TYPE_CONST_DELTA:
@@ -1233,6 +1241,9 @@ branch_prob (void)
 
       /* Commit changes done by instrumentation.  */
       gsi_commit_edge_inserts ();
+
+      if (flag_profile_generate_sampling)
+        add_sampling_to_edge_counters ();
     }
 
   free_aux_for_edges ();
