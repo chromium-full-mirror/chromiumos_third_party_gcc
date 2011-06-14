@@ -167,7 +167,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
        *  string.
        */
       __versa_string(__versa_string&& __str)
-      : __vstring_base(std::forward<__vstring_base>(__str)) { }
+      : __vstring_base(std::move(__str)) { }
 
       /**
        *  @brief  Construct string from an initializer list.
@@ -1340,7 +1340,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 				   && __i2 <= _M_iend());
 	  __glibcxx_requires_valid_range(__k1, __k2);
 	  typedef typename std::__is_integer<_InputIterator>::__type _Integral;
-	  return _M_replace_dispatch(__i1, __i2, __k1, __k2, _Integral());
+	  return this->_M_replace_dispatch(__i1, __i2, __k1, __k2, _Integral());
 	}
 
       // Specializations for the common case of pointer and iterator:
@@ -1454,11 +1454,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
        *  constant time.
       */
       void
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-      swap(__versa_string&& __s)
-#else
       swap(__versa_string& __s)
-#endif
       { this->_M_swap(__s); }
 
       // String operations:
@@ -1899,7 +1895,7 @@ _GLIBCXX_BEGIN_NAMESPACE(__gnu_cxx)
 
 	int __r = traits_type::compare(this->_M_data(), __str.data(), __len);
 	if (!__r)
-	  __r = _S_compare(__size, __osize);
+	  __r = this->_S_compare(__size, __osize);
 	return __r;
       }
 

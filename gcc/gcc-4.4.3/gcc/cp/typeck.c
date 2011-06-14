@@ -2278,7 +2278,11 @@ finish_class_member_access_expr (tree object, tree name, bool template_p,
     return error_mark_node;
   if (!CLASS_TYPE_P (object_type))
     {
-      if (complain & tf_error)
+      /* Suppress the error message and return an error_mark_node if we are
+         parsing a lock attribute. We would like the lock attributes to
+         reference (and tolerate) unkown names so that they provide better
+         code documentation capability.  */
+      if (complain & tf_error && !parsing_lock_attribute)
 	error ("request for member %qD in %qE, which is of non-class type %qT",
 	       name, object, object_type);
       return error_mark_node;

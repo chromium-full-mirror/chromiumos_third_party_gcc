@@ -241,6 +241,10 @@ Wthread-unsupported-lock-name
 Common Var(warn_unsupported_lock_name) Init(0) Warning
 Warn about uses of unsupported lock names in attributes
 
+Wthread-attr-bind-param
+Common Var(warn_thread_attr_bind_param) Init(1) Warning
+Make the thread safety analysis try to bind the function parameters used in the attributes
+
 Wtype-limits
 Common Var(warn_type_limits) Init(-1) Warning
 Warn if a comparison is always true or always false due to the limited range of the data type
@@ -248,6 +252,10 @@ Warn if a comparison is always true or always false due to the limited range of 
 Wuninitialized
 Common Var(warn_uninitialized) Warning
 Warn about uninitialized automatic variables
+
+Wmaybe-uninitialized
+Common Var(warn_maybe_uninitialized) Warning
+Warn about maybe uninitialized automatic variables
 
 Wunreachable-code
 Common Var(warn_notreached) Warning
@@ -421,6 +429,10 @@ fcaller-saves
 Common Report Var(flag_caller_saves) Optimization
 Save registers around function calls
 
+fcgraph-section
+Common Report Var(flag_cgraph_section) Init(0)
+Generate .note.callgraph.text sections listing callees and edge counts.
+
 fcheck-data-deps
 Common Report Var(flag_check_data_deps)
 Compare the results of several data dependence analyzers.
@@ -535,6 +547,12 @@ fripa-disallow-opt-mismatch
 Common Report Var(flag_ripa_disallow_opt_mismatch)
 Don't import an auxiliary module if the command line options mismatch with the primary module
 
+fripa-no-promote-always-inline-func
+Common Report Var(flag_ripa_no_promote_always_inline) Init(0)
+Don't promote always inline static functions assuming they
+will be inlined and no copy is needed.
+
+
 fripa-verbose
 Common Report Var(flag_ripa_verbose)
 Enable verbose informational messages for LIPO compilation
@@ -542,6 +560,10 @@ Enable verbose informational messages for LIPO compilation
 fearly-inlining
 Common Report Var(flag_early_inlining) Init(1) Optimization
 Perform early inlining
+
+fearly-stack-alloc
+Common Report Var(flag_early_stack_alloc)
+Make stack coalescing decisions earlier
 
 feliminate-dwarf2-dups
 Common Report Var(flag_eliminate_dwarf2_dups)
@@ -987,6 +1009,10 @@ fprofile-generate=
 Common Joined RejectNegative
 Enable common options for generating profile info for profile feedback directed optimizations, and set -fprofile-dir=
 
+fprofile-generate-sampling
+Common Var(flag_profile_generate_sampling)
+Turn on instrumentation sampling with -fprofile-generate with rate set by --param profile-generate-sampling-rate or environment variable GCOV_SAMPLING_RATE
+
 fprofile-use
 Common Var(flag_profile_use)
 Enable common options for performing profile feedback directed optimizations
@@ -1051,6 +1077,14 @@ Does nothing.  Preserved for backward compatibility.
 frounding-math
 Common Report Var(flag_rounding_math) Optimization
 Disable optimizations that assume default FP rounding behavior
+
+fpmu-profile-generate=
+Common Joined RejectNegative Var(flag_pmu_profile_generate)
+-fpmu-profile-generate=[load-latency]  Generate pmu profile for cache misses. Currently only pfmon based load latency profiling is supported on Intel/PEBS and AMD/IBS platforms.
+
+fpmu-profile-use=
+Common Joined RejectNegative Var(flag_pmu_profile_use)
+-fpmu-profile-use=[load-latency]  Use pmu profile data while optimizing.  Currently only perfmon based load latency profiling is supported on Intel/PEBS and AMD/IBS platforms.
 
 fsample-profile
 Common Report Var(flag_sample_profile) Optimization
@@ -1487,6 +1521,15 @@ fvpt
 Common Report Var(flag_value_profile_transformations) Optimization
 Use expression value profiles in optimizations
 
+ffvpt
+Common Report Var(flag_float_value_profile_transformations) Optimization
+Enable floating point optimizations based on value profiles. Required
+both for profile generation and use.
+
+ffvpt-functions=
+Common Joined
+-ffvpt-functions=<function>[,<function>,...]|all	List functions to optimize.
+
 fweb
 Common Report Var(flag_web) Init(2) Optimization
 Construct webs and split unrelated uses of single variable
@@ -1494,6 +1537,10 @@ Construct webs and split unrelated uses of single variable
 ftree-builtin-call-dce
 Common Report Var(flag_tree_builtin_call_dce) Init(0) Optimization
 Enable conditional dead code elimination for builtin calls
+
+fclone-hot-version-paths
+Common Report Var(flag_clone_hot_version_paths) Init(0)
+Enable cloning and hoisting of hot multiversioned paths
 
 fwhole-program
 Common Report Var(flag_whole_program) Init(0) Optimization

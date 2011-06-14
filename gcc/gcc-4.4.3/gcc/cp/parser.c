@@ -1552,6 +1552,16 @@ typedef struct cp_parser GTY(())
   /* The number of template parameter lists that apply directly to the
      current declaration.  */
   unsigned num_template_parameter_lists;
+
+  /* Record the paramter list of the function declaration that is being parsed
+     so that it can be looked up when later parsing the lock attributes which
+     might refer to a function parameter.  */
+  tree current_func_declarator_params;
+
+  /* Record the scope of the current declarator as we might need to use it
+     parsing the lock attributes with arguments that should be considered in
+     the declarator's scope.  */
+  tree current_declarator_scope;
 } cp_parser;
 
 /* Prototypes.  */
@@ -4697,8 +4707,18 @@ cp_parser_postfix_expression (cp_parser *parser, bool address_p, bool cast_p,
 	  && TREE_CODE (postfix_expression) == IDENTIFIER_NODE
 	  && cp_lexer_next_token_is_not (parser->lexer, CPP_OPEN_PAREN))
 	/* It is not a Koenig lookup function call.  */
-	postfix_expression
-	  = unqualified_name_lookup_error (postfix_expression);
+        {
+          /* If we are parsing a lock attribute of a function decl, try to
+             see if the identifier is a function parameter first.  */
+          if (parsing_lock_attribute && parser->current_func_declarator_params)
+            postfix_expression
+                = lookup_name_in_func_params (
+                    parser->current_func_declarator_params,
+                    postfix_expression);
+          else
+            postfix_expression
+                = unqualified_name_lookup_error (postfix_expression);
+        }
 
       /* Peek at the next token.  */
       token = cp_lexer_peek_token (parser->lexer);
@@ -6472,6 +6492,16 @@ cp_parser_question_colon_clause (cp_parser* parser, tree logical_or_expr)
                                    tf_warning_or_error);
 }
 
+/* A helpfer function to check if the given expression (EXPR) is of POD type.
+   Note that if the expression's type is NULL (e.g. when its type depends on
+   template parameters), we return false.  */
+
+static bool
+expr_is_pod (tree expr)
+{
+  return TREE_TYPE (expr) && pod_type_p (TREE_TYPE (expr));
+}
+
 /* Parse an assignment-expression.
 
    assignment-expression:
@@ -6529,8 +6559,12 @@ cp_parser_assignment_expression (cp_parser* parser, bool cast_p,
 		return error_mark_node;
 
               /* Check for and warn about self-assignment if -Wself-assign is
-                 enabled and the assignment operator is "=".  */
-              if (warn_self_assign && assignment_operator == NOP_EXPR)
+                 enabled and the assignment operator is "=".
+		 Checking for non-POD self-assignment will be performed only
+		 when -Wself-assign-non-pod is enabled. */
+              if (warn_self_assign
+		  && assignment_operator == NOP_EXPR
+		  && (warn_self_assign_non_pod || expr_is_pod (expr)))
                 check_for_self_assign (input_location, expr, rhs);
 
 	      /* Build the assignment expression.  */
@@ -10615,6 +10649,9 @@ cp_parser_template_argument_list (cp_parser* parser)
   parser->non_integral_constant_expression_p = saved_non_ice_p;
   parser->integral_constant_expression_p = saved_ice_p;
   parser->in_template_argument_list_p = saved_in_template_argument_list_p;
+#ifdef ENABLE_CHECKING
+  SET_NON_DEFAULT_TEMPLATE_ARGS_COUNT (vec, TREE_VEC_LENGTH (vec));
+#endif
   return vec;
 }
 
@@ -12811,6 +12848,15 @@ cp_parser_init_declarator (cp_parser* parser,
       /* Look for an asm-specification.  */
       asm_spec_start_token = cp_lexer_peek_token (parser->lexer);
       asm_specification = cp_parser_asm_specification_opt (parser);
+      /* Record the functino parameter list for later use when we parse the
+         attributes.  */
+      if (warn_thread_safety)
+        {
+          parser->current_func_declarator_params =
+              (declarator->kind == cdk_function
+               ? declarator->u.function.parameters : NULL_TREE);
+          parser->current_declarator_scope = scope;
+        }
       /* And attributes.  */
       attributes_start_token = cp_lexer_peek_token (parser->lexer);
       attributes = cp_parser_attributes_opt (parser, member_p);
@@ -17034,6 +17080,7 @@ cp_parser_attribute_list (cp_parser* parser, bool member_p)
 	  || token->type == CPP_KEYWORD)
 	{
 	  tree arguments = NULL_TREE;
+          tree pushed_scope = NULL_TREE;
 
 	  /* Consume the token.  */
 	  token = cp_lexer_consume_token (parser->lexer);
@@ -17050,9 +17097,17 @@ cp_parser_attribute_list (cp_parser* parser, bool member_p)
 	    {
               /* If this is a lock annotation attribute that takes arguments,
                  set a flag so that we can make the parser tolerant of lock
-                 names not in scope or unsupported.  */
+                 names not in scope or unsupported. Also if the decl is a
+                 member function defined outside the class, we want to enter
+                 the scope of the decl so that the access check (and name
+                 lookup) will happen in the correct scope.  */
               if (is_lock_attribute_with_args (identifier))
-                parsing_lock_attribute = true;
+                {
+                  parsing_lock_attribute = true;
+                  if (parser->current_declarator_scope)
+                    pushed_scope =
+                        push_scope (parser->current_declarator_scope);
+                }
 
               if (member_p && parsing_lock_attribute)
                 {
@@ -17084,6 +17139,8 @@ cp_parser_attribute_list (cp_parser* parser, bool member_p)
 	    }
 
           parsing_lock_attribute = false;
+          if (pushed_scope)
+            pop_scope (pushed_scope);
 	  token = cp_lexer_peek_token (parser->lexer);
 	}
       /* Now, look for more attributes.  If the next token isn't a
@@ -17140,6 +17197,12 @@ cp_parser_late_parsing_attribute_arg_lists (cp_parser* parser)
       ctype = DECL_CONTEXT (decl);
       gcc_assert (ctype && TREE_CODE (ctype) == RECORD_TYPE);
       push_nested_class (ctype);
+
+      /* Record the function parameters for later use when parsing the lock
+         attributes.  */
+      parser->current_func_declarator_params =
+          (TREE_CODE (decl) == FUNCTION_DECL
+           ? DECL_ARGUMENTS (decl) : NULL_TREE);
 
       /* Parse the saved tokens.  */
       arguments = cp_parser_parenthesized_expression_list
@@ -17895,6 +17958,35 @@ cp_parser_function_definition_from_specifiers_and_declarator
      scope of the function to perform the checks, since the function
      might be a friend.  */
   perform_deferred_access_checks ();
+
+  /* If the function definition is annotated with lock attributes with
+     arguments that are data members in the class, the parser would not be
+     able to bind those names to their FIELD_DECLs earlier when parsing the
+     attributes because the class context was not in scope at that time.
+     Now that we have entered the class context, try and bind and resolve
+     those identifiers.  */
+  if (attributes)
+    {
+      tree attr;
+      for (attr = attributes; attr; attr = TREE_CHAIN (attr))
+        {
+          tree arg;
+          if (!is_lock_attribute_with_args (TREE_PURPOSE (attr)))
+            continue;
+          for (arg = TREE_VALUE (attr); arg; arg = TREE_CHAIN (arg))
+            {
+              tree lock = TREE_VALUE (arg);
+              if (TREE_CODE (lock) == IDENTIFIER_NODE)
+                {
+                  tree lock_decl =
+                      cp_parser_lookup_name_simple (parser, lock,
+                                                    input_location);
+                  if (lock_decl && lock_decl != error_mark_node)
+                    TREE_VALUE (arg) = lock_decl;
+                }
+            }
+        }
+    }
 
   if (!success_p)
     {

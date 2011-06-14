@@ -883,7 +883,12 @@ SVR4_ASM_SPEC \
 %{!mnewlib: %{pthread:-lpthread} %{shared:-lc} \
 %{!shared: %{profile:-lc_p} %{!profile:-lc}}}"
 
-#ifdef HAVE_LD_PIE
+#if defined (HAVE_LD_PIE) && defined (ENABLE_CRTBEGINTS)
+#define STARTFILE_LINUX_SPEC "\
+%{!shared: %{pg|p|profile:gcrt1.o%s;pie:Scrt1.o%s;:crt1.o%s}} \
+%{mnewlib:ecrti.o%s;:crti.o%s} \
+%{static:%{pie:crtbeginTS.o%s;:crtbeginT.o%s}} %{!static:%{shared|pie:crtbeginS.o%s;:crtbegin.o%s}}"
+#elif defined (HAVE_LD_PIE) && ! defined (ENABLE_CRTBEGINTS)
 #define	STARTFILE_LINUX_SPEC "\
 %{!shared: %{pg|p|profile:gcrt1.o%s;pie:Scrt1.o%s;:crt1.o%s}} \
 %{mnewlib:ecrti.o%s;:crti.o%s} \
@@ -903,10 +908,12 @@ SVR4_ASM_SPEC \
 
 #define GLIBC_DYNAMIC_LINKER "/lib/ld.so.1"
 #define UCLIBC_DYNAMIC_LINKER "/lib/ld-uClibc.so.0"
-#if UCLIBC_DEFAULT
-#define CHOOSE_DYNAMIC_LINKER(G, U) "%{mglibc:%{muclibc:%e-mglibc and -muclibc used together}" G ";:" U "}"
+#if DEFAULT_LIBC == LIBC_UCLIBC
+#define CHOOSE_DYNAMIC_LINKER(G, U) "%{mglibc:" G ";:" U "}"
+#elif DEFAULT_LIBC == LIBC_GLIBC
+#define CHOOSE_DYNAMIC_LINKER(G, U) "%{muclibc:" U ";:" G "}"
 #else
-#define CHOOSE_DYNAMIC_LINKER(G, U) "%{muclibc:%{mglibc:%e-mglibc and -muclibc used together}" U ";:" G "}"
+#error "Unsupported DEFAULT_LIBC"
 #endif
 #define LINUX_DYNAMIC_LINKER \
   CHOOSE_DYNAMIC_LINKER (GLIBC_DYNAMIC_LINKER, UCLIBC_DYNAMIC_LINKER)

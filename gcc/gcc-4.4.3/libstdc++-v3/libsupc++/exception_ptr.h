@@ -140,7 +140,7 @@ namespace std
       friend bool 
       operator==(const exception_ptr&, const exception_ptr&) throw();
 
-      const type_info*
+      const class type_info*
       __cxa_exception_type() const throw();
     };
 

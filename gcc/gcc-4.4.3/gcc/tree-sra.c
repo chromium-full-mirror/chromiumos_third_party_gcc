@@ -524,6 +524,48 @@ sra_elt_hash (const void *x)
   return h;
 }
 
+/* Check if two fields are compatible. If the fields are of record types,
+   or pointer types pointing to a record type, we only check their offset
+   and size. For others, we fall back to fields_compatible_p() in
+   tree.c.  */
+
+static bool
+check_fields_compatibility_p (const_tree f1, const_tree f2)
+{
+  tree f1_tmp = TREE_TYPE(f1);
+  tree f2_tmp = TREE_TYPE(f2);
+
+  /* For pointers to record, fields_compatible_p() will eventually
+     check the type compatiblity of the point-to record type. In this
+     case, we also bypass the check in fields_compatible_p().  */
+  while (POINTER_TYPE_P (f1_tmp) && POINTER_TYPE_P (f2_tmp))
+    {
+      f1_tmp = TREE_TYPE (f1_tmp);
+      f2_tmp = TREE_TYPE (f2_tmp);
+    }
+
+  /* If both are recored type with the same size, only check field
+     offset and size. Note that we should not see union here.  */
+  if (AGGREGATE_TYPE_P (f1_tmp) &&
+      AGGREGATE_TYPE_P (f2_tmp) &&
+      operand_equal_p (TYPE_SIZE (f1_tmp),
+                       TYPE_SIZE (f2_tmp), OEP_ONLY_CONST) &&
+      operand_equal_p (TYPE_SIZE_UNIT (f1_tmp),
+                       TYPE_SIZE_UNIT (f2_tmp), OEP_ONLY_CONST))
+    {
+      if (operand_equal_p (DECL_FIELD_BIT_OFFSET (f1),
+                           DECL_FIELD_BIT_OFFSET (f2),
+			   OEP_ONLY_CONST) &&
+          operand_equal_p (DECL_FIELD_OFFSET (f1),
+                           DECL_FIELD_OFFSET (f2), OEP_ONLY_CONST))
+        return true;
+
+      return false;
+    }
+ 
+  return fields_compatible_p (f1, f2);
+}
+
 /* Equality function for type SRA_PAIR.  */
 
 static int
@@ -575,7 +617,7 @@ sra_elt_eq (const void *x, const void *y)
 	 compatible records.  */
       if (DECL_FIELD_CONTEXT (ae) == DECL_FIELD_CONTEXT (be))
 	return false;
-      return fields_compatible_p (ae, be);
+      return check_fields_compatibility_p (ae, be);
 
     case BIT_FIELD_REF:
       return

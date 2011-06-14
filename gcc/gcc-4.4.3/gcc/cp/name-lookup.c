@@ -4454,6 +4454,43 @@ lookup_name_innermost_nonclass_level (tree name)
   POP_TIMEVAR_AND_RETURN (TV_NAME_LOOKUP, t);
 }
 
+/* Given an identifier node (NAME), look up the name in the parameter list
+   (PARAM) of the function declaration that is being parsed, and return the
+   parm_decl if found. The parameter list can be either a tree list when
+   obtained from a cp_declarator object (e.g. when invoked from
+   cp_parser_init_declarator) or simply a chain of parameters when we have
+   the function decl (e.g. when invoked from
+   cp_parser_late_parsing_attribute_arg_lists).  */
+
+tree
+lookup_name_in_func_params (tree param, tree name)
+{
+  /* If the compiler is instructed not to bind the names (in lock attributes)
+     to function parameters, just treat it as if the name lookup fails.  */
+  if (!warn_thread_attr_bind_param)
+    return unqualified_name_lookup_error (name);
+
+  gcc_assert (TREE_CODE (name) == IDENTIFIER_NODE && param);
+
+  for ( ; param; param = TREE_CHAIN (param))
+    {
+      tree param_decl;
+      if (TREE_CODE (param) == TREE_LIST)
+        param_decl = TREE_VALUE (param);
+      else
+        {
+          gcc_assert (DECL_P (param));
+          param_decl = param;
+        }
+      /* If param_decl is indeed a decl (it could be a VOID_TYPE if the
+         function has no parameter) and matches NAME, return it.  */
+      if (DECL_P (param_decl) && DECL_NAME (param_decl) == name)
+        return param_decl;
+    }
+
+  return unqualified_name_lookup_error (name);
+}
+
 /* Like lookup_name_innermost_nonclass_level, but for types.  */
 
 static tree
@@ -4516,26 +4553,15 @@ add_function (struct arg_lookup *k, tree fn)
      total number of functions being compared, which should usually be the
      case.  */
 
-  /* We must find only functions, or exactly one non-function.  */
-  if (!k->functions)
+  if (!is_overloaded_fn (fn))
+    /* All names except those of (possibly overloaded) functions and
+       function templates are ignored.  */;
+  else if (!k->functions)
     k->functions = fn;
   else if (fn == k->functions)
     ;
-  else if (is_overloaded_fn (k->functions) && is_overloaded_fn (fn))
-    k->functions = build_overload (fn, k->functions);
   else
-    {
-      tree f1 = OVL_CURRENT (k->functions);
-      tree f2 = fn;
-      if (is_overloaded_fn (f1))
-	{
-	  fn = f1; f1 = f2; f2 = fn;
-	}
-      error ("%q+D is not a function,", f1);
-      error ("  conflict with %q+D", f2);
-      error ("  in call to %qD", k->name);
-      return true;
-    }
+    k->functions = build_overload (fn, k->functions);
 
   return false;
 }

@@ -26,10 +26,11 @@ along with GCC; see the file COPYING3.  If not see
 #define LOCK_NAME_LEN 64
 
 /* Defined in tree-threadsafe-analyze.c */
-extern tree get_canonical_lock_expr (tree, tree, bool);
+extern tree get_canonical_lock_expr (tree, tree, bool, tree);
 extern void clean_up_threadsafe_analysis (void);
 extern struct pointer_map_t *lock_acquired_after_map;
 extern struct pointer_map_t *unbound_lock_map;
 extern const char* dump_expr_tree (tree lock, char *out_buf);
+extern tree get_leftmost_base_var (tree);
 
 #endif /* TREE_THREADSAFE_ANALYZE_H */

@@ -607,7 +607,9 @@
   DONE;
 }")
 
-; Some AIX assemblers don't accept lwsync, so we use a .long.
+; Google partial patch.  Some AIX assemblers don't accept lwsync, so original
+; code used a .long.  Crosstool assemblers do accept lswync, so we can use
+; it here.  Implements part of an upstream fix in gcc 4.6.
 (define_insn "lwsync"
   [(set (mem:BLK (match_scratch 0 "X"))
 	(unspec_volatile:BLK [(mem:BLK (match_scratch 1 "X"))] UNSPEC_LWSYNC))]
@@ -616,7 +618,7 @@
   if (TARGET_NO_LWSYNC)
     return "sync";
   else
-    return ".long 0x7c2004ac";
+    return "lwsync";
 }
   [(set_attr "type" "sync")])
 

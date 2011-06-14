@@ -440,7 +440,7 @@ cgraph_create_node (void)
   if (cgraph_nodes)
     cgraph_nodes->previous = node;
   node->previous = NULL;
-  node->global.estimated_growth = INT_MIN;
+  node->global.estimated_average_growth = INT_MIN;
   cgraph_nodes = node;
   cgraph_n_nodes++;
   return node;
@@ -1119,6 +1119,15 @@ cgraph_mark_needed_node (struct cgraph_node *node)
   cgraph_mark_reachable_node (node);
 }
 
+/* Indicate that the address of the function represented by the node
+   has been taken.  */
+
+void
+cgraph_mark_address_taken (struct cgraph_node *node)
+{
+  node->address_taken = 1;
+}
+
 /* Return local info for the compiled function.  */
 
 struct cgraph_local_info *
@@ -1755,6 +1764,27 @@ dump_vcg_cgraph (FILE *fp, int min_count, bool weighted)
 
   fprintf (fp, "}\n");
   free (include_node);
+}
+
+/* Return true if NODE is a hot function.  */
+
+bool
+hot_function_p (struct cgraph_node *node)
+{
+  struct cgraph_edge *edge;
+
+  if (node->local.inline_summary.self_hot_insns > 0)
+    return true;
+
+  for (edge = node->callees; edge; edge = edge->next_callee)
+    if (cgraph_maybe_hot_edge_p (edge))
+      return true;
+
+  for (edge = node->callers; edge; edge = edge->next_caller)
+    if (cgraph_maybe_hot_edge_p (edge))
+      return true;
+
+  return false;
 }
 
 #include "gt-cgraph.h"

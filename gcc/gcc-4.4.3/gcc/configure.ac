@@ -1184,7 +1184,115 @@ fi
 # Restore CFLAGS from before the gcc_AC_NEED_DECLARATIONS tests.
 CFLAGS="$saved_CFLAGS"
 
-gcc_AC_INITFINI_ARRAY
+# Check if .init_array can be used with .ctors.
+AC_ARG_ENABLE(initfini-array,
+	[  --enable-initfini-array	use .init_array/.fini_array sections],
+	[], [
+AC_CACHE_CHECK(for .preinit_array/.init_array/.fini_array support,
+		 gcc_cv_initfini_array, [dnl
+  if test "x${build}" = "x${target}" ; then
+    AC_RUN_IFELSE([AC_LANG_SOURCE([
+extern void abort ();
+static int count;
+
+static void
+init1005 ()
+{
+  if (count != 0)
+    abort ();
+  count = 1005;
+}
+void (*const init_array1005[]) ()
+  __attribute__ ((section (".init_array.01005"), aligned (sizeof (void *))))
+  = { init1005 };
+static void
+fini1005 ()
+{
+  if (count != 1005)
+    abort ();
+}
+void (*const fini_array1005[]) ()
+  __attribute__ ((section (".fini_array.01005"), aligned (sizeof (void *))))
+  = { fini1005 };
+
+static void
+ctor1007 ()
+{
+  if (count != 1005)
+    abort ();
+  count = 1007;
+}
+void (*const ctors1007[]) ()
+  __attribute__ ((section (".ctors.64528"), aligned (sizeof (void *))))
+  = { ctor1007 };
+static void
+dtor1007 ()
+{
+  if (count != 1007)
+    abort ();
+  count = 1005;
+}
+void (*const dtors1007[]) ()
+  __attribute__ ((section (".dtors.64528"), aligned (sizeof (void *))))
+  = { dtor1007 };
+
+static void
+init65530 ()
+{
+  if (count != 1007)
+    abort ();
+  count = 65530;
+}
+void (*const init_array65530[]) ()
+  __attribute__ ((section (".init_array.65530"), aligned (sizeof (void *))))
+  = { init65530 };
+static void
+fini65530 ()
+{
+  if (count != 65530)
+    abort ();
+  count = 1007;
+}
+void (*const fini_array65530[]) ()
+  __attribute__ ((section (".fini_array.65530"), aligned (sizeof (void *))))
+  = { fini65530 };
+
+static void
+ctor65535 ()
+{
+  if (count != 65530)
+    abort ();
+  count = 65535;
+}
+void (*const ctors65535[]) ()
+  __attribute__ ((section (".ctors"), aligned (sizeof (void *))))
+  = { ctor65535 };
+static void
+dtor65535 ()
+{
+  if (count != 65535)
+    abort ();
+  count = 65530;
+}
+void (*const dtors65535[]) ()
+  __attribute__ ((section (".dtors"), aligned (sizeof (void *))))
+  = { dtor65535 };
+
+int
+main ()
+{
+  return 0;
+}])],
+	     [gcc_cv_initfini_array=yes], [gcc_cv_initfini_array=no],
+	     [gcc_cv_initfini_array=no])
+   else
+     gcc_cv_initfini_array=no
+  enable_initfini_array=$gcc_cv_initfini_array
+])
+if test $enable_initfini_array = yes; then
+  AC_DEFINE(HAVE_INITFINI_ARRAY, 1,
+    [Define .init_array/.fini_array sections are available and working.])
+fi
 
 # mkdir takes a single argument on some systems. 
 gcc_AC_FUNC_MKDIR_TAKES_ONE_ARG
@@ -3651,6 +3759,38 @@ if test x"$enable_linker_build_id" = xyes; then
   fi
 fi
 
+AC_CACHE_CHECK(linker -z now support,
+gcc_cv_ld_now,
+[gcc_cv_ld_now=no
+if test $in_tree_ld = yes ; then
+  if test "$gcc_cv_gld_major_version" -eq 2 -a "$gcc_cv_gld_minor_version" -ge 16 -o "$gcc_cv_gld_major_version" -gt 2 \
+     && test $in_tree_ld_is_elf = yes; then
+    gcc_cv_ld_now=yes
+  fi
+elif test x$gcc_cv_ld != x; then
+	# Check if linker supports -z now options
+	if $gcc_cv_ld --help 2>/dev/null | grep now > /dev/null; then
+		gcc_cv_ld_now=yes
+	fi
+fi
+])
+
+AC_CACHE_CHECK(linker -z relro support,
+gcc_cv_ld_relro,
+[gcc_cv_ld_relro=no
+if test $in_tree_ld = yes ; then
+  if test "$gcc_cv_gld_major_version" -eq 2 -a "$gcc_cv_gld_minor_version" -ge 16 -o "$gcc_cv_gld_major_version" -gt 2 \
+     && test $in_tree_ld_is_elf = yes; then
+    gcc_cv_ld_relro=yes
+  fi
+elif test x$gcc_cv_ld != x; then
+	# Check if linker supports -z relro and -z norelro options
+	if $gcc_cv_ld --help 2>/dev/null | grep relro > /dev/null; then
+		gcc_cv_ld_relro=yes
+	fi
+fi
+])
+
 AC_CACHE_CHECK(linker --sysroot support,
   gcc_cv_ld_sysroot,
   [gcc_cv_ld_sysroot=no
@@ -3732,6 +3872,32 @@ AC_CACHE_CHECK(__stack_chk_fail in target C library,
 if test x$gcc_cv_libc_provides_ssp = xyes; then
   AC_DEFINE(TARGET_LIBC_PROVIDES_SSP, 1,
 	    [Define if your target C library provides stack protector support])
+fi
+
+if test x$enable_esp = xyes ; then
+	if test x$gcc_cv_ld_relro = xyes && test x$gcc_cv_ld_now = xyes; then
+		AC_DEFINE(ENABLE_ESP, 1,
+	    [Define if your target support esp and you have enable it.])
+	else
+		AC_MSG_ERROR([*** --enable-esp Need a linker that support -z now and -z relro.])
+	fi
+fi
+AC_SUBST([enable_esp])
+
+if test x$enable_esp = xyes ; then
+	case "$target" in
+      *-*-linux*)
+		if test x$gcc_cv_ld_pie = xyes && test x$lt_cv_prog_compiler_static_works = xyes; then
+			enable_crtbeginTS=yes
+     	fi
+		;;
+  	  *) enable_crtbeginTS=no ;;
+    esac
+fi
+AC_SUBST([enable_crtbeginTS])
+if test x$enable_crtbeginTS = xyes; then
+  AC_DEFINE(ENABLE_CRTBEGINTS, 1,
+	    [Define if your target crtbeginTS support])
 fi
 
 # Check if TFmode long double should be used by default or not.
@@ -4037,6 +4203,13 @@ AC_ARG_WITH(htmldir,
 htmldir="\${prefix}/$with_htmldir",
 htmldir='$(docdir)')
 AC_SUBST(htmldir)
+
+# Google-local http://b/2739909
+AC_ARG_WITH([rpath-spec],
+[  --with-rpath-spec=SPEC  Use rpath spec as part of default link specs],
+[link_rpath_spec="$withval"],
+[link_rpath_spec=])
+AC_SUBST(link_rpath_spec)
 
 # Substitute configuration variables
 AC_SUBST(subdirs)
