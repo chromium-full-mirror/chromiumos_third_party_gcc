@@ -691,7 +691,7 @@ add_alias_set_conflicts (void)
 		 to be careful as type based aliasing rules may say
 		 access to the same memory does not conflict.  So play
 		 safe and add a conflict in this case.  */
-              || (contains_union && flag_strict_aliasing))
+	      || contains_union)
 	    add_stack_var_conflict (i, j);
 	}
     }
