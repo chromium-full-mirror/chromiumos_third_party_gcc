@@ -190,7 +190,8 @@ free_data_refs_aux (VEC (data_reference_p, heap) *datarefs)
       {
 	base_alias_pair *bap = (base_alias_pair *)(dr->aux);
 
-	free (bap->alias_set);
+	if (bap->alias_set)
+	  free (bap->alias_set);
 
 	free (bap);
 	dr->aux = NULL;
@@ -1092,7 +1093,7 @@ build_loop_iteration_domains (scop_p scop, struct loop *loop,
       scan_tree_for_params (SCOP_REGION (scop), nb_iters, ub_expr, one);
       mpz_clear (one);
 
-      if (max_stmt_executions (loop, true, &nit))
+      if (estimated_loop_iterations (loop, true, &nit))
 	add_upper_bounds_from_estimated_nit (scop, nit, dim, ub_expr);
 
       /* loop_i <= expr_nb_iters */
@@ -1720,7 +1721,7 @@ write_alias_graph_to_ascii_dimacs (FILE *file, char *comment,
 
   FOR_EACH_VEC_ELT (data_reference_p, drs, i, dr1)
     for (j = i + 1; VEC_iterate (data_reference_p, drs, j, dr2); j++)
-      if (dr_may_alias_p (dr1, dr2, true))
+      if (dr_may_alias_p (dr1, dr2))
 	edge_num++;
 
   fprintf (file, "$\n");
@@ -1732,7 +1733,7 @@ write_alias_graph_to_ascii_dimacs (FILE *file, char *comment,
 
   FOR_EACH_VEC_ELT (data_reference_p, drs, i, dr1)
     for (j = i + 1; VEC_iterate (data_reference_p, drs, j, dr2); j++)
-      if (dr_may_alias_p (dr1, dr2, true))
+      if (dr_may_alias_p (dr1, dr2))
 	fprintf (file, "e %d %d\n", i + 1, j + 1);
 
   return true;
@@ -1762,7 +1763,7 @@ write_alias_graph_to_ascii_dot (FILE *file, char *comment,
 
   FOR_EACH_VEC_ELT (data_reference_p, drs, i, dr1)
     for (j = i + 1; VEC_iterate (data_reference_p, drs, j, dr2); j++)
-      if (dr_may_alias_p (dr1, dr2, true))
+      if (dr_may_alias_p (dr1, dr2))
 	fprintf (file, "n%d n%d\n", i, j);
 
   return true;
@@ -1788,7 +1789,7 @@ write_alias_graph_to_ascii_ecc (FILE *file, char *comment,
 
   FOR_EACH_VEC_ELT (data_reference_p, drs, i, dr1)
     for (j = i + 1; VEC_iterate (data_reference_p, drs, j, dr2); j++)
-      if (dr_may_alias_p (dr1, dr2, true))
+      if (dr_may_alias_p (dr1, dr2))
 	fprintf (file, "%d %d\n", i, j);
 
   return true;
@@ -1824,7 +1825,7 @@ build_alias_set_optimal_p (VEC (data_reference_p, heap) *drs)
 
   FOR_EACH_VEC_ELT (data_reference_p, drs, i, dr1)
     for (j = i+1; VEC_iterate (data_reference_p, drs, j, dr2); j++)
-      if (dr_may_alias_p (dr1, dr2, true))
+      if (dr_may_alias_p (dr1, dr2))
 	{
 	  add_edge (g, i, j);
 	  add_edge (g, j, i);
@@ -3219,6 +3220,9 @@ rewrite_commutative_reductions_out_of_ssa (scop_p scop)
     }
 }
 
+/* Java does not initialize long_long_integer_type_node.  */
+#define my_long_long (long_long_integer_type_node ? long_long_integer_type_node : ssizetype)
+
 /* Can all ivs be represented by a signed integer?
    As CLooG might generate negative values in its expressions, signed loop ivs
    are required in the backend. */
@@ -3243,13 +3247,15 @@ scop_ivs_can_be_represented (scop_p scop)
 	  tree type = TREE_TYPE (res);
 
 	  if (TYPE_UNSIGNED (type)
-	      && TYPE_PRECISION (type) >= TYPE_PRECISION (long_long_integer_type_node))
+	      && TYPE_PRECISION (type) >= TYPE_PRECISION (my_long_long))
 	    return false;
 	}
     }
 
   return true;
 }
+
+#undef my_long_long
 
 /* Builds the polyhedral representation for a SESE region.  */
 

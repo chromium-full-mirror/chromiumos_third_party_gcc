@@ -29,3 +29,4 @@ void test01()
   f1 == f2;  // { dg-error "no match" }
   f1 != f2;  // { dg-error "no match" }
 }
+// { dg-excess-errors "candidates are" }

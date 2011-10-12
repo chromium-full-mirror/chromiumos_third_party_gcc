@@ -1,8 +1,7 @@
 /* Contributed by Nicola Pero - Fri Mar  9 21:35:47 CET 2001 */
 
 #include <stdlib.h>
-#include <objc/Protocol.h>
-#include "../../objc-obj-c++-shared/TestsuiteObject.m"
+#import "../../objc-obj-c++-shared/Protocol1.h"
 
 /* Test defining two protocols, one incorporating the other one. */
 
@@ -15,7 +14,7 @@
 @end
 
 /* A class adopting the protocol */
-@interface Test : TestsuiteObject <Processing>
+@interface Test : Object <Processing>
 {
   BOOL didConfigure;
   BOOL didProcess;
@@ -42,4 +41,4 @@ int main (void)
 
   return 0;
 }
-
+#include "../../objc-obj-c++-shared/Object1-implementation.h"

@@ -44,7 +44,7 @@ extern long int gomp_futex_wait, gomp_futex_wake;
 
 #include <futex.h>
 
-static inline int do_spin (int *addr, int val)
+static inline void do_wait (int *addr, int val)
 {
   unsigned long long i, count = gomp_spin_count_var;
 
@@ -52,16 +52,10 @@ static inline int do_spin (int *addr, int val)
     count = gomp_throttled_spin_count_var;
   for (i = 0; i < count; i++)
     if (__builtin_expect (*addr != val, 0))
-      return 0;
+      return;
     else
       cpu_relax ();
-  return 1;
-}
-
-static inline void do_wait (int *addr, int val)
-{
-  if (do_spin (addr, val))
-    futex_wait (addr, val);
+  futex_wait (addr, val);
 }
 
 #ifdef HAVE_ATTRIBUTE_VISIBILITY

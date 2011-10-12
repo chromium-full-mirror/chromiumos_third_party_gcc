@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O -fno-tree-forwprop -fdump-tree-fre1-details" } */
+/* { dg-options "-O -fdump-tree-fre-details" } */
 
 /* From PR14287.  */
 
@@ -14,5 +14,5 @@ foo (long a)
   h = c;
 }
 
-/* { dg-final { scan-tree-dump "Replaced \\\(short int\\\) c_.*with b_" "fre1" } } */
-/* { dg-final { cleanup-tree-dump "fre1" } } */
+/* { dg-final { scan-tree-dump "Replaced \\\(short int\\\) c_.*with b_" "fre" } } */
+/* { dg-final { cleanup-tree-dump "fre" } } */

@@ -24,7 +24,7 @@
 
 /* Provide target-specific access to the futex system call.  */
 
-#ifdef __x86_64__
+#ifdef __LP64__
 # ifndef SYS_futex
 #  define SYS_futex	202
 # endif
@@ -138,7 +138,7 @@ futex_wake (int *addr, int count)
     }
 }
 
-#endif /* __x86_64__ */
+#endif /* __LP64__ */
 
 static inline void
 cpu_relax (void)

@@ -1,5 +1,5 @@
 ; Options for the Ada front end.
-; Copyright (C) 2003, 2007, 2008, 2010, 2011 Free Software Foundation, Inc.
+; Copyright (C) 2003, 2007, 2008, 2010 Free Software Foundation, Inc.
 ;
 ; This file is part of GCC.
 ;
@@ -25,92 +25,95 @@
 Language
 Ada
 
-Language
-AdaWhy
-
 -all-warnings
-Ada AdaWhy Alias(Wall)
+Ada Alias(Wall)
 
 -include-barrier
-Ada AdaWhy Alias(I, -)
+Ada Alias(I, -)
 
 -include-directory
-Ada AdaWhy Separate Alias(I)
+Ada Separate Alias(I)
 
 -include-directory=
-Ada AdaWhy Joined Alias(I)
+Ada Joined Alias(I)
 
 -no-standard-includes
-Ada AdaWhy Alias(nostdinc)
+Ada Alias(nostdinc)
 
 -no-standard-libraries
-Ada AdaWhy Alias(nostdlib)
+Ada Alias(nostdlib)
 
 I
-Ada AdaWhy Joined Separate
+Ada Joined Separate
 ; Documented for C
 
 Wall
-Ada AdaWhy
+Ada
 ; Documented for C
 
 Wmissing-prototypes
-Ada AdaWhy
+Ada
 ; Documented for C
 
 Wstrict-prototypes
-Ada AdaWhy
+Ada
 ; Documented for C
 
 Wwrite-strings
-Ada AdaWhy
+Ada
 ; Documented for C
 
 Wlong-long
-Ada AdaWhy
+Ada
 ; Documented for C
 
 Wvariadic-macros
-Ada AdaWhy
+Ada
 ; Documented for C
 
 Wold-style-definition
-Ada AdaWhy
+Ada
 ; Documented for C
 
 Wmissing-format-attribute
-Ada AdaWhy
+Ada
 ; Documented for C
 
 Woverlength-strings
-Ada AdaWhy
+Ada
 ; Documented for C
 
 k8
 Driver
 
 nostdinc
-Ada AdaWhy RejectNegative
+Ada RejectNegative
 ; Don't look for source files
 
 nostdlib
-Ada AdaWhy
+Ada
 ; Don't look for object files
 
+feliminate-unused-debug-types
+Ada
+; Effect documented for C - intercepted for Ada to force the associated flag
+; not to be set by default, as it currently eliminates unreferenced parallel
+; types we need for encoding descriptions to the debugger.
+
 fRTS=
-Ada AdaWhy Joined RejectNegative
+Ada Joined RejectNegative
 ; Selects the runtime
 
 gant
-Ada AdaWhy Joined Undocumented
+Ada Joined Undocumented
 ; Catches typos
 
 gnatO
-Ada AdaWhy Separate
+Ada Separate
 ; Sets name of output ALI file (internal switch)
 
 gnat
-Ada AdaWhy Joined
+Ada Joined
 -gnat<options>	Specify options to GNAT
 
 ; This comment is to ensure we retain the blank line above.

@@ -309,6 +309,8 @@ extern int cris_cpu_version;
 #define TARGET_HAS_SWAP (cris_cpu_version >= CRIS_CPU_SVINTO)
 #define TARGET_V32 (cris_cpu_version >= CRIS_CPU_V32)
 
+#define CRIS_SUBTARGET_HANDLE_OPTION(x, y, z)
+
 /* Node: Storage Layout */
 
 #define BITS_BIG_ENDIAN 0
@@ -418,7 +420,7 @@ extern int cris_cpu_version;
    registers are fixed at the moment.  The faked argument pointer register
    is fixed too.  */
 #define FIXED_REGISTERS \
- {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1}
+ {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0}
 
 /* Register r9 is used for structure-address, r10-r13 for parameters,
    r10- for return values.  */
@@ -488,17 +490,17 @@ extern int cris_cpu_version;
 
 /* Node: Register Classes */
 
-/* We need a separate register class to handle register allocation for
+/* FIXME: A separate class for the return register would make sense.
+
+   We need a separate register class to handle register allocation for
    ACR, since it can't be used for post-increment.
 
    It's not obvious, but having subunions of all movable-between
-   register classes does really help register allocation (pre-IRA
-   comment).  */
+   register classes does really help register allocation.  */
 enum reg_class
   {
     NO_REGS,
-    ACR_REGS, MOF_REGS, SRP_REGS, CC0_REGS,
-    MOF_SRP_REGS, SPECIAL_REGS,
+    ACR_REGS, MOF_REGS, CC0_REGS, SPECIAL_REGS,
     SPEC_ACR_REGS, GENNONACR_REGS,
     SPEC_GENNONACR_REGS, GENERAL_REGS,
     ALL_REGS,
@@ -509,8 +511,7 @@ enum reg_class
 
 #define REG_CLASS_NAMES						\
   {"NO_REGS",							\
-   "ACR_REGS", "MOF_REGS", "SRP_REGS", "CC0_REGS",		\
-   "MOF_SRP_REGS", "SPECIAL_REGS",				\
+   "ACR_REGS", "MOF_REGS", "CC0_REGS", "SPECIAL_REGS",		\
    "SPEC_ACR_REGS", "GENNONACR_REGS", "SPEC_GENNONACR_REGS",	\
    "GENERAL_REGS", "ALL_REGS"}
 
@@ -523,10 +524,7 @@ enum reg_class
    {0},						\
    {1 << CRIS_ACR_REGNUM},			\
    {1 << CRIS_MOF_REGNUM},			\
-   {1 << CRIS_SRP_REGNUM},			\
    {1 << CRIS_CC0_REGNUM},			\
-   {(1 << CRIS_MOF_REGNUM)			\
-    | (1 << CRIS_SRP_REGNUM)},			\
    {CRIS_SPECIAL_REGS_CONTENTS},		\
    {CRIS_SPECIAL_REGS_CONTENTS			\
     | (1 << CRIS_ACR_REGNUM)},			\
@@ -543,8 +541,8 @@ enum reg_class
 #define REGNO_REG_CLASS(REGNO)			\
   ((REGNO) == CRIS_ACR_REGNUM ? ACR_REGS :	\
    (REGNO) == CRIS_MOF_REGNUM ? MOF_REGS :	\
-   (REGNO) == CRIS_SRP_REGNUM ? SRP_REGS :	\
    (REGNO) == CRIS_CC0_REGNUM ? CC0_REGS :	\
+   (REGNO) == CRIS_SRP_REGNUM ? SPECIAL_REGS :	\
    GENERAL_REGS)
 
 #define BASE_REG_CLASS GENERAL_REGS
@@ -553,6 +551,8 @@ enum reg_class
   ((OCODE) != POST_INC ? BASE_REG_CLASS : GENNONACR_REGS)
 
 #define INDEX_REG_CLASS GENERAL_REGS
+
+#define IRA_COVER_CLASSES { GENERAL_REGS, SPECIAL_REGS, LIM_REG_CLASSES }
 
 #define REG_CLASS_FROM_LETTER(C)		\
   (						\
@@ -594,7 +594,6 @@ enum reg_class
 #define PREFERRED_RELOAD_CLASS(X, CLASS)	\
  ((CLASS) != ACR_REGS				\
   && (CLASS) != MOF_REGS			\
-  && (CLASS) != SRP_REGS			\
   && (CLASS) != CC0_REGS			\
   && (CLASS) != SPECIAL_REGS			\
   ? GENERAL_REGS : (CLASS))
@@ -606,7 +605,7 @@ enum reg_class
    the effect that any X that isn't a special-register is treated as
    a non-empty intersection with GENERAL_REGS.  */
 #define SECONDARY_RELOAD_CLASS(CLASS, MODE, X)				\
- ((reg_class_subset_p (CLASS, SPECIAL_REGS)				\
+ ((((CLASS) == SPECIAL_REGS || (CLASS) == MOF_REGS)			\
    && ((GET_MODE_SIZE (MODE) < 4 && MEM_P (X))				\
        || !reg_classes_intersect_p (REGNO_REG_CLASS (true_regnum (X)),	\
 				    GENERAL_REGS)))			\
@@ -1024,6 +1023,8 @@ struct cum_args {int regs;};
 	goto WIN;							\
     }									\
   while (0)
+
+#define LEGITIMATE_CONSTANT_P(X) 1
 
 
 /* Node: Condition Code */

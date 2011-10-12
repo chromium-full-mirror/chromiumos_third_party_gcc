@@ -32,7 +32,9 @@ struct S {
   template<class... U,
     typename enable_if<and_<is_same<T, U>...>::value>::type*& = enabler
   >
-  S(U...){}			// { dg-error "no type named 'type'" }
+  S(U...){} // #
 };
 
 S<bool> s(0);			// { dg-error "no match" }
+
+// { dg-prune-output "note" }

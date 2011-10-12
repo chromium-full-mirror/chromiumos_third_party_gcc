@@ -12,4 +12,4 @@ template <class T> struct D {
 struct E {
 };
 
-D<E> d; // { dg-message "required" }
+D<E> d; // { dg-message "instantiated" }

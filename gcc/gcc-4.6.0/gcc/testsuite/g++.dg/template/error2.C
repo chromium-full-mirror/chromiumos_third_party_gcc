@@ -3,7 +3,7 @@
 // Copyright (C) 2003 Free Software Foundation, Inc.
 // Contributed by Nathan Sidwell 14 Aug 2003 <nathan@codesourcery.com>
 
-// required from did not indicate the nested class
+// instantiated from did not indicate the nested class
 
 template<class T> struct X
 {
@@ -15,16 +15,16 @@ template<class T> struct X
 template<class T >
 struct Derived
 {
-  class Nested : public X<T> // { dg-message "required" "" }
+  class Nested : public X<T> // { dg-message "instantiated" "" }
   {
   };
   
-  Nested m; // { dg-message "required" "" }
+  Nested m; // { dg-message "instantiated" "" }
   
   void Foo ();
 };
 
 void Foo (Derived<void> &x)
 {
-  x.Foo (); // { dg-message "required" "" }
+  x.Foo (); // { dg-message "instantiated" "" }
 }

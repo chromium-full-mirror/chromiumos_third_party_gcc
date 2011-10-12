@@ -7,6 +7,7 @@ package textproto
 import (
 	"bufio"
 	"bytes"
+	"container/vector"
 	"io"
 	"io/ioutil"
 	"os"
@@ -32,25 +33,22 @@ func NewReader(r *bufio.Reader) *Reader {
 // ReadLine reads a single line from r,
 // eliding the final \n or \r\n from the returned string.
 func (r *Reader) ReadLine() (string, os.Error) {
-	line, err := r.readLineSlice()
+	line, err := r.ReadLineBytes()
 	return string(line), err
 }
 
 // ReadLineBytes is like ReadLine but returns a []byte instead of a string.
 func (r *Reader) ReadLineBytes() ([]byte, os.Error) {
-	line, err := r.readLineSlice()
-	if line != nil {
-		buf := make([]byte, len(line))
-		copy(buf, line)
-		line = buf
-	}
-	return line, err
-}
-
-func (r *Reader) readLineSlice() ([]byte, os.Error) {
 	r.closeDot()
-	line, _, err := r.R.ReadLine()
-	return line, err
+	line, err := r.R.ReadBytes('\n')
+	n := len(line)
+	if n > 0 && line[n-1] == '\n' {
+		n--
+		if n > 0 && line[n-1] == '\r' {
+			n--
+		}
+	}
+	return line[0:n], err
 }
 
 // ReadContinuedLine reads a possibly continued line from r,
@@ -73,7 +71,7 @@ func (r *Reader) readLineSlice() ([]byte, os.Error) {
 // A line consisting of only white space is never continued.
 //
 func (r *Reader) ReadContinuedLine() (string, os.Error) {
-	line, err := r.readContinuedLineSlice()
+	line, err := r.ReadContinuedLineBytes()
 	return string(line), err
 }
 
@@ -94,18 +92,8 @@ func trim(s []byte) []byte {
 // ReadContinuedLineBytes is like ReadContinuedLine but
 // returns a []byte instead of a string.
 func (r *Reader) ReadContinuedLineBytes() ([]byte, os.Error) {
-	line, err := r.readContinuedLineSlice()
-	if line != nil {
-		buf := make([]byte, len(line))
-		copy(buf, line)
-		line = buf
-	}
-	return line, err
-}
-
-func (r *Reader) readContinuedLineSlice() ([]byte, os.Error) {
 	// Read the first line.
-	line, err := r.readLineSlice()
+	line, err := r.ReadLineBytes()
 	if err != nil {
 		return line, err
 	}
@@ -113,13 +101,6 @@ func (r *Reader) readContinuedLineSlice() ([]byte, os.Error) {
 		return line, nil
 	}
 	line = trim(line)
-
-	copied := false
-	if r.R.Buffered() < 1 {
-		// ReadByte will flush the buffer; make a copy of the slice.
-		copied = true
-		line = append([]byte(nil), line...)
-	}
 
 	// Look for a continuation line.
 	c, err := r.R.ReadByte()
@@ -131,11 +112,6 @@ func (r *Reader) readContinuedLineSlice() ([]byte, os.Error) {
 		// Not a continuation.
 		r.R.UnreadByte()
 		return line, nil
-	}
-
-	if !copied {
-		// The next readLineSlice will invalidate the previous one.
-		line = append(make([]byte, 0, len(line)*2), line...)
 	}
 
 	// Read continuation lines.
@@ -152,7 +128,7 @@ func (r *Reader) readContinuedLineSlice() ([]byte, os.Error) {
 			}
 		}
 		var cont []byte
-		cont, err = r.readLineSlice()
+		cont, err = r.ReadLineBytes()
 		cont = trim(cont)
 		line = append(line, ' ')
 		line = append(line, cont...)
@@ -261,7 +237,7 @@ func (r *Reader) ReadResponse(expectCode int) (code int, message string, err os.
 // to a method on r.
 //
 // Dot encoding is a common framing used for data blocks
-// in text protocols such as SMTP.  The data consists of a sequence
+// in text protcols like SMTP.  The data consists of a sequence
 // of lines, each of which ends in "\r\n".  The sequence itself
 // ends at a line containing just a dot: ".\r\n".  Lines beginning
 // with a dot are escaped with an additional dot to avoid
@@ -399,7 +375,7 @@ func (r *Reader) ReadDotLines() ([]string, os.Error) {
 	// We could use ReadDotBytes and then Split it,
 	// but reading a line at a time avoids needing a
 	// large contiguous block of memory and is simpler.
-	var v []string
+	var v vector.StringVector
 	var err os.Error
 	for {
 		var line string
@@ -418,7 +394,7 @@ func (r *Reader) ReadDotLines() ([]string, os.Error) {
 			}
 			line = line[1:]
 		}
-		v = append(v, line)
+		v.Push(line)
 	}
 	return v, err
 }
@@ -426,7 +402,7 @@ func (r *Reader) ReadDotLines() ([]string, os.Error) {
 // ReadMIMEHeader reads a MIME-style header from r.
 // The header is a sequence of possibly continued Key: Value lines
 // ending in a blank line.
-// The returned map m maps CanonicalMIMEHeaderKey(key) to a
+// The returned map m maps CanonicalHeaderKey(key) to a
 // sequence of values in the same order encountered in the input.
 //
 // For example, consider this input:
@@ -439,14 +415,14 @@ func (r *Reader) ReadDotLines() ([]string, os.Error) {
 // Given that input, ReadMIMEHeader returns the map:
 //
 //	map[string][]string{
-//		"My-Key": {"Value 1", "Value 2"},
-//		"Long-Key": {"Even Longer Value"},
+//		"My-Key": []string{"Value 1", "Value 2"},
+//		"Long-Key": []string{"Even Longer Value"},
 //	}
 //
-func (r *Reader) ReadMIMEHeader() (MIMEHeader, os.Error) {
-	m := make(MIMEHeader)
+func (r *Reader) ReadMIMEHeader() (map[string][]string, os.Error) {
+	m := make(map[string][]string)
 	for {
-		kv, err := r.readContinuedLineSlice()
+		kv, err := r.ReadContinuedLineBytes()
 		if len(kv) == 0 {
 			return m, err
 		}
@@ -456,7 +432,7 @@ func (r *Reader) ReadMIMEHeader() (MIMEHeader, os.Error) {
 		if i < 0 || bytes.IndexByte(kv[0:i], ' ') >= 0 {
 			return m, ProtocolError("malformed MIME header line: " + string(kv))
 		}
-		key := CanonicalMIMEHeaderKey(string(kv[0:i]))
+		key := CanonicalHeaderKey(string(kv[0:i]))
 
 		// Skip initial spaces in value.
 		i++ // skip colon
@@ -465,7 +441,9 @@ func (r *Reader) ReadMIMEHeader() (MIMEHeader, os.Error) {
 		}
 		value := string(kv[i:])
 
-		m[key] = append(m[key], value)
+		v := vector.StringVector(m[key])
+		v.Push(value)
+		m[key] = v
 
 		if err != nil {
 			return m, err
@@ -474,12 +452,12 @@ func (r *Reader) ReadMIMEHeader() (MIMEHeader, os.Error) {
 	panic("unreachable")
 }
 
-// CanonicalMIMEHeaderKey returns the canonical format of the
+// CanonicalHeaderKey returns the canonical format of the
 // MIME header key s.  The canonicalization converts the first
 // letter and any letter following a hyphen to upper case;
 // the rest are converted to lowercase.  For example, the
 // canonical key for "accept-encoding" is "Accept-Encoding".
-func CanonicalMIMEHeaderKey(s string) string {
+func CanonicalHeaderKey(s string) string {
 	// Quick check for canonical encoding.
 	needUpper := true
 	for i := 0; i < len(s); i++ {

@@ -7,17 +7,9 @@
 /* This is the runtime.GOMAXPROCS function.  This currently does
    nothing, since each goroutine runs in a separate thread anyhow.  */
 
-extern int GOMAXPROCS (int) asm ("libgo_runtime.runtime.GOMAXPROCS");
+void GOMAXPROCS (int) asm ("libgo_runtime.runtime.GOMAXPROCS");
 
-static int set = 1;
-
-int
-GOMAXPROCS (int n)
+void
+GOMAXPROCS (int n __attribute__ ((unused)))
 {
-  int ret;
-
-  ret = set;
-  if (n > 0)
-    set = n;
-  return ret;
 }

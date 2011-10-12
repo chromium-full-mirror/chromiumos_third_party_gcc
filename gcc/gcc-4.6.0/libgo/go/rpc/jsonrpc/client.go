@@ -44,9 +44,9 @@ func NewClientCodec(conn io.ReadWriteCloser) rpc.ClientCodec {
 }
 
 type clientRequest struct {
-	Method string         `json:"method"`
-	Params [1]interface{} `json:"params"`
-	Id     uint64         `json:"id"`
+	Method string         "method"
+	Params [1]interface{} "params"
+	Id     uint64         "id"
 }
 
 func (c *clientCodec) WriteRequest(r *rpc.Request, param interface{}) os.Error {
@@ -60,9 +60,9 @@ func (c *clientCodec) WriteRequest(r *rpc.Request, param interface{}) os.Error {
 }
 
 type clientResponse struct {
-	Id     uint64           `json:"id"`
-	Result *json.RawMessage `json:"result"`
-	Error  interface{}      `json:"error"`
+	Id     uint64           "id"
+	Result *json.RawMessage "result"
+	Error  interface{}      "error"
 }
 
 func (r *clientResponse) reset() {
@@ -98,9 +98,6 @@ func (c *clientCodec) ReadResponseHeader(r *rpc.Response) os.Error {
 }
 
 func (c *clientCodec) ReadResponseBody(x interface{}) os.Error {
-	if x == nil {
-		return nil
-	}
 	return json.Unmarshal(*c.resp.Result, x)
 }
 
@@ -116,7 +113,7 @@ func NewClient(conn io.ReadWriteCloser) *rpc.Client {
 
 // Dial connects to a JSON-RPC server at the specified network address.
 func Dial(network, address string) (*rpc.Client, os.Error) {
-	conn, err := net.Dial(network, address)
+	conn, err := net.Dial(network, "", address)
 	if err != nil {
 		return nil, err
 	}

@@ -55,7 +55,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "diagnostic-core.h"
 #include "intl.h"
 #include "l-ipo.h"
-#include "filenames.h"
 
 #include "gcov-io.h"
 #include "gcov-io.c"
@@ -809,7 +808,7 @@ tree_coverage_counter_ref (unsigned counter, unsigned no)
 
   /* "no" here is an array index, scaled to bytes later.  */
   return build4 (ARRAY_REF, gcov_type_node, tree_ctr_tables[counter],
-		 build_int_cst (integer_type_node, no), NULL, NULL);
+		 build_int_cst (NULL_TREE, no), NULL, NULL);
 }
 
 /* Generate a tree to access the address of COUNTER NO.  */
@@ -827,7 +826,7 @@ tree_coverage_counter_addr (unsigned counter, unsigned no)
   /* "no" here is an array index, scaled to bytes later.  */
   return build_fold_addr_expr (build4 (ARRAY_REF, gcov_type_node,
 				       tree_ctr_tables[counter],
-				       build_int_cst (integer_type_node, no),
+				       build_int_cst (NULL_TREE, no),
 				       NULL, NULL));
 }
 
@@ -1624,7 +1623,8 @@ build_gcov_info (void)
   da_file_name_len = strlen (da_file_name);
   filename_string = build_string (da_file_name_len + 1, da_file_name);
   TREE_TYPE (filename_string) = build_array_type
-    (char_type_node, build_index_type (size_int (da_file_name_len)));
+    (char_type_node, build_index_type
+     (build_int_cst (NULL_TREE, da_file_name_len)));
   CONSTRUCTOR_APPEND_ELT (v1, field,
 			  build1 (ADDR_EXPR, string_type, filename_string));
 
@@ -1647,7 +1647,7 @@ build_gcov_info (void)
     {
       tree array_type;
 
-      array_type = build_index_type (size_int (n_fns - 1));
+      array_type = build_index_type (build_int_cst (NULL_TREE, n_fns - 1));
       array_type = build_array_type (fn_info_type, array_type);
 
       fn_info_value = build_constructor (array_type, v2);
@@ -1682,7 +1682,8 @@ build_gcov_info (void)
 
   /* counters */
   ctr_info_type = build_ctr_info_type ();
-  ctr_info_ary_type = build_index_type (size_int (n_ctr_types));
+  ctr_info_ary_type = build_index_type (build_int_cst (NULL_TREE,
+						       n_ctr_types));
   ctr_info_ary_type = build_array_type (ctr_info_type, ctr_info_ary_type);
   v2 = NULL;
   for (ix = 0; ix != GCOV_COUNTERS; ix++)
@@ -1760,11 +1761,8 @@ get_da_file_name (const char *base_file_name)
   /* + 1 for extra '/', in case prefix doesn't end with /.  */
   int prefix_len;
 
-  if (profile_data_prefix == 0 && !IS_ABSOLUTE_PATH(&base_file_name[0]))
-    {
-      profile_data_prefix = getpwd ();
-      prefix = profile_data_prefix;
-    }
+  if (prefix == 0 && base_file_name[0] != '/')
+    prefix = getpwd ();
 
   prefix_len = (prefix) ? strlen (prefix) + 1 : 0;
 
@@ -1926,7 +1924,7 @@ coverage_init (const char *filename, const char* source_name)
       strcat (main_input_file_name, source_name);
     }
 
-  if (flag_branch_probabilities)
+  if (flag_profile_use)
     read_counts_file (da_file_name, 0);
 
   /* Rebuild counts_hash and read the auxiliary GCDA files.  */
@@ -2131,6 +2129,21 @@ void
 coverage_has_asm_stmt (void)
 {
   has_asm_statement = flag_ripa_disallow_asm_modules;
+}
+
+/* Check the command line OPTIONS passed to
+   -fpmu-profile-generate. Return 0 if the options are valid, non-zero
+   otherwise.  */
+
+int
+check_pmu_profile_options (const char *options)
+{
+  if (strcmp(options, "load-latency") &&
+      strcmp(options, "load-latency-verbose") &&
+      strcmp(options, "branch-mispredict") &&
+      strcmp(options, "branch-mispredict-verbose"))
+    return 1;
+  return 0;
 }
 
 #include "gt-coverage.h"

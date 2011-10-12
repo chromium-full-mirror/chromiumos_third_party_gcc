@@ -38,7 +38,7 @@ void test01()
 
 int main()
 {
-  test01();
+  test02();
 }
 
-// { dg-prune-output "declared here" }
+// { dg-excess-errors "" }

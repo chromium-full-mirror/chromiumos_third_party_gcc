@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package bytes implements functions for the manipulation of byte slices.
-// It is analogous to the facilities of the strings package.
+// The bytes package implements functions for the manipulation of byte slices.
+// Analogous to the facilities of the strings package.
 package bytes
 
 import (
@@ -212,38 +212,24 @@ func genSplit(s, sep []byte, sepSave, n int) [][]byte {
 	return a[0 : na+1]
 }
 
-// SplitN slices s into subslices separated by sep and returns a slice of
-// the subslices between those separators.
-// If sep is empty, SplitN splits after each UTF-8 sequence.
-// The count determines the number of subslices to return:
-//   n > 0: at most n subslices; the last subslice will be the unsplit remainder.
-//   n == 0: the result is nil (zero subslices)
-//   n < 0: all subslices
-func SplitN(s, sep []byte, n int) [][]byte { return genSplit(s, sep, 0, n) }
-
-// SplitAfterN slices s into subslices after each instance of sep and
-// returns a slice of those subslices.
-// If sep is empty, SplitAfterN splits after each UTF-8 sequence.
-// The count determines the number of subslices to return:
-//   n > 0: at most n subslices; the last subslice will be the unsplit remainder.
-//   n == 0: the result is nil (zero subslices)
-//   n < 0: all subslices
-func SplitAfterN(s, sep []byte, n int) [][]byte {
-	return genSplit(s, sep, len(sep), n)
-}
-
-// Split slices s into all subslices separated by sep and returns a slice of
+// Split slices s into subslices separated by sep and returns a slice of
 // the subslices between those separators.
 // If sep is empty, Split splits after each UTF-8 sequence.
-// It is equivalent to SplitN with a count of -1.
-func Split(s, sep []byte) [][]byte { return genSplit(s, sep, 0, -1) }
+// The count determines the number of subslices to return:
+//   n > 0: at most n subslices; the last subslice will be the unsplit remainder.
+//   n == 0: the result is nil (zero subslices)
+//   n < 0: all subslices
+func Split(s, sep []byte, n int) [][]byte { return genSplit(s, sep, 0, n) }
 
-// SplitAfter slices s into all subslices after each instance of sep and
+// SplitAfter slices s into subslices after each instance of sep and
 // returns a slice of those subslices.
-// If sep is empty, SplitAfter splits after each UTF-8 sequence.
-// It is equivalent to SplitAfterN with a count of -1.
-func SplitAfter(s, sep []byte) [][]byte {
-	return genSplit(s, sep, len(sep), -1)
+// If sep is empty, Split splits after each UTF-8 sequence.
+// The count determines the number of subslices to return:
+//   n > 0: at most n subslices; the last subslice will be the unsplit remainder.
+//   n == 0: the result is nil (zero subslices)
+//   n < 0: all subslices
+func SplitAfter(s, sep []byte, n int) [][]byte {
+	return genSplit(s, sep, len(sep), n)
 }
 
 // Fields splits the array s around each instance of one or more consecutive white space
@@ -307,10 +293,20 @@ func Join(a [][]byte, sep []byte) []byte {
 	}
 
 	b := make([]byte, n)
-	bp := copy(b, a[0])
-	for _, s := range a[1:] {
-		bp += copy(b[bp:], sep)
-		bp += copy(b[bp:], s)
+	bp := 0
+	for i := 0; i < len(a); i++ {
+		s := a[i]
+		for j := 0; j < len(s); j++ {
+			b[bp] = s[j]
+			bp++
+		}
+		if i+1 < len(a) {
+			s = sep
+			for j := 0; j < len(s); j++ {
+				b[bp] = s[j]
+				bp++
+			}
+		}
 	}
 	return b
 }
@@ -397,6 +393,7 @@ func ToLowerSpecial(_case unicode.SpecialCase, s []byte) []byte {
 func ToTitleSpecial(_case unicode.SpecialCase, s []byte) []byte {
 	return Map(func(r int) int { return _case.ToTitle(r) }, s)
 }
+
 
 // isSeparator reports whether the rune could mark a word boundary.
 // TODO: update when package unicode captures more of the properties.

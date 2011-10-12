@@ -1,6 +1,6 @@
 /* LTO IL options.
 
-   Copyright 2009, 2010, 2011 Free Software Foundation, Inc.
+   Copyright 2009, 2010 Free Software Foundation, Inc.
    Contributed by Simon Baldwin <simonb@google.com>
 
 This file is part of GCC.
@@ -30,7 +30,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "flags.h"
 #include "opts.h"
 #include "options.h"
-#include "common/common-target.h"
+#include "target.h"
 #include "diagnostic.h"
 #include "lto-streamer.h"
 
@@ -162,6 +162,18 @@ output_string_stream (struct lto_output_stream *stream, const char *string)
     output_data_stream (stream, &flag, sizeof (flag));
 }
 
+/* Read LENGTH bytes from STREAM to ADDR.  */
+
+static void
+input_data_block (struct lto_input_block *ib, void *addr, size_t length)
+{
+  size_t i;
+  unsigned char *const buffer = (unsigned char *const) addr;
+
+  for (i = 0; i < length; i++)
+    buffer[i] = lto_input_1_unsigned (ib);
+}
+
 /* Return a string from IB.  The string is allocated, and the caller is
    responsible for freeing it.  */
 
@@ -170,15 +182,15 @@ input_string_block (struct lto_input_block *ib)
 {
   bool flag;
 
-  lto_input_data_block (ib, &flag, sizeof (flag));
+  input_data_block (ib, &flag, sizeof (flag));
   if (flag)
     {
       size_t length;
       char *string;
 
-      lto_input_data_block (ib, &length, sizeof (length));
+      input_data_block (ib, &length, sizeof (length));
       string = (char *) xcalloc (1, length + 1);
-      lto_input_data_block (ib, string, length);
+      input_data_block (ib, string, length);
 
       return string;
     }
@@ -194,7 +206,7 @@ input_string_block (struct lto_input_block *ib)
    Among others, optimization options may well be appropriate here.  */
 
 static bool
-register_user_option_p (size_t code, unsigned int type)
+register_user_option_p (size_t code, int type)
 {
   if (type == CL_TARGET)
     return true;
@@ -215,8 +227,7 @@ register_user_option_p (size_t code, unsigned int type)
    If relevant to LTO, save it in the user options vector.  */
 
 void
-lto_register_user_option (size_t code, const char *arg, int value,
-			  unsigned int type)
+lto_register_user_option (size_t code, const char *arg, int value, int type)
 {
   if (register_user_option_p (code, type))
     {
@@ -325,16 +336,16 @@ input_options (struct lto_input_block *ib)
 {
   size_t length, i;
 
-  lto_input_data_block (ib, &length, sizeof (length));
+  input_data_block (ib, &length, sizeof (length));
 
   for (i = 0; i < length; i++)
     {
       opt_t o;
 
-      lto_input_data_block (ib, &o.type, sizeof (o.type));
-      lto_input_data_block (ib, &o.code, sizeof (o.code));
+      input_data_block (ib, &o.type, sizeof (o.type));
+      input_data_block (ib, &o.code, sizeof (o.code));
       o.arg = input_string_block (ib);
-      lto_input_data_block (ib, &o.value, sizeof (o.value));
+      input_data_block (ib, &o.value, sizeof (o.value));
       VEC_safe_push (opt_t, heap, file_options, &o);
     }
 }
@@ -402,12 +413,7 @@ lto_reissue_options (void)
 		    DK_UNSPECIFIED, UNKNOWN_LOCATION, global_dc);
 
       if (o->type == CL_TARGET)
-	{
-	  struct cl_decoded_option decoded;
-	  generate_option (o->code, o->arg, o->value, CL_TARGET, &decoded);
-	  targetm_common.handle_option (&global_options, &global_options_set,
-					&decoded, UNKNOWN_LOCATION);
-	}
+	targetm.handle_option (o->code, o->arg, o->value);
       else if (o->type == CL_COMMON)
 	gcc_assert (flag_var);
       else

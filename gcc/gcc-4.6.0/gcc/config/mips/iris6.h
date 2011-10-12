@@ -23,23 +23,12 @@ along with GCC; see the file COPYING3.  If not see
 #undef TARGET_IRIX6
 #define TARGET_IRIX6 1
 
+#undef MACHINE_TYPE
+#define MACHINE_TYPE "SGI running IRIX 6.5"
+
 /* Default to -mabi=n32 and -mips3.  */
 #undef MULTILIB_DEFAULTS
 #define MULTILIB_DEFAULTS { "mabi=n32" }
-
-/* -march=native handling only makes sense with compiler running on
-   a MIPS chip.  */
-#if defined(__mips__)
-extern const char *host_detect_local_cpu (int argc, const char **argv);
-# define EXTRA_SPEC_FUNCTIONS \
-  { "local_cpu_detect", host_detect_local_cpu },
-
-# define MARCH_MTUNE_NATIVE_SPECS				\
-  " %{march=native:%<march=native %:local_cpu_detect(arch)}"	\
-  " %{mtune=native:%<mtune=native %:local_cpu_detect(tune)}"
-#else
-# define MARCH_MTUNE_NATIVE_SPECS ""
-#endif
 
 /* Force the default ABI onto the command line in order to make the specs
    easier to write.  */
@@ -47,8 +36,7 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 #define DRIVER_SELF_SPECS 			\
   "%{!mabi=*: -mabi=n32}", 			\
   /* Configuration-independent MIPS rules.  */	\
-  BASE_DRIVER_SELF_SPECS,			\
-  MARCH_MTUNE_NATIVE_SPECS
+  BASE_DRIVER_SELF_SPECS
 
 /* IRIX 6.5 has the float and long double forms of math functions.  */
 #define TARGET_C99_FUNCTIONS 1
@@ -92,7 +80,7 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
   while (0)
 
 #undef LOCAL_LABEL_PREFIX
-#define LOCAL_LABEL_PREFIX "."
+#define LOCAL_LABEL_PREFIX (TARGET_NEWABI ? "." : "$")
 
 #undef ASM_DECLARE_OBJECT_NAME
 #define ASM_DECLARE_OBJECT_NAME mips_declare_object_name
@@ -119,7 +107,7 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 #define WINT_TYPE (Pmode == DImode ? "int" : "long int")
 
 #undef WINT_TYPE_SIZE
-#define WINT_TYPE_SIZE INT_TYPE_SIZE
+#define WINT_TYPE_SIZE 32
 
 /* C99 stdint.h types.  */
 #define INT8_TYPE "signed char"
@@ -190,15 +178,16 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
       /* IRIX 6.5.18 and above provide many ISO C99		\
 	 features protected by the __c99 macro.			\
 	 libstdc++ v3 needs them as well.  */			\
-      if (flag_isoc99 || c_dialect_cxx ())			\
-	builtin_define ("__c99");				\
+      if (TARGET_IRIX6)						\
+	if (flag_isoc99 || c_dialect_cxx ())			\
+	  builtin_define ("__c99");				\
 								\
       /* The GNU C++ standard library requires that		\
 	 __EXTENSIONS__ and _SGI_SOURCE be defined on at	\
 	 least IRIX 6.2 and probably all IRIX 6 prior to 6.5.	\
 	 We don't need this on IRIX 6.5 itself, but it		\
 	 shouldn't hurt other than the namespace pollution.  */	\
-      if (!flag_iso || c_dialect_cxx ())			\
+      if (!flag_iso || (TARGET_IRIX6 && c_dialect_cxx ()))	\
 	{							\
 	  builtin_define ("__EXTENSIONS__");			\
 	  builtin_define ("_SGI_SOURCE");			\
@@ -271,8 +260,7 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 
 #undef ENDFILE_SPEC
 #define ENDFILE_SPEC \
-  "%{Ofast|ffast-math|funsafe-math-optimizations:crtfastmath.o%s} \
-   crtend.o%s irix-crtn.o%s \
+  "crtend.o%s irix-crtn.o%s \
    %{!shared: \
      %{mabi=n32:%{mips4:/usr/lib32/mips4/crtn.o%s}\
        %{!mips4:/usr/lib32/mips3/crtn.o%s}}\

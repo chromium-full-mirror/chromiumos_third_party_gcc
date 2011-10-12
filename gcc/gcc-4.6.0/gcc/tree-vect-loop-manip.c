@@ -1105,6 +1105,35 @@ set_prologue_iterations (basic_block bb_before_first_loop,
   first_niters = PHI_RESULT (newphi);
 }
 
+
+/* Remove dead assignments from loop NEW_LOOP.  */
+
+static void
+remove_dead_stmts_from_loop (struct loop *new_loop)
+{
+  basic_block *bbs = get_loop_body (new_loop);
+  unsigned i;
+  for (i = 0; i < new_loop->num_nodes; ++i)
+    {
+      gimple_stmt_iterator gsi;
+      for (gsi = gsi_start_bb (bbs[i]); !gsi_end_p (gsi);)
+	{
+	  gimple stmt = gsi_stmt (gsi);
+	  if (is_gimple_assign (stmt)
+	      && TREE_CODE (gimple_assign_lhs (stmt)) == SSA_NAME
+	      && has_zero_uses (gimple_assign_lhs (stmt)))
+	    {
+	      gsi_remove (&gsi, true);
+	      release_defs (stmt);
+	    }
+	  else
+	    gsi_next (&gsi);
+	}
+    }
+  free (bbs);
+}
+
+
 /* Function slpeel_tree_peel_loop_to_edge.
 
    Peel the first (last) iterations of LOOP into a new prolog (epilog) loop
@@ -1415,6 +1444,13 @@ slpeel_tree_peel_loop_to_edge (struct loop *loop,
 
   BITMAP_FREE (definitions);
   delete_update_ssa ();
+
+  /* Remove all pattern statements from the loop copy.  They will confuse
+     the expander if DCE is disabled.
+     ???  The pattern recognizer should be split into an analysis and
+     a transformation phase that is then run only on the loop that is
+     going to be transformed.  */
+  remove_dead_stmts_from_loop (new_loop);
 
   adjust_vec_debug_stmts ();
 
@@ -1819,7 +1855,9 @@ vect_update_ivs_after_vectorizer (loop_vec_info loop_vinfo, tree niters,
 			 fold_convert (TREE_TYPE (step_expr), niters),
 			 step_expr);
       if (POINTER_TYPE_P (TREE_TYPE (init_expr)))
-	ni = fold_build_pointer_plus (init_expr, off);
+	ni = fold_build2 (POINTER_PLUS_EXPR, TREE_TYPE (init_expr),
+			  init_expr,
+			  fold_convert (sizetype, off));
       else
 	ni = fold_build2 (PLUS_EXPR, TREE_TYPE (init_expr),
 			  init_expr,
@@ -2354,14 +2392,9 @@ static tree
 vect_vfa_segment_size (struct data_reference *dr, tree length_factor)
 {
   tree segment_length;
-
-  if (!compare_tree_int (DR_STEP (dr), 0))
-    segment_length = TYPE_SIZE_UNIT (TREE_TYPE (DR_REF (dr)));
-  else
-    segment_length = size_binop (MULT_EXPR,
-                                 fold_convert (sizetype, DR_STEP (dr)),
-                                 fold_convert (sizetype, length_factor));
-
+  segment_length = size_binop (MULT_EXPR,
+			       fold_convert (sizetype, DR_STEP (dr)),
+			       fold_convert (sizetype, length_factor));
   if (vect_supportable_dr_alignment (dr, false)
         == dr_explicit_realign_optimized)
     {
@@ -2412,13 +2445,13 @@ vect_create_cond_for_alias_checks (loop_vec_info loop_vinfo,
   tree part_cond_expr, length_factor;
 
   /* Create expression
-     ((store_ptr_0 + store_segment_length_0) <= load_ptr_0)
-     || (load_ptr_0 + load_segment_length_0) <= store_ptr_0))
+     ((store_ptr_0 + store_segment_length_0) < load_ptr_0)
+     || (load_ptr_0 + load_segment_length_0) < store_ptr_0))
      &&
      ...
      &&
-     ((store_ptr_n + store_segment_length_n) <= load_ptr_n)
-     || (load_ptr_n + load_segment_length_n) <= store_ptr_n))  */
+     ((store_ptr_n + store_segment_length_n) < load_ptr_n)
+     || (load_ptr_n + load_segment_length_n) < store_ptr_n))  */
 
   if (VEC_empty (ddr_p, may_alias_ddrs))
     return;
@@ -2434,7 +2467,7 @@ vect_create_cond_for_alias_checks (loop_vec_info loop_vinfo,
 
       dr_a = DDR_A (ddr);
       stmt_a = DR_STMT (DDR_A (ddr));
-      dr_group_first_a = GROUP_FIRST_ELEMENT (vinfo_for_stmt (stmt_a));
+      dr_group_first_a = DR_GROUP_FIRST_DR (vinfo_for_stmt (stmt_a));
       if (dr_group_first_a)
         {
 	  stmt_a = dr_group_first_a;
@@ -2443,7 +2476,7 @@ vect_create_cond_for_alias_checks (loop_vec_info loop_vinfo,
 
       dr_b = DDR_B (ddr);
       stmt_b = DR_STMT (DDR_B (ddr));
-      dr_group_first_b = GROUP_FIRST_ELEMENT (vinfo_for_stmt (stmt_b));
+      dr_group_first_b = DR_GROUP_FIRST_DR (vinfo_for_stmt (stmt_b));
       if (dr_group_first_b)
         {
 	  stmt_b = dr_group_first_b;
@@ -2474,19 +2507,21 @@ vect_create_cond_for_alias_checks (loop_vec_info loop_vinfo,
 	}
 
       seg_a_min = addr_base_a;
-      seg_a_max = fold_build_pointer_plus (addr_base_a, segment_length_a);
+      seg_a_max = fold_build2 (POINTER_PLUS_EXPR, TREE_TYPE (addr_base_a), 
+			       addr_base_a, segment_length_a);
       if (tree_int_cst_compare (DR_STEP (dr_a), size_zero_node) < 0)
 	seg_a_min = seg_a_max, seg_a_max = addr_base_a;
 
       seg_b_min = addr_base_b;
-      seg_b_max = fold_build_pointer_plus (addr_base_b, segment_length_b);
+      seg_b_max = fold_build2 (POINTER_PLUS_EXPR, TREE_TYPE (addr_base_b),
+			       addr_base_b, segment_length_b);
       if (tree_int_cst_compare (DR_STEP (dr_b), size_zero_node) < 0)
 	seg_b_min = seg_b_max, seg_b_max = addr_base_b;
 
       part_cond_expr =
       	fold_build2 (TRUTH_OR_EXPR, boolean_type_node,
-	  fold_build2 (LE_EXPR, boolean_type_node, seg_a_max, seg_b_min),
-	  fold_build2 (LE_EXPR, boolean_type_node, seg_b_max, seg_a_min));
+	  fold_build2 (LT_EXPR, boolean_type_node, seg_a_max, seg_b_min),
+	  fold_build2 (LT_EXPR, boolean_type_node, seg_b_max, seg_a_min));
 
       if (*cond_expr)
 	*cond_expr = fold_build2 (TRUTH_AND_EXPR, boolean_type_node,

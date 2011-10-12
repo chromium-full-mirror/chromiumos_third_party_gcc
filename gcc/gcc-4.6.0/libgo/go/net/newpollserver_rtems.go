@@ -68,7 +68,7 @@ func newPollServer() (s *pollServer, err os.Error) {
 	if s.poll, err = newpollster(); err != nil {
 		goto Error
 	}
-	if _, err = s.poll.AddFD(s.pr.Fd(), 'r', true); err != nil {
+	if err = s.poll.AddFD(s.pr.Fd(), 'r', true); err != nil {
 		s.poll.Close()
 		goto Error
 	}

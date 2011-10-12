@@ -1,7 +1,5 @@
 /* { dg-do run } */
 /* { dg-options "-O1 -fno-inline" } */
-/* { dg-require-effective-target int32plus } */
-
 extern void abort (void);
 
 static int something;

@@ -912,7 +912,7 @@ arith_power (gfc_expr *op1, gfc_expr *op2, gfc_expr **resultp)
 	{
 	  gfc_error ("Raising a negative REAL at %L to "
 		     "a REAL power is prohibited", &op1->where);
-	  gfc_free_expr (result);
+	  gfc_free (result);
 	  return ARITH_PROHIBIT;
 	}
 

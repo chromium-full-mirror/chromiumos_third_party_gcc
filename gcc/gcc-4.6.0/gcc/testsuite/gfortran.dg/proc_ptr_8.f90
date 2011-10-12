@@ -42,4 +42,4 @@ contains
 
 END
 
-! { dg-final { cleanup-modules "x" } }
+! { dg-final { cleanup-modules "X" } }

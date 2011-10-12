@@ -6,7 +6,7 @@
  *                                                                          *
  *                          C Implementation File                           *
  *                                                                          *
- *          Copyright (C) 1992-2011, Free Software Foundation, Inc.         *
+ *          Copyright (C) 1992-2009, Free Software Foundation, Inc.         *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -29,10 +29,6 @@
  *                                                                          *
  ****************************************************************************/
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #ifdef IN_RTS
 #include "tconfig.h"
 #include "tsystem.h"
@@ -54,14 +50,9 @@ extern "C" {
 #undef stdout
 #endif
 
-/* Don't use macros versions of this functions on VxWorks since they cause
-   imcompatible changes in some VxWorks versions */
-#ifdef __vxworks
-#undef getchar
+#ifdef VTHREADS
 #undef putchar
-#undef feof
-#undef ferror
-#undef fileno
+#undef getchar
 #endif
 
 #ifdef RTX
@@ -136,9 +127,5 @@ char *
 mktemp (char *template)
 {
   return tmpnam (NULL);
-}
-#endif
-
-#ifdef __cplusplus
 }
 #endif

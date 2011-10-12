@@ -1,20 +1,23 @@
 /* Contributed by Nicola Pero - Thu Mar  8 16:27:46 CET 2001 */
 #include <stdlib.h>
-#include "../../objc-obj-c++-shared/TestsuiteObject.m"
+#ifndef __NEXT_RUNTIME__
+#include <objc/objc-api.h>
+#endif
+#include "../../objc-obj-c++-shared/Object1.h"
 
 /* Test that by using -> we can access ivars of other objects of the same 
    class */
 
-@interface TestClass : TestsuiteObject
+@interface TestClass : Object
 {
   int value;
 }
 - (int) value;
-- (void) setValue: (int)number;
+- (int) setValue: (int)number;
 - (void) takeValueFrom: (TestClass *)object;
 @end
 
-@implementation TestClass : TestsuiteObject
+@implementation TestClass : Object
 {
   int value;
 }
@@ -22,9 +25,9 @@
 { 
   return value;
 }
-- (void) setValue: (int)number
+- (int) setValue: (int)number
 {
-  value = number;
+  value = number; 
 }
 - (void) takeValueFrom: (TestClass *)object
 {
@@ -52,4 +55,4 @@ int main (void)
 
   return 0;
 }
-
+#include "../../objc-obj-c++-shared/Object1-implementation.h"

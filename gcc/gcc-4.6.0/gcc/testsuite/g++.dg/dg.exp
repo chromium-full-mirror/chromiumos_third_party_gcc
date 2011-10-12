@@ -48,7 +48,6 @@ set tests [prune $tests $srcdir/$subdir/tree-prof/*]
 set tests [prune $tests $srcdir/$subdir/torture/*]
 set tests [prune $tests $srcdir/$subdir/graphite/*]
 set tests [prune $tests $srcdir/$subdir/guality/*]
-set tests [prune $tests $srcdir/$subdir/thread-ann/*]
 
 # Main loop.
 dg-runtest $tests "" $DEFAULT_CXXFLAGS

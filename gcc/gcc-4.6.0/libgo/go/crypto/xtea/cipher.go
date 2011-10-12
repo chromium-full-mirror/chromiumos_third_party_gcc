@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package xtea implements XTEA encryption, as defined in Needham and Wheeler's
-// 1997 technical report, "Tea extensions."
+// This package implements XTEA encryption, as defined in Needham and
+// Wheeler's 1997 technical report, "Tea extensions."
 package xtea
 
 // For details, see http://www.cix.co.uk/~klockstone/xtea.pdf
@@ -48,13 +48,13 @@ func NewCipher(key []byte) (*Cipher, os.Error) {
 
 // BlockSize returns the XTEA block size, 8 bytes.
 // It is necessary to satisfy the Cipher interface in the
-// package "crypto/cipher".
+// package "crypto/block".
 func (c *Cipher) BlockSize() int { return BlockSize }
 
 // Encrypt encrypts the 8 byte buffer src using the key and stores the result in dst.
 // Note that for amounts of data larger than a block,
 // it is not safe to just call Encrypt on successive blocks;
-// instead, use an encryption mode like CBC (see crypto/cipher/cbc.go).
+// instead, use an encryption mode like CBC (see crypto/block/cbc.go).
 func (c *Cipher) Encrypt(dst, src []byte) { encryptBlock(c, dst, src) }
 
 // Decrypt decrypts the 8 byte buffer src using the key k and stores the result in dst.

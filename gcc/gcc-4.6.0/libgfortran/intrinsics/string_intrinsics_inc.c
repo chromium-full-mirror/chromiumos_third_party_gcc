@@ -90,7 +90,7 @@ compare_string (gfc_charlen_type len1, const CHARTYPE *s1,
   gfc_charlen_type len;
   int res;
 
-  res = MEMCMP (s1, s2, ((len1 < len2) ? len1 : len2));
+  res = memcmp (s1, s2, ((len1 < len2) ? len1 : len2) * sizeof (CHARTYPE));
   if (res != 0)
     return res;
 

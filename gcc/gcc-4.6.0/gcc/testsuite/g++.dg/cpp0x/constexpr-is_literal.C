@@ -33,7 +33,6 @@ YES(NotLiteral (NotLiteral::*)(NotLiteral));
 
 struct A {
   A(const A&) = default;
-  A(int);
 };
 
 NO(A);				// no constexpr ctor other than copy

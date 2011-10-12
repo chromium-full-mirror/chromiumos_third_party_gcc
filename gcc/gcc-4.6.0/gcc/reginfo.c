@@ -87,9 +87,6 @@ static const char initial_call_really_used_regs[] = CALL_REALLY_USED_REGISTERS;
    and are also considered fixed.  */
 char global_regs[FIRST_PSEUDO_REGISTER];
 
-/* Declaration for the global register. */
-static tree GTY(()) global_regs_decl[FIRST_PSEUDO_REGISTER];
-
 /* Same information as REGS_INVALIDATED_BY_CALL but in regset form to be used
    in dataflow more conveniently.  */
 regset regs_invalidated_by_call_regset;
@@ -529,7 +526,8 @@ init_reg_sets_1 (void)
 	  SET_HARD_REG_BIT (ok_regs, j);
 
       for (i = 0; i < N_REG_CLASSES; i++)
-	if ((targetm.class_max_nregs ((reg_class_t) i, (enum machine_mode) m)
+	if (((unsigned) CLASS_MAX_NREGS ((enum reg_class) i,
+					 (enum machine_mode) m)
 	     <= reg_class_size[i])
 	    && hard_reg_set_intersect_p (ok_regs, reg_class_contents[i]))
 	  {
@@ -631,9 +629,8 @@ register_move_cost (enum machine_mode mode, reg_class_t from, reg_class_t to)
 }
 
 /* Compute cost of moving registers to/from memory.  */
-
 int
-memory_move_cost (enum machine_mode mode, reg_class_t rclass, bool in)
+memory_move_cost (enum machine_mode mode, enum reg_class rclass, bool in)
 {
   return targetm.memory_move_cost (mode, rclass, in);
 }
@@ -827,10 +824,8 @@ fix_register (const char *name, int fixed, int call_used)
 
 /* Mark register number I as global.  */
 void
-globalize_reg (tree decl, int i)
+globalize_reg (int i)
 {
-  location_t loc = DECL_SOURCE_LOCATION (decl);
-
 #ifdef STACK_REGS
   if (IN_RANGE (i, FIRST_STACK_REG, LAST_STACK_REG))
     {
@@ -840,23 +835,18 @@ globalize_reg (tree decl, int i)
 #endif
 
   if (fixed_regs[i] == 0 && no_global_reg_vars)
-    error_at (loc, "global register variable follows a function definition");
+    error ("global register variable follows a function definition");
 
   if (global_regs[i])
     {
-      warning_at (loc, 0, 
-		  "register of %qD used for multiple global register variables",
-		  decl);
-      inform (DECL_SOURCE_LOCATION (global_regs_decl[i]),
-	      "conflicts with %qD", global_regs_decl[i]); 
+      warning (0, "register used for two global register variables");
       return;
     }
 
   if (call_used_regs[i] && ! fixed_regs[i])
-    warning_at (loc, 0, "call-clobbered register used for global register variable");
+    warning (0, "call-clobbered register used for global register variable");
 
   global_regs[i] = 1;
-  global_regs_decl[i] = decl;
 
   /* If we're globalizing the frame pointer, we need to set the
      appropriate regs_invalidated_by_call bit, even if it's already
@@ -900,9 +890,9 @@ struct reg_pref
      union of most major pair of classes, that generality is not required.  */
   char altclass;
 
-  /* allocnoclass is a register class that IRA uses for allocating
+  /* coverclass is a register class that IRA uses for allocating
      the pseudo.  */
-  char allocnoclass;
+  char coverclass;
 };
 
 /* Record preferences of each pseudo.  This is available after RA is
@@ -935,12 +925,12 @@ reg_alternate_class (int regno)
 
 /* Return the reg_class which is used by IRA for its allocation.  */
 enum reg_class
-reg_allocno_class (int regno)
+reg_cover_class (int regno)
 {
   if (reg_pref == 0)
     return NO_REGS;
 
-  return (enum reg_class) reg_pref[regno].allocnoclass;
+  return (enum reg_class) reg_pref[regno].coverclass;
 }
 
 
@@ -1037,18 +1027,18 @@ struct rtl_opt_pass pass_reginfo_init =
 
 
 /* Set up preferred, alternate, and cover classes for REGNO as
-   PREFCLASS, ALTCLASS, and ALLOCNOCLASS.  */
+   PREFCLASS, ALTCLASS, and COVERCLASS.  */
 void
 setup_reg_classes (int regno,
 		   enum reg_class prefclass, enum reg_class altclass,
-		   enum reg_class allocnoclass)
+		   enum reg_class coverclass)
 {
   if (reg_pref == NULL)
     return;
   gcc_assert (reg_info_size == max_reg_num ());
   reg_pref[regno].prefclass = prefclass;
   reg_pref[regno].altclass = altclass;
-  reg_pref[regno].allocnoclass = allocnoclass;
+  reg_pref[regno].coverclass = coverclass;
 }
 
 

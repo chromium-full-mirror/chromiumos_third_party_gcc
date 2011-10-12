@@ -29,11 +29,9 @@ func TestTicker(t *testing.T) {
 	}
 	// Now test that the ticker stopped
 	Sleep(2 * Delta)
-	select {
-	case <-ticker.C:
+	_, received := <-ticker.C
+	if received {
 		t.Fatal("Ticker did not shut down")
-	default:
-		// ok
 	}
 }
 
@@ -44,15 +42,4 @@ func TestTeardown(t *testing.T) {
 		<-ticker.C
 		ticker.Stop()
 	}
-}
-
-func BenchmarkTicker(b *testing.B) {
-	ticker := NewTicker(1)
-	b.ResetTimer()
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		<-ticker.C
-	}
-	b.StopTimer()
-	ticker.Stop()
 }

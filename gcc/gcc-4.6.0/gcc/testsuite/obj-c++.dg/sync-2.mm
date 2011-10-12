@@ -1,13 +1,13 @@
 /* Make sure that @synchronized parses and a very basic test runs.  */
 /* { dg-options "-fobjc-exceptions -fgnu-runtime" } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.h"
+#include "../objc-obj-c++-shared/Object1.h"
 
 int main (void)
 {
-  TestsuiteObject *a = [TestsuiteObject new];
-  TestsuiteObject *b = [TestsuiteObject new];
-  TestsuiteObject *c = [TestsuiteObject new];
+  Object *a = [Object new];
+  Object *b = [Object new];
+  Object *c = [Object new];
 
   /* This single-threaded test just checks that @synchronized() uses a
      recursive mutex, and that the runtime at least doesn't crash

@@ -47,6 +47,8 @@ extern "C" {
      protocol_getMethodDescription()
 */
 
+#include "deprecated/Protocol.h"
+
 #ifdef __cplusplus
 }
 #endif

@@ -38,8 +38,7 @@ struct A
 
 void g()
 {
-  std::shared_ptr<A> sp1 = factory<A>(2, 1.414); // { dg-error "required from here" }
+  std::shared_ptr<A> sp1 = factory<A>(2, 1.414); // { dg-error "instantiated from here" }
 }
 
-// Discard a bogus warning showing up with -Wall.
-// { dg-prune-output "control reaches end of" }
+// { dg-excess-errors "" }

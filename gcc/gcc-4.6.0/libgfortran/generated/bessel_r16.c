@@ -35,6 +35,11 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #else
 #define MATHFUNC(funcname) funcname ## l
 #endif
+#if defined(GFC_REAL_16_IS_FLOAT128)
+#define BUILTINMATHFUNC(funcname) funcname ## q
+#else
+#define BUILTINMATHFUNC(funcname) funcname ## l
+#endif
 
 #if defined (HAVE_GFC_REAL_16)
 

@@ -1,6 +1,6 @@
 // Move, forward and identity for C++0x + swap -*- C++ -*-
 
-// Copyright (C) 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+// Copyright (C) 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -40,7 +40,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   // Used, in C++03 mode too, by allocators, etc.
   template<typename _Tp>
     inline _Tp*
-    __addressof(_Tp& __r) _GLIBCXX_NOEXCEPT
+    __addressof(_Tp& __r)
     {
       return reinterpret_cast<_Tp*>
 	(&const_cast<char&>(reinterpret_cast<const volatile char&>(__r)));
@@ -58,13 +58,13 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   
   /// forward (as per N3143)
   template<typename _Tp>
-    constexpr _Tp&&
-    forward(typename std::remove_reference<_Tp>::type& __t) noexcept
+    inline _Tp&&
+    forward(typename std::remove_reference<_Tp>::type& __t) 
     { return static_cast<_Tp&&>(__t); }
 
   template<typename _Tp>
-    constexpr _Tp&&
-    forward(typename std::remove_reference<_Tp>::type&& __t) noexcept
+    inline _Tp&&
+    forward(typename std::remove_reference<_Tp>::type&& __t) 
     {
       static_assert(!std::is_lvalue_reference<_Tp>::value, "template argument"
 		    " substituting _Tp is an lvalue reference type");
@@ -73,32 +73,14 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /**
    *  @brief Move a value.
-   *  @ingroup utilities
+   *  @ingroup mutating_algorithms
    *  @param  __t  A thing of arbitrary type.
    *  @return Same, moved.
   */
   template<typename _Tp>
-    constexpr typename std::remove_reference<_Tp>::type&&
-    move(_Tp&& __t) noexcept
+    inline typename std::remove_reference<_Tp>::type&&
+    move(_Tp&& __t)
     { return static_cast<typename std::remove_reference<_Tp>::type&&>(__t); }
-
-
-  template<typename _Tp>
-    struct __move_if_noexcept_cond
-    : public __and_<__not_<is_nothrow_move_constructible<_Tp>>,
-                    is_copy_constructible<_Tp>>::type { };
-
-  /**
-   *  @brief Move unless it could throw and the type is copyable.
-   *  @ingroup utilities
-   *  @param  __x  A thing of arbitrary type.
-   *  @return Same, possibly moved.
-   */
-  template<typename _Tp>
-    inline typename
-    conditional<__move_if_noexcept_cond<_Tp>::value, const _Tp&, _Tp&&>::type
-    move_if_noexcept(_Tp& __x) noexcept
-    { return std::move(__x); }
 
   /// declval, from type_traits.
 
@@ -106,13 +88,12 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    *  @brief Returns the actual address of the object or function
    *         referenced by r, even in the presence of an overloaded
    *         operator&.
-   *  @ingroup utilities
    *  @param  __r  Reference to an object or function.
    *  @return   The actual address.
   */
   template<typename _Tp>
     inline _Tp*
-    addressof(_Tp& __r) noexcept
+    addressof(_Tp& __r)
     { return std::__addressof(__r); }
 
 _GLIBCXX_END_NAMESPACE_VERSION
@@ -131,7 +112,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /**
    *  @brief Swaps two values.
-   *  @ingroup utilities
+   *  @ingroup mutating_algorithms
    *  @param  __a  A thing of arbitrary type.
    *  @param  __b  Another thing of arbitrary type.
    *  @return   Nothing.
@@ -139,10 +120,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   template<typename _Tp>
     inline void
     swap(_Tp& __a, _Tp& __b)
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-    noexcept(__and_<is_nothrow_move_constructible<_Tp>,
-	            is_nothrow_move_assignable<_Tp>>::value)
-#endif
     {
       // concept requirements
       __glibcxx_function_requires(_SGIAssignableConcept<_Tp>)
@@ -157,9 +134,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   template<typename _Tp, size_t _Nm>
     inline void
     swap(_Tp (&__a)[_Nm], _Tp (&__b)[_Nm])
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-    noexcept(noexcept(swap(*__a, *__b)))
-#endif
     {
       for (size_t __n = 0; __n < _Nm; ++__n)
 	swap(__a[__n], __b[__n]);

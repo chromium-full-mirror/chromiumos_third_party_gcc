@@ -173,6 +173,9 @@ extern rtx expand_simple_unop (enum machine_mode, enum rtx_code, rtx, rtx,
    perform the operation described by CODE and MODE.  */
 extern int have_insn_for (enum rtx_code, enum machine_mode);
 
+extern rtx prepare_operand (int, rtx, int, enum machine_mode, enum machine_mode,
+			    int);
+
 /* Emit code to make a call to a constant function or a library call.  */
 extern void emit_libcall_block (rtx, rtx, rtx, rtx);
 
@@ -321,16 +324,8 @@ extern void emit_group_store (rtx, rtx, tree, int);
 /* Copy BLKmode object from a set of registers.  */
 extern rtx copy_blkmode_from_reg (rtx, rtx, tree);
 
-/* Mark REG as holding a parameter for the next CALL_INSN.
-   Mode is TYPE_MODE of the non-promoted parameter, or VOIDmode.  */
-extern void use_reg_mode (rtx *, rtx, enum machine_mode);
-
 /* Mark REG as holding a parameter for the next CALL_INSN.  */
-static inline void
-use_reg (rtx *fusage, rtx reg)
-{
-  use_reg_mode (fusage, reg, VOIDmode);
-}
+extern void use_reg (rtx *, rtx);
 
 /* Mark NREGS consecutive regs, starting at REGNO, as holding parameters
    for the next CALL_INSN.  */
@@ -496,10 +491,8 @@ extern rtx expand_call (tree, rtx, int);
 extern void fixup_tail_calls (void);
 
 #ifdef TREE_CODE
-extern rtx expand_variable_shift (enum tree_code, enum machine_mode,
-				  rtx, tree, rtx, int);
-extern rtx expand_shift (enum tree_code, enum machine_mode, rtx, int, rtx,
-			     int);
+extern rtx expand_shift (enum tree_code, enum machine_mode, rtx, tree, rtx,
+			 int);
 extern rtx expand_divmod (int, enum tree_code, enum machine_mode, rtx, rtx,
 			  rtx, int);
 #endif
@@ -673,10 +666,7 @@ extern enum machine_mode
 mode_for_extraction (enum extraction_pattern, int);
 
 extern void store_bit_field (rtx, unsigned HOST_WIDE_INT,
-			     unsigned HOST_WIDE_INT,
-			     unsigned HOST_WIDE_INT,
-			     unsigned HOST_WIDE_INT,
-			     enum machine_mode, rtx);
+			     unsigned HOST_WIDE_INT, enum machine_mode, rtx);
 extern rtx extract_bit_field (rtx, unsigned HOST_WIDE_INT,
 			      unsigned HOST_WIDE_INT, int, bool, rtx,
 			      enum machine_mode, enum machine_mode);

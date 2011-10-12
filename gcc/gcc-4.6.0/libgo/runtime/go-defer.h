@@ -13,10 +13,9 @@ struct __go_defer_stack
   /* The next entry in the stack.  */
   struct __go_defer_stack *__next;
 
-  /* The stack variable for the function which called this defer
-     statement.  This is set to 1 if we are returning from that
-     function, 0 if we are panicing through it.  */
-  _Bool *__frame;
+  /* The frame pointer for the function which called this defer
+     statement.  */
+  void *__frame;
 
   /* The value of the panic stack when this function is deferred.
      This function can not recover this value from the panic stack.

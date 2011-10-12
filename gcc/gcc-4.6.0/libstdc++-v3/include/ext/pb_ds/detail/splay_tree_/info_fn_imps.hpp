@@ -34,6 +34,6 @@
 // warranty.
 
 /**
- * @file splay_tree_/info_fn_imps.hpp
+ * @file info_fn_imps.hpp
  * Contains an implementation.
  */

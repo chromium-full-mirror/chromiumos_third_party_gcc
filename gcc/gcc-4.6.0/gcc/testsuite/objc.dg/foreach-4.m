@@ -5,9 +5,10 @@
 /* { dg-skip-if "No NeXT fast enum. pre-Darwin9" { *-*-darwin[5-8]* } { "-fnext-runtime" } { "" } } */
 /* { dg-xfail-run-if "Needs OBJC2 ABI" { *-*-darwin* && { lp64 && { ! objc2 } } } { "-fnext-runtime" } { "" } } */
 /* { dg-options "-mno-constant-cfstrings" { target *-*-darwin* } } */
-/* { dg-additional-sources "../objc-obj-c++-shared/nsconstantstring-class-impl.m" } */
+/* { dg-additional-sources "../objc-obj-c++-shared/Object1.m ../objc-obj-c++-shared/nsconstantstring-class-impl.m" } */
 
-#import "../objc-obj-c++-shared/TestsuiteObject.m"
+#import "../objc-obj-c++-shared/Object1.h"
+#import "../objc-obj-c++-shared/next-mapping.h"
 #ifndef __NEXT_RUNTIME__
 #include <objc/NXConstStr.h>
 #else
@@ -31,7 +32,7 @@ struct __objcFastEnumerationState
     enumeration.  You create the array with some objects; you can
     mutate the array, and you can fast-enumerate it.
  */
-@interface MyArray : TestsuiteObject
+@interface MyArray : Object
 {
   unsigned int length;
   id *objects;
@@ -44,7 +45,7 @@ struct __objcFastEnumerationState
                                        count:(unsigned long)len;
 @end
 
-@implementation MyArray : TestsuiteObject
+@implementation MyArray : Object
 - (id) initWithLength: (unsigned int)l
 	      objects: (id *)o
 {

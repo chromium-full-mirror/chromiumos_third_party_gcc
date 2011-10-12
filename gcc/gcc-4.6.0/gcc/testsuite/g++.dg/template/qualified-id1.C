@@ -23,5 +23,5 @@ template <typename T> void foo()
 
 void bar()
 {
-  foo<A>(); // { dg-message "required" }
+  foo<A>(); // { dg-message "instantiated" }
 }

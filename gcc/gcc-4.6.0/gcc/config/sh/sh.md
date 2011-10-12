@@ -346,11 +346,11 @@
 ;; ??? This looks ugly because genattrtab won't allow if_then_else or cond
 ;; inside an le.
 (define_attr "short_cbranch_p" "no,yes"
-  (cond [(match_test "mdep_reorg_phase <= SH_FIXUP_PCLOAD")
+  (cond [(ne (symbol_ref "mdep_reorg_phase <= SH_FIXUP_PCLOAD") (const_int 0))
 	 (const_string "no")
 	 (leu (plus (minus (match_dup 0) (pc)) (const_int 252)) (const_int 506))
 	 (const_string "yes")
-	 (match_test "NEXT_INSN (PREV_INSN (insn)) != insn")
+	 (ne (symbol_ref "NEXT_INSN (PREV_INSN (insn)) != insn") (const_int 0))
 	 (const_string "no")
 	 (leu (plus (minus (match_dup 0) (pc)) (const_int 252)) (const_int 508))
 	 (const_string "yes")
@@ -360,7 +360,7 @@
   (cond [(leu (plus (minus (match_dup 0) (pc)) (const_int 990))
 	      (const_int 1988))
 	 (const_string "yes")
-	 (match_test "mdep_reorg_phase <= SH_FIXUP_PCLOAD")
+	 (ne (symbol_ref "mdep_reorg_phase <= SH_FIXUP_PCLOAD") (const_int 0))
 	 (const_string "no")
 	 (leu (plus (minus (match_dup 0) (pc)) (const_int 4092))
 	      (const_int 8186))
@@ -371,7 +371,7 @@
   (cond [(leu (plus (minus (match_dup 0) (pc)) (const_int 988))
 	      (const_int 1986))
 	 (const_string "yes")
-	 (match_test "mdep_reorg_phase <= SH_FIXUP_PCLOAD")
+	 (ne (symbol_ref "mdep_reorg_phase <= SH_FIXUP_PCLOAD") (const_int 0))
 	 (const_string "no")
 	 (leu (plus (minus (match_dup 0) (pc)) (const_int 4090))
 	       (const_int 8184))
@@ -379,12 +379,12 @@
 	 ] (const_string "no")))
 
 (define_attr "braf_branch_p" "no,yes"
-  (cond [(match_test "! TARGET_SH2")
+  (cond [(ne (symbol_ref "! TARGET_SH2") (const_int 0))
 	 (const_string "no")
 	 (leu (plus (minus (match_dup 0) (pc)) (const_int 10330))
 	      (const_int 20660))
 	 (const_string "yes")
-	 (match_test "mdep_reorg_phase <= SH_FIXUP_PCLOAD")
+	 (ne (symbol_ref "mdep_reorg_phase <= SH_FIXUP_PCLOAD") (const_int 0))
 	 (const_string "no")
 	 (leu (plus (minus (match_dup 0) (pc)) (const_int 32764))
 	      (const_int 65530))
@@ -392,12 +392,12 @@
 	 ] (const_string "no")))
 
 (define_attr "braf_cbranch_p" "no,yes"
-  (cond [(match_test "! TARGET_SH2")
+  (cond [(ne (symbol_ref "! TARGET_SH2") (const_int 0))
 	 (const_string "no")
 	 (leu (plus (minus (match_dup 0) (pc)) (const_int 10328))
 	      (const_int 20658))
 	 (const_string "yes")
-	 (match_test "mdep_reorg_phase <= SH_FIXUP_PCLOAD")
+	 (ne (symbol_ref "mdep_reorg_phase <= SH_FIXUP_PCLOAD") (const_int 0))
 	 (const_string "no")
 	 (leu (plus (minus (match_dup 0) (pc)) (const_int 32762))
 	      (const_int 65528))
@@ -426,36 +426,39 @@
 ;; ??? using pc is not computed transitively.
 		(ne (match_dup 0) (match_dup 0))
 		(const_int 14)
-		(match_test "flag_pic")
+		(ne (symbol_ref ("flag_pic")) (const_int 0))
 		(const_int 24)
 		] (const_int 16))
 	 (eq_attr "type" "jump")
 	 (cond [(eq_attr "med_branch_p" "yes")
 		(const_int 2)
-		(and (match_test "prev_nonnote_insn (insn)")
-		     (and (eq (symbol_ref "GET_CODE (prev_nonnote_insn (insn))")			      (symbol_ref "INSN"))
-			  (eq (symbol_ref "INSN_CODE (prev_nonnote_insn (insn))")			      (symbol_ref "code_for_indirect_jump_scratch"))))
+		(and (ne (symbol_ref "prev_nonnote_insn (insn)")
+			 (const_int 0))
+		     (and (eq (symbol_ref "GET_CODE (prev_nonnote_insn (insn))")
+			      (symbol_ref "INSN"))
+			  (eq (symbol_ref "INSN_CODE (prev_nonnote_insn (insn))")
+			      (symbol_ref "code_for_indirect_jump_scratch"))))
                 (cond [(eq_attr "braf_branch_p" "yes")
                        (const_int 6)
-                       (not (match_test "flag_pic"))
+                       (eq (symbol_ref "flag_pic") (const_int 0))
                        (const_int 10)
-                       (match_test "TARGET_SH2")
+                       (ne (symbol_ref "TARGET_SH2") (const_int 0))
                        (const_int 10)] (const_int 18))
 		(eq_attr "braf_branch_p" "yes")
 		(const_int 10)
 ;; ??? using pc is not computed transitively.
 		(ne (match_dup 0) (match_dup 0))
 		(const_int 12)
-		(match_test "flag_pic")
+		(ne (symbol_ref ("flag_pic")) (const_int 0))
 		(const_int 22)
 		] (const_int 14))
 	 (eq_attr "type" "pt_media")
-	 (if_then_else (match_test "TARGET_SHMEDIA64")
+	 (if_then_else (ne (symbol_ref "TARGET_SHMEDIA64") (const_int 0))
 		       (const_int 20) (const_int 12))
 	 (and (eq_attr "type" "jump_media")
-	      (match_test "TARGET_SH5_CUT2_WORKAROUND"))
+	      (ne (symbol_ref "TARGET_SH5_CUT2_WORKAROUND") (const_int 0)))
 	 (const_int 8)
-	 ] (if_then_else (match_test "TARGET_SHMEDIA")
+	 ] (if_then_else (ne (symbol_ref "TARGET_SHMEDIA") (const_int 0))
 			 (const_int 4)
 			 (const_int 2))))
 
@@ -473,13 +476,15 @@
 (define_attr "needs_delay_slot" "yes,no" (const_string "no"))
 
 (define_attr "banked" "yes,no" 
-	(cond [(match_test "sh_loads_bankedreg_p (insn)")
+	(cond [(eq (symbol_ref "sh_loads_bankedreg_p (insn)")
+		   (const_int 1))
 	       (const_string "yes")]
 	      (const_string "no")))
 
 ;; ??? This should be (nil) instead of (const_int 0)
 (define_attr "hit_stack" "yes,no"
-	(cond [(not (match_test "find_regno_note (insn, REG_INC, SP_REG)"))
+	(cond [(eq (symbol_ref "find_regno_note (insn, REG_INC, SP_REG)")
+		   (const_int 0))
 	       (const_string "no")]
 	      (const_string "yes")))
 
@@ -554,7 +559,7 @@
 		  (eq_attr "type" "!pload,prset"))
 	     (and (eq_attr "interrupt_function" "yes")
 		  (ior
-		   (not (match_test "TARGET_SH3"))
+		   (eq (symbol_ref "TARGET_SH3") (const_int 0))
 		   (eq_attr "hit_stack" "no")
 		   (eq_attr "banked" "no"))))) (nil) (nil)])
 
@@ -575,7 +580,7 @@
 
 (define_delay
   (and (eq_attr "type" "cbranch")
-       (match_test "TARGET_SH2"))
+       (ne (symbol_ref "TARGET_SH2") (const_int 0)))
   ;; SH2e has a hardware bug that pretty much prohibits the use of
   ;; annuled delay slots.
   [(eq_attr "cond_delay_slot" "yes") (and (eq_attr "cond_delay_slot" "yes")
@@ -1604,7 +1609,7 @@
    (clobber (reg:SI PR_REG))
    (clobber (reg:SI R4_REG))
    (use (match_operand:SI 1 "arith_reg_operand" "r"))]
-  "TARGET_SH1 && (! TARGET_SH4 || TARGET_DIVIDE_CALL_DIV1)"
+  "TARGET_SH1 && ! TARGET_SH4"
   "jsr	@%1%#"
   [(set_attr "type" "sfunc")
    (set_attr "needs_delay_slot" "yes")])
@@ -1810,7 +1815,7 @@
    (clobber (reg:SI R2_REG))
    (clobber (reg:SI R3_REG))
    (use (match_operand:SI 1 "arith_reg_operand" "r"))]
-  "TARGET_SH1 && (! TARGET_SH4 || TARGET_DIVIDE_CALL_DIV1)"
+  "TARGET_SH1 && ! TARGET_SH4"
   "jsr	@%1%#"
   [(set_attr "type" "sfunc")
    (set_attr "needs_delay_slot" "yes")])
@@ -3473,7 +3478,7 @@ label:
   "TARGET_SH1 && ! sh_dynamicalize_shift_p (operands[2])"
   "#"
   [(set (attr "length")
-	(cond [(match_test "shift_insns_rtx (insn)")
+	(cond [(eq (symbol_ref "shift_insns_rtx (insn)") (const_int 1))
 	       (const_string "2")
 	       (eq (symbol_ref "shift_insns_rtx (insn)") (const_int 2))
 	       (const_string "4")
@@ -3539,7 +3544,7 @@ label:
   "TARGET_SH1"
   "#"
   [(set (attr "length")
-	(cond [(match_test "shift_insns_rtx (insn)")
+	(cond [(eq (symbol_ref "shift_insns_rtx (insn)") (const_int 1))
 	       (const_string "2")
 	       (eq (symbol_ref "shift_insns_rtx (insn)") (const_int 2))
 	       (const_string "4")]
@@ -3775,7 +3780,7 @@ label:
   "TARGET_SH1 && ! sh_dynamicalize_shift_p (operands[2])"
   "#"
   [(set (attr "length")
-	(cond [(match_test "shift_insns_rtx (insn)")
+	(cond [(eq (symbol_ref "shift_insns_rtx (insn)") (const_int 1))
 	       (const_string "2")
 	       (eq (symbol_ref "shift_insns_rtx (insn)") (const_int 2))
 	       (const_string "4")
@@ -4196,7 +4201,7 @@ label:
   "TARGET_SH1 && (unsigned)shl_sext_kind (operands[2], operands[3], 0) - 1 < 5"
   "#"
   [(set (attr "length")
-	(cond [(match_test "shl_sext_length (insn)")
+	(cond [(eq (symbol_ref "shl_sext_length (insn)") (const_int 1))
 	       (const_string "2")
 	       (eq (symbol_ref "shl_sext_length (insn)") (const_int 2))
 	       (const_string "4")
@@ -4282,39 +4287,28 @@ label:
   "sub	r63, %1, %0"
   [(set_attr "type" "arith_media")])
 
-
-
-;; Don't expand immediately because otherwise neg:DI (abs:DI) will not be
-;; combined.
 (define_expand "negdi2"
-  [(set (match_operand:DI 0 "arith_reg_dest" "")
-	(neg:DI (match_operand:DI 1 "arith_reg_operand" "")))
-   (clobber (reg:SI T_REG))]
+  [(set (match_operand:DI 0 "arith_reg_operand" "")
+	(neg:DI (match_operand:DI 1 "arith_reg_operand" "")))]
   ""
-  "")
-
-(define_insn_and_split "*negdi2"
-  [(set (match_operand:DI 0 "arith_reg_dest" "=r")
-	(neg:DI (match_operand:DI 1 "arith_reg_operand" "r")))]
-  "TARGET_SH1"
-  "#"
-  "TARGET_SH1"
-  [(const_int 0)]
   "
 {
-  int low_word = (TARGET_LITTLE_ENDIAN ? 0 : 1);
-  int high_word = (TARGET_LITTLE_ENDIAN ? 1 : 0);
+  if (TARGET_SH1)
+    {
+      int low_word = (TARGET_LITTLE_ENDIAN ? 0 : 1);
+      int high_word = (TARGET_LITTLE_ENDIAN ? 1 : 0);
 
-  rtx low_src = operand_subword (operands[1], low_word, 0, DImode);
-  rtx high_src = operand_subword (operands[1], high_word, 0, DImode);
+      rtx low_src = operand_subword (operands[1], low_word, 0, DImode);
+      rtx high_src = operand_subword (operands[1], high_word, 0, DImode);
 
-  rtx low_dst = operand_subword (operands[0], low_word, 1, DImode);
-  rtx high_dst = operand_subword (operands[0], high_word, 1, DImode);
+      rtx low_dst = operand_subword (operands[0], low_word, 1, DImode);
+      rtx high_dst = operand_subword (operands[0], high_word, 1, DImode);
 
-  emit_insn (gen_clrt ());
-  emit_insn (gen_negc (low_dst, low_src));
-  emit_insn (gen_negc (high_dst, high_src));
-  DONE;
+      emit_insn (gen_clrt ());
+      emit_insn (gen_negc (low_dst, low_src));
+      emit_insn (gen_negc (high_dst, high_src));
+      DONE;
+    }
 }")
 
 (define_insn "negsi2"
@@ -4337,77 +4331,27 @@ label:
 		(const_int -1)))]
   "TARGET_SHMEDIA" "")
 
-(define_expand "abssi2"
+/* The SH4 202 can do zero-offset branches without pipeline stalls.
+   This can be used as some kind of conditional execution, which is useful
+   for abs.  */
+(define_split
   [(set (match_operand:SI 0 "arith_reg_dest" "")
-  	(abs:SI (match_operand:SI 1 "arith_reg_operand" "")))
-   (clobber (reg:SI T_REG))]
-  ""
-  "")
-
-(define_insn_and_split "*abssi2"
-  [(set (match_operand:SI 0 "arith_reg_dest" "=r")
-  	(abs:SI (match_operand:SI 1 "arith_reg_operand" "r")))]
-  "TARGET_SH1"
-  "#"
-  "TARGET_SH1"
-  [(const_int 0)]
-  "
-{
-  emit_insn (gen_cmpgesi_t (operands[1], const0_rtx));
-  emit_insn (gen_negsi_cond (operands[0], operands[1], operands[1],
-		 const1_rtx));
-  DONE;
-}")
-
-(define_insn_and_split "*negabssi2"
-  [(set (match_operand:SI 0 "arith_reg_dest" "=r")
-  	(neg:SI (abs:SI (match_operand:SI 1 "arith_reg_operand" "r"))))]
-  "TARGET_SH1"
-  "#"
-  "TARGET_SH1"
-  [(const_int 0)]
-  "
-{
-  emit_insn (gen_cmpgesi_t (operands[1], const0_rtx));
-  emit_insn (gen_negsi_cond (operands[0], operands[1], operands[1],
-		 const0_rtx));
-  DONE;
-}")
-
-
-;; The SH4 202 can do zero-offset branches without pipeline stalls.
-;; This can be used as some kind of conditional execution, which is useful
-;; for abs.
-;; Actually the instruction scheduling should decide whether to use a
-;; zero-offset branch or not for any generic case involving a single
-;; instruction on SH4 202.
-
-(define_insn_and_split "negsi_cond"
-  [(set (match_operand:SI 0 "arith_reg_dest" "=r,r")
-	(if_then_else:SI (eq:SI (reg:SI T_REG)
-			  (match_operand:SI 3 "const_int_operand" "M,N"))
-	 (match_operand:SI 1 "arith_reg_operand" "0,0")
-	 (neg:SI (match_operand:SI 2 "arith_reg_operand" "r,r"))))]
+	(plus:SI (xor:SI (neg:SI (reg:SI T_REG))
+			 (match_operand:SI 1 "arith_reg_operand" ""))
+		 (reg:SI T_REG)))]
   "TARGET_HARD_SH4"
-  "@
-	bt\\t0f\;neg\\t%2,%0\\n0:
-	bf\\t0f\;neg\\t%2,%0\\n0:"
-  "!TARGET_HARD_SH4"
   [(const_int 0)]
-  "
-{
-  rtx skip_neg_label = gen_label_rtx ();
+  "emit_insn (gen_movsi_i (operands[0], operands[1]));
+   emit_insn (gen_cneg (operands[0], operands[0], operands[0]));
+   DONE;")
 
-  emit_insn (gen_movsi (operands[0], operands[1]));
-
-  emit_jump_insn (INTVAL (operands[3])
-		  ? gen_branch_true (skip_neg_label)
-		  : gen_branch_false (skip_neg_label));
-
-  emit_label_after (skip_neg_label,
-		    emit_insn (gen_negsi2 (operands[0], operands[1])));
-  DONE;
-}"
+(define_insn "cneg"
+  [(set (match_operand:SI 0 "arith_reg_dest" "=r")
+	(if_then_else:SI (eq:SI (reg:SI T_REG) (const_int 0))
+		      (match_operand:SI 1 "arith_reg_operand" "0")
+		      (neg:SI (match_operand:SI 2 "arith_reg_operand" "r"))))]
+  "TARGET_HARD_SH4"
+  "bf 0f\;neg %2,%0\\n0:"
   [(set_attr "type" "arith") ;; poor approximation
    (set_attr "length" "4")])
 
@@ -4433,7 +4377,7 @@ label:
 	ld%M1.uw	%m1, %0"
   [(set_attr "type" "*,load_media")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "ignore")))])
 
@@ -4469,7 +4413,7 @@ label:
 	ld%M1.ub	%m1, %0"
   [(set_attr "type" "arith_media,load_media")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "ignore")))])
 
@@ -4499,7 +4443,7 @@ label:
 	ld%M1.uw	%m1, %0"
   [(set_attr "type" "arith_media,load_media")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "ignore")))])
 
@@ -4546,7 +4490,7 @@ label:
 	ld%M1.ub	%m1, %0"
   [(set_attr "type" "arith_media,load_media")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "ignore")))])
 
@@ -4575,7 +4519,7 @@ label:
 	fmov.sl	%1, %0"
   [(set_attr "type" "arith_media,load_media,fpconv_media")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "extend")))])
 
@@ -4588,7 +4532,7 @@ label:
 	ld%M1.w	%m1, %0"
   [(set_attr "type" "*,load_media")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "ignore")))])
 
@@ -4613,7 +4557,7 @@ label:
 	ld%M1.b	%m1, %0"
   [(set_attr "type" "*,load_media")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "ignore")))])
 
@@ -4653,7 +4597,7 @@ label:
 	ld%M1.w	%m1, %0"
   [(set_attr "type" "arith_media,load_media")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "ignore")))])
 
@@ -4690,7 +4634,7 @@ label:
    (set_attr_alternative "length"
      [(const_int 2)
        (if_then_else
-	(match_test "TARGET_SH2A")
+	(ne (symbol_ref "TARGET_SH2A") (const_int 0))
 	(const_int 4) (const_int 2))])])
 
 (define_insn "*extendqisi2_media"
@@ -4702,7 +4646,7 @@ label:
 	ld%M1.b	%m1, %0"
   [(set_attr "type" "arith_media,load_media")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "ignore")))])
 
@@ -4733,7 +4677,7 @@ label:
    (set_attr_alternative "length"
      [(const_int 2)
        (if_then_else
-	(match_test "TARGET_SH2A")
+	(ne (symbol_ref "TARGET_SH2A") (const_int 0))
 	(const_int 4) (const_int 2))])])
 
 /* It would seem useful to combine the truncXi patterns into the movXi
@@ -4752,7 +4696,7 @@ label:
 	fmov.s	%T1, %0"
   [(set_attr "type"   "arith_media,store_media,fstore_media,fload_media,fpconv_media,fmove_media")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "extend")))])
 
@@ -4766,7 +4710,7 @@ label:
   [(set_attr "type"   "arith_media,store_media")
    (set_attr "length" "8,4")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "extend")))])
 
@@ -4782,7 +4726,7 @@ label:
 	st%M0.b	%m0, %1"
   [(set_attr "type"   "arith_media,store")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "extend")))])
 ;; -------------------------------------------------------------------------
@@ -4993,13 +4937,13 @@ label:
       (const_int 4)
       (const_int 2)
       (if_then_else
-	(match_test "TARGET_SH2A")
+	(ne (symbol_ref "TARGET_SH2A") (const_int 0))
 	(const_int 4) (const_int 2))
       (const_int 2)
       (const_int 2)
       (const_int 2)
       (if_then_else
-	(match_test "TARGET_SH2A")
+	(ne (symbol_ref "TARGET_SH2A") (const_int 0))
 	(const_int 4) (const_int 2))
       (const_int 2)
       (const_int 2)
@@ -5077,7 +5021,7 @@ label:
   [(set_attr "type"   "arith_media,arith_media,*,load_media,store_media,fload_media,fstore_media,fload_media,fpconv_media,fmove_media,ptabs_media,gettr_media,pt_media")
    (set_attr "length" "4,4,8,4,4,4,4,4,4,4,4,4,12")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "ignore")))])
 
@@ -5102,7 +5046,7 @@ label:
   [(set_attr "type"   "arith_media,arith_media,*,load_media,store_media,ptabs_media,gettr_media,pt_media")
    (set_attr "length" "4,4,8,4,4,4,4,12")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "ignore")))])
 
@@ -5297,10 +5241,10 @@ label:
      [(const_int 2)
       (const_int 2)
       (if_then_else
-	(match_test "TARGET_SH2A")
+	(ne (symbol_ref "TARGET_SH2A") (const_int 0))
 	(const_int 4) (const_int 2))
       (if_then_else
-	(match_test "TARGET_SH2A")
+	(ne (symbol_ref "TARGET_SH2A") (const_int 0))
 	(const_int 4) (const_int 2))
       (const_int 2)
       (const_int 2)
@@ -5319,7 +5263,7 @@ label:
 	st%M0.b	%m0, %N1"
   [(set_attr "type" "arith_media,arith_media,load_media,store_media")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "ignore")))])
 
@@ -5381,7 +5325,7 @@ label:
 	st%M0.w	%m0, %N1"
   [(set_attr "type" "arith_media,arith_media,*,load_media,store_media")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "ignore")))])
 
@@ -5887,10 +5831,10 @@ label:
       ;; We can't use 4-byte push/pop on SHcompact, so we have to
       ;; increment or decrement r15 explicitly.
       (if_then_else
-       (match_test "TARGET_SHCOMPACT")
+       (ne (symbol_ref "TARGET_SHCOMPACT") (const_int 0))
        (const_int 10) (const_int 8))
       (if_then_else
-       (match_test "TARGET_SHCOMPACT")
+       (ne (symbol_ref "TARGET_SHCOMPACT") (const_int 0))
        (const_int 10) (const_int 8))])
    (set_attr "type" "fmove,move,pcfload,fload,fstore,pcload,load,store,load,fload")
    (set_attr "late_fp_use" "*,*,*,*,yes,*,*,*,*,*")
@@ -6570,7 +6514,7 @@ label:
 	st%M0.l	%m0, %N1"
   [(set_attr "type" "fmove_media,fload_media,fpconv_media,arith_media,*,fload_media,fstore_media,load_media,store_media")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "ignore")))])
 
@@ -6587,7 +6531,7 @@ label:
 	st%M0.l	%m0, %N1"
   [(set_attr "type" "arith_media,*,load_media,store_media")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "ignore")))])
 
@@ -6679,17 +6623,17 @@ label:
       (const_int 2)
       (const_int 4)
       (if_then_else
-	(match_test "TARGET_SH2A")
+	(ne (symbol_ref "TARGET_SH2A") (const_int 0))
 	(const_int 4) (const_int 2))
       (if_then_else
-	(match_test "TARGET_SH2A")
+	(ne (symbol_ref "TARGET_SH2A") (const_int 0))
 	(const_int 4) (const_int 2))
       (const_int 2)
       (if_then_else
-	(match_test "TARGET_SH2A")
+	(ne (symbol_ref "TARGET_SH2A") (const_int 0))
 	(const_int 4) (const_int 2))
       (if_then_else
-	(match_test "TARGET_SH2A")
+	(ne (symbol_ref "TARGET_SH2A") (const_int 0))
 	(const_int 4) (const_int 2))
       (const_int 2)
       (const_int 2)
@@ -11126,7 +11070,7 @@ mov.l\\t1f,r0\\n\\
       && MEM_P (operands[1]) && MEM_ALIGN (operands[1]) < 32)
     {
       rtx src = adjust_address (operands[1], BLKmode, 0);
-      set_mem_size (src, 4);
+      set_mem_size (src, GEN_INT (4));
       emit_insn (gen_movua (operands[0], src));
       DONE;
     }
@@ -11158,7 +11102,7 @@ mov.l\\t1f,r0\\n\\
       && MEM_P (operands[1]) && MEM_ALIGN (operands[1]) < 32)
     {
       rtx src = adjust_address (operands[1], BLKmode, 0);
-      set_mem_size (src, 4);
+      set_mem_size (src, GEN_INT (4));
       emit_insn (gen_movua (operands[0], src));
       DONE;
     }
@@ -11669,7 +11613,7 @@ mov.l\\t1f,r0\\n\\
   [(set_attr "type"   "arith_media,arith_media,*,load_media,store_media")
    (set_attr "length" "4,4,16,4,4")
    (set (attr "highpart")
-	(cond [(match_test "sh_contains_memref_p (insn)")
+	(cond [(ne (symbol_ref "sh_contains_memref_p (insn)") (const_int 0))
 	       (const_string "user")]
 	      (const_string "ignore")))])
 

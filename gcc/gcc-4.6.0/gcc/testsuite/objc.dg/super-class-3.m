@@ -4,12 +4,12 @@
 /* { dg-do run } */
 /* { dg-xfail-run-if "Needs OBJC2 ABI" { *-*-darwin* && { lp64 && { ! objc2 } } } { "-fnext-runtime" } { "" } } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.m"
+#include "../objc-obj-c++-shared/Object1.h"
 
 #include <stdlib.h>
 #define CHECK_IF(expr) if(!(expr)) abort()
 
-@interface _Child: TestsuiteObject
+@interface _Child: Object
 + (int) flashCache;
 @end
 
@@ -21,10 +21,10 @@
 + (int) flushCache2;
 @end
 
-int _TestsuiteObject = 23;  /* Should not conflict with @interface TestsuiteObject.  */
+int _Object = 23;  /* Should not conflict with @interface Object.  */
 
 @implementation _Child
-+ (int) flashCache { return 12 + _TestsuiteObject; }
++ (int) flashCache { return 12 + _Object; }
 @end
 
 @implementation Child
@@ -43,3 +43,4 @@ int main(void) {
   return 0; 
 }
 
+#include "../objc-obj-c++-shared/Object1-implementation.h"

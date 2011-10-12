@@ -1,15 +1,10 @@
-2011-04-20  Jim Meyering  <meyering@redhat.com>
+2011-06-27  Release Manager
 
-	* decNumber.c (decNumberFromString): Remove useless
-	if-before-free test.
-	(decNumberCompareTotalMag, decNumberExp, decNumberFMA): Likewise.
-	(decNumberLn, decNumberLog10, decNumberPower): Likewise.
-	(decNumberReduce, decNumberSquareRoot, decAddOp): Likewise.
-	(decDivideOp, NEEDTWO, decExpOp, LN2): Likewise.
+	* GCC 4.6.1 released.
 
-2011-03-28  Mike Frysinger  <vapier@gentoo.org>
+2011-03-25  Release Manager
 
-	* .gitignore: New file.
+	* GCC 4.6.0 released.
 
 2010-11-24  Nathan Froyd  <froydnj@codesourcery.com>
 

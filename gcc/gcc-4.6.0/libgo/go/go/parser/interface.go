@@ -14,8 +14,9 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"path/filepath"
+	pathutil "path"
 )
+
 
 // If src != nil, readSource converts src to a []byte if possible;
 // otherwise it returns an error. If src == nil, readSource returns
@@ -41,20 +42,19 @@ func readSource(filename string, src interface{}) ([]byte, os.Error) {
 			}
 			return buf.Bytes(), nil
 		default:
-			return nil, os.NewError("invalid source")
+			return nil, os.ErrorString("invalid source")
 		}
 	}
 
 	return ioutil.ReadFile(filename)
 }
 
-func (p *parser) errors() os.Error {
-	mode := scanner.Sorted
-	if p.mode&SpuriousErrors == 0 {
-		mode = scanner.NoMultiples
-	}
-	return p.GetError(mode)
+
+func (p *parser) parseEOF() os.Error {
+	p.expect(token.EOF)
+	return p.GetError(scanner.Sorted)
 }
+
 
 // ParseExpr parses a Go expression and returns the corresponding
 // AST node. The fset, filename, and src arguments have the same interpretation
@@ -69,14 +69,13 @@ func ParseExpr(fset *token.FileSet, filename string, src interface{}) (ast.Expr,
 
 	var p parser
 	p.init(fset, filename, data, 0)
-	x := p.parseRhs()
+	x := p.parseExpr()
 	if p.tok == token.SEMICOLON {
 		p.next() // consume automatically inserted semicolon, if any
 	}
-	p.expect(token.EOF)
-
-	return x, p.errors()
+	return x, p.parseEOF()
 }
+
 
 // ParseStmtList parses a list of Go statements and returns the list
 // of corresponding AST nodes. The fset, filename, and src arguments have the same
@@ -91,11 +90,9 @@ func ParseStmtList(fset *token.FileSet, filename string, src interface{}) ([]ast
 
 	var p parser
 	p.init(fset, filename, data, 0)
-	list := p.parseStmtList()
-	p.expect(token.EOF)
-
-	return list, p.errors()
+	return p.parseStmtList(), p.parseEOF()
 }
+
 
 // ParseDeclList parses a list of Go declarations and returns the list
 // of corresponding AST nodes. The fset, filename, and src arguments have the same
@@ -110,11 +107,9 @@ func ParseDeclList(fset *token.FileSet, filename string, src interface{}) ([]ast
 
 	var p parser
 	p.init(fset, filename, data, 0)
-	list := p.parseDeclList()
-	p.expect(token.EOF)
-
-	return list, p.errors()
+	return p.parseDeclList(), p.parseEOF()
 }
+
 
 // ParseFile parses the source code of a single Go source file and returns
 // the corresponding ast.File node. The source code may be provided via
@@ -144,10 +139,9 @@ func ParseFile(fset *token.FileSet, filename string, src interface{}, mode uint)
 
 	var p parser
 	p.init(fset, filename, data, mode)
-	file := p.parseFile() // parseFile reads to EOF
-
-	return file, p.errors()
+	return p.parseFile(), p.GetError(scanner.NoMultiples) // parseFile() reads to EOF
 }
+
 
 // ParseFiles calls ParseFile for each file in the filenames list and returns
 // a map of package name -> package AST with all the packages found. The mode
@@ -165,8 +159,7 @@ func ParseFiles(fset *token.FileSet, filenames []string, mode uint) (pkgs map[st
 			name := src.Name.Name
 			pkg, found := pkgs[name]
 			if !found {
-				// TODO(gri) Use NewPackage here; reconsider ParseFiles API.
-				pkg = &ast.Package{name, nil, nil, make(map[string]*ast.File)}
+				pkg = &ast.Package{name, nil, make(map[string]*ast.File)}
 				pkgs[name] = pkg
 			}
 			pkg.Files[filename] = src
@@ -176,6 +169,7 @@ func ParseFiles(fset *token.FileSet, filenames []string, mode uint) (pkgs map[st
 	}
 	return
 }
+
 
 // ParseDir calls ParseFile for the files in the directory specified by path and
 // returns a map of package name -> package AST with all the packages found. If
@@ -188,7 +182,7 @@ func ParseFiles(fset *token.FileSet, filenames []string, mode uint) (pkgs map[st
 // error are returned.
 //
 func ParseDir(fset *token.FileSet, path string, filter func(*os.FileInfo) bool, mode uint) (map[string]*ast.Package, os.Error) {
-	fd, err := os.Open(path)
+	fd, err := os.Open(path, os.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +198,7 @@ func ParseDir(fset *token.FileSet, path string, filter func(*os.FileInfo) bool, 
 	for i := 0; i < len(list); i++ {
 		d := &list[i]
 		if filter == nil || filter(d) {
-			filenames[n] = filepath.Join(path, d.Name)
+			filenames[n] = pathutil.Join(path, d.Name)
 			n++
 		}
 	}

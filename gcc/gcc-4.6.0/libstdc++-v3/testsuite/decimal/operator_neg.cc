@@ -157,3 +157,4 @@ logical_not (void)
   a128 = !b128;		// { dg-error "error" } 
 }
 
+// { dg-excess-errors "" { target *-*-* } }

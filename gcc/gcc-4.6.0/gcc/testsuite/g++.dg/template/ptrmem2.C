@@ -7,7 +7,7 @@
 
 struct A {};
 
-template <typename T> T A::* Foo (); // { dg-error "reference" }
+template <typename T> T A::* Foo (); // { dg-message "note" }
 
 void Baz ()
 {

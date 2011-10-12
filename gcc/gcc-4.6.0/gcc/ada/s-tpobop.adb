@@ -6,7 +6,7 @@
 --                                                                          --
 --                                  B o d y                                 --
 --                                                                          --
---         Copyright (C) 1998-2011, Free Software Foundation, Inc.          --
+--         Copyright (C) 1998-2010, Free Software Foundation, Inc.          --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -258,11 +258,7 @@ package body System.Tasking.Protected_Objects.Operations is
             --  enabled for its remaining life.
 
             Self_Id := STPO.Self;
-
-            if not ZCX_By_Default then
-               Initialization.Undefer_Abort_Nestable (Self_Id);
-            end if;
-
+            Initialization.Undefer_Abort_Nestable (Self_Id);
             Transfer_Occurrence
               (Entry_Call.Self.Common.Compiler_Data.Current_Excep'Access,
                Self_Id.Common.Compiler_Data.Current_Excep);
@@ -274,9 +270,6 @@ package body System.Tasking.Protected_Objects.Operations is
       end if;
 
       if Runtime_Traces then
-
-         --  ??? Entry_Call can be null
-
          Send_Trace_Info (PO_Done, Entry_Call.Self);
       end if;
    end Exceptional_Complete_Entry_Body;
@@ -568,7 +561,7 @@ package body System.Tasking.Protected_Objects.Operations is
       --  where abort is already deferred.
 
       Initialization.Defer_Abort_Nestable (Self_ID);
-      Lock_Entries_With_Status (Object, Ceiling_Violation);
+      Lock_Entries (Object, Ceiling_Violation);
 
       if Ceiling_Violation then
 
@@ -722,7 +715,7 @@ package body System.Tasking.Protected_Objects.Operations is
 
             --  Requeue is to different PO
 
-            Lock_Entries_With_Status (New_Object, Ceiling_Violation);
+            Lock_Entries (New_Object, Ceiling_Violation);
 
             if Ceiling_Violation then
                Object.Call_In_Progress := null;
@@ -966,7 +959,7 @@ package body System.Tasking.Protected_Objects.Operations is
       end if;
 
       Initialization.Defer_Abort_Nestable (Self_Id);
-      Lock_Entries_With_Status (Object, Ceiling_Violation);
+      Lock_Entries (Object, Ceiling_Violation);
 
       if Ceiling_Violation then
          Initialization.Undefer_Abort (Self_Id);

@@ -1,8 +1,9 @@
 /* { dg-do compile } */
 
-#import "../objc-obj-c++-shared/TestsuiteObject.h"
+#import "../objc-obj-c++-shared/Object1.h"
+#include <objc/objc-api.h>
 
-@interface obj : TestsuiteObject
+@interface obj : Object
 {
 @public
   int v1;

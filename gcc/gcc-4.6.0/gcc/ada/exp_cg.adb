@@ -478,8 +478,7 @@ package body Exp_CG is
         and then
           Is_Ancestor
             (Find_Dispatching_Type (Ultimate_Alias (Prim)),
-             Root_Type (Ctrl_Typ),
-             Use_Full_View => True)
+             Root_Type (Ctrl_Typ))
       then
          --  This is a special case in which we generate in the ci file the
          --  slot number of the renaming primitive (i.e. Base2) but instead of
@@ -617,8 +616,7 @@ package body Exp_CG is
          if Present (Overridden_Operation (Prim))
            and then
              Is_Ancestor
-               (Find_Dispatching_Type (Overridden_Operation (Prim)), Typ,
-                Use_Full_View => True)
+               (Find_Dispatching_Type (Overridden_Operation (Prim)), Typ)
          then
             Write_Char (',');
             Write_Int
@@ -644,8 +642,7 @@ package body Exp_CG is
 
                   if Present (Int_Alias)
                     and then
-                      not Is_Ancestor (Find_Dispatching_Type (Int_Alias), Typ,
-                                       Use_Full_View => True)
+                      not Is_Ancestor (Find_Dispatching_Type (Int_Alias), Typ)
                     and then (Alias (Prim_Op)) = Prim
                   then
                      Write_Char (',');

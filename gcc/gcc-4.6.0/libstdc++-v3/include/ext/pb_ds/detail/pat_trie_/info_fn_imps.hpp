@@ -34,8 +34,8 @@
 // warranty.
 
 /**
- * @file pat_trie_/info_fn_imps.hpp
- * Contains an implementation class for pat_trie.
+ * @file info_fn_imps.hpp
+ * Contains an implementation class for bin_search_tree_.
  */
 
 PB_DS_CLASS_T_DEC
@@ -54,5 +54,5 @@ PB_DS_CLASS_T_DEC
 inline typename PB_DS_CLASS_C_DEC::size_type
 PB_DS_CLASS_C_DEC::
 max_size() const
-{ return s_inode_allocator.max_size(); }
+{ return s_internal_node_allocator.max_size(); }
 

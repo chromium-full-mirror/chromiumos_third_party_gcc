@@ -125,8 +125,8 @@ main()
   typedef
     cc_hash_table<
     string,
-    null_type,
-    null_type,
+    null_mapped_type,
+    null_hash_fn,
     equal_to<string>,
     simple_string_ranged_hash_fn>
     set_t;

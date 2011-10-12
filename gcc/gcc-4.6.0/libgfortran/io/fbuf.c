@@ -51,7 +51,8 @@ fbuf_destroy (gfc_unit * u)
 {
   if (u->fbuf == NULL)
     return;
-  free (u->fbuf->buf);
+  if (u->fbuf->buf)
+    free (u->fbuf->buf);
   free (u->fbuf);
   u->fbuf = NULL;
 }

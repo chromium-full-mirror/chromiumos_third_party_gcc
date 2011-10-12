@@ -1,5 +1,5 @@
 /* Target Prototypes for R8C/M16C/M32C
-   Copyright (C) 2005, 2007, 2008, 2010, 2011
+   Copyright (C) 2005, 2007, 2008, 2010
    Free Software Foundation, Inc.
    Contributed by Red Hat.
 
@@ -19,9 +19,12 @@
    along with GCC; see the file COPYING3.  If not see
    <http://www.gnu.org/licenses/>.  */
 
+#define MM enum machine_mode
+#define UINT unsigned int
+
 void m32c_conditional_register_usage (void);
 int  m32c_const_ok_for_constraint_p (HOST_WIDE_INT, char, const char *);
-unsigned int m32c_dwarf_frame_regnum (int);
+UINT m32c_dwarf_frame_regnum (int);
 int  m32c_eh_return_data_regno (int);
 void m32c_emit_epilogue (void);
 void m32c_emit_prologue (void);
@@ -33,6 +36,7 @@ void m32c_init_expanders (void);
 int  m32c_initial_elimination_offset (int, int);
 void m32c_output_reg_pop (FILE *, int);
 void m32c_output_reg_push (FILE *, int);
+int  m32c_print_operand_punct_valid_p (int);
 unsigned int  m32c_push_rounding (int);
 int  m32c_reg_class_from_constraint (char, const char *);
 void m32c_register_pragmas (void);
@@ -43,7 +47,8 @@ int  m32c_trampoline_size (void);
 
 #ifdef RTX_CODE
 
-int  m32c_cannot_change_mode_class (enum machine_mode, enum machine_mode, int);
+int  m32c_cannot_change_mode_class (MM, MM, int);
+int  m32c_class_max_nregs (int, MM);
 rtx  m32c_eh_return_stackadj_rtx (void);
 void m32c_emit_eh_epilogue (rtx);
 int  m32c_expand_cmpstr (rtx *);
@@ -55,24 +60,29 @@ void m32c_expand_neg_mulpsi3 (rtx *);
 int  m32c_expand_setmemhi (rtx *);
 int  m32c_extra_constraint_p (rtx, char, const char *);
 int  m32c_extra_constraint_p2 (rtx, char, const char *);
-int  m32c_hard_regno_nregs (int, enum machine_mode);
-int  m32c_hard_regno_ok (int, enum machine_mode);
+int  m32c_hard_regno_nregs (int, MM);
+int  m32c_hard_regno_ok (int, MM);
 bool m32c_illegal_subreg_p (rtx);
-bool m32c_immd_dbl_mov (rtx *, enum machine_mode);
+bool m32c_immd_dbl_mov (rtx *, MM);
 rtx  m32c_incoming_return_addr_rtx (void);
-int  m32c_legitimize_reload_address (rtx *, enum machine_mode, int, int, int);
-int  m32c_limit_reload_class (enum machine_mode, int);
-int  m32c_modes_tieable_p (enum machine_mode, enum machine_mode);
-bool m32c_mov_ok (rtx *, enum machine_mode);
+int  m32c_legitimate_constant_p (rtx);
+int  m32c_legitimize_reload_address (rtx *, MM, int, int, int);
+int  m32c_limit_reload_class (MM, int);
+int  m32c_modes_tieable_p (MM, MM);
+bool m32c_mov_ok (rtx *, MM);
 char * m32c_output_compare (rtx, rtx *);
-int  m32c_prepare_move (rtx *, enum machine_mode);
+int  m32c_preferred_output_reload_class (rtx, int);
+int  m32c_preferred_reload_class (rtx, int);
+int  m32c_prepare_move (rtx *, MM);
 int  m32c_prepare_shift (rtx *, int, int);
+void m32c_print_operand (FILE *, rtx, int);
+void m32c_print_operand_address (FILE *, rtx);
 int  m32c_reg_ok_for_base_p (rtx, int);
 enum reg_class m32c_regno_reg_class (int);
 rtx  m32c_return_addr_rtx (int);
 const char *m32c_scc_pattern (rtx *, RTX_CODE);
-int  m32c_secondary_reload_class (int, enum machine_mode, rtx);
-int  m32c_split_move (rtx *, enum machine_mode, int);
+int  m32c_secondary_reload_class (int, MM, rtx);
+int  m32c_split_move (rtx *, MM, int);
 int  m32c_split_psi_p (rtx *);
 int current_function_special_page_vector (rtx);
 
@@ -88,3 +98,6 @@ void m32c_output_aligned_common (FILE *, tree, const char *,
 				 int, int, int);
 
 #endif
+
+#undef MM
+#undef UINT

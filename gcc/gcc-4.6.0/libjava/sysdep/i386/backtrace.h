@@ -17,10 +17,7 @@ details.  */
 /* To allow this to link as a DLL.  */
 #define MAIN_FUNC dll_crt0__FP11per_process
 extern "C" int MAIN_FUNC () __declspec(dllimport);
-#elif defined (_WIN32)
-#define MAIN_FUNC DllMain
-extern "C" int __stdcall MAIN_FUNC (void *, unsigned long, void *);
-#else /* !__CYGWIN__ && !_WIN32 */
+#else /* !__CYGWIN__ */
 #define MAIN_FUNC main
 extern int MAIN_FUNC (int, char **);
 #endif /* ?__CYGWIN__ */

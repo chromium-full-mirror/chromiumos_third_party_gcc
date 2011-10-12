@@ -80,13 +80,12 @@ along with this program; see the file COPYING3.  If not see
 
 /* The part of the symbol table the plugin has to keep track of. Note that we
    must keep SYMS until all_symbols_read is called to give the linker time to
-   copy the symbol information. 
-   The id must be 64bit to minimze collisions. */
+   copy the symbol information. */
 
 struct sym_aux
 {
   uint32_t slot;
-  unsigned long long id;
+  unsigned id;
   unsigned next_conflict;
 };
 
@@ -95,7 +94,7 @@ struct plugin_symtab
   int nsyms;
   struct sym_aux *aux;
   struct ld_plugin_symbol *syms;
-  unsigned long long id;
+  unsigned id;
 };
 
 /* Encapsulates object file data during symbol scan.  */
@@ -130,7 +129,7 @@ enum symbol_style
 static char *arguments_file_name;
 static ld_plugin_register_claim_file register_claim_file;
 static ld_plugin_register_all_symbols_read register_all_symbols_read;
-static ld_plugin_get_symbols get_symbols, get_symbols_v2;
+static ld_plugin_get_symbols get_symbols;
 static ld_plugin_register_cleanup register_cleanup;
 static ld_plugin_add_input_file add_input_file;
 static ld_plugin_add_input_library add_input_library;
@@ -313,7 +312,8 @@ free_1 (void)
 	{
 	  struct ld_plugin_symbol *s = &symtab->syms[j];
 	  free (s->name);
-	  free (s->comdat_key);
+	  if (s->comdat_key)
+	    free (s->comdat_key);
 	}
       free (symtab->syms);
       symtab->syms = NULL;
@@ -342,7 +342,8 @@ free_2 (void)
   claimed_files = NULL;
   num_claimed_files = 0;
 
-  free (arguments_file_name);
+  if (arguments_file_name)
+    free (arguments_file_name);
   arguments_file_name = NULL;
 }
 
@@ -360,8 +361,7 @@ dump_symtab (FILE *f, struct plugin_symtab *symtab)
       
       assert (resolution != LDPR_UNKNOWN);
 
-      fprintf (f, "%u %llx %s %s\n",
-               (unsigned int) slot, symtab->aux[j].id,
+      fprintf (f, "%u %x %s %s\n", (unsigned int) slot, symtab->aux[j].id,
 	       lto_resolution_str[resolution], 
 	       symtab->syms[j].name);
     }
@@ -443,12 +443,7 @@ write_resolution (void)
       struct plugin_symtab *symtab = &info->symtab;
       struct ld_plugin_symbol *syms = symtab->syms;
 
-      /* Version 2 of API supports IRONLY_EXP resolution that is
-         accepted by GCC-4.7 and newer.  */
-      if (get_symbols_v2)
-        get_symbols_v2 (info->handle, symtab->nsyms, syms);
-      else
-        get_symbols (info->handle, symtab->nsyms, syms);
+      get_symbols (info->handle, symtab->nsyms, syms);
 
       finish_conflict_resolution (symtab, &info->conflicts);
 
@@ -766,7 +761,7 @@ resolve_conflicts (struct plugin_symtab *t, struct plugin_symtab *conflicts)
 	    {
 	      SWAP (struct ld_plugin_symbol, *orig, *s);
 	      SWAP (uint32_t, orig_aux->slot, aux->slot);
-	      SWAP (unsigned long long, orig_aux->id, aux->id);
+	      SWAP (unsigned, orig_aux->id, aux->id);
 	      /* Don't swap conflict chain pointer */
 	    } 
 
@@ -816,7 +811,7 @@ process_symtab (void *data, const char *name, off_t offset, off_t length)
 
   s = strrchr (name, '.');
   if (s)
-    sscanf (s, ".%llx", &obj->out->id);
+    sscanf (s, ".%x", &obj->out->id);
   secdata = xmalloc (length);
   offset += obj->file->offset;
   if (offset != lseek (obj->file->fd, offset, SEEK_SET)
@@ -992,9 +987,6 @@ onload (struct ld_plugin_tv *tv)
 	  break;
 	case LDPT_REGISTER_ALL_SYMBOLS_READ_HOOK:
 	  register_all_symbols_read = p->tv_u.tv_register_all_symbols_read;
-	  break;
-	case LDPT_GET_SYMBOLS_V2:
-	  get_symbols_v2 = p->tv_u.tv_get_symbols;
 	  break;
 	case LDPT_GET_SYMBOLS:
 	  get_symbols = p->tv_u.tv_get_symbols;

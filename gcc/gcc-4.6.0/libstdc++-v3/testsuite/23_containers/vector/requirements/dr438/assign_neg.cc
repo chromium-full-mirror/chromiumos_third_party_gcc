@@ -18,7 +18,8 @@
 // <http://www.gnu.org/licenses/>.
 
 // { dg-do compile }
-// { dg-error "no matching" "" { target *-*-* } 1222 }
+// { dg-error "no matching" "" { target *-*-* } 1166 }
+// { dg-excess-errors "" }
 
 #include <vector>
 

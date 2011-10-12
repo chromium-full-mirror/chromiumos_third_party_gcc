@@ -7,5 +7,3 @@ foo ()
   const bool b =;		// { dg-error "" }
   foo < b > ();			// { dg-error "constant expression" }
 };
-
-// { dg-error "no match" "" { target *-*-* } 8 }

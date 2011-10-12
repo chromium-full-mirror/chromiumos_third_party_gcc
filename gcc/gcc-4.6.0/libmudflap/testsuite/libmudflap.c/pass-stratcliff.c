@@ -1,6 +1,5 @@
 /* Test for string function add boundaries of usable memory.
-   Copyright (C) 1996, 1997, 1999, 2000, 2001, 2002, 2011
-   Free Software Foundation, Inc.
+   Copyright (C) 1996,1997,1999,2000,2001,2002 Free Software Foundation, Inc.
    This file is part of the GNU C Library.
    Contributed by Ulrich Drepper <drepper@cygnus.com>, 1996.
 
@@ -26,8 +25,6 @@
    test the real implementation.  */
 #undef __USE_STRING_INLINES
 
-#include "../config.h"
-
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -37,10 +34,6 @@
 
 #ifndef MAX
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
-#endif
-
-#ifndef MIN
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
 int
@@ -160,7 +153,7 @@ main (int argc, char *argv[])
 	    }
         }
 
-#ifdef HAVE_RAWMEMCHR
+#ifndef __FreeBSD__
       /* rawmemchr test */
       for (outer = size - 1; outer >= MAX (0, size - 128); --outer)
         {
@@ -257,7 +250,7 @@ main (int argc, char *argv[])
 	    }
         }
 
-#ifdef HAVE_STPCPY
+#ifndef __FreeBSD__
       /* stpcpy test */
       for (outer = size - 1; outer >= MAX (0, size - 128); --outer)
         {
@@ -309,7 +302,7 @@ main (int argc, char *argv[])
 	      result = 1;
 	    }
 
-#ifdef HAVE_MEMPCPY
+#ifndef __FreeBSD__
       /* mempcpy test */
       for (outer = size - 1; outer >= MAX (0, size - 128); --outer)
 	for (inner = 0; inner < size - outer; ++inner)

@@ -21,7 +21,7 @@ type tx struct {
 	x int
 }
 
-var txType = reflect.TypeOf((*tx)(nil)).Elem()
+var txType = reflect.Typeof((*tx)(nil)).(*reflect.PtrType).Elem().(*reflect.StructType)
 
 // A type that can unmarshal itself.
 
@@ -34,18 +34,12 @@ func (u *unmarshaler) UnmarshalJSON(b []byte) os.Error {
 	return nil
 }
 
-type ustruct struct {
-	M unmarshaler
-}
-
 var (
 	um0, um1 unmarshaler // target2 of unmarshaling
 	ump      = &um1
 	umtrue   = unmarshaler{true}
-	umslice  = []unmarshaler{unmarshaler{true}}
-	umslicep = new([]unmarshaler)
-	umstruct = ustruct{unmarshaler{true}}
 )
+
 
 type unmarshalTest struct {
 	in  string
@@ -65,11 +59,11 @@ var unmarshalTests = []unmarshalTest{
 	{`"g-clef: \uD834\uDD1E"`, new(string), "g-clef: \U0001D11E", nil},
 	{`"invalid: \uD834x\uDD1E"`, new(string), "invalid: \uFFFDx\uFFFD", nil},
 	{"null", new(interface{}), nil, nil},
-	{`{"X": [1,2,3], "Y": 4}`, new(T), T{Y: 4}, &UnmarshalTypeError{"array", reflect.TypeOf("")}},
+	{`{"X": [1,2,3], "Y": 4}`, new(T), T{Y: 4}, &UnmarshalTypeError{"array", reflect.Typeof("")}},
 	{`{"x": 1}`, new(tx), tx{}, &UnmarshalFieldError{"x", txType, txType.Field(0)}},
 
 	// syntax errors
-	{`{"X": "foo", "Y"}`, nil, nil, &SyntaxError{"invalid character '}' after object key", 17}},
+	{`{"X": "foo", "Y"}`, nil, nil, SyntaxError("invalid character '}' after object key")},
 
 	// composite tests
 	{allValueIndent, new(All), allValue, nil},
@@ -84,9 +78,6 @@ var unmarshalTests = []unmarshalTest{
 	// unmarshal interface test
 	{`{"T":false}`, &um0, umtrue, nil}, // use "false" so test will fail if custom unmarshaler is not called
 	{`{"T":false}`, &ump, &umtrue, nil},
-	{`[{"T":false}]`, &umslice, umslice, nil},
-	{`[{"T":false}]`, &umslicep, &umslice, nil},
-	{`{"M":{"T":false}}`, &umstruct, umstruct, nil},
 }
 
 func TestMarshal(t *testing.T) {
@@ -126,12 +117,12 @@ func TestMarshalBadUTF8(t *testing.T) {
 }
 
 func TestUnmarshal(t *testing.T) {
+	var scan scanner
 	for i, tt := range unmarshalTests {
-		var scan scanner
 		in := []byte(tt.in)
 		if err := checkValid(in, &scan); err != nil {
 			if !reflect.DeepEqual(err, tt.err) {
-				t.Errorf("#%d: checkValid: %#v", i, err)
+				t.Errorf("#%d: checkValid: %v", i, err)
 				continue
 			}
 		}
@@ -139,7 +130,8 @@ func TestUnmarshal(t *testing.T) {
 			continue
 		}
 		// v = new(right-type)
-		v := reflect.New(reflect.TypeOf(tt.ptr).Elem())
+		v := reflect.NewValue(tt.ptr).(*reflect.PtrValue)
+		v.PointTo(reflect.MakeZero(v.Type().(*reflect.PtrType).Elem()))
 		if err := Unmarshal([]byte(in), v.Interface()); !reflect.DeepEqual(err, tt.err) {
 			t.Errorf("#%d: %v want %v", i, err, tt.err)
 			continue
@@ -150,13 +142,13 @@ func TestUnmarshal(t *testing.T) {
 			println(string(data))
 			data, _ = Marshal(tt.out)
 			println(string(data))
+			return
 			continue
 		}
 	}
 }
 
 func TestUnmarshalMarshal(t *testing.T) {
-	initBig()
 	var v interface{}
 	if err := Unmarshal(jsonBig, &v); err != nil {
 		t.Fatalf("Unmarshal: %v", err)
@@ -169,25 +161,6 @@ func TestUnmarshalMarshal(t *testing.T) {
 		t.Errorf("Marshal jsonBig")
 		diff(t, b, jsonBig)
 		return
-	}
-}
-
-func TestLargeByteSlice(t *testing.T) {
-	s0 := make([]byte, 2000)
-	for i := range s0 {
-		s0[i] = byte(i)
-	}
-	b, err := Marshal(s0)
-	if err != nil {
-		t.Fatalf("Marshal: %v", err)
-	}
-	var s1 []byte
-	if err := Unmarshal(b, &s1); err != nil {
-		t.Fatalf("Unmarshal: %v", err)
-	}
-	if bytes.Compare(s0, s1) != 0 {
-		t.Errorf("Marshal large byte slice")
-		diff(t, s0, s1)
 	}
 }
 
@@ -214,18 +187,6 @@ func TestUnmarshalPtrPtr(t *testing.T) {
 	}
 	if xint.X != 1 {
 		t.Fatalf("Did not write to xint")
-	}
-}
-
-func TestEscape(t *testing.T) {
-	const input = `"foobar"<html>`
-	const expected = `"\"foobar\"\u003chtml\u003e"`
-	b, err := Marshal(input)
-	if err != nil {
-		t.Fatalf("Marshal error: %v", err)
-	}
-	if s := string(b); s != expected {
-		t.Errorf("Encoding of [%s] was [%s], want [%s]", input, s, expected)
 	}
 }
 
@@ -262,10 +223,7 @@ type All struct {
 	Float32 float32
 	Float64 float64
 
-	Foo  string `json:"bar"`
-	Foo2 string `json:"bar2,dummyopt"`
-
-	IntStr int64 `json:",string"`
+	Foo string "bar"
 
 	PBool    *bool
 	PInt     *int
@@ -334,8 +292,6 @@ var allValue = All{
 	Float32: 14.1,
 	Float64: 15.1,
 	Foo:     "foo",
-	Foo2:    "foo2",
-	IntStr:  42,
 	String:  "16",
 	Map: map[string]Small{
 		"17": {Tag: "tag17"},
@@ -396,8 +352,6 @@ var allValueIndent = `{
 	"Float32": 14.1,
 	"Float64": 15.1,
 	"bar": "foo",
-	"bar2": "foo2",
-	"IntStr": "42",
 	"PBool": null,
 	"PInt": null,
 	"PInt8": null,
@@ -458,7 +412,11 @@ var allValueIndent = `{
 		"str25",
 		"str26"
 	],
-	"ByteSlice": "Gxwd",
+	"ByteSlice": [
+		27,
+		28,
+		29
+	],
 	"Small": {
 		"Tag": "tag30"
 	},
@@ -488,8 +446,6 @@ var pallValueIndent = `{
 	"Float32": 0,
 	"Float64": 0,
 	"bar": "",
-	"bar2": "",
-        "IntStr": "0",
 	"PBool": true,
 	"PInt": 2,
 	"PInt8": 3,
@@ -546,7 +502,7 @@ var pallValueIndent = `{
 	"EmptySlice": [],
 	"NilSlice": [],
 	"StringSlice": [],
-	"ByteSlice": "",
+	"ByteSlice": [],
 	"Small": {
 		"Tag": ""
 	},

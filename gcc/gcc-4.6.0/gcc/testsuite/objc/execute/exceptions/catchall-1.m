@@ -4,7 +4,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "../../../objc-obj-c++-shared/TestsuiteObject.m"
+#import "../../../objc-obj-c++-shared/Object1.h"
 
 /* The following is not required in actual user code; we include it
    here to check that the compiler generates an internal definition of
@@ -13,10 +13,10 @@
 
 #define CHECK_IF(expr) if(!(expr)) abort()
 
-@interface Frob: TestsuiteObject
+@interface Frob: Object
 @end
 
-@implementation Frob: TestsuiteObject
+@implementation Frob: Object
 @end
 
 static Frob* _connection = nil;
@@ -24,7 +24,7 @@ static Frob* _connection = nil;
 //--------------------------------------------------------------------
 
 
-void test (TestsuiteObject* sendPort)
+void test (Object* sendPort)
 {
 	int cleanupPorts = 1;
 	Frob* receivePort = nil;
@@ -51,7 +51,7 @@ void test (TestsuiteObject* sendPort)
 		printf ("cleanupPorts = %d\n", cleanupPorts);
 		printf ("---\n");		
 		
-		@throw [TestsuiteObject new];
+		@throw [Object new];
 	}
 	@catch(Frob *obj) {
 		printf ("Exception caught by incorrect handler!\n");
@@ -71,7 +71,7 @@ void test (TestsuiteObject* sendPort)
 
 int main (void) {
 
-	test((TestsuiteObject *)-1);
+	test((Object *)-1);
 	return 0;
 }
-
+#import "../../../objc-obj-c++-shared/Object1-implementation.h"

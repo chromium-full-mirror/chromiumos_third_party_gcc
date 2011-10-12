@@ -7,4 +7,4 @@ template<typename T> void foo()
   T::~T(); // { dg-error "member" }
 }
 
-template void foo<A>(); // { dg-message "required" }
+template void foo<A>(); // { dg-message "instantiated" }

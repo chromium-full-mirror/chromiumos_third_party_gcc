@@ -2,9 +2,9 @@
 
 /* Another gimplifier ICE... */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.h"
+#include "../objc-obj-c++-shared/Object1.h"
 
-@interface MyView: TestsuiteObject {
+@interface MyView: Object {
   int _frame;
 }
 - (void)_finalize;

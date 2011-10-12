@@ -16,6 +16,7 @@
 # It depends on the GNU version of c++filt, since it must understand the
 # GNU mangling style.
 
+use File::Glob ':glob';
 use FileHandle;
 use IPC::Open2;
 

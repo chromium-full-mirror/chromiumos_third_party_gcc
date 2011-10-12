@@ -1,5 +1,3 @@
-/* { dg-require-effective-target mmap } */
-
 #include <sys/mman.h>
 #include <stdio.h>
 

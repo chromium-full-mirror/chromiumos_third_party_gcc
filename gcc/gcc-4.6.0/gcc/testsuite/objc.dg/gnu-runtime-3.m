@@ -3,12 +3,12 @@
 /* { dg-do run } */
 /* { dg-skip-if "" { *-*-* } { "-fnext-runtime" } { "" } } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.m"
+#include <objc/Object.h>
 #include <string.h>
 #include <stdlib.h>
 
 int main(int argc, void **args)
 {
-  [TestsuiteObject new];
+  [Object new];
   return 0;
 }

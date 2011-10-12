@@ -95,30 +95,30 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       
       /**
        *  @brief  An %auto_ptr is usually constructed from a raw pointer.
-       *  @param  __p  A pointer (defaults to NULL).
+       *  @param  p  A pointer (defaults to NULL).
        *
-       *  This object now @e owns the object pointed to by @a __p.
+       *  This object now @e owns the object pointed to by @a p.
        */
       explicit
       auto_ptr(element_type* __p = 0) throw() : _M_ptr(__p) { }
 
       /**
        *  @brief  An %auto_ptr can be constructed from another %auto_ptr.
-       *  @param  __a  Another %auto_ptr of the same type.
+       *  @param  a  Another %auto_ptr of the same type.
        *
-       *  This object now @e owns the object previously owned by @a __a,
+       *  This object now @e owns the object previously owned by @a a,
        *  which has given up ownership.
        */
       auto_ptr(auto_ptr& __a) throw() : _M_ptr(__a.release()) { }
 
       /**
        *  @brief  An %auto_ptr can be constructed from another %auto_ptr.
-       *  @param  __a  Another %auto_ptr of a different but related type.
+       *  @param  a  Another %auto_ptr of a different but related type.
        *
        *  A pointer-to-Tp1 must be convertible to a
        *  pointer-to-Tp/element_type.
        *
-       *  This object now @e owns the object previously owned by @a __a,
+       *  This object now @e owns the object previously owned by @a a,
        *  which has given up ownership.
        */
       template<typename _Tp1>
@@ -126,9 +126,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
       /**
        *  @brief  %auto_ptr assignment operator.
-       *  @param  __a  Another %auto_ptr of the same type.
+       *  @param  a  Another %auto_ptr of the same type.
        *
-       *  This object now @e owns the object previously owned by @a __a,
+       *  This object now @e owns the object previously owned by @a a,
        *  which has given up ownership.  The object that this one @e
        *  used to own and track has been deleted.
        */
@@ -141,11 +141,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
       /**
        *  @brief  %auto_ptr assignment operator.
-       *  @param  __a  Another %auto_ptr of a different but related type.
+       *  @param  a  Another %auto_ptr of a different but related type.
        *
        *  A pointer-to-Tp1 must be convertible to a pointer-to-Tp/element_type.
        *
-       *  This object now @e owns the object previously owned by @a __a,
+       *  This object now @e owns the object previously owned by @a a,
        *  which has given up ownership.  The object that this one @e
        *  used to own and track has been deleted.
        */
@@ -231,9 +231,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       
       /**
        *  @brief  Forcibly deletes the managed object.
-       *  @param  __p  A pointer (defaults to NULL).
+       *  @param  p  A pointer (defaults to NULL).
        *
-       *  This object now @e owns the object pointed to by @a __p.  The
+       *  This object now @e owns the object pointed to by @a p.  The
        *  previous object has been deleted.
        */
       void

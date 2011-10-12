@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O2 -fdump-tree-vrp1 -fno-tree-ccp" } */
+/* { dg-options "-O2 -fdump-tree-vrp1" } */
 
 int
 foo (unsigned int i, unsigned int j)

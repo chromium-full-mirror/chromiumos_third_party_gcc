@@ -28,13 +28,13 @@ const (
 
 func main() {
 
-	var r complex64 = 5 + 0i
+	r := 5 + 0i
 	if r != R {
 		println("opcode 1", r, R)
 		panic("fail")
 	}
 
-	var i complex64 = 6i
+	i := 6i
 	if i != I {
 		println("opcode 2", i, I)
 		panic("fail")

@@ -11,10 +11,12 @@ import (
 	"io"
 	"regexp"
 	"strings"
-	"template" // for HTMLEscape
+	"template" // for htmlEscape
 )
 
+
 func isWhitespace(ch byte) bool { return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' }
+
 
 func stripTrailingWhitespace(s string) string {
 	i := len(s)
@@ -23,6 +25,7 @@ func stripTrailingWhitespace(s string) string {
 	}
 	return s[0:i]
 }
+
 
 // CommentText returns the text of comment,
 // with the comment markers - //, /*, and */ - removed.
@@ -55,7 +58,7 @@ func CommentText(comment *ast.CommentGroup) string {
 		}
 
 		// Split on newlines.
-		cl := strings.Split(c, "\n")
+		cl := strings.Split(c, "\n", -1)
 
 		// Walk lines, stripping trailing white space and adding to list.
 		for _, l := range cl {
@@ -81,6 +84,7 @@ func CommentText(comment *ast.CommentGroup) string {
 
 	return strings.Join(lines, "\n")
 }
+
 
 // Split bytes into lines.
 func split(text []byte) [][]byte {
@@ -115,6 +119,7 @@ func split(text []byte) [][]byte {
 	return out
 }
 
+
 var (
 	ldquo = []byte("&ldquo;")
 	rdquo = []byte("&rdquo;")
@@ -143,6 +148,7 @@ func commentEscape(w io.Writer, s []byte, nice bool) {
 	template.HTMLEscape(w, s[last:])
 }
 
+
 const (
 	// Regexp for Go identifiers
 	identRx = `[a-zA-Z_][a-zA-Z_0-9]*` // TODO(gri) ASCII only for now - fix this
@@ -169,6 +175,7 @@ var (
 	html_pre    = []byte("<pre>")
 	html_endpre = []byte("</pre>\n")
 )
+
 
 // Emphasize and escape a line of text for HTML. URLs are converted into links;
 // if the URL also appears in the words map, the link is taken from the map (if
@@ -228,6 +235,7 @@ func emphasize(w io.Writer, line []byte, words map[string]string, nice bool) {
 	commentEscape(w, line, nice)
 }
 
+
 func indentLen(s []byte) int {
 	i := 0
 	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
@@ -236,7 +244,9 @@ func indentLen(s []byte) int {
 	return i
 }
 
+
 func isBlank(s []byte) bool { return len(s) == 0 || (len(s) == 1 && s[0] == '\n') }
+
 
 func commonPrefix(a, b []byte) []byte {
 	i := 0
@@ -245,6 +255,7 @@ func commonPrefix(a, b []byte) []byte {
 	}
 	return a[0:i]
 }
+
 
 func unindent(block [][]byte) {
 	if len(block) == 0 {
@@ -268,13 +279,14 @@ func unindent(block [][]byte) {
 	}
 }
 
+
 // Convert comment text to formatted HTML.
 // The comment was prepared by DocReader,
 // so it is known not to have leading, trailing blank lines
 // nor to have trailing spaces at the end of lines.
 // The comment markers have already been removed.
 //
-// Turn each run of multiple \n into </p><p>.
+// Turn each run of multiple \n into </p><p>
 // Turn each run of indented lines into a <pre> block without indent.
 //
 // URLs in the comment text are converted into links; if the URL also appears

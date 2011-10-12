@@ -166,12 +166,14 @@ pack_c10 (gfc_array_c10 *ret, const gfc_array_c10 *array,
 	  GFC_DIMENSION_SET(ret->dim[0], 0, total-1, 1);
 
 	  ret->offset = 0;
-
-	  /* internal_malloc_size allocates a single byte for zero size.  */
-	  ret->data = internal_malloc_size (sizeof (GFC_COMPLEX_10) * total);
-
 	  if (total == 0)
-	    return;
+	    {
+	      /* In this case, nothing remains to be done.  */
+	      ret->data = internal_malloc_size (1);
+	      return;
+	    }
+	  else
+	    ret->data = internal_malloc_size (sizeof (GFC_COMPLEX_10) * total);
 	}
       else 
 	{

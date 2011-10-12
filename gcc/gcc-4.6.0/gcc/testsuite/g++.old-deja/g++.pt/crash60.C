@@ -5,7 +5,7 @@
 // We ICE'd rather than fail to instantiate.
 
 template< typename SID, class SDR >
-void k( SID sid, SDR* p,	// { dg-error "no type named 'T'" }
+void k( SID sid, SDR* p,	// { dg-message "note" }
  void (SDR::*)
  ( typename SID::T ) );
 

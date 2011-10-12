@@ -8,10 +8,8 @@
 package main
 
 import (
-	"big"
-	"crypto/x509/pkix"
-	"crypto/rand"
 	"crypto/rsa"
+	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
 	"flag"
@@ -27,15 +25,15 @@ func main() {
 
 	priv, err := rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
-		log.Fatalf("failed to generate private key: %s", err)
+		log.Exitf("failed to generate private key: %s", err)
 		return
 	}
 
 	now := time.Seconds()
 
 	template := x509.Certificate{
-		SerialNumber: new(big.Int).SetInt64(0),
-		Subject: pkix.Name{
+		SerialNumber: []byte{0},
+		Subject: x509.Name{
 			CommonName:   *hostName,
 			Organization: []string{"Acme Co"},
 		},
@@ -48,20 +46,20 @@ func main() {
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
 	if err != nil {
-		log.Fatalf("Failed to create certificate: %s", err)
+		log.Exitf("Failed to create certificate: %s", err)
 		return
 	}
 
-	certOut, err := os.Create("cert.pem")
+	certOut, err := os.Open("cert.pem", os.O_WRONLY|os.O_CREAT, 0644)
 	if err != nil {
-		log.Fatalf("failed to open cert.pem for writing: %s", err)
+		log.Exitf("failed to open cert.pem for writing: %s", err)
 		return
 	}
 	pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: derBytes})
 	certOut.Close()
 	log.Print("written cert.pem\n")
 
-	keyOut, err := os.OpenFile("key.pem", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	keyOut, err := os.Open("key.pem", os.O_WRONLY|os.O_CREAT, 0600)
 	if err != nil {
 		log.Print("failed to open key.pem for writing:", err)
 		return

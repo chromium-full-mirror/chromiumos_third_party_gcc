@@ -33,19 +33,7 @@ void f2(struct S i, int j) {
 
 void f3(int i) {
  [=]{
-   int j = i;			// { dg-warning "shadowed declaration" }
-   int i;			// { dg-warning "shadows a lambda capture" }
-   i = 1;
+   int j = i;
+   int i; // { dg-warning "shadows a member of" }
  };
 }
-
-template <class T>
-void f4(int i) {
- [=]{
-   int j = i;			// { dg-warning "shadowed declaration" }
-   int i;			// { dg-warning "shadows a lambda capture" }
-   i = 1;
- };
-}
-
-template void f4<int>(int);

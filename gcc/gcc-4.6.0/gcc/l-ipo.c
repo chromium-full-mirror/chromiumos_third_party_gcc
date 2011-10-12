@@ -390,7 +390,6 @@ pop_module_scope (void)
     primary_module_last_loc = input_location;
 
   at_eof = 1;
-  cgraph_process_same_body_aliases ();
   lang_hooks.l_ipo.process_pending_decls (input_location);
   lang_hooks.l_ipo.clear_deferred_fns ();
   at_eof = 0;
@@ -1068,8 +1067,7 @@ cgraph_unify_type_alias_sets (void)
         {
           push_cfun (DECL_STRUCT_FUNCTION (node->decl));
           current_function_decl = node->decl;
-          if (gimple_has_body_p (current_function_decl))
-            cgraph_collect_type_referenced ();
+          cgraph_collect_type_referenced ();
           current_function_decl = NULL;
           pop_cfun ();
         }
@@ -1380,7 +1378,7 @@ cgraph_lipo_get_resolved_node_1 (tree decl, bool do_assert)
   struct cgraph_sym **slot;
 
   /* Handle alias decl. */
-  slot = cgraph_sym (cgraph_get_create_node (decl)->decl);
+  slot = cgraph_sym (cgraph_node (decl)->decl);
 
   if (!slot || !*slot)
     {
@@ -1397,7 +1395,7 @@ cgraph_lipo_get_resolved_node_1 (tree decl, bool do_assert)
              is to modify the callgraph so that they are not eliminated
              in the first place -- this will allow inlining to happen.  */
 
-          struct cgraph_node *n = cgraph_get_create_node (decl);
+          struct cgraph_node *n = cgraph_node (decl);
           if (!n->analyzed)
             {
               gcc_assert (DECL_EXTERNAL (decl)
@@ -1440,7 +1438,7 @@ cgraph_lipo_get_resolved_node (tree decl)
          modules. Skip the real resolution here to avoid merging '__builtin_xxx'
          with 'xxx'.  */
       || DECL_BUILT_IN (decl))
-    return cgraph_get_create_node (decl);
+    return cgraph_node (decl);
 
   node = cgraph_lipo_get_resolved_node_1 (decl, true);
   return node;
@@ -1762,7 +1760,7 @@ promote_static_var_func (unsigned module_id, tree decl, bool is_extern)
 
   if (DECL_ASSEMBLER_NAME_SET_P (decl)
       && TREE_CODE (decl) == FUNCTION_DECL)
-    cgraph_remove_assembler_hash_node (cgraph_get_create_node (decl));
+    cgraph_remove_assembler_hash_node (cgraph_node (decl));
 
   assemb_id = create_unique_name (decl, module_id);
   SET_DECL_ASSEMBLER_NAME (decl, assemb_id);
@@ -1772,7 +1770,7 @@ promote_static_var_func (unsigned module_id, tree decl, bool is_extern)
 
   if (TREE_CODE (decl) == FUNCTION_DECL)
     {
-      struct cgraph_node *node = cgraph_get_create_node (decl);
+      struct cgraph_node *node = cgraph_node (decl);
 
       node->resolution = LDPR_UNKNOWN;
       cgraph_add_assembler_hash_node (node);
@@ -1846,28 +1844,6 @@ process_module_scope_static_var (struct varpool_node *vnode)
     }
 }
 
-/* Promote all aliases of CNODE.  */
-
-static void
-promote_function_aliases (struct cgraph_node *cnode, unsigned mod_id,
-                          bool is_extern)
-{
-  int i;
-  struct ipa_ref *ref;
-
-  for (i = 0; ipa_ref_list_refering_iterate (&cnode->ref_list, i, ref); i++)
-    {
-      if (ref->use == IPA_REF_ALIAS)
-        {
-          struct cgraph_node *alias = ipa_ref_refering_node (ref);
-          tree alias_decl = alias->decl;
-          /* Should assert  */
-          if (cgraph_get_module_id (alias_decl) == mod_id)
-            promote_static_var_func (mod_id, alias_decl, is_extern);
-        }
-    }
-}
-
 /* Promote static function CNODE->decl to be global.  */
 
 static void
@@ -1875,9 +1851,6 @@ process_module_scope_static_func (struct cgraph_node *cnode)
 {
   tree decl = cnode->decl;
   bool addr_taken;
-  unsigned mod_id;
-  struct ipa_ref *ref;
-  int i;
 
   if (TREE_PUBLIC (decl)
       || !TREE_STATIC (decl)
@@ -1892,15 +1865,15 @@ process_module_scope_static_func (struct cgraph_node *cnode)
   /* Can be local -- the promotion pass need to be done after
      callgraph build when address taken bit is set.  */
   addr_taken = cnode->address_taken;
-  if (!addr_taken)
+  if (!addr_taken && cnode->same_body)
     {
-      for (i = 0; ipa_ref_list_refering_iterate (&cnode->ref_list, i, ref); i++)
-        if (ref->use == IPA_REF_ALIAS)
-          {
-	    struct cgraph_node *alias = ipa_ref_refering_node (ref);
-	    if (alias->address_taken)
-	      addr_taken = true;
-          }
+      struct cgraph_node *alias = cnode->same_body;
+      while (alias)
+        {
+	  if (alias->address_taken)
+	    addr_taken = true;
+          alias = alias->next;
+        }
     }
   if (!addr_taken)
     {
@@ -1912,15 +1885,33 @@ process_module_scope_static_func (struct cgraph_node *cnode)
       return;
     }
 
-  mod_id = cgraph_get_module_id (decl);
   if (cgraph_is_auxiliary (decl))
     {
-      gcc_assert (mod_id != primary_module_id);
+      unsigned mod_id;
+
+      gcc_assert (cgraph_get_module_id (decl) != primary_module_id);
+      mod_id = cgraph_get_module_id (decl);
       /* Promote static function to global.  */
       if (mod_id)
         {
           promote_static_var_func (mod_id, decl, 1);
-          promote_function_aliases (cnode, mod_id, 1);
+
+          /* Process aliases  */
+          if (cnode->same_body)
+            {
+              struct cgraph_node *alias = cnode->same_body;
+              while (alias)
+                {
+                  if (!alias->thunk.thunk_p)
+                    {
+                      tree alias_decl = alias->decl;
+                      /* Should assert  */
+                      if (cgraph_get_module_id (alias_decl) == mod_id)
+                        promote_static_var_func (mod_id, alias_decl, 1);
+                    }
+                   alias = alias->next;
+                }
+            }
         }
     }
   else
@@ -1929,10 +1920,25 @@ process_module_scope_static_func (struct cgraph_node *cnode)
           /* skip static_init routines.  */
           && !DECL_ARTIFICIAL (decl))
         {
-          promote_static_var_func (mod_id, decl, 0);
+          promote_static_var_func (cgraph_get_module_id (decl), decl, 0);
           cgraph_mark_if_needed (decl);
 
-          promote_function_aliases (cnode, mod_id, 0);
+          /* Process aliases  */
+          if (cnode->same_body)
+            {
+              struct cgraph_node *alias = cnode->same_body;
+              while (alias)
+                {
+                  if (!alias->thunk.thunk_p)
+                    {
+                      tree alias_decl = alias->decl;
+                      /* Should assert  */
+                      if (cgraph_get_module_id (alias_decl) == cgraph_get_module_id (decl))
+                        promote_static_var_func (cgraph_get_module_id (decl), alias_decl, 0);
+                    }
+                   alias = alias->next;
+                }
+            }
         }
     }
 }

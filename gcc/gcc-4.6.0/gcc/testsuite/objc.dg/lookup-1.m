@@ -1,8 +1,9 @@
 /* { dg-do run } */
 /* { dg-xfail-run-if "Needs OBJC2 ABI" { *-*-darwin* && { lp64 && { ! objc2 } } } { "-fnext-runtime" } { "" } } */
+/* { dg-additional-sources "../objc-obj-c++-shared/Object1.m" } */
 
 #include <stdlib.h>
-#include "../objc-obj-c++-shared/TestsuiteObject.m"
+#include "../objc-obj-c++-shared/Object1.h"
 
 typedef struct MyWidget {
   int a;
@@ -14,13 +15,13 @@ MyWidget gWidget = { 17 };
 - (MyWidget *)widget;
 @end
 
-@interface Foo: TestsuiteObject
+@interface Foo: Object
 @end
 
 @interface Bar: Foo <MyProto>
 @end
 
-@interface Container: TestsuiteObject
+@interface Container: Object
 + (MyWidget *)elementForView:(Foo *)view;
 @end
 
@@ -37,8 +38,7 @@ MyWidget gWidget = { 17 };
 + (MyWidget *)elementForView:(Foo *)view
 {
   MyWidget *widget = (MyWidget *) nil;
-  if (class_conformsToProtocol (object_getClass (view),
-				@protocol(MyProto))) {
+  if ([view conformsTo:@protocol(MyProto)]) {
     widget = [(Foo <MyProto> *)view widget];
   }
   return widget;

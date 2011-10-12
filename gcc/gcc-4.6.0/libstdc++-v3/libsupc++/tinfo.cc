@@ -41,11 +41,8 @@ operator== (const std::type_info& arg) const
 #if __GXX_MERGED_TYPEINFO_NAMES
   return name () == arg.name ();
 #else
-  /* The name() method will strip any leading '*' prefix. Therefore
-     take care to look at __name rather than name() when looking for
-     the "pointer" prefix.  */
   return (&arg == this)
-    || (__name[0] != '*' && (__builtin_strcmp (name (), arg.name ()) == 0));
+    || (name ()[0] != '*' && (__builtin_strcmp (name (), arg.name ()) == 0));
 #endif
 }
 

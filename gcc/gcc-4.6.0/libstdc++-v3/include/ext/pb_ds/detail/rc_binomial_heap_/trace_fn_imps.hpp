@@ -34,7 +34,7 @@
 // warranty.
 
 /**
- * @file rc_binomial_heap_/trace_fn_imps.hpp
+ * @file trace_fn_imps.hpp
  * Contains an implementation for rc_binomial_heap_.
  */
 
@@ -46,6 +46,7 @@ PB_DS_CLASS_C_DEC::
 trace() const
 {
   base_type::trace();
+
   m_rc.trace();
 }
 

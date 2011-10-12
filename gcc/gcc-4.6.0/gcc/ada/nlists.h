@@ -6,7 +6,7 @@
  *                                                                          *
  *                              C Header File                               *
  *                                                                          *
- *            Copyright (C) 1992-2011, Free Software Foundation, Inc.       *
+ *            Copyright (C) 1992-2008, Free Software Foundation, Inc.       *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -29,11 +29,7 @@
    nlists.adb and must be kept synchronized with changes in these files.
 
    Note that only routines for reading the tree are included, since the
-   tree transformer is not supposed to modify the tree in any way.  */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+   tree transformer is not supposed to modify the tree in any way. */
 
 /*  The following is the structure used for the list headers table */
 
@@ -132,7 +128,3 @@ List_Containing (Node_Id Node)
 {
   return Nodes_Ptr[Node - First_Node_Id].V.NX.link;
 }
-
-#ifdef __cplusplus
-}
-#endif

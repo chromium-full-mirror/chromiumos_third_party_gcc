@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009, 2010, 2011 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -34,7 +34,7 @@
 // warranty.
 
 /**
- * @file pairing_heap_/erase_fn_imps.hpp
+ * @file erase_fn_imps.hpp
  * Contains an implementation class for a pairing heap.
  */
 
@@ -43,17 +43,17 @@ void
 PB_DS_CLASS_C_DEC::
 pop()
 {
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid();)
   _GLIBCXX_DEBUG_ASSERT(!base_type::empty());
 
   node_pointer p_new_root = join_node_children(base_type::m_p_root);
-  PB_DS_ASSERT_NODE_CONSISTENT(p_new_root, false)
+  _GLIBCXX_DEBUG_ONLY(assert_node_consistent(p_new_root, false);)
   if (p_new_root != 0)
     p_new_root->m_p_prev_or_parent = 0;
 
   base_type::actual_erase_node(base_type::m_p_root);
   base_type::m_p_root = p_new_root;
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid();)
 }
 
 PB_DS_CLASS_T_DEC
@@ -61,11 +61,11 @@ void
 PB_DS_CLASS_C_DEC::
 erase(point_iterator it)
 {
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid();)
   _GLIBCXX_DEBUG_ASSERT(!base_type::empty());
   remove_node(it.m_p_nd);
   base_type::actual_erase_node(it.m_p_nd);
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid();)
 }
 
 PB_DS_CLASS_T_DEC
@@ -73,18 +73,21 @@ void
 PB_DS_CLASS_C_DEC::
 remove_node(node_pointer p_nd)
 {
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid();)
   _GLIBCXX_DEBUG_ASSERT(!base_type::empty());
   node_pointer p_new_child = join_node_children(p_nd);
 
-  PB_DS_ASSERT_NODE_CONSISTENT(p_new_child, false)
+#ifdef _GLIBCXX_DEBUG
+  if (p_new_child != 0)
+    base_type::assert_node_consistent(p_new_child, false);
+#endif 
 
   if (p_nd == base_type::m_p_root)
     {
       if (p_new_child != 0)
 	p_new_child->m_p_prev_or_parent = 0;
       base_type::m_p_root = p_new_child;
-      PB_DS_ASSERT_NODE_CONSISTENT(base_type::m_p_root, false)
+      _GLIBCXX_DEBUG_ONLY(base_type::assert_node_consistent(base_type::m_p_root, false);)
       return;
     }
 
@@ -98,14 +101,14 @@ remove_node(node_pointer p_nd)
 	  if (p_new_child->m_p_next_sibling != 0)
 	    p_new_child->m_p_next_sibling->m_p_prev_or_parent = p_new_child;
 	  p_nd->m_p_prev_or_parent->m_p_l_child = p_new_child;
-	  PB_DS_ASSERT_NODE_CONSISTENT(p_nd->m_p_prev_or_parent, false)
+	  _GLIBCXX_DEBUG_ONLY(base_type::assert_node_consistent(p_nd->m_p_prev_or_parent, false);)
           return;
         }
 
       p_nd->m_p_prev_or_parent->m_p_l_child = p_nd->m_p_next_sibling;
       if (p_nd->m_p_next_sibling != 0)
 	p_nd->m_p_next_sibling->m_p_prev_or_parent = p_nd->m_p_prev_or_parent;
-      PB_DS_ASSERT_NODE_CONSISTENT(p_nd->m_p_prev_or_parent, false)
+      _GLIBCXX_DEBUG_ONLY(base_type::assert_node_consistent(p_nd->m_p_prev_or_parent, false);)
       return;
     }
 
@@ -116,14 +119,14 @@ remove_node(node_pointer p_nd)
       if (p_new_child->m_p_next_sibling != 0)
 	p_new_child->m_p_next_sibling->m_p_prev_or_parent = p_new_child;
       p_new_child->m_p_prev_or_parent->m_p_next_sibling = p_new_child;
-      PB_DS_ASSERT_NODE_CONSISTENT(p_nd->m_p_prev_or_parent, false)
+      _GLIBCXX_DEBUG_ONLY(base_type::assert_node_consistent(p_nd->m_p_prev_or_parent, false);)
       return;
     }
 
   p_nd->m_p_prev_or_parent->m_p_next_sibling = p_nd->m_p_next_sibling;
   if (p_nd->m_p_next_sibling != 0)
     p_nd->m_p_next_sibling->m_p_prev_or_parent = p_nd->m_p_prev_or_parent;
-  PB_DS_ASSERT_NODE_CONSISTENT(p_nd->m_p_prev_or_parent, false)
+  _GLIBCXX_DEBUG_ONLY(base_type::assert_node_consistent(p_nd->m_p_prev_or_parent, false);)
 }
 
 PB_DS_CLASS_T_DEC
@@ -139,7 +142,7 @@ join_node_children(node_pointer p_nd)
     p_ret = forward_join(p_ret, p_ret->m_p_next_sibling);
   while (p_ret->m_p_prev_or_parent != p_nd)
     p_ret = back_join(p_ret->m_p_prev_or_parent, p_ret);
-  PB_DS_ASSERT_NODE_CONSISTENT(p_ret, false)
+  _GLIBCXX_DEBUG_ONLY(assert_node_consistent(p_ret, false);)
   return p_ret;
 }
 
@@ -168,7 +171,7 @@ forward_join(node_pointer p_nd, node_pointer p_next)
 
   p_nd->m_p_next_sibling = 0;
   base_type::make_child_of(p_next, p_nd);
-  PB_DS_ASSERT_NODE_CONSISTENT(p_nd, false)
+  _GLIBCXX_DEBUG_ONLY(base_type::assert_node_consistent(p_nd, false));
   return p_nd;
 }
 
@@ -184,13 +187,13 @@ back_join(node_pointer p_nd, node_pointer p_next)
     {
       p_next->m_p_prev_or_parent = p_nd->m_p_prev_or_parent;
       base_type::make_child_of(p_nd, p_next);
-      PB_DS_ASSERT_NODE_CONSISTENT(p_next, false)
+      _GLIBCXX_DEBUG_ONLY(base_type::assert_node_consistent(p_next, false));
       return p_next;
     }
 
   p_nd->m_p_next_sibling = 0;
   base_type::make_child_of(p_next, p_nd);
-  PB_DS_ASSERT_NODE_CONSISTENT(p_nd, false)
+  _GLIBCXX_DEBUG_ONLY(base_type::assert_node_consistent(p_nd, false));
   return p_nd;
 }
 
@@ -200,10 +203,10 @@ typename PB_DS_CLASS_C_DEC::size_type
 PB_DS_CLASS_C_DEC::
 erase_if(Pred pred)
 {
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid();)
     if (base_type::empty())
       {
-        PB_DS_ASSERT_VALID((*this))
+        _GLIBCXX_DEBUG_ONLY(assert_valid();)
 	return 0;
       }
   base_type::to_linked_list();
@@ -227,7 +230,7 @@ erase_if(Pred pred)
       push_imp(p_cur);
       p_cur = p_next;
     }
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid();)
   return ersd;
 }
 

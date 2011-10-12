@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1997-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1997-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -55,7 +55,6 @@ with Snames;   use Snames;
 with Stand;    use Stand;
 with Table;
 with Tbuild;   use Tbuild;
-with Uintp;    use Uintp;
 with Uname;    use Uname;
 
 package body Sem_Elab is
@@ -177,8 +176,7 @@ package body Sem_Elab is
       E                 : Entity_Id;
       Outer_Scope       : Entity_Id;
       Inter_Unit_Only   : Boolean;
-      Generate_Warnings : Boolean := True;
-      In_Init_Proc      : Boolean := False);
+      Generate_Warnings : Boolean := True);
    --  This is the internal recursive routine that is called to check for a
    --  possible elaboration error. The argument N is a subprogram call or
    --  generic instantiation to be checked, and E is the entity of the called
@@ -187,8 +185,7 @@ package body Sem_Elab is
    --  call is only to be checked in the case where it is to another unit (and
    --  skipped if within a unit). Generate_Warnings is set to False to suppress
    --  warning messages about missing pragma Elaborate_All's. These messages
-   --  are not wanted for inner calls in the dynamic model. Flag In_Init_Proc
-   --  should be set whenever the current context is a type init proc.
+   --  are not wanted for inner calls in the dynamic model.
 
    procedure Check_Bad_Instantiation (N : Node_Id);
    --  N is a node for an instantiation (if called with any other node kind,
@@ -231,44 +228,6 @@ package body Sem_Elab is
    --  Check_Internal_Call. Outer_Scope is the outer level scope for the
    --  original call.
 
-   function Has_Generic_Body (N : Node_Id) return Boolean;
-   --  N is a generic package instantiation node, and this routine determines
-   --  if this package spec does in fact have a generic body. If so, then
-   --  True is returned, otherwise False. Note that this is not at all the
-   --  same as checking if the unit requires a body, since it deals with
-   --  the case of optional bodies accurately (i.e. if a body is optional,
-   --  then it looks to see if a body is actually present). Note: this
-   --  function can only do a fully correct job if in generating code mode
-   --  where all bodies have to be present. If we are operating in semantics
-   --  check only mode, then in some cases of optional bodies, a result of
-   --  False may incorrectly be given. In practice this simply means that
-   --  some cases of warnings for incorrect order of elaboration will only
-   --  be given when generating code, which is not a big problem (and is
-   --  inevitable, given the optional body semantics of Ada).
-
-   procedure Insert_Elab_Check (N : Node_Id; C : Node_Id := Empty);
-   --  Given code for an elaboration check (or unconditional raise if the check
-   --  is not needed), inserts the code in the appropriate place. N is the call
-   --  or instantiation node for which the check code is required. C is the
-   --  test whose failure triggers the raise.
-
-   function Is_Finalization_Procedure (Id : Entity_Id) return Boolean;
-   --  Determine whether entity Id denotes a [Deep_]Finalize procedure
-
-   procedure Output_Calls (N : Node_Id);
-   --  Outputs chain of calls stored in the Elab_Call table. The caller has
-   --  already generated the main warning message, so the warnings generated
-   --  are all continuation messages. The argument is the call node at which
-   --  the messages are to be placed.
-
-   function Same_Elaboration_Scope (Scop1, Scop2 : Entity_Id) return Boolean;
-   --  Given two scopes, determine whether they are the same scope from an
-   --  elaboration point of view, i.e. packages and blocks are ignored.
-
-   procedure Set_C_Scope;
-   --  On entry C_Scope is set to some scope. On return, C_Scope is reset
-   --  to be the enclosing compilation unit of this scope.
-
    procedure Set_Elaboration_Constraint
     (Call : Node_Id;
      Subp : Entity_Id;
@@ -291,6 +250,41 @@ package body Sem_Elab is
    --  If P appears in the context of U, the current processing is correct.
    --  Otherwise we must identify these two cases to retrieve Q and place the
    --  Elaborate_All_Desirable on it.
+
+   function Has_Generic_Body (N : Node_Id) return Boolean;
+   --  N is a generic package instantiation node, and this routine determines
+   --  if this package spec does in fact have a generic body. If so, then
+   --  True is returned, otherwise False. Note that this is not at all the
+   --  same as checking if the unit requires a body, since it deals with
+   --  the case of optional bodies accurately (i.e. if a body is optional,
+   --  then it looks to see if a body is actually present). Note: this
+   --  function can only do a fully correct job if in generating code mode
+   --  where all bodies have to be present. If we are operating in semantics
+   --  check only mode, then in some cases of optional bodies, a result of
+   --  False may incorrectly be given. In practice this simply means that
+   --  some cases of warnings for incorrect order of elaboration will only
+   --  be given when generating code, which is not a big problem (and is
+   --  inevitable, given the optional body semantics of Ada).
+
+   procedure Insert_Elab_Check (N : Node_Id; C : Node_Id := Empty);
+   --  Given code for an elaboration check (or unconditional raise if the check
+   --  is not needed), inserts the code in the appropriate place. N is the call
+   --  or instantiation node for which the check code is required. C is the
+   --  test whose failure triggers the raise.
+
+   procedure Output_Calls (N : Node_Id);
+   --  Outputs chain of calls stored in the Elab_Call table. The caller has
+   --  already generated the main warning message, so the warnings generated
+   --  are all continuation messages. The argument is the call node at which
+   --  the messages are to be placed.
+
+   function Same_Elaboration_Scope (Scop1, Scop2 : Entity_Id) return Boolean;
+   --  Given two scopes, determine whether they are the same scope from an
+   --  elaboration point of view, i.e. packages and blocks are ignored.
+
+   procedure Set_C_Scope;
+   --  On entry C_Scope is set to some scope. On return, C_Scope is reset
+   --  to be the enclosing compilation unit of this scope.
 
    function Spec_Entity (E : Entity_Id) return Entity_Id;
    --  Given a compilation unit entity, if it is a spec entity, it is returned
@@ -477,8 +471,7 @@ package body Sem_Elab is
       E                 : Entity_Id;
       Outer_Scope       : Entity_Id;
       Inter_Unit_Only   : Boolean;
-      Generate_Warnings : Boolean := True;
-      In_Init_Proc      : Boolean := False)
+      Generate_Warnings : Boolean := True)
    is
       Loc  : constant Source_Ptr := Sloc (N);
       Ent  : Entity_Id;
@@ -665,10 +658,11 @@ package body Sem_Elab is
          if Body_Acts_As_Spec then
             if Is_TSS (Ent, TSS_Deep_Initialize) then
                declare
-                  Typ  : constant Entity_Id := Etype (First_Formal (Ent));
+                  Typ  : Entity_Id;
                   Init : Entity_Id;
-
                begin
+                  Typ  := Etype (Next_Formal (First_Formal (Ent)));
+
                   if not Is_Controlled (Typ) then
                      return;
                   else
@@ -971,14 +965,6 @@ package body Sem_Elab is
             then
                null;
 
-            --  Do not generate an Elaborate_All for finalization routines
-            --  which perform partial clean up as part of initialization.
-
-            elsif In_Init_Proc
-              and then Is_Finalization_Procedure (Ent)
-            then
-               null;
-
             --  Here we need to generate an implicit elaborate all
 
             else
@@ -1118,9 +1104,8 @@ package body Sem_Elab is
    ---------------------
 
    procedure Check_Elab_Call
-     (N            : Node_Id;
-      Outer_Scope  : Entity_Id := Empty;
-      In_Init_Proc : Boolean   := False)
+     (N           : Node_Id;
+      Outer_Scope : Entity_Id := Empty)
    is
       Ent : Entity_Id;
       P   : Node_Id;
@@ -1429,19 +1414,14 @@ package body Sem_Elab is
 
       C_Scope := Current_Scope;
 
-      --  If not outer level call, then we follow it if it is within the
-      --  original scope of the outer call.
+      --  If not outer level call, then we follow it if it is within
+      --  the original scope of the outer call.
 
       if Present (Outer_Scope)
         and then Within (Scope (Ent), Outer_Scope)
       then
          Set_C_Scope;
-         Check_A_Call
-           (N               => N,
-            E               => Ent,
-            Outer_Scope     => Outer_Scope,
-            Inter_Unit_Only => False,
-            In_Init_Proc    => In_Init_Proc);
+         Check_A_Call (N, Ent, Outer_Scope, Inter_Unit_Only => False);
 
       elsif Elaboration_Checks_Suppressed (Current_Scope) then
          null;
@@ -1466,7 +1446,7 @@ package body Sem_Elab is
            (N,
             Ent,
             Standard_Standard,
-            Inter_Unit_Only   => True,
+            Inter_Unit_Only => True,
             Generate_Warnings => False);
 
       --  Otherwise nothing to do
@@ -1998,7 +1978,7 @@ package body Sem_Elab is
          --  arguments that are assignments (OUT or IN OUT mode formals).
 
          elsif Nkind (N) = N_Procedure_Call_Statement then
-            Check_Elab_Call (N, Outer_Scope, In_Init_Proc => Is_Init_Proc (E));
+            Check_Elab_Call (N, Outer_Scope);
 
             Actual := First_Actual (N);
             while Present (Actual) loop
@@ -2177,10 +2157,9 @@ package body Sem_Elab is
                   Insert_Action (Declaration_Node (E),
                     Make_Object_Declaration (Loce,
                       Defining_Identifier => Ent,
-                      Object_Definition   =>
-                        New_Occurrence_Of (Standard_Short_Integer, Loce),
-                      Expression          =>
-                        Make_Integer_Literal (Loc, Uint_0)));
+                      Object_Definition =>
+                        New_Occurrence_Of (Standard_Boolean, Loce),
+                      Expression => New_Occurrence_Of (Standard_False, Loce)));
 
                   --  Set elaboration flag at the point of the body
 
@@ -2199,12 +2178,10 @@ package body Sem_Elab is
                end;
             end if;
 
-            --  Generate check of the elaboration counter
+            --  Generate check of the elaboration Boolean
 
             Insert_Elab_Check (N,
-               Make_Attribute_Reference (Loc,
-                 Attribute_Name => Name_Elaborated,
-                 Prefix         => New_Occurrence_Of (E, Loc)));
+              New_Occurrence_Of (Elaboration_Entity (E), Loc));
          end if;
 
          --  Generate the warning
@@ -2444,7 +2421,7 @@ package body Sem_Elab is
                 not Restriction_Active (No_Entry_Calls_In_Elaboration_Code)
             then
                --  Runtime elaboration check required. Generate check of the
-               --  elaboration counter for the unit containing the entity.
+               --  elaboration Boolean for the unit containing the entity.
 
                Insert_Elab_Check (N,
                  Make_Attribute_Reference (Loc,
@@ -2931,53 +2908,6 @@ package body Sem_Elab is
          end if;
       end if;
    end Insert_Elab_Check;
-
-   -------------------------------
-   -- Is_Finalization_Procedure --
-   -------------------------------
-
-   function Is_Finalization_Procedure (Id : Entity_Id) return Boolean is
-   begin
-      --  Check whether Id is a procedure with at least one parameter
-
-      if Ekind (Id) = E_Procedure
-        and then Present (First_Formal (Id))
-      then
-         declare
-            Typ      : constant Entity_Id := Etype (First_Formal (Id));
-            Deep_Fin : Entity_Id := Empty;
-            Fin      : Entity_Id := Empty;
-
-         begin
-            --  If the type of the first formal does not require finalization
-            --  actions, then this is definitely not [Deep_]Finalize.
-
-            if not Needs_Finalization (Typ) then
-               return False;
-            end if;
-
-            --  At this point we have the following scenario:
-
-            --    procedure Name (Param1 : [in] [out] Ctrl[; Param2 : ...]);
-
-            --  Recover the two possible versions of [Deep_]Finalize using the
-            --  type of the first parameter and compare with the input.
-
-            Deep_Fin := TSS (Typ, TSS_Deep_Finalize);
-
-            if Is_Controlled (Typ) then
-               Fin := Find_Prim_Op (Typ, Name_Finalize);
-            end if;
-
-            return
-                (Present (Deep_Fin) and then Id = Deep_Fin)
-              or else
-                (Present (Fin) and then Id = Fin);
-         end;
-      end if;
-
-      return False;
-   end Is_Finalization_Procedure;
 
    ------------------
    -- Output_Calls --

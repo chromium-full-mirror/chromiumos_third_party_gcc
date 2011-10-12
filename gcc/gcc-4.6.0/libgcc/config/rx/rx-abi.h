@@ -80,6 +80,15 @@
 #endif
 
 
+#ifdef L_si_to_sf
+#define DECLARE_LIBRARY_RENAMES RENAME_LIBRARY (floatsisf, CONV32sf)
+#endif
+
+#ifdef L_usi_to_sf
+#define DECLARE_LIBRARY_RENAMES RENAME_LIBRARY (floatunsisf, CONV32uf)
+#endif
+
+
 
 #ifdef __RX_64BIT_DOUBLES__
 
@@ -165,14 +174,6 @@
 
 #ifdef L_negate_df
 #define DECLARE_LIBRARY_RENAMES RENAME_LIBRARY (negdf2, NEGd)
-#endif
-
-#ifdef L_si_to_sf
-#define DECLARE_LIBRARY_RENAMES RENAME_LIBRARY (floatsisf, CONV32sf)
-#endif
-
-#ifdef L_usi_to_sf
-#define DECLARE_LIBRARY_RENAMES RENAME_LIBRARY (floatunsisf, CONV32uf)
 #endif
 
 /* The 64-bit comparison functions do not have aliases because libgcc2

@@ -77,9 +77,9 @@ namespace std _GLIBCXX_VISIBILITY(default)
 
     /**
      *  @brief Defines @c != for arbitrary types, in terms of @c ==.
-     *  @param  __x  A thing.
-     *  @param  __y  Another thing.
-     *  @return   __x != __y
+     *  @param  x  A thing.
+     *  @param  y  Another thing.
+     *  @return   x != y
      *
      *  This function uses @c == to determine its result.
      */
@@ -90,9 +90,9 @@ namespace std _GLIBCXX_VISIBILITY(default)
 
     /**
      *  @brief Defines @c > for arbitrary types, in terms of @c <.
-     *  @param  __x  A thing.
-     *  @param  __y  Another thing.
-     *  @return   __x > __y
+     *  @param  x  A thing.
+     *  @param  y  Another thing.
+     *  @return   x > y
      *
      *  This function uses @c < to determine its result.
      */
@@ -103,9 +103,9 @@ namespace std _GLIBCXX_VISIBILITY(default)
 
     /**
      *  @brief Defines @c <= for arbitrary types, in terms of @c <.
-     *  @param  __x  A thing.
-     *  @param  __y  Another thing.
-     *  @return   __x <= __y
+     *  @param  x  A thing.
+     *  @param  y  Another thing.
+     *  @return   x <= y
      *
      *  This function uses @c < to determine its result.
      */
@@ -116,9 +116,9 @@ namespace std _GLIBCXX_VISIBILITY(default)
 
     /**
      *  @brief Defines @c >= for arbitrary types, in terms of @c <.
-     *  @param  __x  A thing.
-     *  @param  __y  Another thing.
-     *  @return   __x >= __y
+     *  @param  x  A thing.
+     *  @param  y  Another thing.
+     *  @return   x >= y
      *
      *  This function uses @c < to determine its result.
      */

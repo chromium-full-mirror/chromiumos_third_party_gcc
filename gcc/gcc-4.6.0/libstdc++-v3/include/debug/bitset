@@ -1,6 +1,6 @@
 // Debugging bitset implementation -*- C++ -*-
 
-// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -66,19 +66,19 @@ namespace __debug
 	reference();
 
 	reference(const _Base_ref& __base,
-		  bitset* __seq __attribute__((__unused__))) _GLIBCXX_NOEXCEPT
+		  bitset* __seq __attribute__((__unused__)))
 	: _Base_ref(__base)
 	, _Safe_iterator_base(__seq, false)
 	{ }
 
       public:
-	reference(const reference& __x) _GLIBCXX_NOEXCEPT
+	reference(const reference& __x)
 	: _Base_ref(__x)
 	, _Safe_iterator_base(__x, false)
 	{ }
 
 	reference&
-	operator=(bool __x) _GLIBCXX_NOEXCEPT
+	operator=(bool __x)
 	{
 	  _GLIBCXX_DEBUG_VERIFY(! this->_M_singular(),
 			      _M_message(__gnu_debug::__msg_bad_bitset_write)
@@ -88,7 +88,7 @@ namespace __debug
 	}
 
 	reference&
-	operator=(const reference& __x) _GLIBCXX_NOEXCEPT
+	operator=(const reference& __x)
 	{
 	  _GLIBCXX_DEBUG_VERIFY(! __x._M_singular(),
 			       _M_message(__gnu_debug::__msg_bad_bitset_read)
@@ -101,7 +101,7 @@ namespace __debug
 	}
 
 	bool
-	operator~() const _GLIBCXX_NOEXCEPT
+	operator~() const
 	{
 	  _GLIBCXX_DEBUG_VERIFY(! this->_M_singular(),
 			       _M_message(__gnu_debug::__msg_bad_bitset_read)
@@ -109,7 +109,7 @@ namespace __debug
 	  return ~(*static_cast<const _Base_ref*>(this));
 	}
 
-	operator bool() const _GLIBCXX_NOEXCEPT
+	operator bool() const
 	{
 	  _GLIBCXX_DEBUG_VERIFY(! this->_M_singular(),
 			      _M_message(__gnu_debug::__msg_bad_bitset_read)
@@ -118,7 +118,7 @@ namespace __debug
 	}
 
 	reference&
-	flip() _GLIBCXX_NOEXCEPT
+	flip()
 	{
 	  _GLIBCXX_DEBUG_VERIFY(! this->_M_singular(),
 			      _M_message(__gnu_debug::__msg_bad_bitset_flip)
@@ -130,11 +130,10 @@ namespace __debug
 #endif
 
       // 23.3.5.1 constructors:
-      _GLIBCXX_CONSTEXPR bitset() _GLIBCXX_NOEXCEPT
-      : _Base() { }
+      _GLIBCXX_CONSTEXPR bitset() : _Base() { }
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
-      constexpr bitset(unsigned long long __val) noexcept
+      constexpr bitset(unsigned long long __val)
 #else
       bitset(unsigned long __val)
 #endif
@@ -174,42 +173,42 @@ namespace __debug
 
       // 23.3.5.2 bitset operations:
       bitset<_Nb>&
-      operator&=(const bitset<_Nb>& __rhs) _GLIBCXX_NOEXCEPT
+      operator&=(const bitset<_Nb>& __rhs)
       {
 	_M_base() &= __rhs;
 	return *this;
       }
 
       bitset<_Nb>&
-      operator|=(const bitset<_Nb>& __rhs) _GLIBCXX_NOEXCEPT
+      operator|=(const bitset<_Nb>& __rhs)
       {
 	_M_base() |= __rhs;
 	return *this;
       }
 
       bitset<_Nb>&
-      operator^=(const bitset<_Nb>& __rhs) _GLIBCXX_NOEXCEPT
+      operator^=(const bitset<_Nb>& __rhs)
       {
 	_M_base() ^= __rhs;
 	return *this;
       }
 
       bitset<_Nb>&
-      operator<<=(size_t __pos) _GLIBCXX_NOEXCEPT
+      operator<<=(size_t __pos)
       {
 	_M_base() <<= __pos;
 	return *this;
       }
 
       bitset<_Nb>&
-      operator>>=(size_t __pos) _GLIBCXX_NOEXCEPT
+      operator>>=(size_t __pos)
       {
 	_M_base() >>= __pos;
 	return *this;
       }
 
       bitset<_Nb>&
-      set() _GLIBCXX_NOEXCEPT
+      set()
       {
 	_Base::set();
 	return *this;
@@ -225,7 +224,7 @@ namespace __debug
       }
 
       bitset<_Nb>&
-      reset() _GLIBCXX_NOEXCEPT
+      reset()
       {
 	_Base::reset();
 	return *this;
@@ -238,12 +237,10 @@ namespace __debug
 	return *this;
       }
 
-      bitset<_Nb>
-      operator~() const _GLIBCXX_NOEXCEPT
-      { return bitset(~_M_base()); }
+      bitset<_Nb> operator~() const { return bitset(~_M_base()); }
 
       bitset<_Nb>&
-      flip() _GLIBCXX_NOEXCEPT
+      flip()
       {
 	_Base::flip();
 	return *this;
@@ -349,11 +346,11 @@ namespace __debug
       using _Base::size;
 
       bool
-      operator==(const bitset<_Nb>& __rhs) const _GLIBCXX_NOEXCEPT
+      operator==(const bitset<_Nb>& __rhs) const
       { return _M_base() == __rhs; }
 
       bool
-      operator!=(const bitset<_Nb>& __rhs) const _GLIBCXX_NOEXCEPT
+      operator!=(const bitset<_Nb>& __rhs) const
       { return _M_base() != __rhs; }
 
       using _Base::test;
@@ -362,35 +359,33 @@ namespace __debug
       using _Base::none;
 
       bitset<_Nb>
-      operator<<(size_t __pos) const _GLIBCXX_NOEXCEPT
+      operator<<(size_t __pos) const
       { return bitset<_Nb>(_M_base() << __pos); }
 
       bitset<_Nb>
-      operator>>(size_t __pos) const _GLIBCXX_NOEXCEPT
+      operator>>(size_t __pos) const
       { return bitset<_Nb>(_M_base() >> __pos); }
 
-      _Base& 
-      _M_base() _GLIBCXX_NOEXCEPT
-      { return *this; }
+      _Base&
+      _M_base() { return *this; }
 
       const _Base&
-      _M_base() const _GLIBCXX_NOEXCEPT
-      { return *this; }
+      _M_base() const { return *this; }
     };
 
   template<size_t _Nb>
     bitset<_Nb>
-    operator&(const bitset<_Nb>& __x, const bitset<_Nb>& __y) _GLIBCXX_NOEXCEPT
+    operator&(const bitset<_Nb>& __x, const bitset<_Nb>& __y)
     { return bitset<_Nb>(__x) &= __y; }
 
   template<size_t _Nb>
     bitset<_Nb>
-    operator|(const bitset<_Nb>& __x, const bitset<_Nb>& __y) _GLIBCXX_NOEXCEPT
+    operator|(const bitset<_Nb>& __x, const bitset<_Nb>& __y)
     { return bitset<_Nb>(__x) |= __y; }
 
   template<size_t _Nb>
     bitset<_Nb>
-    operator^(const bitset<_Nb>& __x, const bitset<_Nb>& __y) _GLIBCXX_NOEXCEPT
+    operator^(const bitset<_Nb>& __x, const bitset<_Nb>& __y)
     { return bitset<_Nb>(__x) ^= __y; }
 
   template<typename _CharT, typename _Traits, size_t _Nb>

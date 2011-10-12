@@ -34,7 +34,7 @@
 // warranty.
 
 /**
- * @file ov_tree_map_/insert_fn_imps.hpp
+ * @file insert_fn_imps.hpp
  * Contains an implementation class for ov_tree_.
  */
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011
+/* Copyright (C) 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Andy Vaught
    F2003 I/O support contributed by Jerry DeLisle
@@ -467,8 +467,12 @@ new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags * flags)
 	break;
 
       opp->file = tmpname;
+#ifdef HAVE_SNPRINTF
       opp->file_len = snprintf(opp->file, sizeof (tmpname), "fort.%d", 
 			       (int) opp->common.unit);
+#else
+      opp->file_len = sprintf(opp->file, "fort.%d", (int) opp->common.unit);
+#endif
       break;
 
     default:
@@ -500,29 +504,26 @@ new_unit (st_parameter_open *opp, gfc_unit *u, unit_flags * flags)
   if (s == NULL)
     {
       char *path, *msg;
-      size_t msglen;
       path = (char *) gfc_alloca (opp->file_len + 1);
-      msglen = opp->file_len + 51;
-      msg = (char *) gfc_alloca (msglen);
+      msg = (char *) gfc_alloca (opp->file_len + 51);
       unpack_filename (path, opp->file, opp->file_len);
 
       switch (errno)
 	{
 	case ENOENT: 
-	  snprintf (msg, msglen, "File '%s' does not exist", path);
+	  sprintf (msg, "File '%s' does not exist", path);
 	  break;
 
 	case EEXIST:
-	  snprintf (msg, msglen, "File '%s' already exists", path);
+	  sprintf (msg, "File '%s' already exists", path);
 	  break;
 
 	case EACCES:
-	  snprintf (msg, msglen, 
-		    "Permission denied trying to open file '%s'", path);
+	  sprintf (msg, "Permission denied trying to open file '%s'", path);
 	  break;
 
 	case EISDIR:
-	  snprintf (msg, msglen, "'%s' is a directory", path);
+	  sprintf (msg, "'%s' is a directory", path);
 	  break;
 
 	default:
@@ -688,7 +689,8 @@ already_open (st_parameter_open *opp, gfc_unit * u, unit_flags * flags)
 	}
 
       u->s = NULL;
-      free (u->file);
+      if (u->file)
+	free (u->file);
       u->file = NULL;
       u->file_len = 0;
 

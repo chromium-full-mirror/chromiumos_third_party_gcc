@@ -586,13 +586,11 @@ codecvt usage.
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://www.opengroup.org/austin">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.opengroup.org/austin/" class="uri">
+    </biblioid>
+    <citetitle>
       System Interface Definitions, Issue 7 (IEEE Std. 1003.1-2008)
-	</link>
-      </title>
-
+    </citetitle>
     <copyright>
       <year>2008</year>
       <holder>
@@ -641,36 +639,32 @@ codecvt usage.
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://www.lysator.liu.se/c/na1.html">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.lysator.liu.se/c/na1.html" class="uri">
+    </biblioid>
+    <citetitle>
       A brief description of Normative Addendum 1
-	</link>
-      </title>
+    </citetitle>
 
     <author><personname><surname>Feather</surname><firstname>Clive</firstname></personname></author>
     <pagenums>Extended Character Sets</pagenums>
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://tldp.org/HOWTO/Unicode-HOWTO.html">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://tldp.org/HOWTO/Unicode-HOWTO.html" class="uri">
+	</biblioid>
+	<citetitle>
 	  The Unicode HOWTO
-	</link>
-      </title>
+	</citetitle>
 
     <author><personname><surname>Haible</surname><firstname>Bruno</firstname></personname></author>
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://www.cl.cam.ac.uk/~mgk25/unicode.html">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.cl.cam.ac.uk/~mgk25/unicode.html" class="uri">
+    </biblioid>
+    <citetitle>
       UTF-8 and Unicode FAQ for Unix/Linux
-	</link>
-      </title>
-
+    </citetitle>
 
     <author><personname><surname>Khun</surname><firstname>Markus</firstname></personname></author>
   </biblioentry>

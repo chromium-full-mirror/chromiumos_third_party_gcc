@@ -4,9 +4,10 @@
 /* { dg-do run } */
 /* { dg-skip-if "No NeXT fast enum. pre-Darwin9" { *-*-darwin[5-8]* } { "-fnext-runtime" } { "" } } */
 /* { dg-xfail-run-if "Needs OBJC2 ABI" { *-*-darwin* && { lp64 && { ! objc2 } } } { "-fnext-runtime" } { "" } } */
+/* { dg-additional-sources "../objc-obj-c++-shared/Object1.m" } */
 /* { dg-options "-Wall" } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.m"
+#import "../objc-obj-c++-shared/Object1.h"
 
 extern void abort (void);
 /*
@@ -18,7 +19,7 @@ struct __objcFastEnumerationState
   unsigned long extra[5];
 };
 */
-@interface TestsuiteObject (NSFastEnumeration)
+@interface Object (NSFastEnumeration)
 - (unsigned long)countByEnumeratingWithState: (struct __objcFastEnumerationState *)state
                                      objects:(id *)stackbuf 
                                        count:(unsigned int)len;
@@ -43,7 +44,7 @@ int main (void)
     abort ();
 
   /* Test that if nothing is done, object is set to nil.  */
-  object = [TestsuiteObject new];
+  object = [Object new];
 
   for (object in array)
     ;

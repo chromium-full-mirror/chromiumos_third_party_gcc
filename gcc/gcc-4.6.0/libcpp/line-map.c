@@ -34,6 +34,7 @@ linemap_init (struct line_maps *set)
   set->maps = NULL;
   set->allocated = 0;
   set->used = 0;
+  set->last_listed = -1;
   set->trace_includes = false;
   set->depth = 0;
   set->cache = 0;
@@ -114,10 +115,11 @@ linemap_add (struct line_maps *set, enum lc_reason reason,
   if (reason == LC_RENAME_VERBATIM)
     reason = LC_RENAME;
 
-  if (set->depth == 0 && reason == LC_RENAME)
-    abort ();
-
-  if (reason == LC_LEAVE)
+  /* If we don't keep our line maps consistent, we can easily
+     segfault.  Don't rely on the client to do it for us.  */
+  if (set->depth == 0)
+    reason = LC_ENTER;
+  else if (reason == LC_LEAVE)
     {
       struct line_map *from;
       bool error;
@@ -136,7 +138,7 @@ linemap_add (struct line_maps *set, enum lc_reason reason,
       else
 	{
 	  from = INCLUDED_FROM (set, map - 1);
-	  error = to_file && filename_cmp (from->to_file, to_file);
+	  error = to_file && strcmp (from->to_file, to_file);
 	}
 
       /* Depending upon whether we are handling preprocessed input or

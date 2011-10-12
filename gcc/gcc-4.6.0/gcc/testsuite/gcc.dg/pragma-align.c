@@ -1,6 +1,6 @@
 /* Prove that pragma alignment handling works somewhat. */
 
-/* { dg-do run { target { ! default_packed } } } */
+/* { dg-do run } */
 
 extern void abort (void);
 

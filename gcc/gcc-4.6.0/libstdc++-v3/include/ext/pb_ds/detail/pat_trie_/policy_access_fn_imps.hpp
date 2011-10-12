@@ -34,20 +34,20 @@
 // warranty.
 
 /**
- * @file pat_trie_/policy_access_fn_imps.hpp
- * Contains an implementation class for pat_trie.
+ * @file policy_access_fn_imps.hpp
+ * Contains an implementation class for bin_search_tree_.
  */
 
 PB_DS_CLASS_T_DEC
-typename PB_DS_CLASS_C_DEC::access_traits& 
+typename PB_DS_CLASS_C_DEC::e_access_traits& 
 PB_DS_CLASS_C_DEC::
-get_access_traits()
+get_e_access_traits()
 { return *this; }
 
 PB_DS_CLASS_T_DEC
-const typename PB_DS_CLASS_C_DEC::access_traits& 
+const typename PB_DS_CLASS_C_DEC::e_access_traits& 
 PB_DS_CLASS_C_DEC::
-get_access_traits() const
+get_e_access_traits() const
 { return *this; }
 
 PB_DS_CLASS_T_DEC

@@ -43,10 +43,10 @@ void test01()
 }
 
 // { dg-error "does not name a type" "" { target *-*-* } 33 }
-// { dg-error "required from here" "" { target *-*-* } 35 }
-// { dg-error "required from here" "" { target *-*-* } 37 }
-// { dg-error "required from here" "" { target *-*-* } 40 }
-// { dg-error "required from here" "" { target *-*-* } 42 }
+// { dg-error "instantiated from here" "" { target *-*-* } 35 }
+// { dg-error "instantiated from here" "" { target *-*-* } 37 }
+// { dg-error "instantiated from here" "" { target *-*-* } 40 }
+// { dg-error "instantiated from here" "" { target *-*-* } 42 }
 
-// { dg-error "invalid use of incomplete type" "" { target *-*-* } 1463 }
-// { dg-error "declaration of" "" { target *-*-* } 1427 }
+// { dg-error "invalid use of incomplete type" "" { target *-*-* } 1020 }
+// { dg-error "declaration of" "" { target *-*-* } 984 }

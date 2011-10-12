@@ -1,6 +1,7 @@
 /* { dg-lto-do link } */
 /* { dg-skip-if "" { ! { x86_64-*-* } } { "*" } { "" } } */
 /* { dg-lto-options { { -O2 -flto -w } } } */
+/* { dg-require-effective-target lp64 } */
 
 register int r asm("esi");
 

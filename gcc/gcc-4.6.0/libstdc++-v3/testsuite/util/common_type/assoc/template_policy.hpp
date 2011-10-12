@@ -46,33 +46,33 @@ namespace __gnu_pbds
 {
   namespace test
   {
-    template<typename _Alloc>
+    template<typename Allocator>
     struct direct_mask_range_hashing_t_ 
-    : public __gnu_pbds::direct_mask_range_hashing<typename _Alloc::size_type>
+    : public __gnu_pbds::direct_mask_range_hashing<typename Allocator::size_type>
     {
-      typedef typename _Alloc::size_type size_type;
+      typedef typename Allocator::size_type size_type;
       typedef __gnu_pbds::direct_mask_range_hashing<size_type> base_type;
     };
 
-    template<typename _Alloc>
+    template<typename Allocator>
     struct direct_mod_range_hashing_t_ 
-    : public __gnu_pbds::direct_mod_range_hashing<typename _Alloc::size_type>
+    : public __gnu_pbds::direct_mod_range_hashing<typename Allocator::size_type>
     {
-      typedef typename _Alloc::size_type size_type;
+      typedef typename Allocator::size_type size_type;
       typedef __gnu_pbds::direct_mod_range_hashing<size_type> base_type;
     };
 
-    template<typename _Alloc,
-	     typename _Alloc::size_type Min_Load_Nom,
-	     typename _Alloc::size_type Min_Load_Denom,
-	     typename _Alloc::size_type Max_Load_Nom,
-	     typename _Alloc::size_type Max_Load_Denom,
+    template<typename Allocator,
+	     typename Allocator::size_type Min_Load_Nom,
+	     typename Allocator::size_type Min_Load_Denom,
+	     typename Allocator::size_type Max_Load_Nom,
+	     typename Allocator::size_type Max_Load_Denom,
 	     bool External_Access>
     struct hash_load_check_resize_trigger_t_ 
     : public __gnu_pbds::hash_load_check_resize_trigger<External_Access,
-						   typename _Alloc::size_type>
+						   typename Allocator::size_type>
     {
-      typedef typename _Alloc::size_type size_type;
+      typedef typename Allocator::size_type size_type;
       typedef __gnu_pbds::hash_load_check_resize_trigger<External_Access, size_type>  base_type;
 
       inline
@@ -87,15 +87,15 @@ namespace __gnu_pbds
 	};
     };
 
-    template<typename _Alloc,
-	     typename _Alloc::size_type Load_Nom,
-	     typename _Alloc::size_type Load_Denom,
+    template<typename Allocator,
+	     typename Allocator::size_type Load_Nom,
+	     typename Allocator::size_type Load_Denom,
 	     bool External_Access>
     struct cc_hash_max_collision_check_resize_trigger_t_ 
     : public __gnu_pbds::cc_hash_max_collision_check_resize_trigger<External_Access,
-      typename _Alloc::size_type>
+      typename Allocator::size_type>
     {
-      typedef typename _Alloc::size_type size_type;
+      typedef typename Allocator::size_type size_type;
       typedef __gnu_pbds::cc_hash_max_collision_check_resize_trigger<External_Access, size_type> base_type;
 
       inline
@@ -113,30 +113,30 @@ namespace __gnu_pbds
     struct hash_prime_size_policy_t_ : public __gnu_pbds::hash_prime_size_policy
     { };
 
-    template<typename _Alloc>
+    template<typename Allocator>
     struct hash_exponential_size_policy_t_ 
-    : public __gnu_pbds::hash_exponential_size_policy<typename _Alloc::size_type>
+    : public __gnu_pbds::hash_exponential_size_policy<typename Allocator::size_type>
     { };
 
-    template<typename Key, typename _Alloc>
+    template<typename Key, class Allocator>
     struct linear_probe_fn_t_ 
-    : public __gnu_pbds::linear_probe_fn<typename _Alloc::size_type>
+    : public __gnu_pbds::linear_probe_fn<typename Allocator::size_type>
     { };
 
-    template<typename Key, typename _Alloc>
+    template<typename Key, class Allocator>
     struct quadratic_probe_fn_t_ 
-    : public __gnu_pbds::quadratic_probe_fn<typename _Alloc::size_type>
+    : public __gnu_pbds::quadratic_probe_fn<typename Allocator::size_type>
     { };
 
-    template<typename _Alloc, typename _Alloc::size_type Max_Count>
-    struct lu_counter_policy_t_ 
-    : public __gnu_pbds::lu_counter_policy<Max_Count, _Alloc>
+    template<typename Allocator, typename Allocator::size_type Max_Count>
+    struct counter_lu_policy_t_ 
+    : public __gnu_pbds::counter_lu_policy<Max_Count, Allocator>
     {
-      typedef __gnu_pbds::lu_counter_policy<Max_Count, _Alloc> base_type;
+      typedef __gnu_pbds::counter_lu_policy<Max_Count, Allocator> base_type;
     };
 
-    struct lu_move_to_front_policy_t_ 
-    : public __gnu_pbds::lu_move_to_front_policy<>
+    struct move_to_front_lu_policy_t_ 
+    : public __gnu_pbds::move_to_front_lu_policy<>
     { };
   } // namespace test
 } // namespace __gnu_pbds

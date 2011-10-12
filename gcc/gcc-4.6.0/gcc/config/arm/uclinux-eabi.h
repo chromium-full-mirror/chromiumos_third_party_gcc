@@ -64,4 +64,3 @@
 		    : "0" (_beg), "r" (_end), "r" (_flg), "r" (_scno));	\
 }
 
-#define ARM_TARGET2_DWARF_FORMAT DW_EH_PE_absptr

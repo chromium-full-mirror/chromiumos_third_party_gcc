@@ -1,4 +1,5 @@
 // { dg-options "-std=c++0x" }
+#include <cassert>
 
 int main() {
   int i = 0;

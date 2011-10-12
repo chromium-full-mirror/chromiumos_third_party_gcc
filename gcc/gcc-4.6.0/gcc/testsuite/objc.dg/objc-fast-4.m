@@ -3,10 +3,10 @@
 /* { dg-options "-O0" } */
 /* Radar 4015820 */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.h"
+#include "../objc-obj-c++-shared/Object1.h"
 
 void foo(void) {
-  TestsuiteObject *o;
+  Object *o;
   [o++ free];
 }
 /* { dg-final { scan-assembler-not "L_objc_msgSend\\\$non_lazy_ptr" } } */

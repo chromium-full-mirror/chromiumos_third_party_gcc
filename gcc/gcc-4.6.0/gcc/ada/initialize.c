@@ -6,7 +6,7 @@
  *                                                                          *
  *                          C Implementation File                           *
  *                                                                          *
- *          Copyright (C) 1992-2011, Free Software Foundation, Inc.         *
+ *          Copyright (C) 1992-2009, Free Software Foundation, Inc.         *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -32,14 +32,10 @@
 /*  This unit provides default implementation for __gnat_initialize ()
     which is called before the elaboration of the partition. It is provided
     in a separate file/object so that users can replace it easily.
-    The default implementation should be null on most targets.  */
-
-#ifdef __cplusplus
-extern "C" {
-#endif
+    The default implementation should be null on most targets. */
 
 /* The following include is here to meet the published VxWorks requirement
-   that the __vxworks header appear before any other include.  */
+   that the __vxworks header appear before any other include. */
 #ifdef __vxworks
 #include "vxWorks.h"
 #endif
@@ -221,7 +217,8 @@ __gnat_initialize (void *eh ATTRIBUTE_UNUSED)
 
 		     FindClose (hDir);
 
-		     free (dir);
+		     if (dir != NULL)
+		       free (dir);
 		   }
 	       }
 	     else
@@ -362,8 +359,4 @@ __gnat_initialize (void *eh ATTRIBUTE_UNUSED)
 {
 }
 
-#endif
-
-#ifdef __cplusplus
-}
 #endif

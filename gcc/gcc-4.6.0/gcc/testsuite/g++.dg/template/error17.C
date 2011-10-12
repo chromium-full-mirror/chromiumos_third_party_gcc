@@ -6,4 +6,5 @@ foo()
 {
   union { struct { }; }; // { dg-error "prohibits anonymous struct" "anon" }
   // { dg-error "not inside" "not inside" { target *-*-* } 7 }
+  // { dg-warning "no members" "no members" { target *-*-* } 7 }
 }

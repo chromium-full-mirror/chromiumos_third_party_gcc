@@ -3,13 +3,13 @@
 /* { dg-options "" } */
 /* { dg-do run } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.m"
+#include "../objc-obj-c++-shared/Object1.h"
 #include <objc/objc.h>
 
 extern void abort(void);
 #define CHECK_IF(expr) if(!(expr)) abort();
 
-@interface Foo: TestsuiteObject {
+@interface Foo: Object {
   int a, b;
   float c, d;
 }
@@ -18,16 +18,17 @@ extern void abort(void);
 @implementation Foo
 @end
 
-typedef TestsuiteObject MyObject;
+typedef Object MyObject;
 typedef struct Foo Foo_type;
 
-@compatibility_alias AliasObject TestsuiteObject;
+@compatibility_alias AliasObject Object;
 
 int main(void) {
-  CHECK_IF(sizeof(Foo) > sizeof(TestsuiteObject) && sizeof(TestsuiteObject) > 0);
+  CHECK_IF(sizeof(Foo) > sizeof(Object) && sizeof(Object) > 0);
   CHECK_IF(sizeof(Foo) == sizeof(Foo_type));
-  CHECK_IF(sizeof(TestsuiteObject) == sizeof(MyObject));
-  CHECK_IF(sizeof(TestsuiteObject) == sizeof(AliasObject));
+  CHECK_IF(sizeof(Object) == sizeof(MyObject));
+  CHECK_IF(sizeof(Object) == sizeof(AliasObject));
   return 0;
 }
 
+#include "../objc-obj-c++-shared/Object1-implementation.h"

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1997-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1997-2009, Free Software Foundation, Inc.         --
 --                       (Version for Alpha OpenVMS)                        --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
@@ -35,6 +35,11 @@ with System.Machine_Code; use System.Machine_Code;
 
 package body System.Vax_Float_Operations is
 
+   --  Ensure this gets compiled with -O to avoid extra (and possibly
+   --  improper) memory stores.
+
+   pragma Optimize (Time);
+
    --  Declare the functions that do the conversions between floating-point
    --  formats.  Call the operands IEEE float so they get passed in
    --  FP registers.
@@ -62,9 +67,12 @@ package body System.Vax_Float_Operations is
       A, B : T;
       C    : G;
    begin
-      Asm ("ldg %0,%1", T'Asm_Output ("=f", A), D'Asm_Input ("m", X));
-      Asm ("cvtdg %1,%0", T'Asm_Output ("=f", B), T'Asm_Input ("f", A));
-      Asm ("stg %1,%0", G'Asm_Output ("=m", C), T'Asm_Input ("f", B));
+      Asm ("ldg %0,%1", T'Asm_Output ("=f", A), D'Asm_Input ("m", X),
+           Volatile => True);
+      Asm ("cvtdg %1,%0", T'Asm_Output ("=f", B), T'Asm_Input ("f", A),
+           Volatile => True);
+      Asm ("stg %1,%0", G'Asm_Output ("=m", C), T'Asm_Input ("f", B),
+           Volatile => True);
       return C;
    end D_To_G;
 
@@ -76,8 +84,10 @@ package body System.Vax_Float_Operations is
       A : T;
       B : G;
    begin
-      Asm ("ldf %0,%1", T'Asm_Output ("=f", A), F'Asm_Input ("m", X));
-      Asm ("stg %1,%0", G'Asm_Output ("=m", B), T'Asm_Input ("f", A));
+      Asm ("ldf %0,%1", T'Asm_Output ("=f", A), F'Asm_Input ("m", X),
+           Volatile => True);
+      Asm ("stg %1,%0", G'Asm_Output ("=m", B), T'Asm_Input ("f", A),
+           Volatile => True);
       return B;
    end F_To_G;
 
@@ -93,7 +103,8 @@ package body System.Vax_Float_Operations is
       --  Because converting to a wider FP format is a no-op, we say
       --  A is 64-bit even though we are loading 32 bits into it.
 
-      Asm ("ldf %0,%1", T'Asm_Output ("=f", A), F'Asm_Input ("m", X));
+      Asm ("ldf %0,%1", T'Asm_Output ("=f", A), F'Asm_Input ("m", X),
+           Volatile => True);
 
       B := S (Cvt_G_T (A));
       return B;
@@ -107,9 +118,12 @@ package body System.Vax_Float_Operations is
       A, B : T;
       C    : D;
    begin
-      Asm ("ldg %0,%1", T'Asm_Output ("=f", A), G'Asm_Input ("m", X));
-      Asm ("cvtgd %1,%0", T'Asm_Output ("=f", B), T'Asm_Input ("f", A));
-      Asm ("stg %1,%0", D'Asm_Output ("=m", C), T'Asm_Input ("f", B));
+      Asm ("ldg %0,%1", T'Asm_Output ("=f", A), G'Asm_Input ("m", X),
+           Volatile => True);
+      Asm ("cvtgd %1,%0", T'Asm_Output ("=f", B), T'Asm_Input ("f", A),
+           Volatile => True);
+      Asm ("stg %1,%0", D'Asm_Output ("=m", C), T'Asm_Input ("f", B),
+           Volatile => True);
       return C;
    end G_To_D;
 
@@ -122,9 +136,12 @@ package body System.Vax_Float_Operations is
       B : S;
       C : F;
    begin
-      Asm ("ldg %0,%1", T'Asm_Output ("=f", A), G'Asm_Input ("m", X));
-      Asm ("cvtgf %1,%0", S'Asm_Output ("=f", B), T'Asm_Input ("f", A));
-      Asm ("stf %1,%0", F'Asm_Output ("=m", C), S'Asm_Input ("f", B));
+      Asm ("ldg %0,%1", T'Asm_Output ("=f", A), G'Asm_Input ("m", X),
+           Volatile => True);
+      Asm ("cvtgf %1,%0", S'Asm_Output ("=f", B), T'Asm_Input ("f", A),
+           Volatile => True);
+      Asm ("stf %1,%0", F'Asm_Output ("=m", C), S'Asm_Input ("f", B),
+           Volatile => True);
       return C;
    end G_To_F;
 
@@ -136,8 +153,10 @@ package body System.Vax_Float_Operations is
       A : T;
       B : Q;
    begin
-      Asm ("ldg %0,%1", T'Asm_Output ("=f", A), G'Asm_Input ("m", X));
-      Asm ("cvtgq %1,%0", Q'Asm_Output ("=f", B), T'Asm_Input ("f", A));
+      Asm ("ldg %0,%1", T'Asm_Output ("=f", A), G'Asm_Input ("m", X),
+           Volatile => True);
+      Asm ("cvtgq %1,%0", Q'Asm_Output ("=f", B), T'Asm_Input ("f", A),
+           Volatile => True);
       return B;
    end G_To_Q;
 
@@ -148,7 +167,8 @@ package body System.Vax_Float_Operations is
    function G_To_T (X : G) return T is
       A, B : T;
    begin
-      Asm ("ldg %0,%1", T'Asm_Output ("=f", A), G'Asm_Input ("m", X));
+      Asm ("ldg %0,%1", T'Asm_Output ("=f", A), G'Asm_Input ("m", X),
+           Volatile => True);
       B := Cvt_G_T (A);
       return B;
    end G_To_T;
@@ -170,8 +190,10 @@ package body System.Vax_Float_Operations is
       A : S;
       B : F;
    begin
-      Asm ("cvtqf %1,%0", S'Asm_Output ("=f", A), Q'Asm_Input ("f", X));
-      Asm ("stf %1,%0", F'Asm_Output ("=m", B), S'Asm_Input ("f", A));
+      Asm ("cvtqf %1,%0", S'Asm_Output ("=f", A), Q'Asm_Input ("f", X),
+           Volatile => True);
+      Asm ("stf %1,%0", F'Asm_Output ("=m", B), S'Asm_Input ("f", A),
+           Volatile => True);
       return B;
    end Q_To_F;
 
@@ -183,8 +205,10 @@ package body System.Vax_Float_Operations is
       A : T;
       B : G;
    begin
-      Asm ("cvtqg %1,%0", T'Asm_Output ("=f", A), Q'Asm_Input ("f", X));
-      Asm ("stg %1,%0", G'Asm_Output ("=m", B), T'Asm_Input ("f", A));
+      Asm ("cvtqg %1,%0", T'Asm_Output ("=f", A), Q'Asm_Input ("f", X),
+           Volatile => True);
+      Asm ("stg %1,%0", G'Asm_Output ("=m", B), T'Asm_Input ("f", A),
+           Volatile => True);
       return B;
    end Q_To_G;
 
@@ -197,7 +221,8 @@ package body System.Vax_Float_Operations is
       B : F;
    begin
       A := Cvt_T_F (T (X));
-      Asm ("stf %1,%0", F'Asm_Output ("=m", B), S'Asm_Input ("f", A));
+      Asm ("stf %1,%0", F'Asm_Output ("=m", B), S'Asm_Input ("f", A),
+           Volatile => True);
       return B;
    end S_To_F;
 
@@ -219,7 +244,8 @@ package body System.Vax_Float_Operations is
       B : G;
    begin
       A := Cvt_T_G (X);
-      Asm ("stg %1,%0", G'Asm_Output ("=m", B), T'Asm_Input ("f", A));
+      Asm ("stg %1,%0", G'Asm_Output ("=m", B), T'Asm_Input ("f", A),
+           Volatile => True);
       return B;
    end T_To_G;
 
@@ -231,9 +257,12 @@ package body System.Vax_Float_Operations is
       A, B : S;
       C    : F;
    begin
-      Asm ("ldf %0,%1", S'Asm_Output ("=f", A), F'Asm_Input ("m", X));
-      Asm ("cpys $f31,%1,%0", S'Asm_Output ("=f", B), S'Asm_Input ("f", A));
-      Asm ("stf %1,%0", F'Asm_Output ("=m", C), S'Asm_Input ("f", B));
+      Asm ("ldf %0,%1", S'Asm_Output ("=f", A), F'Asm_Input ("m", X),
+           Volatile => True);
+      Asm ("cpys $f31,%1,%0", S'Asm_Output ("=f", B), S'Asm_Input ("f", A),
+           Volatile => True);
+      Asm ("stf %1,%0", F'Asm_Output ("=m", C), S'Asm_Input ("f", B),
+           Volatile => True);
       return C;
    end Abs_F;
 
@@ -246,8 +275,10 @@ package body System.Vax_Float_Operations is
       C    : G;
    begin
       Asm ("ldg %0,%1", T'Asm_Output ("=f", A), G'Asm_Input ("m", X));
-      Asm ("cpys $f31,%1,%0", T'Asm_Output ("=f", B), T'Asm_Input ("f", A));
-      Asm ("stg %1,%0", G'Asm_Output ("=m", C), T'Asm_Input ("f", B));
+      Asm ("cpys $f31,%1,%0", T'Asm_Output ("=f", B), T'Asm_Input ("f", A),
+           Volatile => True);
+      Asm ("stg %1,%0", G'Asm_Output ("=m", C), T'Asm_Input ("f", B),
+           Volatile => True);
       return C;
    end Abs_G;
 
@@ -260,10 +291,13 @@ package body System.Vax_Float_Operations is
       R1        : F;
    begin
       Asm ("ldf %0,%1", S'Asm_Output ("=f", X1), F'Asm_Input ("m", X));
-      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y));
+      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("addf %1,%2,%0", S'Asm_Output ("=f", R),
-           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)));
-      Asm ("stf %1,%0", F'Asm_Output ("=m", R1), S'Asm_Input ("f", R));
+           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)),
+           Volatile => True);
+      Asm ("stf %1,%0", F'Asm_Output ("=m", R1), S'Asm_Input ("f", R),
+           Volatile => True);
       return R1;
    end Add_F;
 
@@ -276,10 +310,13 @@ package body System.Vax_Float_Operations is
       R1        : G;
    begin
       Asm ("ldg %0,%1", T'Asm_Output ("=f", X1), G'Asm_Input ("m", X));
-      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y));
+      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("addg %1,%2,%0", T'Asm_Output ("=f", R),
-           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)));
-      Asm ("stg %1,%0", G'Asm_Output ("=m", R1), T'Asm_Input ("f", R));
+           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)),
+           Volatile => True);
+      Asm ("stg %1,%0", G'Asm_Output ("=m", R1), T'Asm_Input ("f", R),
+           Volatile => True);
       return R1;
    end Add_G;
 
@@ -355,10 +392,13 @@ package body System.Vax_Float_Operations is
       R1        : F;
    begin
       Asm ("ldf %0,%1", S'Asm_Output ("=f", X1), F'Asm_Input ("m", X));
-      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y));
+      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("divf %1,%2,%0", S'Asm_Output ("=f", R),
-           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)));
-      Asm ("stf %1,%0", F'Asm_Output ("=m", R1), S'Asm_Input ("f", R));
+           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)),
+           Volatile => True);
+      Asm ("stf %1,%0", F'Asm_Output ("=m", R1), S'Asm_Input ("f", R),
+           Volatile => True);
       return R1;
    end Div_F;
 
@@ -371,10 +411,13 @@ package body System.Vax_Float_Operations is
       R1        : G;
    begin
       Asm ("ldg %0,%1", T'Asm_Output ("=f", X1), G'Asm_Input ("m", X));
-      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y));
+      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("divg %1,%2,%0", T'Asm_Output ("=f", R),
-           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)));
-      Asm ("stg %1,%0", G'Asm_Output ("=m", R1), T'Asm_Input ("f", R));
+           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)),
+           Volatile => True);
+      Asm ("stg %1,%0", G'Asm_Output ("=m", R1), T'Asm_Input ("f", R),
+           Volatile => True);
       return R1;
    end Div_G;
 
@@ -386,9 +429,11 @@ package body System.Vax_Float_Operations is
       X1, Y1, R : S;
    begin
       Asm ("ldf %0,%1", S'Asm_Output ("=f", X1), F'Asm_Input ("m", X));
-      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y));
+      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("cmpgeq %1,%2,%0", S'Asm_Output ("=f", R),
-           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)));
+           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)),
+           Volatile => True);
       return R /= 0.0;
    end Eq_F;
 
@@ -400,9 +445,11 @@ package body System.Vax_Float_Operations is
       X1, Y1, R : T;
    begin
       Asm ("ldg %0,%1", T'Asm_Output ("=f", X1), G'Asm_Input ("m", X));
-      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y));
+      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("cmpgeq %1,%2,%0", T'Asm_Output ("=f", R),
-           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)));
+           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)),
+           Volatile => True);
       return R /= 0.0;
    end Eq_G;
 
@@ -414,9 +461,11 @@ package body System.Vax_Float_Operations is
       X1, Y1, R : S;
    begin
       Asm ("ldf %0,%1", S'Asm_Output ("=f", X1), F'Asm_Input ("m", X));
-      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y));
+      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("cmpgle %1,%2,%0", S'Asm_Output ("=f", R),
-           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)));
+           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)),
+           Volatile => True);
       return R /= 0.0;
    end Le_F;
 
@@ -428,9 +477,11 @@ package body System.Vax_Float_Operations is
       X1, Y1, R : T;
    begin
       Asm ("ldg %0,%1", T'Asm_Output ("=f", X1), G'Asm_Input ("m", X));
-      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y));
+      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("cmpgle %1,%2,%0", T'Asm_Output ("=f", R),
-           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)));
+           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)),
+           Volatile => True);
       return R /= 0.0;
    end Le_G;
 
@@ -442,9 +493,11 @@ package body System.Vax_Float_Operations is
       X1, Y1, R : S;
    begin
       Asm ("ldf %0,%1", S'Asm_Output ("=f", X1), F'Asm_Input ("m", X));
-      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y));
+      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("cmpglt %1,%2,%0", S'Asm_Output ("=f", R),
-           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)));
+           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)),
+           Volatile => True);
       return R /= 0.0;
    end Lt_F;
 
@@ -456,9 +509,11 @@ package body System.Vax_Float_Operations is
       X1, Y1, R : T;
    begin
       Asm ("ldg %0,%1", T'Asm_Output ("=f", X1), G'Asm_Input ("m", X));
-      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y));
+      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("cmpglt %1,%2,%0", T'Asm_Output ("=f", R),
-           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)));
+           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)),
+           Volatile => True);
       return R /= 0.0;
    end Lt_G;
 
@@ -471,10 +526,13 @@ package body System.Vax_Float_Operations is
       R1        : F;
    begin
       Asm ("ldf %0,%1", S'Asm_Output ("=f", X1), F'Asm_Input ("m", X));
-      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y));
+      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("mulf %1,%2,%0", S'Asm_Output ("=f", R),
-           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)));
-      Asm ("stf %1,%0", F'Asm_Output ("=m", R1), S'Asm_Input ("f", R));
+           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)),
+           Volatile => True);
+      Asm ("stf %1,%0", F'Asm_Output ("=m", R1), S'Asm_Input ("f", R),
+           Volatile => True);
       return R1;
    end Mul_F;
 
@@ -487,10 +545,13 @@ package body System.Vax_Float_Operations is
       R1        : G;
    begin
       Asm ("ldg %0,%1", T'Asm_Output ("=f", X1), G'Asm_Input ("m", X));
-      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y));
+      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("mulg %1,%2,%0", T'Asm_Output ("=f", R),
-           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)));
-      Asm ("stg %1,%0", G'Asm_Output ("=m", R1), T'Asm_Input ("f", R));
+           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)),
+           Volatile => True);
+      Asm ("stg %1,%0", G'Asm_Output ("=m", R1), T'Asm_Input ("f", R),
+           Volatile => True);
       return R1;
    end Mul_G;
 
@@ -502,9 +563,11 @@ package body System.Vax_Float_Operations is
       X1, Y1, R : S;
    begin
       Asm ("ldf %0,%1", S'Asm_Output ("=f", X1), F'Asm_Input ("m", X));
-      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y));
+      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("cmpgeq %1,%2,%0", S'Asm_Output ("=f", R),
-           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)));
+           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)),
+           Volatile => True);
       return R = 0.0;
    end Ne_F;
 
@@ -516,9 +579,11 @@ package body System.Vax_Float_Operations is
       X1, Y1, R : T;
    begin
       Asm ("ldg %0,%1", T'Asm_Output ("=f", X1), G'Asm_Input ("m", X));
-      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y));
+      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("cmpgeq %1,%2,%0", T'Asm_Output ("=f", R),
-           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)));
+           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)),
+           Volatile => True);
       return R = 0.0;
    end Ne_G;
 
@@ -531,8 +596,10 @@ package body System.Vax_Float_Operations is
       C    : F;
    begin
       Asm ("ldf %0,%1", S'Asm_Output ("=f", A), F'Asm_Input ("m", X));
-      Asm ("subf $f31,%1,%0", S'Asm_Output ("=f", B), S'Asm_Input ("f", A));
-      Asm ("stf %1,%0", F'Asm_Output ("=m", C), S'Asm_Input ("f", B));
+      Asm ("cpysn %1,%1,%0", S'Asm_Output ("=f", B), S'Asm_Input ("f", A),
+           Volatile => True);
+      Asm ("stf %1,%0", F'Asm_Output ("=m", C), S'Asm_Input ("f", B),
+           Volatile => True);
       return C;
    end Neg_F;
 
@@ -545,8 +612,10 @@ package body System.Vax_Float_Operations is
       C    : G;
    begin
       Asm ("ldg %0,%1", T'Asm_Output ("=f", A), G'Asm_Input ("m", X));
-      Asm ("subg $f31,%1,%0", T'Asm_Output ("=f", B), T'Asm_Input ("f", A));
-      Asm ("stg %1,%0", G'Asm_Output ("=m", C), T'Asm_Input ("f", B));
+      Asm ("cpysn %1,%1,%0", T'Asm_Output ("=f", B), T'Asm_Input ("f", A),
+           Volatile => True);
+      Asm ("stg %1,%0", G'Asm_Output ("=m", C), T'Asm_Input ("f", B),
+           Volatile => True);
       return C;
    end Neg_G;
 
@@ -583,11 +652,13 @@ package body System.Vax_Float_Operations is
 
    function Return_D (X : D) return D is
       R : D;
+
    begin
       --  The return value is already in $f0 so we need to trick the compiler
       --  into thinking that we're moving X to $f0.
+
       Asm ("cvtdg $f0,$f0", Inputs => D'Asm_Input ("g", X), Clobber => "$f0",
-        Volatile => True);
+           Volatile => True);
       Asm ("stg $f0,%0", D'Asm_Output ("=m", R), Volatile => True);
       return R;
    end Return_D;
@@ -598,11 +669,13 @@ package body System.Vax_Float_Operations is
 
    function Return_F (X : F) return F is
       R : F;
+
    begin
       --  The return value is already in $f0 so we need to trick the compiler
       --  into thinking that we're moving X to $f0.
+
       Asm ("stf $f0,%0", F'Asm_Output ("=m", R), F'Asm_Input ("g", X),
-        Clobber => "$f0", Volatile => True);
+           Clobber => "$f0", Volatile => True);
       return R;
    end Return_F;
 
@@ -612,11 +685,13 @@ package body System.Vax_Float_Operations is
 
    function Return_G (X : G) return G is
       R : G;
+
    begin
       --  The return value is already in $f0 so we need to trick the compiler
       --  into thinking that we're moving X to $f0.
+
       Asm ("stg $f0,%0", G'Asm_Output ("=m", R), G'Asm_Input ("g", X),
-        Clobber => "$f0", Volatile => True);
+           Clobber => "$f0", Volatile => True);
       return R;
    end Return_G;
 
@@ -630,10 +705,13 @@ package body System.Vax_Float_Operations is
 
    begin
       Asm ("ldf %0,%1", S'Asm_Output ("=f", X1), F'Asm_Input ("m", X));
-      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y));
+      Asm ("ldf %0,%1", S'Asm_Output ("=f", Y1), F'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("subf %1,%2,%0", S'Asm_Output ("=f", R),
-           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)));
-      Asm ("stf %1,%0", F'Asm_Output ("=m", R1), S'Asm_Input ("f", R));
+           (S'Asm_Input ("f", X1), S'Asm_Input ("f", Y1)),
+           Volatile => True);
+      Asm ("stf %1,%0", F'Asm_Output ("=m", R1), S'Asm_Input ("f", R),
+           Volatile => True);
       return R1;
    end Sub_F;
 
@@ -646,10 +724,13 @@ package body System.Vax_Float_Operations is
       R1        : G;
    begin
       Asm ("ldg %0,%1", T'Asm_Output ("=f", X1), G'Asm_Input ("m", X));
-      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y));
+      Asm ("ldg %0,%1", T'Asm_Output ("=f", Y1), G'Asm_Input ("m", Y),
+           Volatile => True);
       Asm ("subg %1,%2,%0", T'Asm_Output ("=f", R),
-           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)));
-      Asm ("stg %1,%0", G'Asm_Output ("=m", R1), T'Asm_Input ("f", R));
+           (T'Asm_Input ("f", X1), T'Asm_Input ("f", Y1)),
+           Volatile => True);
+      Asm ("stg %1,%0", G'Asm_Output ("=m", R1), T'Asm_Input ("f", R),
+           Volatile => True);
       return R1;
    end Sub_G;
 

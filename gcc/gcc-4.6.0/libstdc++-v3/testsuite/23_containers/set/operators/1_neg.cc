@@ -40,3 +40,4 @@ void test01()
   test &= itr == setByName.end(); // { dg-error "no" } 
 }
 
+// { dg-excess-errors "" }

@@ -1,4 +1,5 @@
 /* { dg-require-effective-target vect_int } */
+/* { dg-add-options quad_vectors } */
 
 #include <stdarg.h>
 #include "tree-vect.h"
@@ -7,7 +8,7 @@ __attribute__ ((noinline))
 void with_restrict(int * __restrict p)
 {
   int i;
-  int *q = p - 1;
+  int *q = p - 2;
 
   for (i = 0; i < 1000; ++i) {
     p[i] = q[i];
@@ -18,7 +19,7 @@ __attribute__ ((noinline))
 void without_restrict(int * p)
 {
   int i;
-  int *q = p - 1;
+  int *q = p - 2;
 
   for (i = 0; i < 1000; ++i) {
     p[i] = q[i];
@@ -37,8 +38,8 @@ int main(void)
     a[i] = b[i] = i;
   }
 
-  with_restrict(a + 1);
-  without_restrict(b + 1);
+  with_restrict(a + 2);
+  without_restrict(b + 2);
 
   for (i = 0; i < 1002; ++i) {
     if (a[i] != b[i])
@@ -47,6 +48,6 @@ int main(void)
   return 0;
 }
 
-/* { dg-final { scan-tree-dump-times "vectorized 0 loops" 2 "vect" } } */
-/* { dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect" } } */
+/* { dg-final { scan-tree-dump-times "vectorized 0 loops" 2 "vect"  { xfail vect_no_align } } } */
+/* { dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect"  { xfail vect_no_align } } } */
 /* { dg-final { cleanup-tree-dump "vect" } } */

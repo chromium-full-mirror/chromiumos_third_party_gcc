@@ -9,9 +9,9 @@ void f1(void)
   #pragma omp atomic
     x %= 2;		/* { dg-error "invalid operator" } */
   #pragma omp atomic
-    x = x + 1;
+    x = x + 1;		/* { dg-error "invalid operator" } */
   #pragma omp atomic
-    x = 1;		/* { dg-error "invalid form" } */
+    x = 1;		/* { dg-error "invalid operator" } */
   #pragma omp atomic
     ++y;		/* { dg-error "read-only variable" } */
   #pragma omp atomic

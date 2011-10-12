@@ -41,7 +41,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"runtime"
 	"sort"
 )
 
@@ -98,7 +97,6 @@ func printKnucs(a kNucArray) {
 }
 
 func main() {
-	runtime.GOMAXPROCS(4)
 	in := bufio.NewReader(os.Stdin)
 	three := []byte(">THREE ")
 	for {

@@ -4,9 +4,9 @@
 /* { dg-require-effective-target ilp32 } */
 /* { dg-skip-if "" { *-*-* } { "-fgnu-runtime" } { "" } } */
 
+#include "../objc-obj-c++-shared/Protocol1.h"
 #include <stdio.h>
 #include <string.h>
-#include "../objc-obj-c++-shared/runtime.h"
 
 extern void abort();
 
@@ -44,32 +44,25 @@ extern void abort();
 
 Protocol *proto = @protocol(CommonProtocol);
 struct objc_method_description *meth;
-struct objc_method_description meth_object;
 
 int main()
 {
-        meth_object = protocol_getMethodDescription (proto, @selector(methodCall_On:), YES, YES);
-        meth = &meth_object;
+        meth = [proto descriptionForInstanceMethod: @selector(methodCall_On:)];
 	if (strcmp (meth->types, "Vv12@0:4On@8"))
 	  abort();
-        meth_object = protocol_getMethodDescription (proto, @selector(methodCall_nO:), YES, YES);
-        meth = &meth_object;
+        meth = [proto descriptionForInstanceMethod: @selector(methodCall_nO:)];
 	if (strcmp (meth->types, "Vv12@0:4nO@8"))
 	  abort();
-        meth_object = protocol_getMethodDescription (proto, @selector(methodCall_Oo:), YES, YES);
-        meth = &meth_object;
+        meth = [proto descriptionForInstanceMethod: @selector(methodCall_Oo:)];
 	if (strcmp (meth->types, "Vv12@0:4Oo@8"))
 	  abort();
-        meth_object = protocol_getMethodDescription (proto, @selector(methodCall_oO:), YES, YES);
-        meth = &meth_object;
+        meth = [proto descriptionForInstanceMethod: @selector(methodCall_oO:)];
 	if (strcmp (meth->types, "Vv12@0:4oO@8"))
 	  abort();
-        meth_object = protocol_getMethodDescription (proto, @selector(methodCall_rn:), YES, YES);
-        meth = &meth_object;
+        meth = [proto descriptionForInstanceMethod: @selector(methodCall_rn:)];
 	if (strcmp (meth->types, "Vv12@0:4rn@8"))
 	  abort();
-        meth_object = protocol_getMethodDescription (proto, @selector(methodCall_oOn:), YES, YES);
-        meth = &meth_object;
+        meth = [proto descriptionForInstanceMethod: @selector(methodCall_oOn:)];
 	if (strcmp (meth->types, "Vv12@0:4oOn@8"))
 	  abort();
 	return 0;

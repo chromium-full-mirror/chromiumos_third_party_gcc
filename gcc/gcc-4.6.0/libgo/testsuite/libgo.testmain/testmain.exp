@@ -54,13 +54,7 @@ if ![ string match "" $comp_output ] {
     exit 1
 }
 
-set result [libgo_load "./a.exe" "-test.short" ""]
+set result [libgo_load "./a.exe" "" ""]
 
 set status [lindex $result 0]
-
-set name "go"
-if [info exists env(GOTESTNAME)] {
-    set name "$env(GOTESTNAME)"
-}
-
-$status $name
+$status go

@@ -1,6 +1,6 @@
-#import "../../objc-obj-c++-shared/TestsuiteObject.h"
+#import "../../objc-obj-c++-shared/Object1.h"
 
 int main(void)
 {
-  [TestsuiteObject class];
+  [Object class];
 }

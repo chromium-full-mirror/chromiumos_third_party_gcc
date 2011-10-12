@@ -36,10 +36,10 @@
 !$omp end parallel
 
   ip3 = loc (i)
-!$omp parallel firstprivate (ip3)
+!$omp parallel firstprivate (ip3) ! { dg-error "Cray pointer 'ip3' in FIRSTPRIVATE clause" }
 !$omp end parallel
 
-!$omp parallel do lastprivate (ip4)
+!$omp parallel do lastprivate (ip4) ! { dg-error "Cray pointer 'ip4' in LASTPRIVATE clause" }
   do i = 1, 10
     if (i .eq. 10) ip4 = loc (i)
   end do

@@ -11,4 +11,6 @@ MODE test5##CEXT(MODE a, MODE b) { return __builtin_copysign##CEXT(a, b); }
 TEST_SET (float, f)
 TEST_SET (double, )
 TEST_SET (long double, l)
+#if defined (__LP64__)
 TEST_SET (__float128, q)
+#endif

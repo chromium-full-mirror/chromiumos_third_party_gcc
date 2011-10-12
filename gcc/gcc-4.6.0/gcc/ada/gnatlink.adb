@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1996-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1996-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -141,8 +141,9 @@ procedure Gnatlink is
 
    Read_Mode : constant String := "r" & ASCII.NUL;
 
-   Begin_Info : constant String := "--  BEGIN Object file/option list";
-   End_Info   : constant String := "--  END Object file/option list   ";
+   Begin_Info : String := "--  BEGIN Object file/option list";
+   End_Info   : String := "--  END Object file/option list   ";
+   --  Note: above lines are modified in C mode, see option processing
 
    Gcc_Path             : String_Access;
    Linker_Path          : String_Access;
@@ -161,6 +162,9 @@ procedure Gnatlink is
    Debug_Flag_Present : Boolean := False;
    Verbose_Mode       : Boolean := False;
    Very_Verbose_Mode  : Boolean := False;
+
+   Ada_Bind_File : Boolean := True;
+   --  Set to True if bind file is generated in Ada
 
    Standard_Gcc : Boolean := True;
 
@@ -409,6 +413,11 @@ procedure Gnatlink is
 
                elsif Arg'Length = 2 then
                   case Arg (2) is
+                     when 'A' =>
+                        Ada_Bind_File := True;
+                        Begin_Info := "--  BEGIN Object file/option list";
+                        End_Info   := "--  END Object file/option list   ";
+
                      when 'b' =>
                         Linker_Options.Increment_Last;
                         Linker_Options.Table (Linker_Options.Last) :=
@@ -439,6 +448,11 @@ procedure Gnatlink is
 
                         end Get_Machine_Name;
 
+                     when 'C' =>
+                        Ada_Bind_File := False;
+                        Begin_Info := "/*  BEGIN Object file/option list";
+                        End_Info   := "    END Object file/option list */";
+
                      when 'f' =>
                         if Object_List_File_Supported then
                            Object_List_File_Required := True;
@@ -464,9 +478,6 @@ procedure Gnatlink is
                           new String'(Executable_Name
                                         (Argument (Next_Arg),
                                          Only_If_No_Suffix => True));
-
-                     when 'P' =>
-                        Opt.CodePeer_Mode := True;
 
                      when 'R' =>
                         Opt.Run_Path_Option := False;
@@ -649,11 +660,13 @@ procedure Gnatlink is
          Next_Arg := Next_Arg + 1;
       end loop;
 
-      --  Compile the bind file with warnings suppressed, because
+      --  If Ada bind file, then compile it with warnings suppressed, because
       --  otherwise the with of the main program may cause junk warnings.
 
-      Binder_Options.Increment_Last;
-      Binder_Options.Table (Binder_Options.Last) := new String'("-gnatws");
+      if Ada_Bind_File then
+         Binder_Options.Increment_Last;
+         Binder_Options.Table (Binder_Options.Last) := new String'("-gnatws");
+      end if;
 
       --  If we did not get an ali file at all, and we had at least one
       --  linker option, then assume that was the intended ali file after
@@ -921,8 +934,11 @@ procedure Gnatlink is
 
          exit when Next_Line (Nfirst .. Nlast) = End_Info;
 
-         Next_Line (Nfirst .. Nlast - 8) := Next_Line (Nfirst + 8 .. Nlast);
-         Nlast := Nlast - 8;
+         if Ada_Bind_File then
+            Next_Line (Nfirst .. Nlast - 8) :=
+              Next_Line (Nfirst + 8 .. Nlast);
+            Nlast := Nlast - 8;
+         end if;
 
          --  Go to next section when switches are reached
 
@@ -1394,8 +1410,11 @@ procedure Gnatlink is
             Get_Next_Line;
             exit when Next_Line (Nfirst .. Nlast) = End_Info;
 
-            Next_Line (Nfirst .. Nlast - 8) := Next_Line (Nfirst + 8 .. Nlast);
-            Nlast := Nlast - 8;
+            if Ada_Bind_File then
+               Next_Line (Nfirst .. Nlast - 8) :=
+                 Next_Line (Nfirst + 8 .. Nlast);
+               Nlast := Nlast - 8;
+            end if;
          end loop;
       end if;
 
@@ -1422,15 +1441,12 @@ procedure Gnatlink is
       Write_Eol;
       Write_Line ("  mainprog.ali   the ALI file of the main program");
       Write_Eol;
-      Write_Eol;
-      Display_Usage_Version_And_Help;
-      Write_Line ("  -f    Force object file list to be generated");
+      Write_Line ("  -f    force object file list to be generated");
       Write_Line ("  -g    Compile binder source file with debug information");
       Write_Line ("  -n    Do not compile the binder source file");
-      Write_Line ("  -P    Process files for use by CodePeer");
       Write_Line ("  -R    Do not use a run_path_option");
-      Write_Line ("  -v    Verbose mode");
-      Write_Line ("  -v -v Very verbose mode");
+      Write_Line ("  -v    verbose mode");
+      Write_Line ("  -v -v very verbose mode");
       Write_Eol;
       Write_Line ("  -o nam     Use 'nam' as the name of the executable");
       Write_Line ("  -b target  Compile the binder source to run on target");
@@ -1586,9 +1602,12 @@ begin
                   elsif Arg'Length > 5
                     and then Arg (Arg'First + 2 .. Arg'First + 5) = "RTS="
                   then
-                     Binder_Options_From_ALI.Increment_Last;
-                     Binder_Options_From_ALI.Table
-                       (Binder_Options_From_ALI.Last) := String_Access (Arg);
+                     if Ada_Bind_File then
+                        Binder_Options_From_ALI.Increment_Last;
+                        Binder_Options_From_ALI.Table
+                          (Binder_Options_From_ALI.Last)
+                            := String_Access (Arg);
+                     end if;
 
                      --  Set the RTS_*_Path_Name variables, so that
                      --  the correct directories will be set when
@@ -1638,9 +1657,14 @@ begin
          when CLI_Target => Gcc := new String'("dotnet-gnatcompile");
          when No_VM      => raise Program_Error;
       end case;
+
+      Ada_Bind_File := True;
+      Begin_Info := "--  BEGIN Object file/option list";
+      End_Info   := "--  END Object file/option list   ";
    end if;
 
-   --  Compile the bind file with the following switches:
+   --  If the main program is in Ada it is compiled with the following
+   --  switches:
 
    --    -gnatA   stops reading gnat.adc, since we don't know what
    --             pragmas would work, and we do not need it anyway.
@@ -1651,22 +1675,16 @@ begin
    --             because bindgen uses brackets encoding for all upper
    --             half and wide characters in identifier names.
 
-   --  In addition, in CodePeer mode compile with -gnatC
-
-   Binder_Options_From_ALI.Increment_Last;
-   Binder_Options_From_ALI.Table (Binder_Options_From_ALI.Last) :=
-        new String'("-gnatA");
-   Binder_Options_From_ALI.Increment_Last;
-   Binder_Options_From_ALI.Table (Binder_Options_From_ALI.Last) :=
-        new String'("-gnatWb");
-   Binder_Options_From_ALI.Increment_Last;
-   Binder_Options_From_ALI.Table (Binder_Options_From_ALI.Last) :=
-        new String'("-gnatiw");
-
-   if Opt.CodePeer_Mode then
+   if Ada_Bind_File then
       Binder_Options_From_ALI.Increment_Last;
       Binder_Options_From_ALI.Table (Binder_Options_From_ALI.Last) :=
-           new String'("-gnatC");
+        new String'("-gnatA");
+      Binder_Options_From_ALI.Increment_Last;
+      Binder_Options_From_ALI.Table (Binder_Options_From_ALI.Last) :=
+        new String'("-gnatWb");
+      Binder_Options_From_ALI.Increment_Last;
+      Binder_Options_From_ALI.Table (Binder_Options_From_ALI.Last) :=
+        new String'("-gnatiw");
    end if;
 
    --  Locate all the necessary programs and verify required files are present
@@ -1682,7 +1700,7 @@ begin
          Linker_Path := System.OS_Lib.Locate_Exec_On_Path ("dotnet-ld");
 
          if Linker_Path = null then
-            Exit_With_Error ("Couldn't locate dotnet-ld");
+            Exit_With_Error ("Couldn't locate ilasm");
          end if;
 
       elsif RTX_RTSS_Kernel_Module_On_Target then
@@ -1779,7 +1797,9 @@ begin
    begin
       --  Set prefix
 
-      if OpenVMS_On_Target then
+      if not Ada_Bind_File then
+         Bind_File_Prefix := new String'("b_");
+      elsif OpenVMS_On_Target then
          Bind_File_Prefix := new String'("b__");
       else
          Bind_File_Prefix := new String'("b~");
@@ -1802,9 +1822,13 @@ begin
                     Fname (Fname'First .. Fname'First + Fname_Len - 1);
 
       begin
-         Binder_Spec_Src_File := new String'(Fnam & ".ads");
-         Binder_Body_Src_File := new String'(Fnam & ".adb");
-         Binder_Ali_File      := new String'(Fnam & ".ali");
+         if Ada_Bind_File then
+            Binder_Spec_Src_File := new String'(Fnam & ".ads");
+            Binder_Body_Src_File := new String'(Fnam & ".adb");
+            Binder_Ali_File      := new String'(Fnam & ".ali");
+         else
+            Binder_Body_Src_File := new String'(Fnam & ".c");
+         end if;
 
          Binder_Obj_File := new String'(Fnam & Get_Target_Object_Suffix.all);
       end;
@@ -1862,13 +1886,6 @@ begin
             Exit_Program (E_Fatal);
          end if;
       end Bind_Step;
-   end if;
-
-   --  In CodePeer mode, there's nothing left to do after the binder file has
-   --  been compiled.
-
-   if Opt.CodePeer_Mode then
-      return;
    end if;
 
    --  Now, actually link the program
@@ -2231,8 +2248,14 @@ begin
    --  useful if debugging.
 
    if not Debug_Flag_Present then
-      Delete (Binder_Ali_File.all & ASCII.NUL);
-      Delete (Binder_Spec_Src_File.all & ASCII.NUL);
+      if Binder_Ali_File /= null then
+         Delete (Binder_Ali_File.all & ASCII.NUL);
+      end if;
+
+      if Binder_Spec_Src_File /= null then
+         Delete (Binder_Spec_Src_File.all & ASCII.NUL);
+      end if;
+
       Delete (Binder_Body_Src_File.all & ASCII.NUL);
 
       if VM_Target = No_VM then

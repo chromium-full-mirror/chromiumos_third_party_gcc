@@ -62,49 +62,6 @@
 #define OUTPUT_LABEL(INDENT_STRING, LABEL_NUMBER) \
   printf("%sL%d: ATTRIBUTE_UNUSED_LABEL\n", (INDENT_STRING), (LABEL_NUMBER))
 
-/* Ways of obtaining an rtx to be tested.  */
-enum position_type {
-  /* PATTERN (peep2_next_insn (ARG)).  */
-  POS_PEEP2_INSN,
-
-  /* XEXP (BASE, ARG).  */
-  POS_XEXP,
-
-  /* XVECEXP (BASE, 0, ARG).  */
-  POS_XVECEXP0
-};
-
-/* The position of an rtx relative to X0.  Each useful position is
-   represented by exactly one instance of this structure.  */
-struct position
-{
-  /* The parent rtx.  This is the root position for POS_PEEP2_INSNs.  */
-  struct position *base;
-
-  /* A position with the same BASE and TYPE, but with the next value
-     of ARG.  */
-  struct position *next;
-
-  /* A list of all POS_XEXP positions that use this one as their base,
-     chained by NEXT fields.  The first entry represents XEXP (this, 0),
-     the second represents XEXP (this, 1), and so on.  */
-  struct position *xexps;
-
-  /* A list of POS_XVECEXP0 positions that use this one as their base,
-     chained by NEXT fields.  The first entry represents XVECEXP (this, 0, 0),
-     the second represents XVECEXP (this, 0, 1), and so on.  */
-  struct position *xvecexp0s;
-
-  /* The type of position.  */
-  enum position_type type;
-
-  /* The argument to TYPE (shown as ARG in the position_type comments).  */
-  int arg;
-
-  /* The depth of this position, with 0 as the root.  */
-  int depth;
-};
-
 /* A listhead of decision trees.  The alternatives to a node are kept
    in a doubly-linked list so we can easily add nodes to the proper
    place when merging.  */
@@ -175,7 +132,7 @@ struct decision
   struct decision *afterward;	/* Node to test on success,
 				   but failure of successor nodes.  */
 
-  struct position *position;	/* Position in pattern.  */
+  const char *position;		/* String denoting position in pattern.  */
 
   struct decision_test *tests;	/* The tests for this node.  */
 
@@ -213,79 +170,311 @@ static int max_depth;
 
 /* The line number of the start of the pattern currently being processed.  */
 static int pattern_lineno;
-
-/* The root position (x0).  */
-static struct position root_pos;
-
-/* A list of all POS_PEEP2_INSNs.  The entry for insn 0 is the root position,
-   since we are given that instruction's pattern as x0.  */
-static struct position *peep2_insn_pos_list = &root_pos;
 
+/* Predicate handling.
+
+   We construct from the machine description a table mapping each
+   predicate to a list of the rtl codes it can possibly match.  The
+   function 'maybe_both_true' uses it to deduce that there are no
+   expressions that can be matches by certain pairs of tree nodes.
+   Also, if a predicate can match only one code, we can hardwire that
+   code into the node testing the predicate.
+
+   Some predicates are flagged as special.  validate_pattern will not
+   warn about modeless match_operand expressions if they have a
+   special predicate.  Predicates that allow only constants are also
+   treated as special, for this purpose.
+
+   validate_pattern will warn about predicates that allow non-lvalues
+   when they appear in destination operands.
+
+   Calculating the set of rtx codes that can possibly be accepted by a
+   predicate expression EXP requires a three-state logic: any given
+   subexpression may definitively accept a code C (Y), definitively
+   reject a code C (N), or may have an indeterminate effect (I).  N
+   and I is N; Y or I is Y; Y and I, N or I are both I.  Here are full
+   truth tables.
+
+     a b  a&b  a|b
+     Y Y   Y    Y
+     N Y   N    Y
+     N N   N    N
+     I Y   I    Y
+     I N   N    I
+     I I   I    I
+
+   We represent Y with 1, N with 0, I with 2.  If any code is left in
+   an I state by the complete expression, we must assume that that
+   code can be accepted.  */
+
+#define N 0
+#define Y 1
+#define I 2
+
+#define TRISTATE_AND(a,b)			\
+  ((a) == I ? ((b) == N ? N : I) :		\
+   (b) == I ? ((a) == N ? N : I) :		\
+   (a) && (b))
+
+#define TRISTATE_OR(a,b)			\
+  ((a) == I ? ((b) == Y ? Y : I) :		\
+   (b) == I ? ((a) == Y ? Y : I) :		\
+   (a) || (b))
+
+#define TRISTATE_NOT(a)				\
+  ((a) == I ? I : !(a))
+
+/* 0 means no warning about that code yet, 1 means warned.  */
+static char did_you_mean_codes[NUM_RTX_CODE];
+
+/* Recursively calculate the set of rtx codes accepted by the
+   predicate expression EXP, writing the result to CODES.  */
+static void
+compute_predicate_codes (rtx exp, char codes[NUM_RTX_CODE])
+{
+  char op0_codes[NUM_RTX_CODE];
+  char op1_codes[NUM_RTX_CODE];
+  char op2_codes[NUM_RTX_CODE];
+  int i;
+
+  switch (GET_CODE (exp))
+    {
+    case AND:
+      compute_predicate_codes (XEXP (exp, 0), op0_codes);
+      compute_predicate_codes (XEXP (exp, 1), op1_codes);
+      for (i = 0; i < NUM_RTX_CODE; i++)
+	codes[i] = TRISTATE_AND (op0_codes[i], op1_codes[i]);
+      break;
+
+    case IOR:
+      compute_predicate_codes (XEXP (exp, 0), op0_codes);
+      compute_predicate_codes (XEXP (exp, 1), op1_codes);
+      for (i = 0; i < NUM_RTX_CODE; i++)
+	codes[i] = TRISTATE_OR (op0_codes[i], op1_codes[i]);
+      break;
+    case NOT:
+      compute_predicate_codes (XEXP (exp, 0), op0_codes);
+      for (i = 0; i < NUM_RTX_CODE; i++)
+	codes[i] = TRISTATE_NOT (op0_codes[i]);
+      break;
+
+    case IF_THEN_ELSE:
+      /* a ? b : c  accepts the same codes as (a & b) | (!a & c).  */
+      compute_predicate_codes (XEXP (exp, 0), op0_codes);
+      compute_predicate_codes (XEXP (exp, 1), op1_codes);
+      compute_predicate_codes (XEXP (exp, 2), op2_codes);
+      for (i = 0; i < NUM_RTX_CODE; i++)
+	codes[i] = TRISTATE_OR (TRISTATE_AND (op0_codes[i], op1_codes[i]),
+				TRISTATE_AND (TRISTATE_NOT (op0_codes[i]),
+					      op2_codes[i]));
+      break;
+
+    case MATCH_CODE:
+      /* MATCH_CODE allows a specified list of codes.  However, if it
+	 does not apply to the top level of the expression, it does not
+	 constrain the set of codes for the top level.  */
+      if (XSTR (exp, 1)[0] != '\0')
+	{
+	  memset (codes, Y, NUM_RTX_CODE);
+	  break;
+	}
+
+      memset (codes, N, NUM_RTX_CODE);
+      {
+	const char *next_code = XSTR (exp, 0);
+	const char *code;
+
+	if (*next_code == '\0')
+	  {
+	    error_with_line (pattern_lineno, "empty match_code expression");
+	    break;
+	  }
+
+	while ((code = scan_comma_elt (&next_code)) != 0)
+	  {
+	    size_t n = next_code - code;
+	    int found_it = 0;
+
+	    for (i = 0; i < NUM_RTX_CODE; i++)
+	      if (!strncmp (code, GET_RTX_NAME (i), n)
+		  && GET_RTX_NAME (i)[n] == '\0')
+		{
+		  codes[i] = Y;
+		  found_it = 1;
+		  break;
+		}
+	    if (!found_it)
+	      {
+		error_with_line (pattern_lineno,
+				 "match_code \"%.*s\" matches nothing",
+				 (int) n, code);
+		for (i = 0; i < NUM_RTX_CODE; i++)
+		  if (!strncasecmp (code, GET_RTX_NAME (i), n)
+		      && GET_RTX_NAME (i)[n] == '\0'
+		      && !did_you_mean_codes[i])
+		    {
+		      did_you_mean_codes[i] = 1;
+		      message_with_line (pattern_lineno, "(did you mean \"%s\"?)", GET_RTX_NAME (i));
+		    }
+	      }
+
+	  }
+      }
+      break;
+
+    case MATCH_OPERAND:
+      /* MATCH_OPERAND disallows the set of codes that the named predicate
+	 disallows, and is indeterminate for the codes that it does allow.  */
+      {
+	struct pred_data *p = lookup_predicate (XSTR (exp, 1));
+	if (!p)
+	  {
+	    error_with_line (pattern_lineno,
+			     "reference to unknown predicate '%s'",
+			     XSTR (exp, 1));
+	    break;
+	  }
+	for (i = 0; i < NUM_RTX_CODE; i++)
+	  codes[i] = p->codes[i] ? I : N;
+      }
+      break;
+
+
+    case MATCH_TEST:
+      /* (match_test WHATEVER) is completely indeterminate.  */
+      memset (codes, I, NUM_RTX_CODE);
+      break;
+
+    default:
+      error_with_line (pattern_lineno,
+		       "'%s' cannot be used in a define_predicate expression",
+		       GET_RTX_NAME (GET_CODE (exp)));
+      memset (codes, I, NUM_RTX_CODE);
+      break;
+    }
+}
+
+#undef TRISTATE_OR
+#undef TRISTATE_AND
+#undef TRISTATE_NOT
+
+/* Process a define_predicate expression: compute the set of predicates
+   that can be matched, and record this as a known predicate.  */
+static void
+process_define_predicate (rtx desc)
+{
+  struct pred_data *pred = XCNEW (struct pred_data);
+  char codes[NUM_RTX_CODE];
+  int i;
+
+  pred->name = XSTR (desc, 0);
+  if (GET_CODE (desc) == DEFINE_SPECIAL_PREDICATE)
+    pred->special = 1;
+
+  compute_predicate_codes (XEXP (desc, 1), codes);
+
+  for (i = 0; i < NUM_RTX_CODE; i++)
+    if (codes[i] != N)
+      add_predicate_code (pred, (enum rtx_code) i);
+
+  add_predicate (pred);
+}
+#undef I
+#undef N
+#undef Y
+
+
+static struct decision *new_decision
+  (const char *, struct decision_head *);
+static struct decision_test *new_decision_test
+  (enum decision_type, struct decision_test ***);
+static rtx find_operand
+  (rtx, int, rtx);
+static rtx find_matching_operand
+  (rtx, int);
+static void validate_pattern
+  (rtx, rtx, rtx, int);
+static struct decision *add_to_sequence
+  (rtx, struct decision_head *, const char *, enum routine_type, int);
+
+static int maybe_both_true_2
+  (struct decision_test *, struct decision_test *);
+static int maybe_both_true_1
+  (struct decision_test *, struct decision_test *);
+static int maybe_both_true
+  (struct decision *, struct decision *, int);
+
+static int nodes_identical_1
+  (struct decision_test *, struct decision_test *);
+static int nodes_identical
+  (struct decision *, struct decision *);
+static void merge_accept_insn
+  (struct decision *, struct decision *);
+static void merge_trees
+  (struct decision_head *, struct decision_head *);
+
+static void factor_tests
+  (struct decision_head *);
+static void simplify_tests
+  (struct decision_head *);
+static int break_out_subroutines
+  (struct decision_head *, int);
+static void find_afterward
+  (struct decision_head *, struct decision *);
+
+static void change_state
+  (const char *, const char *, const char *);
+static void print_code
+  (enum rtx_code);
+static void write_afterward
+  (struct decision *, struct decision *, const char *);
+static struct decision *write_switch
+  (struct decision *, int);
+static void write_cond
+  (struct decision_test *, int, enum routine_type);
+static void write_action
+  (struct decision *, struct decision_test *, int, int,
+   struct decision *, enum routine_type);
+static int is_unconditional
+  (struct decision_test *, enum routine_type);
+static int write_node
+  (struct decision *, int, enum routine_type);
+static void write_tree_1
+  (struct decision_head *, int, enum routine_type);
+static void write_tree
+  (struct decision_head *, const char *, enum routine_type, int);
+static void write_subroutine
+  (struct decision_head *, enum routine_type);
+static void write_subroutines
+  (struct decision_head *, enum routine_type);
+static void write_header
+  (void);
+
+static struct decision_head make_insn_sequence
+  (rtx, enum routine_type);
+static void process_tree
+  (struct decision_head *, enum routine_type);
+
+static void debug_decision_0
+  (struct decision *, int, int);
+static void debug_decision_1
+  (struct decision *, int);
+static void debug_decision_2
+  (struct decision_test *);
 extern void debug_decision
   (struct decision *);
 extern void debug_decision_list
   (struct decision *);
 
-/* Return a position with the given BASE, TYPE and ARG.  NEXT_PTR
-   points to where the unique object that represents the position
-   should be stored.  Create the object if it doesn't already exist,
-   otherwise reuse the object that is already there.  */
-
-static struct position *
-next_position (struct position **next_ptr, struct position *base,
-	       enum position_type type, int arg)
-{
-  struct position *pos;
-
-  pos = *next_ptr;
-  if (!pos)
-    {
-      pos = XCNEW (struct position);
-      pos->base = base;
-      pos->type = type;
-      pos->arg = arg;
-      pos->depth = base->depth + 1;
-      *next_ptr = pos;
-    }
-  return pos;
-}
-
-/* Compare positions POS1 and POS2 lexicographically.  */
-
-static int
-compare_positions (struct position *pos1, struct position *pos2)
-{
-  int diff;
-
-  diff = pos1->depth - pos2->depth;
-  if (diff < 0)
-    do
-      pos2 = pos2->base;
-    while (pos1->depth != pos2->depth);
-  else if (diff > 0)
-    do
-      pos1 = pos1->base;
-    while (pos1->depth != pos2->depth);
-  while (pos1 != pos2)
-    {
-      diff = (int) pos1->type - (int) pos2->type;
-      if (diff == 0)
-	diff = pos1->arg - pos2->arg;
-      pos1 = pos1->base;
-      pos2 = pos2->base;
-    }
-  return diff;
-}
-
 /* Create a new node in sequence after LAST.  */
 
 static struct decision *
-new_decision (struct position *pos, struct decision_head *last)
+new_decision (const char *position, struct decision_head *last)
 {
   struct decision *new_decision = XCNEW (struct decision);
 
   new_decision->success = *last;
-  new_decision->position = pos;
+  new_decision->position = xstrdup (position);
   new_decision->number = next_number++;
 
   last->first = last->last = new_decision;
@@ -660,31 +849,35 @@ validate_pattern (rtx pattern, rtx insn, rtx set, int set_code)
    LAST is a pointer to the listhead in the previous node in the chain (or
    in the calling function, for the first node).
 
-   POSITION is the current position in the insn.
+   POSITION is the string representing the current position in the insn.
 
    INSN_TYPE is the type of insn for which we are emitting code.
 
    A pointer to the final node in the chain is returned.  */
 
 static struct decision *
-add_to_sequence (rtx pattern, struct decision_head *last,
-		 struct position *pos, enum routine_type insn_type, int top)
+add_to_sequence (rtx pattern, struct decision_head *last, const char *position,
+		 enum routine_type insn_type, int top)
 {
   RTX_CODE code;
   struct decision *this_decision, *sub;
   struct decision_test *test;
   struct decision_test **place;
-  struct position *subpos, **subpos_ptr;
+  char *subpos;
   size_t i;
   const char *fmt;
+  int depth = strlen (position);
   int len;
   enum machine_mode mode;
-  enum position_type pos_type;
 
-  if (pos->depth > max_depth)
-    max_depth = pos->depth;
+  if (depth > max_depth)
+    max_depth = depth;
 
-  sub = this_decision = new_decision (pos, last);
+  subpos = XNEWVAR (char, depth + 2);
+  strcpy (subpos, position);
+  subpos[depth + 1] = 0;
+
+  sub = this_decision = new_decision (position, last);
   place = &this_decision->tests;
 
  restart:
@@ -714,15 +907,15 @@ add_to_sequence (rtx pattern, struct decision_head *last,
 	      last->first = last->last = NULL;
 	    }
 
-	  subpos_ptr = &peep2_insn_pos_list;
 	  for (i = 0; i < (size_t) XVECLEN (pattern, 0); i++)
 	    {
-	      subpos = next_position (subpos_ptr, &root_pos,
-				      POS_PEEP2_INSN, i);
+	      /* Which insn we're looking at is represented by A-Z. We don't
+	         ever use 'A', however; it is always implied.  */
+
+	      subpos[depth] = (i > 0 ? 'A' + i : 0);
 	      sub = add_to_sequence (XVECEXP (pattern, 0, i),
 				     last, subpos, insn_type, 0);
 	      last = &sub->success;
-	      subpos_ptr = &subpos->next;
 	    }
 	  goto ret;
 	}
@@ -806,22 +999,12 @@ add_to_sequence (rtx pattern, struct decision_head *last,
 
 	if (was_code == MATCH_OPERATOR || was_code == MATCH_PARALLEL)
 	  {
-	    if (was_code == MATCH_OPERATOR)
-	      {
-		pos_type = POS_XEXP;
-		subpos_ptr = &pos->xexps;
-	      }
-	    else
-	      {
-		pos_type = POS_XVECEXP0;
-		subpos_ptr = &pos->xvecexp0s;
-	      }
+	    char base = (was_code == MATCH_OPERATOR ? '0' : 'a');
 	    for (i = 0; i < (size_t) XVECLEN (pattern, 2); i++)
 	      {
-		subpos = next_position (subpos_ptr, pos, pos_type, i);
+		subpos[depth] = i + base;
 		sub = add_to_sequence (XVECEXP (pattern, 2, i),
 				       &sub->success, subpos, insn_type, 0);
-		subpos_ptr = &subpos->next;
 	      }
 	  }
 	goto fini;
@@ -836,13 +1019,11 @@ add_to_sequence (rtx pattern, struct decision_head *last,
       test = new_decision_test (DT_accept_op, &place);
       test->u.opno = XINT (pattern, 0);
 
-      subpos_ptr = &pos->xexps;
       for (i = 0; i < (size_t) XVECLEN (pattern, 1); i++)
 	{
-	  subpos = next_position (subpos_ptr, pos, POS_XEXP, i);
+	  subpos[depth] = i + '0';
 	  sub = add_to_sequence (XVECEXP (pattern, 1, i),
 				 &sub->success, subpos, insn_type, 0);
-	  subpos_ptr = &subpos->next;
 	}
       goto fini;
 
@@ -906,29 +1087,24 @@ add_to_sequence (rtx pattern, struct decision_head *last,
     }
 
   /* Now test our sub-patterns.  */
-  subpos_ptr = &pos->xexps;
   for (i = 0; i < (size_t) len; i++)
     {
-      subpos = next_position (subpos_ptr, pos, POS_XEXP, i);
       switch (fmt[i])
 	{
 	case 'e': case 'u':
+	  subpos[depth] = '0' + i;
 	  sub = add_to_sequence (XEXP (pattern, i), &sub->success,
 				 subpos, insn_type, 0);
 	  break;
 
 	case 'E':
 	  {
-	    struct position *subpos2, **subpos2_ptr;
 	    int j;
-
-	    subpos2_ptr = &pos->xvecexp0s;
 	    for (j = 0; j < XVECLEN (pattern, i); j++)
 	      {
-		subpos2 = next_position (subpos2_ptr, pos, POS_XVECEXP0, j);
+		subpos[depth] = 'a' + j;
 		sub = add_to_sequence (XVECEXP (pattern, i, j),
-				       &sub->success, subpos2, insn_type, 0);
-		subpos2_ptr = &subpos2->next;
+				       &sub->success, subpos, insn_type, 0);
 	      }
 	    break;
 	  }
@@ -942,7 +1118,6 @@ add_to_sequence (rtx pattern, struct decision_head *last,
 	default:
 	  gcc_unreachable ();
 	}
-      subpos_ptr = &subpos->next;
     }
 
  fini:
@@ -966,6 +1141,7 @@ add_to_sequence (rtx pattern, struct decision_head *last,
   gcc_assert (this_decision->tests);
 
  ret:
+  free (subpos);
   return sub;
 }
 
@@ -1131,12 +1307,12 @@ maybe_both_true (struct decision *d1, struct decision *d2,
      of a node's success nodes (from the loop at the end of this function).
      Skip forward until we come to a position that matches.
 
-     Due to the way positions are constructed, we know that iterating
-     forward from the lexically lower position will run into the lexically
-     higher position and not the other way around.  This saves a bit
-     of effort.  */
+     Due to the way position strings are constructed, we know that iterating
+     forward from the lexically lower position (e.g. "00") will run into
+     the lexically higher position (e.g. "1") and not the other way around.
+     This saves a bit of effort.  */
 
-  cmp = compare_positions (d1->position, d2->position);
+  cmp = strcmp (d1->position, d2->position);
   if (cmp != 0)
     {
       gcc_assert (!toplevel);
@@ -1251,7 +1427,7 @@ nodes_identical (struct decision *d1, struct decision *d2)
      invoked.  */
   if (d1->success.first
       && d2->success.first
-      && d1->success.first->position != d2->success.first->position)
+      && strcmp (d1->success.first->position, d2->success.first->position))
     return 0;
 
   return 1;
@@ -1321,7 +1497,7 @@ merge_trees (struct decision_head *oldh, struct decision_head *addh)
     }
 
   /* Trying to merge bits at different positions isn't possible.  */
-  gcc_assert (oldh->first->position == addh->first->position);
+  gcc_assert (!strcmp (oldh->first->position, addh->first->position));
 
   for (add = addh->first; add ; add = next)
     {
@@ -1580,31 +1756,33 @@ find_afterward (struct decision_head *head, struct decision *real_afterward)
    match multiple insns and we try to step past the end of the stream.  */
 
 static void
-change_state (struct position *oldpos, struct position *newpos,
-	      const char *indent)
+change_state (const char *oldpos, const char *newpos, const char *indent)
 {
-  while (oldpos->depth > newpos->depth)
-    oldpos = oldpos->base;
+  int odepth = strlen (oldpos);
+  int ndepth = strlen (newpos);
+  int depth;
 
-  if (oldpos != newpos)
-    switch (newpos->type)
-      {
-      case POS_PEEP2_INSN:
-	printf ("%stem = peep2_next_insn (%d);\n", indent, newpos->arg);
-	printf ("%sx%d = PATTERN (tem);\n", indent, newpos->depth);
-	break;
+  /* Pop up as many levels as necessary.  */
+  for (depth = odepth; strncmp (oldpos, newpos, depth) != 0; --depth)
+    continue;
 
-      case POS_XEXP:
-	change_state (oldpos, newpos->base, indent);
-	printf ("%sx%d = XEXP (x%d, %d);\n",
-		indent, newpos->depth, newpos->depth - 1, newpos->arg);
-	break;
-
-      case POS_XVECEXP0:
-	change_state (oldpos, newpos->base, indent);
+  /* Go down to desired level.  */
+  while (depth < ndepth)
+    {
+      /* It's a different insn from the first one.  */
+      if (ISUPPER (newpos[depth]))
+	{
+	  printf ("%stem = peep2_next_insn (%d);\n",
+		  indent, newpos[depth] - 'A');
+	  printf ("%sx%d = PATTERN (tem);\n", indent, depth + 1);
+	}
+      else if (ISLOWER (newpos[depth]))
 	printf ("%sx%d = XVECEXP (x%d, 0, %d);\n",
-		indent, newpos->depth, newpos->depth - 1, newpos->arg);
-	break;
+		indent, depth + 1, depth, newpos[depth] - 'a');
+      else
+	printf ("%sx%d = XEXP (x%d, %c);\n",
+		indent, depth + 1, depth, newpos[depth]);
+      ++depth;
     }
 }
 
@@ -1977,13 +2155,12 @@ write_action (struct decision *p, struct decision_test *test,
 
 	case PEEPHOLE2:
 	  {
-	    int match_len = 0;
-	    struct position *pos;
+	    int match_len = 0, i;
 
-	    for (pos = p->position; pos; pos = pos->base)
-	      if (pos->type == POS_PEEP2_INSN)
+	    for (i = strlen (p->position) - 1; i >= 0; --i)
+	      if (ISUPPER (p->position[i]))
 		{
-		  match_len = pos->arg;
+		  match_len = p->position[i] - 'A';
 		  break;
 		}
 	    printf ("%s*_pmatch_len = %d;\n", indent, match_len);
@@ -2125,7 +2302,7 @@ write_tree_1 (struct decision_head *head, int depth,
    position at the node that branched to this node.  */
 
 static void
-write_tree (struct decision_head *head, struct position *prevpos,
+write_tree (struct decision_head *head, const char *prevpos,
 	    enum routine_type type, int initial)
 {
   struct decision *p = head->first;
@@ -2167,8 +2344,10 @@ write_tree (struct decision_head *head, struct position *prevpos,
     }
   else
     {
+      int depth = strlen (p->position);
+
       change_state (prevpos, p->position, "  ");
-      write_tree_1 (head, p->position->depth, type);
+      write_tree_1 (head, depth, type);
 
       for (p = head->first; p; p = p->next)
         if (p->success.first)
@@ -2224,7 +2403,7 @@ peephole2%s (rtx x0 ATTRIBUTE_UNUSED,\n\trtx insn ATTRIBUTE_UNUSED,\n\tint *_pma
     printf ("  recog_data.insn = NULL_RTX;\n");
 
   if (head->first)
-    write_tree (head, &root_pos, type, 1);
+    write_tree (head, "", type, 1);
   else
     printf ("  goto ret0;\n");
 
@@ -2321,12 +2500,12 @@ make_insn_sequence (rtx insn, enum routine_type type)
   struct decision *last;
   struct decision_test *test, **place;
   struct decision_head head;
-  struct position *c_test_pos, **pos_ptr;
+  char c_test_pos[2];
 
   /* We should never see an insn whose C test is false at compile time.  */
   gcc_assert (truth);
 
-  c_test_pos = &root_pos;
+  c_test_pos[0] = '\0';
   if (type == PEEPHOLE2)
     {
       int i, j;
@@ -2338,20 +2517,19 @@ make_insn_sequence (rtx insn, enum routine_type type)
       x = rtx_alloc (PARALLEL);
       PUT_MODE (x, VOIDmode);
       XVEC (x, 0) = rtvec_alloc (XVECLEN (insn, 0));
-      pos_ptr = &peep2_insn_pos_list;
       for (i = j = 0; i < XVECLEN (insn, 0); i++)
 	{
 	  rtx tmp = XVECEXP (insn, 0, i);
 	  if (GET_CODE (tmp) != MATCH_SCRATCH && GET_CODE (tmp) != MATCH_DUP)
 	    {
-	      c_test_pos = next_position (pos_ptr, &root_pos,
-					  POS_PEEP2_INSN, j);
 	      XVECEXP (x, 0, j) = tmp;
 	      j++;
-	      pos_ptr = &c_test_pos->next;
 	    }
 	}
       XVECLEN (x, 0) = j;
+
+      c_test_pos[0] = 'A' + j - 1;
+      c_test_pos[1] = '\0';
     }
   else if (XVECLEN (insn, type == RECOG) == 1)
     x = XVECEXP (insn, type == RECOG, 0);
@@ -2365,7 +2543,7 @@ make_insn_sequence (rtx insn, enum routine_type type)
   validate_pattern (x, insn, NULL_RTX, 0);
 
   memset(&head, 0, sizeof(head));
-  last = add_to_sequence (x, &head, &root_pos, type, 1);
+  last = add_to_sequence (x, &head, "", type, 1);
 
   /* Find the end of the test chain on the last node.  */
   for (test = last->tests; test->next; test = test->next)
@@ -2431,8 +2609,7 @@ make_insn_sequence (rtx insn, enum routine_type type)
 
 	      /* Recognize it.  */
 	      memset (&clobber_head, 0, sizeof(clobber_head));
-	      last = add_to_sequence (new_rtx, &clobber_head, &root_pos,
-				      type, 1);
+	      last = add_to_sequence (new_rtx, &clobber_head, "", type, 1);
 
 	      /* Find the end of the test chain on the last node.  */
 	      for (test = last->tests; test->next; test = test->next)
@@ -2443,7 +2620,7 @@ make_insn_sequence (rtx insn, enum routine_type type)
 	      place = &test->next;
 	      if (test->type == DT_accept_op)
 		{
-		  last = new_decision (&root_pos, &last->success);
+		  last = new_decision ("", &last->success);
 		  place = &last->tests;
 		}
 
@@ -2539,6 +2716,11 @@ main (int argc, char **argv)
 
       switch (GET_CODE (desc))
 	{
+	case DEFINE_PREDICATE:
+	case DEFINE_SPECIAL_PREDICATE:
+	  process_define_predicate (desc);
+	  break;
+
 	case DEFINE_INSN:
 	  h = make_insn_sequence (desc, RECOG);
 	  merge_trees (&recog_tree, &h);

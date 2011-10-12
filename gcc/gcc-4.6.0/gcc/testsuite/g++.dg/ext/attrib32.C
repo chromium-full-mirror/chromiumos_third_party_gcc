@@ -10,10 +10,10 @@ void bar()
   foo(0);
 }
 
-typedef union U1 { int i; } U2 __attribute__((transparent_union)); // { dg-warning "ignored" }
+typedef union U1 { int i; } U2 __attribute__((transparent_union));
 
-static void foo2(U1) {}		// { dg-error "previously defined" }
-static void foo2(U2) {}		// { dg-error "redefinition" }
+static void foo2(U1) {}
+static void foo2(U2) {}
 
 void bar2(U1 u1, U2 u2)
 {

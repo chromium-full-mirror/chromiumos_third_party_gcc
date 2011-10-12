@@ -65,7 +65,7 @@ class M {
 
   void P (int64 t)
     {
-      int cc;
+      int cc; /* { dg-excess-errors "note: 'cc' was declared here" } */
       if (!GetC (&cc))
         return;
 

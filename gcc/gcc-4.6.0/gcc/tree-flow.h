@@ -61,7 +61,7 @@ struct GTY(()) gimple_df {
   struct pointer_map_t * GTY((skip(""))) decls_to_pointers;
 
   /* Free list of SSA_NAMEs.  */
-  VEC(tree,gc) *free_ssanames;
+  tree free_ssanames;
 
   /* Hashtable holding definition for symbol.  If this field is not NULL, it
      means that the first reference to this variable in the function is a
@@ -171,6 +171,10 @@ struct GTY(()) var_ann_d {
      See the enum's definition for more detailed information about the
      states.  */
   ENUM_BITFIELD (need_phi_state) need_phi_state : 2;
+
+  /* True for HEAP artificial variables.  These variables represent
+     the memory area allocated by a call to malloc.  */
+  unsigned is_heapvar : 1;
 
   /* Used by var_map for the base index of ssa base variables.  */
   unsigned base_index;
@@ -422,8 +426,9 @@ extern basic_block label_to_block_fn (struct function *, tree);
 #define label_to_block(t) (label_to_block_fn (cfun, t))
 extern void notice_special_calls (gimple);
 extern void clear_special_calls (void);
-extern void verify_gimple_in_seq (gimple_seq);
-extern void verify_gimple_in_cfg (struct function *);
+extern void verify_stmts (void);
+extern void verify_gimple (void);
+extern void verify_types_in_gimple_seq (gimple_seq);
 extern tree gimple_block_label (basic_block);
 extern void extract_true_false_edges_from_block (basic_block, edge *, edge *);
 extern bool gimple_duplicate_sese_region (edge, edge, basic_block *, unsigned,
@@ -542,7 +547,7 @@ extern void flush_pending_stmts (edge);
 extern void verify_ssa (bool);
 extern void delete_tree_ssa (void);
 extern bool ssa_undefined_value_p (tree);
-extern void warn_uninit (enum opt_code, tree, tree, tree, const char *, void *);
+extern void warn_uninit (enum opt_code, tree, const char *, void *);
 extern unsigned int warn_uninitialized_vars (bool);
 extern void execute_update_addresses_taken (void);
 
@@ -590,14 +595,12 @@ extern void ssanames_print_statistics (void);
 
 /* In tree-ssa-ccp.c  */
 tree fold_const_aggregate_ref (tree);
-tree gimple_fold_stmt_to_constant (gimple, tree (*)(tree));
 
 /* In tree-ssa-dom.c  */
 extern void dump_dominator_optimization_stats (FILE *);
 extern void debug_dominator_optimization_stats (void);
 int loop_depth_of_name (tree);
 tree degenerate_phi_result (gimple);
-bool simple_iv_increment_p (gimple);
 
 /* In tree-ssa-copy.c  */
 extern void propagate_value (use_operand_p, tree);
@@ -700,6 +703,8 @@ bool gimple_duplicate_loop_to_header_edge (struct loop *, edge,
 struct loop *slpeel_tree_duplicate_loop_to_edge_cfg (struct loop *, edge);
 void rename_variables_in_loop (struct loop *);
 void rename_variables_in_bb (basic_block bb);
+struct loop *tree_ssa_loop_version (struct loop *, tree,
+				    basic_block *);
 tree expand_simple_operations (tree);
 void substitute_in_loop_info (struct loop *, tree, tree);
 edge single_dom_exit (struct loop *);
@@ -807,7 +812,7 @@ bool may_be_nonaddressable_p (tree expr);
 
 /* In tree-ssa-threadupdate.c.  */
 extern bool thread_through_all_blocks (bool);
-extern void register_jump_thread (edge, edge, edge);
+extern void register_jump_thread (edge, edge);
 
 /* In gimplify.c  */
 tree force_gimple_operand_1 (tree, gimple_seq *, gimple_predicate, tree);

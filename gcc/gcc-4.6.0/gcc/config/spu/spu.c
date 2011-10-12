@@ -1,5 +1,4 @@
-/* Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011
-   Free Software Foundation, Inc.
+/* Copyright (C) 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
    This file is free software; you can redistribute it and/or modify it under
    the terms of the GNU General Public License as published by the Free
@@ -149,6 +148,8 @@ char regs_ever_allocated[FIRST_PSEUDO_REGISTER];
 
 /*  Prototypes and external defs.  */
 static void spu_option_override (void);
+static void spu_option_init_struct (struct gcc_options *opts);
+static void spu_option_default_params (void);
 static void spu_init_builtins (void);
 static tree spu_builtin_decl (unsigned, bool);
 static bool spu_scalar_mode_supported_p (enum machine_mode mode);
@@ -186,13 +187,11 @@ static tree spu_handle_vector_attribute (tree * node, tree name, tree args,
 					 int flags,
 					 bool *no_add_attrs);
 static int spu_naked_function_p (tree func);
-static bool spu_pass_by_reference (cumulative_args_t cum,
-				   enum machine_mode mode,
+static bool spu_pass_by_reference (CUMULATIVE_ARGS *cum, enum machine_mode mode,
 				   const_tree type, bool named);
-static rtx spu_function_arg (cumulative_args_t cum, enum machine_mode mode,
+static rtx spu_function_arg (CUMULATIVE_ARGS *cum, enum machine_mode mode,
 			     const_tree type, bool named);
-static void spu_function_arg_advance (cumulative_args_t cum,
-				      enum machine_mode mode,
+static void spu_function_arg_advance (CUMULATIVE_ARGS *cum, enum machine_mode mode,
 				      const_tree type, bool named);
 static tree spu_build_builtin_va_list (void);
 static void spu_va_start (tree, rtx);
@@ -203,7 +202,7 @@ static int mem_is_padded_component_ref (rtx x);
 static int reg_aligned_for_addr (rtx x);
 static bool spu_assemble_integer (rtx x, unsigned int size, int aligned_p);
 static void spu_asm_globalize_label (FILE * file, const char *name);
-static bool spu_rtx_costs (rtx x, int code, int outer_code, int opno,
+static bool spu_rtx_costs (rtx x, int code, int outer_code,
 			   int *total, bool speed);
 static bool spu_function_ok_for_sibcall (tree decl, tree exp);
 static void spu_init_libfuncs (void);
@@ -231,8 +230,6 @@ static rtx spu_expand_load (rtx, rtx, rtx, int);
 static void spu_trampoline_init (rtx, tree, rtx);
 static void spu_conditional_register_usage (void);
 static bool spu_ref_may_alias_errno (ao_ref *);
-static void spu_output_mi_thunk (FILE *, tree, HOST_WIDE_INT,
-				 HOST_WIDE_INT, tree);
 
 /* Which instruction set architecture to use.  */
 int spu_arch;
@@ -291,13 +288,10 @@ spu_libgcc_shift_count_mode (void);
 /*  Table of machine attributes.  */
 static const struct attribute_spec spu_attribute_table[] =
 {
-  /* { name, min_len, max_len, decl_req, type_req, fn_type_req, handler,
-       affects_type_identity } */
-  { "naked",          0, 0, true,  false, false, spu_handle_fndecl_attribute,
-    false },
-  { "spu_vector",     0, 0, false, true,  false, spu_handle_vector_attribute,
-    false },
-  { NULL,             0, 0, false, false, false, NULL, false }
+  /* { name, min_len, max_len, decl_req, type_req, fn_type_req, handler } */
+  { "naked",          0, 0, true,  false, false, spu_handle_fndecl_attribute },
+  { "spu_vector",     0, 0, false, true,  false, spu_handle_vector_attribute },
+  { NULL,             0, 0, false, false, false, NULL }
 };
 
 /*  TARGET overrides.  */
@@ -412,10 +406,6 @@ static const struct attribute_spec spu_attribute_table[] =
 #undef TARGET_EXPAND_BUILTIN_VA_START
 #define TARGET_EXPAND_BUILTIN_VA_START spu_va_start
 
-static void spu_setup_incoming_varargs (cumulative_args_t cum,
-					enum machine_mode mode,
-					tree type, int *pretend_size,
-					int no_rtl);
 #undef TARGET_SETUP_INCOMING_VARARGS
 #define TARGET_SETUP_INCOMING_VARARGS spu_setup_incoming_varargs
 
@@ -424,6 +414,9 @@ static void spu_setup_incoming_varargs (cumulative_args_t cum,
 
 #undef TARGET_GIMPLIFY_VA_ARG_EXPR
 #define TARGET_GIMPLIFY_VA_ARG_EXPR spu_gimplify_va_arg_expr
+
+#undef TARGET_DEFAULT_TARGET_FLAGS
+#define TARGET_DEFAULT_TARGET_FLAGS (TARGET_DEFAULT)
 
 #undef TARGET_INIT_LIBFUNCS
 #define TARGET_INIT_LIBFUNCS spu_init_libfuncs
@@ -473,14 +466,20 @@ static void spu_setup_incoming_varargs (cumulative_args_t cum,
 #undef TARGET_LEGITIMATE_ADDRESS_P
 #define TARGET_LEGITIMATE_ADDRESS_P spu_legitimate_address_p
 
-#undef TARGET_LEGITIMATE_CONSTANT_P
-#define TARGET_LEGITIMATE_CONSTANT_P spu_legitimate_constant_p
-
 #undef TARGET_TRAMPOLINE_INIT
 #define TARGET_TRAMPOLINE_INIT spu_trampoline_init
 
 #undef TARGET_OPTION_OVERRIDE
 #define TARGET_OPTION_OVERRIDE spu_option_override
+
+#undef TARGET_OPTION_INIT_STRUCT
+#define TARGET_OPTION_INIT_STRUCT spu_option_init_struct
+
+#undef TARGET_OPTION_DEFAULT_PARAMS
+#define TARGET_OPTION_DEFAULT_PARAMS spu_option_default_params
+
+#undef TARGET_EXCEPT_UNWIND_INFO
+#define TARGET_EXCEPT_UNWIND_INFO  sjlj_except_unwind_info
 
 #undef TARGET_CONDITIONAL_REGISTER_USAGE
 #define TARGET_CONDITIONAL_REGISTER_USAGE spu_conditional_register_usage
@@ -488,17 +487,28 @@ static void spu_setup_incoming_varargs (cumulative_args_t cum,
 #undef TARGET_REF_MAY_ALIAS_ERRNO
 #define TARGET_REF_MAY_ALIAS_ERRNO spu_ref_may_alias_errno
 
-#undef TARGET_ASM_OUTPUT_MI_THUNK
-#define TARGET_ASM_OUTPUT_MI_THUNK spu_output_mi_thunk
-#undef TARGET_ASM_CAN_OUTPUT_MI_THUNK
-#define TARGET_ASM_CAN_OUTPUT_MI_THUNK hook_bool_const_tree_hwi_hwi_const_tree_true
-
 /* Variable tracking should be run after all optimizations which
    change order of insns.  It also needs a valid CFG.  */
 #undef TARGET_DELAY_VARTRACK
 #define TARGET_DELAY_VARTRACK true
 
 struct gcc_target targetm = TARGET_INITIALIZER;
+
+static void
+spu_option_init_struct (struct gcc_options *opts)
+{
+  /* With so many registers this is better on by default. */
+  opts->x_flag_rename_registers = 1;
+}
+
+/* Implement TARGET_OPTION_DEFAULT_PARAMS.  */
+static void
+spu_option_default_params (void)
+{
+  /* Override some of the default param values.  With so many registers
+     larger values are better for these params.  */
+  set_default_param_value (PARAM_MAX_PENDING_LIST_LENGTH, 128);
+}
 
 /* Implement TARGET_OPTION_OVERRIDE.  */
 static void
@@ -728,7 +738,10 @@ spu_expand_extv (rtx ops[], int unsignedp)
     emit_insn (gen_rotlti3 (s0, s0, GEN_INT (start)));
 
   if (128 - width)
-    s0 = expand_shift (RSHIFT_EXPR, TImode, s0, 128 - width, s0, unsignedp);
+    {
+      tree c = build_int_cst (NULL_TREE, 128 - width);
+      s0 = expand_shift (RSHIFT_EXPR, TImode, s0, c, s0, unsignedp);
+    }
 
   emit_move_insn (dst, s0);
 }
@@ -982,27 +995,6 @@ spu_emit_branch_or_set (int is_set, rtx cmp, rtx operands[])
 	  }
     }
 
-  /* However, if we generate an integer result, performing a reverse test
-     would require an extra negation, so avoid that where possible.  */
-  if (GET_CODE (op1) == CONST_INT && is_set == 1)
-    {
-      HOST_WIDE_INT val = INTVAL (op1) + 1;
-      if (trunc_int_for_mode (val, GET_MODE (op0)) == val)
-	switch (code)
-	  {
-	  case LE:
-	    op1 = GEN_INT (val);
-	    code = LT;
-	    break;
-	  case LEU:
-	    op1 = GEN_INT (val);
-	    code = LTU;
-	    break;
-	  default:
-	    break;
-	  }
-    }
-
   comp_mode = SImode;
   op_mode = GET_MODE (op0);
 
@@ -1134,8 +1126,7 @@ spu_emit_branch_or_set (int is_set, rtx cmp, rtx operands[])
 
   if (is_set == 0 && op1 == const0_rtx
       && (GET_MODE (op0) == SImode
-	  || GET_MODE (op0) == HImode
-	  || GET_MODE (op0) == QImode) && scode == SPU_EQ)
+	  || GET_MODE (op0) == HImode) && scode == SPU_EQ)
     {
       /* Don't need to set a register with the result when we are 
          comparing against zero and branching. */
@@ -2096,7 +2087,7 @@ spu_expand_prologue (void)
 	}
     }
 
-  if (flag_stack_usage_info)
+  if (flag_stack_usage)
     current_function_static_stack_size = total_size;
 }
 
@@ -2106,7 +2097,7 @@ spu_expand_epilogue (bool sibcall_p)
   int size = get_frame_size (), offset, regno;
   HOST_WIDE_INT saved_regs_size, total_size;
   rtx sp_reg = gen_rtx_REG (Pmode, STACK_POINTER_REGNUM);
-  rtx scratch_reg_0;
+  rtx jump, scratch_reg_0;
 
   if (spu_naked_function_p (current_function_decl))
     return;
@@ -2148,8 +2139,10 @@ spu_expand_epilogue (bool sibcall_p)
   if (!sibcall_p)
     {
       emit_use (gen_rtx_REG (SImode, LINK_REGISTER_REGNUM));
-      emit_jump_insn (gen__return ());
+      jump = emit_jump_insn (gen__return ());
+      emit_barrier_after (jump);
     }
+
 }
 
 rtx
@@ -2663,14 +2656,13 @@ insert_hbrp_for_ilb_runout (rtx first)
 
 /* The SPU might hang when it executes 48 inline instructions after a
    hinted branch jumps to its hinted target.  The beginning of a
-   function and the return from a call might have been hinted, and
-   must be handled as well.  To prevent a hang we insert 2 hbrps.  The
-   first should be within 6 insns of the branch target.  The second
-   should be within 22 insns of the branch target.  When determining
-   if hbrps are necessary, we look for only 32 inline instructions,
-   because up to 12 nops and 4 hbrps could be inserted.  Similarily,
-   when inserting new hbrps, we insert them within 4 and 16 insns of
-   the target.  */
+   function and the return from a call might have been hinted, and must
+   be handled as well.  To prevent a hang we insert 2 hbrps.  The first
+   should be within 6 insns of the branch target.  The second should be
+   within 22 insns of the branch target.  When determining if hbrps are
+   necessary, we look for only 32 inline instructions, because up to to
+   12 nops and 4 hbrps could be inserted.  Similarily, when inserting
+   new hbrps, we insert them within 4 and 16 insns of the target.  */
 static void
 insert_hbrp (void)
 {
@@ -3320,7 +3312,7 @@ spu_sched_adjust_cost (rtx insn, rtx link, rtx dep_insn, int cost)
 }
 
 /* Create a CONST_DOUBLE from a string.  */
-rtx
+struct rtx_def *
 spu_float_const (const char *string, enum machine_mode mode)
 {
   REAL_VALUE_TYPE value;
@@ -3743,8 +3735,8 @@ ea_symbol_ref (rtx *px, void *data ATTRIBUTE_UNUSED)
    - a 64-bit constant where the high and low bits are identical
      (DImode, DFmode)
    - a 128-bit constant where the four 32-bit words match.  */
-bool
-spu_legitimate_constant_p (enum machine_mode mode, rtx x)
+int
+spu_legitimate_constant_p (rtx x)
 {
   if (GET_CODE (x) == HIGH)
     x = XEXP (x, 0);
@@ -3756,7 +3748,7 @@ spu_legitimate_constant_p (enum machine_mode mode, rtx x)
 
   /* V4SI with all identical symbols is valid. */
   if (!flag_pic
-      && mode == V4SImode
+      && GET_MODE (x) == V4SImode
       && (GET_CODE (CONST_VECTOR_ELT (x, 0)) == SYMBOL_REF
 	  || GET_CODE (CONST_VECTOR_ELT (x, 0)) == LABEL_REF
 	  || GET_CODE (CONST_VECTOR_ELT (x, 0)) == CONST))
@@ -3825,14 +3817,8 @@ spu_legitimate_address_p (enum machine_mode mode,
 	if (GET_CODE (op0) == REG
 	    && INT_REG_OK_FOR_BASE_P (op0, reg_ok_strict)
 	    && GET_CODE (op1) == CONST_INT
-	    && ((INTVAL (op1) >= -0x2000 && INTVAL (op1) <= 0x1fff)
-		/* If virtual registers are involved, the displacement will
-		   change later on anyway, so checking would be premature.
-		   Reload will make sure the final displacement after
-		   register elimination is OK.  */
-		|| op0 == arg_pointer_rtx
-		|| op0 == frame_pointer_rtx
-		|| op0 == virtual_stack_vars_rtx)
+	    && INTVAL (op1) >= -0x2000
+	    && INTVAL (op1) <= 0x1fff
 	    && (!aligned || (INTVAL (op1) & 15) == 0))
 	  return TRUE;
 	if (GET_CODE (op0) == REG
@@ -3903,45 +3889,6 @@ spu_addr_space_legitimize_address (rtx x, rtx oldx, enum machine_mode mode,
     return x;
 
   return spu_legitimize_address (x, oldx, mode);
-}
-
-/* Reload reg + const_int for out-of-range displacements.  */
-rtx
-spu_legitimize_reload_address (rtx ad, enum machine_mode mode ATTRIBUTE_UNUSED,
-			       int opnum, int type)
-{
-  bool removed_and = false;
-
-  if (GET_CODE (ad) == AND
-      && CONST_INT_P (XEXP (ad, 1))
-      && INTVAL (XEXP (ad, 1)) == (HOST_WIDE_INT) - 16)
-    {
-      ad = XEXP (ad, 0);
-      removed_and = true;
-    }
-
-  if (GET_CODE (ad) == PLUS
-      && REG_P (XEXP (ad, 0))
-      && CONST_INT_P (XEXP (ad, 1))
-      && !(INTVAL (XEXP (ad, 1)) >= -0x2000
-	   && INTVAL (XEXP (ad, 1)) <= 0x1fff))
-    {
-      /* Unshare the sum.  */
-      ad = copy_rtx (ad);
-
-      /* Reload the displacement.  */
-      push_reload (XEXP (ad, 1), NULL_RTX, &XEXP (ad, 1), NULL,
-		   BASE_REG_CLASS, GET_MODE (ad), VOIDmode, 0, 0,
-		   opnum, (enum reload_type) type);
-
-      /* Add back AND for alignment if we stripped it.  */
-      if (removed_and)
-	ad = gen_rtx_AND (GET_MODE (ad), ad, GEN_INT (-16));
-
-      return ad;
-    }
-
-  return NULL_RTX;
 }
 
 /* Handle an attribute requiring a FUNCTION_DECL; arguments as in
@@ -4097,11 +4044,10 @@ spu_function_value (const_tree type, const_tree func ATTRIBUTE_UNUSED)
 }
 
 static rtx
-spu_function_arg (cumulative_args_t cum_v,
+spu_function_arg (CUMULATIVE_ARGS *cum,
 		  enum machine_mode mode,
 		  const_tree type, bool named ATTRIBUTE_UNUSED)
 {
-  CUMULATIVE_ARGS *cum = get_cumulative_args (cum_v);
   int byte_size;
 
   if (*cum >= MAX_REGISTER_ARGS)
@@ -4134,11 +4080,9 @@ spu_function_arg (cumulative_args_t cum_v,
 }
 
 static void
-spu_function_arg_advance (cumulative_args_t cum_v, enum machine_mode mode,
+spu_function_arg_advance (CUMULATIVE_ARGS * cum, enum machine_mode mode,
 			  const_tree type, bool named ATTRIBUTE_UNUSED)
 {
-  CUMULATIVE_ARGS *cum = get_cumulative_args (cum_v);
-
   *cum += (type && TREE_CODE (TYPE_SIZE (type)) != INTEGER_CST
 	   ? 1
 	   : mode == BLKmode
@@ -4150,7 +4094,7 @@ spu_function_arg_advance (cumulative_args_t cum_v, enum machine_mode mode,
 
 /* Variable sized types are passed by reference.  */
 static bool
-spu_pass_by_reference (cumulative_args_t cum ATTRIBUTE_UNUSED,
+spu_pass_by_reference (CUMULATIVE_ARGS * cum ATTRIBUTE_UNUSED,
 		       enum machine_mode mode ATTRIBUTE_UNUSED,
 		       const_tree type, bool named ATTRIBUTE_UNUSED)
 {
@@ -4248,15 +4192,17 @@ spu_va_start (tree valist, rtx nextarg)
   /* Find the __args area.  */
   t = make_tree (TREE_TYPE (args), nextarg);
   if (crtl->args.pretend_args_size > 0)
-    t = fold_build_pointer_plus_hwi (t, -STACK_POINTER_OFFSET);
+    t = build2 (POINTER_PLUS_EXPR, TREE_TYPE (args), t,
+		size_int (-STACK_POINTER_OFFSET));
   t = build2 (MODIFY_EXPR, TREE_TYPE (args), args, t);
   TREE_SIDE_EFFECTS (t) = 1;
   expand_expr (t, const0_rtx, VOIDmode, EXPAND_NORMAL);
 
   /* Find the __skip area.  */
   t = make_tree (TREE_TYPE (skip), virtual_incoming_args_rtx);
-  t = fold_build_pointer_plus_hwi (t, (crtl->args.pretend_args_size
-				       - STACK_POINTER_OFFSET));
+  t = build2 (POINTER_PLUS_EXPR, TREE_TYPE (skip), t,
+	      size_int (crtl->args.pretend_args_size
+			 - STACK_POINTER_OFFSET));
   t = build2 (MODIFY_EXPR, TREE_TYPE (skip), skip, t);
   TREE_SIDE_EFFECTS (t) = 1;
   expand_expr (t, const0_rtx, VOIDmode, EXPAND_NORMAL);
@@ -4286,7 +4232,7 @@ spu_gimplify_va_arg_expr (tree valist, tree type, gimple_seq * pre_p,
   tree f_args, f_skip;
   tree args, skip;
   HOST_WIDE_INT size, rsize;
-  tree addr, tmp;
+  tree paddedsize, addr, tmp;
   bool pass_by_reference_p;
 
   f_args = TYPE_FIELDS (TREE_TYPE (va_list_type_node));
@@ -4302,8 +4248,8 @@ spu_gimplify_va_arg_expr (tree valist, tree type, gimple_seq * pre_p,
 
   /* if an object is dynamically sized, a pointer to it is passed
      instead of the object itself. */
-  pass_by_reference_p = pass_by_reference (NULL, TYPE_MODE (type), type,
-					   false);
+  pass_by_reference_p = spu_pass_by_reference (NULL, TYPE_MODE (type), type,
+					       false);
   if (pass_by_reference_p)
     type = build_pointer_type (type);
   size = int_size_in_bytes (type);
@@ -4311,20 +4257,21 @@ spu_gimplify_va_arg_expr (tree valist, tree type, gimple_seq * pre_p,
 
   /* build conditional expression to calculate addr. The expression
      will be gimplified later. */
-  tmp = fold_build_pointer_plus_hwi (unshare_expr (args), rsize);
+  paddedsize = size_int (rsize);
+  tmp = build2 (POINTER_PLUS_EXPR, ptr_type_node, unshare_expr (args), paddedsize);
   tmp = build2 (TRUTH_AND_EXPR, boolean_type_node,
 		build2 (GT_EXPR, boolean_type_node, tmp, unshare_expr (skip)),
 		build2 (LE_EXPR, boolean_type_node, unshare_expr (args),
 		unshare_expr (skip)));
 
   tmp = build3 (COND_EXPR, ptr_type_node, tmp,
-		fold_build_pointer_plus_hwi (unshare_expr (skip), 32),
-		unshare_expr (args));
+		build2 (POINTER_PLUS_EXPR, ptr_type_node, unshare_expr (skip),
+			size_int (32)), unshare_expr (args));
 
   gimplify_assign (addr, tmp, pre_p);
 
   /* update VALIST.__args */
-  tmp = fold_build_pointer_plus_hwi (addr, rsize);
+  tmp = build2 (POINTER_PLUS_EXPR, ptr_type_node, addr, paddedsize);
   gimplify_assign (unshare_expr (args), tmp, pre_p);
 
   addr = fold_convert (build_pointer_type_for_mode (type, ptr_mode, true),
@@ -4340,8 +4287,8 @@ spu_gimplify_va_arg_expr (tree valist, tree type, gimple_seq * pre_p,
    to the first unnamed parameters.  If the first unnamed parameter is
    in the stack then save no registers.  Set pretend_args_size to the
    amount of space needed to save the registers. */
-static void
-spu_setup_incoming_varargs (cumulative_args_t cum, enum machine_mode mode,
+void
+spu_setup_incoming_varargs (CUMULATIVE_ARGS * cum, enum machine_mode mode,
 			    tree type, int *pretend_size, int no_rtl)
 {
   if (!no_rtl)
@@ -4349,11 +4296,11 @@ spu_setup_incoming_varargs (cumulative_args_t cum, enum machine_mode mode,
       rtx tmp;
       int regno;
       int offset;
-      int ncum = *get_cumulative_args (cum);
+      int ncum = *cum;
 
       /* cum currently points to the last named argument, we want to
          start at the next argument. */
-      spu_function_arg_advance (pack_cumulative_args (&ncum), mode, type, true);
+      spu_function_arg_advance (&ncum, mode, type, true);
 
       offset = -STACK_POINTER_OFFSET;
       for (regno = ncum; regno < MAX_REGISTER_ARGS; regno++)
@@ -4426,7 +4373,7 @@ store_with_one_insn_p (rtx mem)
     {
       /* We use the associated declaration to make sure the access is
          referring to the whole object.
-         We check both MEM_EXPR and SYMBOL_REF_DECL.  I'm not sure
+         We check both MEM_EXPR and and SYMBOL_REF_DECL.  I'm not sure
          if it is necessary.  Will there be cases where one exists, and
          the other does not?  Will there be cases where both exist, but
          have different types?  */
@@ -5482,8 +5429,7 @@ spu_asm_globalize_label (FILE * file, const char *name)
 }
 
 static bool
-spu_rtx_costs (rtx x, int code, int outer_code ATTRIBUTE_UNUSED,
-	       int opno ATTRIBUTE_UNUSED, int *total,
+spu_rtx_costs (rtx x, int code, int outer_code ATTRIBUTE_UNUSED, int *total,
 	       bool speed ATTRIBUTE_UNUSED)
 {
   enum machine_mode mode = GET_MODE (x);
@@ -5495,7 +5441,7 @@ spu_rtx_costs (rtx x, int code, int outer_code ATTRIBUTE_UNUSED,
      of a CONST_VECTOR here (or in CONST_COSTS) doesn't help though
      because this cost will only be compared against a single insn. 
      if (code == CONST_VECTOR)
-       return spu_legitimate_constant_p (mode, x) ? cost : COSTS_N_INSNS (6);
+       return (LEGITIMATE_CONSTANT_P(x)) ? cost : COSTS_N_INSNS(6);
    */
 
   /* Use defaults for float operations.  Not accurate but good enough. */
@@ -5695,7 +5641,6 @@ spu_init_libfuncs (void)
   set_optab_libfunc (ffs_optab, DImode, "__ffsdi2");
   set_optab_libfunc (clz_optab, DImode, "__clzdi2");
   set_optab_libfunc (ctz_optab, DImode, "__ctzdi2");
-  set_optab_libfunc (clrsb_optab, DImode, "__clrsbdi2");
   set_optab_libfunc (popcount_optab, DImode, "__popcountdi2");
   set_optab_libfunc (parity_optab, DImode, "__paritydi2");
 
@@ -6603,7 +6548,9 @@ expand_builtin_args (struct spu_builtin_description *d, tree exp,
       ops[i] = expand_expr (arg, NULL_RTX, VOIDmode, EXPAND_NORMAL);
     }
 
-  gcc_assert (i == insn_data[icode].n_generator_args);
+  /* The insn pattern may have additional operands (SCRATCH).
+     Return the number of actual non-SCRATCH operands.  */
+  gcc_assert (i <= insn_data[icode].n_operands);
   return i;
 }
 
@@ -7227,92 +7174,6 @@ spu_ref_may_alias_errno (ao_ref *ref)
     return true;
 
   return default_ref_may_alias_errno (ref);
-}
-
-/* Output thunk to FILE that implements a C++ virtual function call (with
-   multiple inheritance) to FUNCTION.  The thunk adjusts the this pointer
-   by DELTA, and unless VCALL_OFFSET is zero, applies an additional adjustment
-   stored at VCALL_OFFSET in the vtable whose address is located at offset 0
-   relative to the resulting this pointer.  */
-
-static void
-spu_output_mi_thunk (FILE *file, tree thunk ATTRIBUTE_UNUSED,
-		     HOST_WIDE_INT delta, HOST_WIDE_INT vcall_offset,
-		     tree function)
-{
-  rtx op[8];
-
-  /* Make sure unwind info is emitted for the thunk if needed.  */
-  final_start_function (emit_barrier (), file, 1);
-
-  /* Operand 0 is the target function.  */
-  op[0] = XEXP (DECL_RTL (function), 0);
-
-  /* Operand 1 is the 'this' pointer.  */
-  if (aggregate_value_p (TREE_TYPE (TREE_TYPE (function)), function))
-    op[1] = gen_rtx_REG (Pmode, FIRST_ARG_REGNUM + 1);
-  else
-    op[1] = gen_rtx_REG (Pmode, FIRST_ARG_REGNUM);
-
-  /* Operands 2/3 are the low/high halfwords of delta.  */
-  op[2] = GEN_INT (trunc_int_for_mode (delta, HImode));
-  op[3] = GEN_INT (trunc_int_for_mode (delta >> 16, HImode));
-
-  /* Operands 4/5 are the low/high halfwords of vcall_offset.  */
-  op[4] = GEN_INT (trunc_int_for_mode (vcall_offset, HImode));
-  op[5] = GEN_INT (trunc_int_for_mode (vcall_offset >> 16, HImode));
-
-  /* Operands 6/7 are temporary registers.  */
-  op[6] = gen_rtx_REG (Pmode, 79);
-  op[7] = gen_rtx_REG (Pmode, 78);
-
-  /* Add DELTA to this pointer.  */
-  if (delta)
-    {
-      if (delta >= -0x200 && delta < 0x200)
-	output_asm_insn ("ai\t%1,%1,%2", op);
-      else if (delta >= -0x8000 && delta < 0x8000)
-	{
-	  output_asm_insn ("il\t%6,%2", op);
-	  output_asm_insn ("a\t%1,%1,%6", op);
-	}
-      else
-	{
-	  output_asm_insn ("ilhu\t%6,%3", op);
-	  output_asm_insn ("iohl\t%6,%2", op);
-	  output_asm_insn ("a\t%1,%1,%6", op);
-	}
-    }
-
-  /* Perform vcall adjustment.  */
-  if (vcall_offset)
-    {
-      output_asm_insn ("lqd\t%7,0(%1)", op);
-      output_asm_insn ("rotqby\t%7,%7,%1", op);
-
-      if (vcall_offset >= -0x200 && vcall_offset < 0x200)
-	output_asm_insn ("ai\t%7,%7,%4", op);
-      else if (vcall_offset >= -0x8000 && vcall_offset < 0x8000)
-	{
-	  output_asm_insn ("il\t%6,%4", op);
-	  output_asm_insn ("a\t%7,%7,%6", op);
-	}
-      else
-	{
-	  output_asm_insn ("ilhu\t%6,%5", op);
-	  output_asm_insn ("iohl\t%6,%4", op);
-	  output_asm_insn ("a\t%7,%7,%6", op);
-	}
-
-      output_asm_insn ("lqd\t%6,0(%7)", op);
-      output_asm_insn ("rotqby\t%6,%6,%7", op);
-      output_asm_insn ("a\t%1,%1,%6", op);
-    }
-
-  /* Jump to target.  */
-  output_asm_insn ("br\t%0", op);
-
-  final_end_function ();
 }
 
 #include "gt-spu.h"

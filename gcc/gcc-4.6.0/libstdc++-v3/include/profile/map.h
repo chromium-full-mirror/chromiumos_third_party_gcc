@@ -92,7 +92,6 @@ namespace __profile
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
       map(map&& __x)
-      noexcept(is_nothrow_copy_constructible<_Compare>::value)
       : _Base(std::move(__x))
       { }
 
@@ -102,7 +101,7 @@ namespace __profile
       : _Base(__l, __c, __a) { }
 #endif
 
-      ~map() _GLIBCXX_NOEXCEPT
+      ~map()
       { __profcxx_map_to_unordered_map_destruct(this); }
 
       map&
@@ -138,44 +137,44 @@ namespace __profile
 
       // iterators:
       iterator 
-      begin() _GLIBCXX_NOEXCEPT
+      begin()
       { return _Base::begin(); }
 
       const_iterator
-      begin() const _GLIBCXX_NOEXCEPT
+      begin() const
       { return _Base::begin(); }
 
       iterator
-      end() _GLIBCXX_NOEXCEPT
+      end()
       { return _Base::end(); }
 
       const_iterator
-      end() const _GLIBCXX_NOEXCEPT
+      end() const
       { return _Base::end(); }
 
       reverse_iterator
-      rbegin() _GLIBCXX_NOEXCEPT
+      rbegin()
       { 
         __profcxx_map_to_unordered_map_invalidate(this);
         return reverse_iterator(end()); 
       }
 
       const_reverse_iterator
-      rbegin() const _GLIBCXX_NOEXCEPT
+      rbegin() const
       {
         __profcxx_map_to_unordered_map_invalidate(this);
         return const_reverse_iterator(end());
       }
 
       reverse_iterator
-      rend() _GLIBCXX_NOEXCEPT
+      rend()
       {
         __profcxx_map_to_unordered_map_invalidate(this);
         return reverse_iterator(begin());
       }
 
       const_reverse_iterator
-      rend() const _GLIBCXX_NOEXCEPT
+      rend() const
       {
         __profcxx_map_to_unordered_map_invalidate(this);
         return const_reverse_iterator(begin());
@@ -183,22 +182,22 @@ namespace __profile
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
       const_iterator
-      cbegin() const noexcept
+      cbegin() const
       { return const_iterator(_Base::begin()); }
 
       const_iterator
-      cend() const noexcept
+      cend() const
       { return const_iterator(_Base::end()); }
 
       const_reverse_iterator
-      crbegin() const noexcept
+      crbegin() const
       {
         __profcxx_map_to_unordered_map_invalidate(this);
         return const_reverse_iterator(end());
       }
 
       const_reverse_iterator
-      crend() const noexcept
+      crend() const
       {
         __profcxx_map_to_unordered_map_invalidate(this);
         return const_reverse_iterator(begin());
@@ -360,11 +359,12 @@ namespace __profile
 #endif
 
       void
+
       swap(map& __x)
       { _Base::swap(__x); }
 
       void
-      clear() _GLIBCXX_NOEXCEPT
+      clear()
       { this->erase(begin(), end()); }
 
       // observers:
@@ -443,10 +443,10 @@ namespace __profile
       }
 
       _Base& 
-      _M_base() _GLIBCXX_NOEXCEPT       { return *this; }
+      _M_base() { return *this; }
 
       const _Base&
-      _M_base() const _GLIBCXX_NOEXCEPT { return *this; }
+      _M_base() const { return *this; }
 
     };
 

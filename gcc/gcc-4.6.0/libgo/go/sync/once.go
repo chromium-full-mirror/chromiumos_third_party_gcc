@@ -4,20 +4,16 @@
 
 package sync
 
-import (
-	"sync/atomic"
-)
-
 // Once is an object that will perform exactly one action.
 type Once struct {
 	m    Mutex
-	done uint32
+	done bool
 }
 
 // Do calls the function f if and only if the method is being called for the
 // first time with this receiver.  In other words, given
 // 	var once Once
-// if once.Do(f) is called multiple times, only the first call will invoke f,
+// if Do(f) is called multiple times, only the first call will invoke f,
 // even if f has a different value in each invocation.  A new instance of
 // Once is required for each function to execute.
 //
@@ -30,14 +26,10 @@ type Once struct {
 // Do to be called, it will deadlock.
 //
 func (o *Once) Do(f func()) {
-	if atomic.LoadUint32(&o.done) == 1 {
-		return
-	}
-	// Slow-path.
 	o.m.Lock()
 	defer o.m.Unlock()
-	if o.done == 0 {
+	if !o.done {
+		o.done = true
 		f()
-		atomic.CompareAndSwapUint32(&o.done, 0, 1)
 	}
 }

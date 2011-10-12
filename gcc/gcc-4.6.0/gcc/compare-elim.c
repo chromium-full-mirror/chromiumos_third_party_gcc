@@ -636,6 +636,7 @@ struct rtl_opt_pass pass_compare_elim_after_reload =
   TODO_df_finish
   | TODO_df_verify
   | TODO_verify_rtl_sharing
+  | TODO_dump_func
   | TODO_ggc_collect			/* todo_flags_finish */
  }
 };

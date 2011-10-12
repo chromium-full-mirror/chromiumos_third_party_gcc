@@ -36,12 +36,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "opts.h"
 #include "options.h"
 #include "mkdeps.h"
-#include "c-target.h"
-#include "tm.h"			/* For BYTES_BIG_ENDIAN,
-				   DOLLARS_IN_IDENTIFIERS,
-				   STDC_0_IN_SYSTEM_HEADERS,
-				   TARGET_FLT_EVAL_METHOD_NON_DEFAULT and
-				   TARGET_OPTF.  */
+#include "target.h"		/* For gcc_targetcm.  */
 #include "tm_p.h"		/* For C_COMMON_OVERRIDE_OPTIONS.  */
 #include "function.h"
 #include "params.h"
@@ -409,7 +404,6 @@ c_common_handle_option (size_t scode, const char *arg, int value,
           warn_sign_compare = value;
 	  warn_reorder = value;
           warn_cxx0x_compat = value;
-          warn_delnonvdtor = value;
 	}
 
       cpp_opts->warn_trigraphs = value;
@@ -818,16 +812,6 @@ c_common_handle_option (size_t scode, const char *arg, int value,
     }
 
   return result;
-}
-
-/* Default implementation of TARGET_HANDLE_C_OPTION.  */
-
-bool
-default_handle_c_option (size_t code ATTRIBUTE_UNUSED,
-			 const char *arg ATTRIBUTE_UNUSED,
-			 int value ATTRIBUTE_UNUSED)
-{
-  return false;
 }
 
 /* Post-switch processing.  */
@@ -1354,17 +1338,12 @@ c_finish_options (void)
     {
       size_t i;
 
-      {
-	/* Make sure all of the builtins about to be declared have
-	  BUILTINS_LOCATION has their source_location.  */
-	source_location builtins_loc = BUILTINS_LOCATION;
-	cpp_force_token_locations (parse_in, &builtins_loc);
+      cb_file_change (parse_in,
+		      linemap_add (line_table, LC_RENAME, 0,
+				   _("<built-in>"), 0));
 
-	cpp_init_builtins (parse_in, flag_hosted);
-	c_cpp_builtins (parse_in);
-
-	cpp_stop_forcing_token_locations (parse_in);
-      }
+      cpp_init_builtins (parse_in, flag_hosted);
+      c_cpp_builtins (parse_in);
 
       /* We're about to send user input to cpplib, so make it warn for
 	 things that we previously (when we sent it internal definitions)
@@ -1551,9 +1530,6 @@ set_std_cxx0x (int iso)
   flag_no_gnu_keywords = iso;
   flag_no_nonansi_builtin = iso;
   flag_iso = iso;
-  /* C++0x includes the C99 standard library.  */
-  flag_isoc94 = 1;
-  flag_isoc99 = 1;
   cxx_dialect = cxx0x;
 }
 

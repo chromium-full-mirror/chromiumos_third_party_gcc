@@ -30,7 +30,7 @@ main()
   int i;
   std::string s;
 
-  std::tr1::tie(i, ignore, s) = make_tuple(42, 3.14, "C++");
+  tie(i, ignore, s) = make_tuple(42, 3.14, "C++");
   VERIFY( i == 42 );
   VERIFY( s == "C++" );
 }

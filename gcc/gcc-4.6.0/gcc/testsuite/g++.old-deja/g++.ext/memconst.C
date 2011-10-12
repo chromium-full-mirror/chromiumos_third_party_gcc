@@ -21,5 +21,5 @@ public:
 void
 foo::bar ()
 {
-    qwerty QWERTY ((unsigned short*)dummy_key);
+    qwerty QWERTY ((unsigned short*)dummy_key); // { dg-error "" } 
 }

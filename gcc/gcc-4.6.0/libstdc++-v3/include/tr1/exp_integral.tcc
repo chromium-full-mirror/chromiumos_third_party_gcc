@@ -59,8 +59,6 @@ namespace tr1
   {
   _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
-    template<typename _Tp> _Tp __expint_E1(const _Tp);
-
     /**
      *   @brief Return the exponential integral @f$ E_1(x) @f$
      *          by series summation.  This should be good

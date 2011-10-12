@@ -166,12 +166,11 @@ characters.
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://www.unix.org/version3/ieee_std.html">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.unix.org/version3/ieee_std.html" class="uri">
+      </biblioid>
+      <citetitle>
 	The Open Group Base Specifications, Issue 6 (IEEE Std. 1003.1-2004)
-	</link>
-      </title>
+      </citetitle>
 
     <copyright>
       <year>1999</year>

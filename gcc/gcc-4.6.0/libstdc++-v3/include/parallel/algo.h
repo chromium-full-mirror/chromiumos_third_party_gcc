@@ -273,12 +273,12 @@ namespace __parallel
                   _BinaryPredicate __comp)
     {
       typedef std::iterator_traits<_IIter> _IIterTraits;
-      typedef std::iterator_traits<_FIterator> _FIterTraits;
+      typedef std::iterator_traits<_FIterator> iteratorf_traits;
       typedef typename _IIterTraits::iterator_category _IIteratorCategory;
-      typedef typename _FIterTraits::iterator_category _FIteratorCategory;
+      typedef typename iteratorf_traits::iterator_category iteratorf_category;
 
       return __find_first_of_switch(__begin1, __end1, __begin2, __end2, __comp,
-                                  _IIteratorCategory(), _FIteratorCategory());
+                                  _IIteratorCategory(), iteratorf_category());
     }
 
   // Public interface, insert default comparator
@@ -288,9 +288,9 @@ namespace __parallel
                   _FIterator __begin2, _FIterator __end2)
     {
       typedef std::iterator_traits<_IIter> _IIterTraits;
-      typedef std::iterator_traits<_FIterator> _FIterTraits;
+      typedef std::iterator_traits<_FIterator> iteratorf_traits;
       typedef typename _IIterTraits::value_type _IValueType;
-      typedef typename _FIterTraits::value_type _FValueType;
+      typedef typename iteratorf_traits::value_type _FValueType;
 
       return __gnu_parallel::find_first_of(__begin1, __end1, __begin2, __end2,
                          __gnu_parallel::_EqualTo<_IValueType, _FValueType>());

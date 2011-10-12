@@ -178,60 +178,6 @@
   "TARGET_XADD"
   "lock{%;} xadd{<imodesuffix>}\t{%0, %1|%1, %0}")
 
-;; This peephole2 and following insn optimize
-;; __sync_fetch_and_add (x, -N) == N into just lock {add,sub,inc,dec}
-;; followed by testing of flags instead of lock xadd and comparisons.
-(define_peephole2
-  [(set (match_operand:SWI 0 "register_operand" "")
-	(match_operand:SWI 2 "const_int_operand" ""))
-   (parallel [(set (match_dup 0)
-		   (unspec_volatile:SWI
-		     [(match_operand:SWI 1 "memory_operand" "")] UNSPECV_XCHG))
-	      (set (match_dup 1)
-		   (plus:SWI (match_dup 1)
-			     (match_dup 0)))
-	      (clobber (reg:CC FLAGS_REG))])
-   (set (reg:CCZ FLAGS_REG)
-	(compare:CCZ (match_dup 0)
-		     (match_operand:SWI 3 "const_int_operand" "")))]
-  "peep2_reg_dead_p (3, operands[0])
-   && (unsigned HOST_WIDE_INT) INTVAL (operands[2])
-      == -(unsigned HOST_WIDE_INT) INTVAL (operands[3])
-   && !reg_overlap_mentioned_p (operands[0], operands[1])"
-  [(parallel [(set (reg:CCZ FLAGS_REG)
-		   (compare:CCZ (unspec_volatile:SWI [(match_dup 1)]
-						     UNSPECV_XCHG)
-				(match_dup 3)))
-	      (set (match_dup 1)
-		   (plus:SWI (match_dup 1)
-			     (match_dup 2)))])])
-
-(define_insn "*sync_old_add_cmp<mode>"
-  [(set (reg:CCZ FLAGS_REG)
-	(compare:CCZ (unspec_volatile:SWI
-		       [(match_operand:SWI 0 "memory_operand" "+m")]
-		       UNSPECV_XCHG)
-		     (match_operand:SWI 2 "const_int_operand" "i")))
-   (set (match_dup 0)
-	(plus:SWI (match_dup 0)
-		  (match_operand:SWI 1 "const_int_operand" "i")))]
-  "(unsigned HOST_WIDE_INT) INTVAL (operands[1])
-   == -(unsigned HOST_WIDE_INT) INTVAL (operands[2])"
-{
-  if (TARGET_USE_INCDEC)
-    {
-      if (operands[1] == const1_rtx)
-	return "lock{%;} inc{<imodesuffix>}\t%0";
-      if (operands[1] == constm1_rtx)
-	return "lock{%;} dec{<imodesuffix>}\t%0";
-    }
-
-  if (x86_maybe_negate_const_int (&operands[1], <MODE>mode))
-    return "lock{%;} sub{<imodesuffix>}\t{%1, %0|%0, %1}";
-
-  return "lock{%;} add{<imodesuffix>}\t{%1, %0|%0, %1}";
-})
-
 ;; Recall that xchg implicitly sets LOCK#, so adding it again wastes space.
 (define_insn "sync_lock_test_and_set<mode>"
   [(set (match_operand:SWI 0 "register_operand" "=<r>")

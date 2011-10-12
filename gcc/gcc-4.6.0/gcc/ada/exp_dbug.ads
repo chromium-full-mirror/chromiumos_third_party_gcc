@@ -1082,8 +1082,7 @@ package Exp_Dbug is
    function Debug_Renaming_Declaration (N : Node_Id) return Node_Id;
    --  The argument N is a renaming declaration. The result is a variable
    --  declaration as described in the above paragraphs. If N is not a special
-   --  debug declaration, then Empty is returned. This function also takes care
-   --  of setting Materialize_Entity on the renamed entity where required.
+   --  debug declaration, then Empty is returned.
 
    ---------------------------
    -- Packed Array Encoding --

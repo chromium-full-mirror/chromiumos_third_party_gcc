@@ -34,8 +34,10 @@ namespace
   
   struct generic_error_category : public std::error_category
   {
+    generic_error_category() {}
+
     virtual const char*
-    name() const noexcept
+    name() const 
     { return "generic"; }
 
     virtual string 
@@ -49,8 +51,10 @@ namespace
 
   struct system_error_category : public std::error_category
   {
+    system_error_category() {}
+
     virtual const char*
-    name() const noexcept
+    name() const
     { return "system"; }
 
     virtual string
@@ -70,33 +74,32 @@ namespace std _GLIBCXX_VISIBILITY(default)
 {
 _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
-  error_category::error_category() noexcept = default;
+  error_category::error_category() = default;
 
-  error_category::~error_category() noexcept = default;
-
-  const error_category& 
-  system_category() noexcept { return system_category_instance; }
+  error_category::~error_category() = default;
 
   const error_category& 
-  generic_category() noexcept { return generic_category_instance; }
+  system_category() throw() { return system_category_instance; }
+
+  const error_category& 
+  generic_category() throw() { return generic_category_instance; }
   
-  system_error::~system_error() noexcept = default;
+  system_error::~system_error() throw() = default;
 
   error_condition 
-  error_category::default_error_condition(int __i) const noexcept
+  error_category::default_error_condition(int __i) const
   { return error_condition(__i, *this); }
 
   bool 
-  error_category::equivalent(int __i,
-			     const error_condition& __cond) const noexcept
+  error_category::equivalent(int __i, const error_condition& __cond) const
   { return default_error_condition(__i) == __cond; }
 
   bool 
-  error_category::equivalent(const error_code& __code, int __i) const noexcept
+  error_category::equivalent(const error_code& __code, int __i) const
   { return *this == __code.category() && __code.value() == __i; }
 
   error_condition 
-  error_code::default_error_condition() const noexcept
+  error_code::default_error_condition() const
   { return category().default_error_condition(value()); }
 
 _GLIBCXX_END_NAMESPACE_VERSION

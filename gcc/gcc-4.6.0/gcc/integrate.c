@@ -1,6 +1,6 @@
 /* Procedure integration for GCC.
    Copyright (C) 1988, 1991, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
-   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Michael Tiemann (tiemann@cygnus.com)
 
@@ -35,8 +35,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "expr.h"
 #include "output.h"
 #include "recog.h"
-/* For reg_equivs.  */
-#include "reload.h"
 #include "integrate.h"
 #include "except.h"
 #include "function.h"
@@ -114,8 +112,7 @@ set_block_origin_self (tree stmt)
 	for (local_decl = BLOCK_VARS (stmt);
 	     local_decl != NULL_TREE;
 	     local_decl = DECL_CHAIN (local_decl))
-	  if (! DECL_EXTERNAL (local_decl))
-	    set_decl_origin_self (local_decl);	/* Potential recursion.  */
+	  set_decl_origin_self (local_decl);	/* Potential recursion.  */
       }
 
       {
@@ -176,8 +173,7 @@ set_block_abstract_flags (tree stmt, int setting)
   for (local_decl = BLOCK_VARS (stmt);
        local_decl != NULL_TREE;
        local_decl = DECL_CHAIN (local_decl))
-    if (! DECL_EXTERNAL (local_decl))
-      set_decl_abstract_flags (local_decl, setting);
+    set_decl_abstract_flags (local_decl, setting);
 
   for (i = 0; i < BLOCK_NUM_NONLOCALIZED_VARS (stmt); i++)
     {
@@ -325,14 +321,14 @@ struct rtl_opt_pass pass_initial_value_sets =
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
-  0                                     /* todo_flags_finish */
+  TODO_dump_func                        /* todo_flags_finish */
  }
 };
 
 /* If the backend knows where to allocate pseudos for hard
    register initial values, register these allocations now.  */
 void
-allocate_initial_values (VEC (reg_equivs_t, gc) *reg_equivs)
+allocate_initial_values (rtx *reg_equiv_memory_loc)
 {
   if (targetm.allocate_initial_value)
     {
@@ -350,7 +346,7 @@ allocate_initial_values (VEC (reg_equivs_t, gc) *reg_equivs)
 	  if (x && REG_N_SETS (REGNO (ivs->entries[i].pseudo)) <= 1)
 	    {
 	      if (MEM_P (x))
-		reg_equiv_memory_loc (regno) = x;
+		reg_equiv_memory_loc[regno] = x;
 	      else
 		{
 		  basic_block bb;

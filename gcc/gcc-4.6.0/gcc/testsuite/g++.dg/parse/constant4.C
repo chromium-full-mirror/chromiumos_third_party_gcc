@@ -34,7 +34,7 @@ template <typename> struct X
 
 void Baz ()
 {
-  Foo<int> (); // { dg-message "required" "" }
+  Foo<int> (); // { dg-message "instantiated" "" }
 }
 
   

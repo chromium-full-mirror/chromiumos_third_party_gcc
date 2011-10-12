@@ -2,7 +2,7 @@
 /* { dg-do run } */
 /* { dg-xfail-run-if "Needs OBJC2 ABI" { *-*-darwin* && { lp64 && { ! objc2 } } } { "-fnext-runtime" } { "" } } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.m"
+#include "../objc-obj-c++-shared/Object1.h"
 
 extern int strcmp(const char *, const char *);
 extern void abort(void);
@@ -10,7 +10,7 @@ extern void abort(void);
 
 typedef float (*floatfunc)(float, float);
 
-@interface MyObject : TestsuiteObject
+@interface MyObject : Object
 {
 @public
   int (*ivar)(int, int, int);
@@ -46,4 +46,6 @@ int main ()
   CHECK_IF(!strcmp(enc, "{MyObject=#^?^?}"));
   return(0);
 }
+
+#include "../objc-obj-c++-shared/Object1-implementation.h"
 

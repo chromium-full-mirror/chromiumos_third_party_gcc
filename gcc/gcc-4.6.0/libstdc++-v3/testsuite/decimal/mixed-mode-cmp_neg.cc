@@ -103,3 +103,4 @@ bad_ge (void)
   b6 = d >= b128;	// { dg-error "error" }
 }
 
+// { dg-excess-errors "notes about candidates" }

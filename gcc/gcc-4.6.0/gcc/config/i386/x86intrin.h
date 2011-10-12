@@ -77,20 +77,16 @@
 #include <lwpintrin.h>
 #endif
 
+#ifdef __ABM__
+#include <abmintrin.h>
+#endif
+
 #ifdef __BMI__
 #include <bmiintrin.h>
 #endif
 
-#ifdef __BMI2__
-#include <bmi2intrin.h>
-#endif
-
 #ifdef __TBM__
 #include <tbmintrin.h>
-#endif
-
-#ifdef __LZCNT__
-#include <lzcntintrin.h>
 #endif
 
 #ifdef __POPCNT__

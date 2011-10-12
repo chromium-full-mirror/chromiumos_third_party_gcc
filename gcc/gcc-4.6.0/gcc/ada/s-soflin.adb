@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -45,6 +45,11 @@ pragma Warnings (On);
 package body System.Soft_Links is
 
    package SST renames System.Secondary_Stack;
+
+   NT_Exc_Stack : array (0 .. 8192) of aliased Character;
+   for NT_Exc_Stack'Alignment use Standard'Maximum_Alignment;
+   --  Allocate an exception stack for the main program to use.
+   --  This is currently only used under VMS.
 
    NT_TSD : TSD;
    --  Note: we rely on the default initialization of NT_TSD
@@ -90,11 +95,9 @@ package body System.Soft_Links is
 
       Task_Termination_Handler.all (Ada.Exceptions.Null_Occurrence);
 
-      --  Finalize all library-level controlled objects if needed
+      --  Finalize the global list for controlled objects if needed
 
-      if Finalize_Library_Objects /=  null then
-         Finalize_Library_Objects.all;
-      end if;
+      Finalize_Global_List.all;
    end Adafinal_NT;
 
    ---------------------------
@@ -120,8 +123,11 @@ package body System.Soft_Links is
    ----------------
 
    procedure Create_TSD (New_TSD : in out TSD) is
-      use Parameters;
-      SS_Ratio_Dynamic : constant Boolean := Sec_Stack_Percentage = Dynamic;
+      use type Parameters.Size_Type;
+
+      SS_Ratio_Dynamic : constant Boolean :=
+                           Parameters.Sec_Stack_Ratio = Parameters.Dynamic;
+
    begin
       if SS_Ratio_Dynamic then
          SST.SS_Init
@@ -164,6 +170,24 @@ package body System.Soft_Links is
    begin
       return NT_TSD.Current_Excep'Access;
    end Get_Current_Excep_NT;
+
+   ---------------------------
+   -- Get_Exc_Stack_Addr_NT --
+   ---------------------------
+
+   function Get_Exc_Stack_Addr_NT return Address is
+   begin
+      return NT_Exc_Stack (NT_Exc_Stack'Last)'Address;
+   end Get_Exc_Stack_Addr_NT;
+
+   -----------------------------
+   -- Get_Exc_Stack_Addr_Soft --
+   -----------------------------
+
+   function Get_Exc_Stack_Addr_Soft return Address is
+   begin
+      return Get_Exc_Stack_Addr.all;
+   end Get_Exc_Stack_Addr_Soft;
 
    ------------------------
    -- Get_GNAT_Exception --
@@ -219,19 +243,14 @@ package body System.Soft_Links is
       return NT_TSD.Pri_Stack_Info'Access;
    end Get_Stack_Info_NT;
 
-   -----------------------------
-   -- Save_Library_Occurrence --
-   -----------------------------
+   -------------------------------
+   -- Null_Finalize_Global_List --
+   -------------------------------
 
-   procedure Save_Library_Occurrence
-     (E : Ada.Exceptions.Exception_Occurrence)
-   is
+   procedure Null_Finalize_Global_List is
    begin
-      if not Library_Exception_Set then
-         Library_Exception_Set := True;
-         Ada.Exceptions.Save_Occurrence (Library_Exception, E);
-      end if;
-   end Save_Library_Occurrence;
+      null;
+   end Null_Finalize_Global_List;
 
    ---------------------------
    -- Set_Jmpbuf_Address_NT --

@@ -1,7 +1,8 @@
 /* Test that the compiler properly optimizes floating point multiply
    and add instructions FMA3 systems.  */
 
-/* { dg-do compile { target { ! { ia32 } } } } */
+/* { dg-do compile } */
+/* { dg-require-effective-target lp64 } */
 /* { dg-options "-O2 -mfma -mno-fma4" } */
 
 extern void exit (int);

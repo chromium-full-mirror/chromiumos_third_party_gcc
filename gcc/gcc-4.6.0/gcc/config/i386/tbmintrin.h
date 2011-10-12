@@ -47,55 +47,64 @@ __bextri_u32 (unsigned int __X, const unsigned int __I)
 extern __inline unsigned int __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __blcfill_u32 (unsigned int __X)
 {
-  return __X & (__X + 1);
+	unsigned int tmp = (__X) & ((__X) + 1);
+	return tmp;
 }
 
 extern __inline unsigned int __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __blci_u32 (unsigned int __X)
 {
-  return __X | ~(__X + 1);
+	unsigned int tmp = (__X) | (~((__X) + 1));
+	return tmp;
 }
 
 extern __inline unsigned int __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __blcic_u32 (unsigned int __X)
 {
-  return ~__X & (__X + 1);
+	unsigned int tmp = (~(__X)) & ((__X) + 1);
+	return tmp;
 }
 
 extern __inline unsigned int __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __blcmsk_u32 (unsigned int __X)
 {
-  return __X ^ (__X + 1);
+	unsigned int tmp = (__X) ^ ((__X) + 1);
+	return tmp;
 }
 
 extern __inline unsigned int __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __blcs_u32 (unsigned int __X)
 {
-  return __X | (__X + 1);
+	unsigned int tmp = (__X) | ((__X) + 1);
+	return tmp;
 }
 
 extern __inline unsigned int __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __blsfill_u32 (unsigned int __X)
 {
-  return __X | (__X - 1);
+	unsigned int tmp = (__X) | ((__X) - 1);
+	return tmp;
 }
 
 extern __inline unsigned int __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __blsic_u32 (unsigned int __X)
 {
-  return ~__X | (__X - 1);
+	unsigned int tmp = (~(__X)) | ((__X) - 1);
+	return tmp;
 }
 
 extern __inline unsigned int __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __t1mskc_u32 (unsigned int __X)
 {
-  return ~__X | (__X + 1);
+	unsigned int tmp = (~(__X)) | ((__X) + 1);
+	return tmp;
 }
 
 extern __inline unsigned int __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __tzmsk_u32 (unsigned int __X)
 {
-  return ~__X & (__X - 1);
+	unsigned int tmp = (~(__X)) & ((__X) - 1);
+	return tmp;
 }
 
 
@@ -105,68 +114,78 @@ __tzmsk_u32 (unsigned int __X)
 extern __inline unsigned long long __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __bextri_u64 (unsigned long long __X, const unsigned int __I)
 {
-  return __builtin_ia32_bextri_u64 (__X, __I);
+	return __builtin_ia32_bextri_u64 (__X, __I);
 }
 #else
-#define __bextri_u64(X, I)						   \
-  ((unsigned long long)__builtin_ia32_bextri_u64 ((unsigned long long)(X), \
-						  (unsigned long long)(I)))
+#define __bextri_u64(X, I)                                                       \
+        ((unsigned long long)__builtin_ia32_bextri_u64 ((unsigned long long)(X), \
+	                                                (unsigned long long)(I)))
 #endif /*__OPTIMIZE__ */
 
 extern __inline unsigned long long __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __blcfill_u64 (unsigned long long __X)
 {
-  return __X & (__X + 1);
+	unsigned long long tmp = (__X) & ((__X) + 1);
+	return tmp;
 }
 
 extern __inline unsigned long long __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __blci_u64 (unsigned long long __X)
 {
-  return __X | ~(__X + 1);
+	unsigned long long tmp = (__X) | (~((__X) + 1));
+	return tmp;
 }
 
 extern __inline unsigned long long __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __blcic_u64 (unsigned long long __X)
 {
-  return ~__X & (__X + 1);
+	unsigned long long tmp = (~(__X)) & ((__X) + 1);
+	return tmp;
 }
 
 extern __inline unsigned long long __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __blcmsk_u64 (unsigned long long __X)
 {
-  return __X ^ (__X + 1);
+	unsigned long long tmp = (__X) ^ ((__X) + 1);
+	return tmp;
 }
 
 extern __inline unsigned long long __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __blcs_u64 (unsigned long long __X)
 {
-  return __X | (__X + 1);
+	unsigned long long tmp = (__X) | ((__X) + 1);
+	return tmp;
 }
 
 extern __inline unsigned long long __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __blsfill_u64 (unsigned long long __X)
 {
-  return __X | (__X - 1);
+	unsigned long long tmp = (__X) | ((__X) - 1);
+	return tmp;
 }
 
 extern __inline unsigned long long __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __blsic_u64 (unsigned long long __X)
 {
-  return ~__X | (__X - 1);
+	unsigned long long tmp = (~(__X)) | ((__X) - 1);
+	return tmp;
 }
 
 extern __inline unsigned long long __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __t1mskc_u64 (unsigned long long __X)
 {
-  return ~__X | (__X + 1);
+	unsigned long long tmp = (~(__X)) | ((__X) + 1);
+	return tmp;
 }
 
 extern __inline unsigned long long __attribute__((__gnu_inline__, __always_inline__, __artificial__))
 __tzmsk_u64 (unsigned long long __X)
 {
-  return ~__X & (__X - 1);
+	unsigned long long tmp = (~(__X)) & ((__X) - 1);
+	return tmp;
 }
 
 
 #endif /* __x86_64__  */
 #endif /* _TBMINTRIN_H_INCLUDED */
+

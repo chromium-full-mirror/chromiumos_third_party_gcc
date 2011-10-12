@@ -6,7 +6,7 @@
  *                                                                          *
  *                          C Implementation File                           *
  *                                                                          *
- *          Copyright (C) 1992-2011, Free Software Foundation, Inc.         *
+ *          Copyright (C) 1992-2009 Free Software Foundation, Inc.          *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -29,10 +29,6 @@
  *                                                                          *
  ****************************************************************************/
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #ifdef __alpha_vxworks
 #include "vxWorks.h"
 #endif
@@ -48,7 +44,7 @@ extern "C" {
 
 #include "adaint.h"
 
-/* Routine used by Ada.Command_Line.Set_Exit_Status.  */
+/* Routine used by Ada.Command_Line.Set_Exit_Status */
 
 int gnat_exit_status = 0;
 
@@ -57,7 +53,3 @@ __gnat_set_exit_status (int i)
 {
   gnat_exit_status = i;
 }
-
-#ifdef __cplusplus
-}
-#endif

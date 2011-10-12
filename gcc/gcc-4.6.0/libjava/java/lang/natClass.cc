@@ -668,9 +668,7 @@ java::lang::Class::newInstance (void)
 void
 java::lang::Class::finalize (void)
 {
-  // Array classes don't have an engine, and don't need to be finalized.
-   if (engine)
-     engine->unregister(this);
+  engine->unregister(this);
 }
 
 #ifdef INTERPRETER

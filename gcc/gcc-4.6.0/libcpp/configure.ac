@@ -102,13 +102,7 @@ if test $ac_cv_type_uchar = yes; then
   [Define if <sys/types.h> defines \`uchar'.])
 fi
 
-# g++ on Solaris 10+ defines _XOPEN_SOURCE=600, which exposes a different
-# iconv() prototype.
-AS_IF([test "$ENABLE_BUILD_WITH_CXX" = "yes"],
-  [AC_LANG_PUSH([C++])
-   AM_ICONV
-   AC_LANG_POP([C++])],
-  [AM_ICONV])
+AM_ICONV
 
 # More defines and substitutions.
 PACKAGE="$PACKAGE_TARNAME"
@@ -150,7 +144,9 @@ case $target in
 	x86_64-*-* | \
 	ia64-*-* | \
 	hppa*64*-*-* | \
-	i[34567]86-*-* | x86_64-*-solaris2.1[0-9]* | \
+	i[34567]86-*-darwin* | \
+	i[34567]86-*-solaris2.1[0-9]* | \
+	i[34567]86-w64-mingw* | \
 	mips*-*-* | \
 	mmix-*-* | \
 	powerpc*-*-* | \
@@ -160,6 +156,13 @@ case $target in
 	spu-*-* | \
 	sh[123456789lbe]*-*-* | sh-*-*)
 		need_64bit_hwint=yes ;;
+	i[34567]86-*-linux*)
+		if test "x$enable_targets" = xall; then
+			need_64bit_hwint=yes
+		else
+			need_64bit_hwint=no
+		fi
+		;;
 	*)
 		need_64bit_hwint=no ;;
 esac

@@ -1,5 +1,5 @@
 // PR c++/43031
-// { dg-do compile { target { { i?86-*-* x86_64-*-* } && ia32 } } }
+// { dg-do compile { target { { i?86-*-* x86_64-*-* } && ilp32 } } }
 
 class T;
 class L { };

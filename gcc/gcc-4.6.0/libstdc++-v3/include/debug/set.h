@@ -1,6 +1,6 @@
 // Debugging set implementation -*- C++ -*-
 
-// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -46,6 +46,7 @@ namespace __debug
       public __gnu_debug::_Safe_sequence<set<_Key, _Compare, _Allocator> >
     {
       typedef _GLIBCXX_STD_C::set<_Key, _Compare, _Allocator> _Base;
+      typedef __gnu_debug::_Safe_sequence<set> _Safe_base;
 
       typedef typename _Base::const_iterator _Base_const_iterator;
       typedef typename _Base::iterator _Base_iterator;
@@ -87,24 +88,23 @@ namespace __debug
 		__comp, __a) { }
 
       set(const set& __x)
-      : _Base(__x) { }
+      : _Base(__x), _Safe_base() { }
 
       set(const _Base& __x)
-      : _Base(__x) { }
+      : _Base(__x), _Safe_base() { }
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
       set(set&& __x)
-      noexcept(is_nothrow_copy_constructible<_Compare>::value)
-      : _Base(std::move(__x))
+      : _Base(std::move(__x)), _Safe_base()
       { this->_M_swap(__x); }
 
       set(initializer_list<value_type> __l,
 	  const _Compare& __comp = _Compare(),
 	  const allocator_type& __a = allocator_type())
-      : _Base(__l, __comp, __a) { }
+      : _Base(__l, __comp, __a), _Safe_base() { }
 #endif
 
-      ~set() _GLIBCXX_NOEXCEPT { }
+      ~set() { }
 
       set&
       operator=(const set& __x)
@@ -138,52 +138,52 @@ namespace __debug
 
       // iterators:
       iterator
-      begin() _GLIBCXX_NOEXCEPT
+      begin()
       { return iterator(_Base::begin(), this); }
 
       const_iterator
-      begin() const _GLIBCXX_NOEXCEPT
+      begin() const
       { return const_iterator(_Base::begin(), this); }
 
       iterator
-      end() _GLIBCXX_NOEXCEPT
+      end()
       { return iterator(_Base::end(), this); }
 
       const_iterator
-      end() const _GLIBCXX_NOEXCEPT
+      end() const
       { return const_iterator(_Base::end(), this); }
 
       reverse_iterator
-      rbegin() _GLIBCXX_NOEXCEPT
+      rbegin()
       { return reverse_iterator(end()); }
 
       const_reverse_iterator
-      rbegin() const _GLIBCXX_NOEXCEPT
+      rbegin() const
       { return const_reverse_iterator(end()); }
 
       reverse_iterator
-      rend() _GLIBCXX_NOEXCEPT
+      rend()
       { return reverse_iterator(begin()); }
 
       const_reverse_iterator
-      rend() const _GLIBCXX_NOEXCEPT
+      rend() const
       { return const_reverse_iterator(begin()); }
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
       const_iterator
-      cbegin() const noexcept
+      cbegin() const
       { return const_iterator(_Base::begin(), this); }
 
       const_iterator
-      cend() const noexcept
+      cend() const
       { return const_iterator(_Base::end(), this); }
 
       const_reverse_iterator
-      crbegin() const noexcept
+      crbegin() const
       { return const_reverse_iterator(end()); }
 
       const_reverse_iterator
-      crend() const noexcept
+      crend() const
       { return const_reverse_iterator(begin()); }
 #endif
 
@@ -205,6 +205,7 @@ namespace __debug
       std::pair<iterator, bool>
       insert(value_type&& __x)
       {
+	typedef typename _Base::iterator _Base_iterator;
 	std::pair<_Base_iterator, bool> __res
 	  = _Base::insert(std::move(__x));
 	return std::pair<iterator, bool>(iterator(__res.first, this),
@@ -322,7 +323,7 @@ namespace __debug
       }
 
       void
-      clear() _GLIBCXX_NOEXCEPT
+      clear()
       {
 	this->_M_invalidate_all();
 	_Base::clear();
@@ -386,10 +387,10 @@ namespace __debug
       }
 
       _Base&
-      _M_base() _GLIBCXX_NOEXCEPT       { return *this; }
+      _M_base() { return *this; }
 
       const _Base&
-      _M_base() const _GLIBCXX_NOEXCEPT { return *this; }
+      _M_base() const { return *this; }
 
     private:
       void

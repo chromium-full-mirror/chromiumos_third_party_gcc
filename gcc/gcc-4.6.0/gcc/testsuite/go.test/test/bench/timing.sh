@@ -8,12 +8,6 @@ set -e
 eval $(gomake --no-print-directory -f ../../src/Make.inc go-env)
 PATH=.:$PATH
 
-havegccgo=false
-if which gccgo >/dev/null 2>&1
-then
-	havegccgo=true
-fi
-
 mode=run
 case X"$1" in
 X-test)
@@ -35,6 +29,8 @@ runonly() {
 		"$@"
 	fi
 }
+
+
 
 run() {
 	if [ $mode = test ]
@@ -61,10 +57,6 @@ run() {
 		fi
 		return
 	fi
-	if ! $havegccgo && echo $1 | grep -q '^gccgo '
-	then
-		return
-	fi
 	echo -n '	'$1'	'
 	$1
 	shift
@@ -75,7 +67,7 @@ run() {
 fasta() {
 	runonly echo 'fasta -n 25000000'
 	run 'gcc -O2 fasta.c' a.out 25000000
-	run 'gccgo -O2 fasta.go' a.out -n 25000000	#commented out until WriteString is in bufio
+	#run 'gccgo -O2 fasta.go' a.out -n 25000000	#commented out until WriteString is in bufio
 	run 'gc fasta' $O.out -n 25000000
 	run 'gc_B fasta' $O.out -n 25000000
 }
@@ -93,7 +85,7 @@ revcomp() {
 
 nbody() {
 	runonly echo 'nbody -n 50000000'
-	run 'gcc -O2 -lm nbody.c' a.out 50000000
+	run 'gcc -O2 nbody.c' a.out 50000000
 	run 'gccgo -O2 nbody.go' a.out -n 50000000
 	run 'gc nbody' $O.out -n 50000000
 	run 'gc_B nbody' $O.out -n 50000000
@@ -123,8 +115,7 @@ regexdna() {
 	runonly a.out 100000 > x
 	runonly echo 'regex-dna 100000'
 	run 'gcc -O2 regex-dna.c -lpcre' a.out <x
-	run 'gccgo -O2 regex-dna.go' a.out <x
-	run 'gccgo -O2 regex-dna-parallel.go' a.out <x
+#	run 'gccgo -O2 regex-dna.go' a.out <x	# pages badly; don't run
 	run 'gc regex-dna' $O.out <x
 	run 'gc regex-dna-parallel' $O.out <x
 	run 'gc_B regex-dna' $O.out <x
@@ -144,8 +135,8 @@ knucleotide() {
 	runonly a.out 1000000 > x  # should be using 25000000
 	runonly echo 'k-nucleotide 1000000'
 	run 'gcc -O2 -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include k-nucleotide.c -lglib-2.0' a.out <x
-	run 'gccgo -O2 k-nucleotide.go' a.out <x
-	run 'gccgo -O2 k-nucleotide-parallel.go' a.out <x
+	run 'gccgo -O2 k-nucleotide.go' a.out <x	# warning: pages badly!
+	run 'gccgo -O2 k-nucleotide-parallel.go' a.out <x	# warning: pages badly!
 	run 'gc k-nucleotide' $O.out <x
 	run 'gc k-nucleotide-parallel' $O.out <x
 	run 'gc_B k-nucleotide' $O.out <x
@@ -161,17 +152,17 @@ mandelbrot() {
 }
 
 meteor() {
-	runonly echo 'meteor 2098'
-	run 'gcc -O2 meteor-contest.c' a.out 2098
-	run 'gccgo -O2 meteor-contest.go' a.out -n 2098
-	run 'gc meteor-contest' $O.out -n 2098
-	run 'gc_B  meteor-contest' $O.out -n 2098
+	runonly echo 'meteor 16000'
+	run 'gcc -O2 meteor-contest.c' a.out
+	run 'gccgo -O2 meteor-contest.go' a.out
+	run 'gc meteor-contest' $O.out
+	run 'gc_B  meteor-contest' $O.out
 }
 
 pidigits() {
 	runonly echo 'pidigits 10000'
 	run 'gcc -O2 pidigits.c -lgmp' a.out 10000
-	run 'gccgo -O2 pidigits.go' a.out -n 10000
+#	run 'gccgo -O2 pidigits.go' a.out -n 10000  # uncomment when gccgo library updated
 	run 'gc pidigits' $O.out -n 10000
 	run 'gc_B  pidigits' $O.out -n 10000
 }

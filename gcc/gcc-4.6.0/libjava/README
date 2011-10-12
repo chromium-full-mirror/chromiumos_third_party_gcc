@@ -15,8 +15,6 @@ can be found on the gcj web pages at this URL:
 BUGS
 ====
 
-Please refer to
+Please submit bug reports via this URL:
 
-		http://gcc.gnu.org/bugs/
-
-on when and how to submit a bug report.
+	http://gcc.gnu.org/bugzilla

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -183,16 +183,11 @@ package body Sprint is
    procedure Sprint_And_List (List : List_Id);
    --  Print the given list with items separated by vertical "and"
 
-   procedure Sprint_Aspect_Specifications
-     (Node      : Node_Id;
-      Semicolon : Boolean);
+   procedure Sprint_Aspect_Specifications (Node : Node_Id);
    --  Node is a declaration node that has aspect specifications (Has_Aspects
-   --  flag set True). It outputs the aspect specifications. For the case
-   --  of Semicolon = True, it is called after outputting the terminating
-   --  semicolon for the related node. The effect is to remove the semicolon
-   --  and print the aspect specifications followed by a terminating semicolon.
-   --  For the case of Semicolon False, no semicolon is removed or output, and
-   --  all the aspects are printed on a single line.
+   --  flag set True). It is called after outputting the terminating semicolon
+   --  for the related node. The effect is to remove the semicolon and print
+   --  the aspect specifications, followed by a terminating semicolon.
 
    procedure Sprint_Bar_List (List : List_Id);
    --  Print the given list with items separated by vertical bars
@@ -635,24 +630,16 @@ package body Sprint is
    -- Sprint_Aspect_Specifications --
    ----------------------------------
 
-   procedure Sprint_Aspect_Specifications
-     (Node      : Node_Id;
-      Semicolon : Boolean)
-   is
+   procedure Sprint_Aspect_Specifications (Node : Node_Id) is
       AS : constant List_Id := Aspect_Specifications (Node);
       A  : Node_Id;
 
    begin
-      if Semicolon then
-         Write_Erase_Char (';');
-         Indent := Indent + 2;
-         Write_Indent;
-         Write_Str ("with ");
-         Indent := Indent + 5;
-
-      else
-         Write_Str (" with ");
-      end if;
+      Write_Erase_Char (';');
+      Indent := Indent + 2;
+      Write_Indent;
+      Write_Str ("with ");
+      Indent := Indent + 5;
 
       A := First (AS);
       loop
@@ -671,16 +658,11 @@ package body Sprint is
 
          exit when No (A);
          Write_Char (',');
-
-         if Semicolon then
-            Write_Indent;
-         end if;
+         Write_Indent;
       end loop;
 
-      if Semicolon then
-         Indent := Indent - 7;
-         Write_Char (';');
-      end if;
+      Indent := Indent - 7;
+      Write_Char (';');
    end Sprint_Aspect_Specifications;
 
    ---------------------
@@ -1062,15 +1044,8 @@ package body Sprint is
             Write_Str_Sloc (" and then ");
             Sprint_Right_Opnd (Node);
 
-         --  Note: the following code for N_Aspect_Specification is not
-         --  normally used, since we deal with aspects as part of a
-         --  declaration, but it is here in case we deliberately try
-         --  to print an N_Aspect_Speficiation node (e.g. from GDB).
-
          when N_Aspect_Specification =>
-            Sprint_Node (Identifier (Node));
-            Write_Str (" => ");
-            Sprint_Node (Expression (Node));
+            raise Program_Error;
 
          when N_Assignment_Statement =>
             Write_Indent;
@@ -1347,12 +1322,6 @@ package body Sprint is
             Write_Str (" of ");
 
             Sprint_Node (Component_Definition (Node));
-
-         --  A contract node should not appear in the tree. It is a semantic
-         --  node attached to entry and [generic] subprogram entities.
-
-         when N_Contract =>
-            raise Program_Error;
 
          when N_Decimal_Fixed_Point_Definition =>
             Write_Str_With_Col_Check_Sloc (" delta ");
@@ -1633,16 +1602,6 @@ package body Sprint is
             Indent_End;
             Write_Indent;
 
-         when N_Expression_Function =>
-            Write_Indent;
-            Sprint_Node_Sloc (Specification (Node));
-            Write_Str (" is");
-            Indent_Begin;
-            Write_Indent;
-            Sprint_Node (Expression (Node));
-            Write_Char (';');
-            Indent_End;
-
          when N_Extended_Return_Statement =>
             Write_Indent_Str_Sloc ("return ");
             Sprint_Node_List (Return_Object_Declarations (Node));
@@ -1801,11 +1760,6 @@ package body Sprint is
 
             Write_Str_With_Col_Check_Sloc ("private");
 
-         when N_Formal_Incomplete_Type_Definition =>
-            if Tagged_Present (Node) then
-               Write_Str_With_Col_Check ("is tagged ");
-            end if;
-
          when N_Formal_Signed_Integer_Type_Definition =>
             Write_Str_With_Col_Check_Sloc ("range <>");
 
@@ -1819,12 +1773,7 @@ package body Sprint is
                Write_Str_With_Col_Check ("(<>)");
             end if;
 
-            if Nkind (Formal_Type_Definition (Node)) /=
-                N_Formal_Incomplete_Type_Definition
-            then
-               Write_Str_With_Col_Check (" is ");
-            end if;
-
+            Write_Str_With_Col_Check (" is ");
             Sprint_Node (Formal_Type_Definition (Node));
             Write_Char (';');
 
@@ -2462,14 +2411,6 @@ package body Sprint is
          when N_Package_Specification =>
             Write_Str_With_Col_Check_Sloc ("package ");
             Sprint_Node (Defining_Unit_Name (Node));
-
-            if Nkind (Parent (Node)) = N_Package_Declaration
-              and then Has_Aspects (Parent (Node))
-            then
-               Sprint_Aspect_Specifications
-                 (Parent (Node), Semicolon => False);
-            end if;
-
             Write_Str (" is");
             Sprint_Indented_List (Visible_Declarations (Node));
 
@@ -2520,6 +2461,17 @@ package body Sprint is
             else
                Write_Str (", ");
             end if;
+
+         when N_Parameterized_Expression =>
+            Write_Indent;
+            Sprint_Node_Sloc (Specification (Node));
+
+            Write_Str (" is");
+            Indent_Begin;
+            Write_Indent;
+            Sprint_Node (Expression (Node));
+            Write_Char (';');
+            Indent_End;
 
          when N_Pop_Constraint_Error_Label =>
             Write_Indent_Str ("%pop_constraint_error_label");
@@ -2709,12 +2661,7 @@ package body Sprint is
                Write_Str (" some ");
             end if;
 
-            if Present (Iterator_Specification (Node)) then
-               Sprint_Node (Iterator_Specification (Node));
-            else
-               Sprint_Node (Loop_Parameter_Specification (Node));
-            end if;
-
+            Sprint_Node (Loop_Parameter_Specification (Node));
             Write_Str (" => ");
             Sprint_Node (Condition (Node));
 
@@ -3229,11 +3176,8 @@ package body Sprint is
             end if;
       end case;
 
-      --  Print aspects, except for special case of package declaration,
-      --  where the aspects are printed inside the package specification.
-
-      if Has_Aspects (Node) and Nkind (Node) /= N_Package_Declaration then
-         Sprint_Aspect_Specifications (Node, Semicolon => True);
+      if Has_Aspects (Node) then
+         Sprint_Aspect_Specifications (Node);
       end if;
 
       if Nkind (Node) in N_Subexpr

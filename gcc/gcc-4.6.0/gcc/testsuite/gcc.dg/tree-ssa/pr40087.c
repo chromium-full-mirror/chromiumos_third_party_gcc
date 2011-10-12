@@ -1,5 +1,5 @@
 /* { dg-do run } */
-/* { dg-options "-O1 -Wno-attributes" } */
+/* { dg-options "-O1 " } */
 
 extern void abort (void);
 

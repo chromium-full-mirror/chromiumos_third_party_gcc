@@ -19,24 +19,24 @@ import (
 const debugText = `<html>
 	<body>
 	<title>Services</title>
-	{{range .}}
+	{.repeated section @}
 	<hr>
-	Service {{.Name}}
+	Service {Name}
 	<hr>
 		<table>
 		<th align=center>Method</th><th align=center>Calls</th>
-		{{range .Method}}
+		{.repeated section Method}
 			<tr>
-			<td align=left font=fixed>{{.Name}}({{.Type.ArgType}}, {{.Type.ReplyType}}) os.Error</td>
-			<td align=center>{{.Type.NumCalls}}</td>
+			<td align=left font=fixed>{Name}({Type.ArgType}, {Type.ReplyType}) os.Error</td>
+			<td align=center>{Type.NumCalls}</td>
 			</tr>
-		{{end}}
+		{.end}
 		</table>
-	{{end}}
+	{.end}
 	</body>
 	</html>`
 
-var debug = template.Must(template.New("RPC debug").Parse(debugText))
+var debug = template.MustParse(debugText, nil)
 
 type debugMethod struct {
 	Type *methodType
@@ -70,7 +70,7 @@ func (server debugHTTP) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// Build a sorted version of the data.
 	var services = make(serviceArray, len(server.serviceMap))
 	i := 0
-	server.mu.Lock()
+	server.Lock()
 	for sname, service := range server.serviceMap {
 		services[i] = debugService{service, sname, make(methodArray, len(service.method))}
 		j := 0
@@ -81,9 +81,9 @@ func (server debugHTTP) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		sort.Sort(services[i].Method)
 		i++
 	}
-	server.mu.Unlock()
+	server.Unlock()
 	sort.Sort(services)
-	err := debug.Execute(w, services)
+	err := debug.Execute(services, w)
 	if err != nil {
 		fmt.Fprintln(w, "rpc: error executing template:", err.String())
 	}

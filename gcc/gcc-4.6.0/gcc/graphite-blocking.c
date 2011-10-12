@@ -89,7 +89,7 @@ along with GCC; see the file COPYING3.  If not see
    # }
 */
 
-static void
+static bool
 pbb_strip_mine_time_depth (poly_bb_p pbb, int time_depth, int stride)
 {
   ppl_dimension_type iter, dim, strip;
@@ -151,6 +151,8 @@ pbb_strip_mine_time_depth (poly_bb_p pbb, int time_depth, int stride)
     ppl_Polyhedron_add_constraint (res, new_cstr);
     ppl_delete_Constraint (new_cstr);
   }
+
+  return true;
 }
 
 /* Returns true when strip mining with STRIDE of the loop LST is
@@ -175,10 +177,10 @@ lst_strip_mine_profitable_p (lst_p lst, int stride)
   return res;
 }
 
-/* Strip-mines all the loops of LST with STRIDE.  Return the number of
-   loops strip-mined.  */
+/* Strip-mines all the loops of LST with STRIDE.  Return true if it
+   did strip-mined some loops.  */
 
-static int
+static bool
 lst_do_strip_mine_loop (lst_p lst, int depth, int stride)
 {
   int i;
@@ -186,26 +188,26 @@ lst_do_strip_mine_loop (lst_p lst, int depth, int stride)
   poly_bb_p pbb;
 
   if (!lst)
-    return 0;
+    return false;
 
   if (LST_LOOP_P (lst))
     {
-      int res = 0;
+      bool res = false;
 
       FOR_EACH_VEC_ELT (lst_p, LST_SEQ (lst), i, l)
-	res += lst_do_strip_mine_loop (l, depth, stride);
+	res |= lst_do_strip_mine_loop (l, depth, stride);
 
       return res;
     }
 
   pbb = LST_PBB (lst);
-  pbb_strip_mine_time_depth (pbb, psct_dynamic_dim (pbb, depth), stride);
-  return 1;
+  return pbb_strip_mine_time_depth (pbb, psct_dynamic_dim (pbb, depth),
+				    stride);
 }
 
 /* Strip-mines all the loops of LST with STRIDE.  When STRIDE is zero,
-   read the stride from the PARAM_LOOP_BLOCK_TILE_SIZE.  Return the
-   number of strip-mined loops.
+   read the stride from the PARAM_LOOP_BLOCK_TILE_SIZE.  Return true
+   if it did strip-mined some loops.
 
    Strip mining transforms a loop
 
@@ -219,12 +221,12 @@ lst_do_strip_mine_loop (lst_p lst, int depth, int stride)
    |     S (i = k + j);
 */
 
-static int
+static bool
 lst_do_strip_mine (lst_p lst, int stride)
 {
   int i;
   lst_p l;
-  int res = 0;
+  bool res = false;
   int depth;
 
   if (!stride)
@@ -235,23 +237,23 @@ lst_do_strip_mine (lst_p lst, int stride)
     return false;
 
   FOR_EACH_VEC_ELT (lst_p, LST_SEQ (lst), i, l)
-    res += lst_do_strip_mine (l, stride);
+    res |= lst_do_strip_mine (l, stride);
 
   depth = lst_depth (lst);
   if (depth >= 0
       && lst_strip_mine_profitable_p (lst, stride))
     {
-      res += lst_do_strip_mine_loop (lst, lst_depth (lst), stride);
+      res |= lst_do_strip_mine_loop (lst, lst_depth (lst), stride);
       lst_add_loop_under_loop (lst);
     }
 
   return res;
 }
 
-/* Strip mines all the loops in SCOP.  Returns the number of
-   strip-mined loops.  */
+/* Strip mines all the loops in SCOP.  Returns true when some loops
+   have been strip-mined.  */
 
-int
+bool
 scop_do_strip_mine (scop_p scop, int stride)
 {
   return lst_do_strip_mine (SCOP_TRANSFORMED_SCHEDULE (scop), stride);
@@ -263,22 +265,27 @@ scop_do_strip_mine (scop_p scop, int stride)
 bool
 scop_do_block (scop_p scop)
 {
+  bool strip_mined = false;
+  bool interchanged = false;
+
   store_scattering (scop);
 
-  /* If we don't strip mine at least two loops, or not interchange
-     loops, the strip mine alone will not be profitable, and the
-     transform is not a loop blocking: so revert the transform.  */
-  if (lst_do_strip_mine (SCOP_TRANSFORMED_SCHEDULE (scop), 0) < 2
-      || scop_do_interchange (scop) == 0)
+  strip_mined = lst_do_strip_mine (SCOP_TRANSFORMED_SCHEDULE (scop), 0);
+  interchanged = scop_do_interchange (scop);
+
+  /* If we don't interchange loops, the strip mine alone will not be
+     profitable, and the transform is not a loop blocking: so revert
+     the transform.  */
+  if (!interchanged)
     {
       restore_scattering (scop);
       return false;
     }
-
-  if (dump_file && (dump_flags & TDF_DETAILS))
+  else if (strip_mined && interchanged
+	   && dump_file && (dump_flags & TDF_DETAILS))
     fprintf (dump_file, "SCoP will be loop blocked.\n");
 
-  return true;
+  return strip_mined || interchanged;
 }
 
 #endif

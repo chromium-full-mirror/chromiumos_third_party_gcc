@@ -33,3 +33,4 @@ test01()
   const std::auto_ptr<A> a;
   std::shared_ptr<A> p(std::move(a)); // { dg-error "no match" }
 }
+// { dg-excess-errors "candidates are" }

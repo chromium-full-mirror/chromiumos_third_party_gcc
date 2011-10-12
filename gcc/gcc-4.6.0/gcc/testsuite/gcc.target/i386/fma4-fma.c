@@ -2,7 +2,8 @@
    and add instructions into vfmaddss, vfmsubss, vfnmaddss,
    vfnmsubss on FMA4 systems.  */
 
-/* { dg-do compile { target { ! { ia32 } } } } */
+/* { dg-do compile } */
+/* { dg-require-effective-target lp64 } */
 /* { dg-options "-O2 -mfma4" } */
 
 extern void exit (int);

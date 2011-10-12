@@ -34,8 +34,8 @@
 // warranty.
 
 /**
- * @file ov_tree_map_/policy_access_fn_imps.hpp
- * Contains an implementation class for ov_tree.
+ * @file policy_access_fn_imps.hpp
+ * Contains an implementation class for bin_search_tree_.
  */
 
 PB_DS_CLASS_T_DEC

@@ -1,7 +1,8 @@
 /* Contributed by Nicola Pero - Fri Mar  9 19:39:15 CET 2001 */
 
 #include <stdlib.h>
-#include "../../objc-obj-c++-shared/runtime.h"
+#include "../../objc-obj-c++-shared/next-mapping.h"
+#include <objc/objc-api.h>
 
 /* Test the hidden argument _cmd to method calls */
 
@@ -15,9 +16,11 @@
 @implementation TestClass
 + (const char*) method
 {
-  return sel_getName (_cmd);
+  return sel_get_name (_cmd);
 }
+#ifdef __NEXT_RUNTIME__
 + initialize { return self; }
+#endif
 @end
 
 

@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O -fno-tree-sra -fdump-tree-fre1" } */
+/* { dg-options "-O -fno-tree-sra -fdump-tree-fre" } */
 
 int foo(void)
 {
@@ -30,5 +30,5 @@ int bazzoo (void)
   return b.i;
 }
 
-/* { dg-final { scan-tree-dump-times "= 0;" 5 "fre1" } } */
-/* { dg-final { cleanup-tree-dump "fre1" } } */
+/* { dg-final { scan-tree-dump-times "= 0;" 5 "fre" } } */
+/* { dg-final { cleanup-tree-dump "fre" } } */

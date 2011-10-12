@@ -4,10 +4,10 @@
 
 /* { dg-do run } */
 /* { dg-xfail-run-if "PR23616" { *-*-* } { "-fgnu-runtime" } { "-fnext-runtime" } } */
-/* { dg-xfail-if "Needs OBJC2 ABI" { *-*-darwin* && { lp64 && { ! objc2 } } } { "-fnext-runtime" "-fgnu-runtime" } { "" } } */
+/* { dg-xfail-if "Needs OBJC2 ABI" { *-*-darwin* && { lp64 && { ! objc2 } } } { "-fnext-runtime" "-fgnu-runtime" } { "" } } 
 /* { dg-options "-fobjc-exceptions" } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.m"
+#include "../objc-obj-c++-shared/Object1.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -18,10 +18,10 @@
 
 #define CHECK_IF(expr) if(!(expr)) abort()
 
-@interface Frob: TestsuiteObject
+@interface Frob: Object
 @end
 
-@implementation Frob: TestsuiteObject
+@implementation Frob: Object
 @end
 
 static Frob* _connection = nil;
@@ -29,7 +29,7 @@ static Frob* _connection = nil;
 //--------------------------------------------------------------------
 
 
-void test (TestsuiteObject* sendPort)
+void test (Object* sendPort)
 {
   int cleanupPorts = 1;
   Frob* receivePort = nil;
@@ -56,7 +56,7 @@ void test (TestsuiteObject* sendPort)
     printf ("cleanupPorts = %d\n", cleanupPorts);
     printf ("---\n");		
 		
-    @throw [TestsuiteObject new];
+    @throw [Object new];
   }
   @catch(Frob *obj) {
     printf ("Exception caught by incorrect handler!\n");
@@ -75,7 +75,7 @@ void test (TestsuiteObject* sendPort)
 }
 
 int main (void) {
-  test((TestsuiteObject *)-1);
+  test((Object *)-1);
   return 0;
 }
-
+#include "../objc-obj-c++-shared/Object1-implementation.h"

@@ -10,11 +10,12 @@
 #include "go-panic.h"
 #include "channel.h"
 
-/* Prepare to send something on a channel.  FOR_SELECT is true if this
+/* Prepare to send something on a channel.  Return true if the channel
+   is acquired, false, if it is closed.  FOR_SELECT is true if this
    call is being made after a select statement returned with this
    channel selected.  */
 
-void
+_Bool
 __go_send_acquire (struct __go_channel *channel, _Bool for_select)
 {
   int i;
@@ -24,13 +25,19 @@ __go_send_acquire (struct __go_channel *channel, _Bool for_select)
 
   while (1)
     {
+      /* Check whether the channel is closed.  */
       if (channel->is_closed)
 	{
-	  if (for_select)
-	    channel->selected_for_send = 0;
-	  i = pthread_mutex_unlock (&channel->lock);
-	  __go_assert (i == 0);
-	  __go_panic_msg ("send on closed channel");
+	  ++channel->closed_op_count;
+	  if (channel->closed_op_count >= MAX_CLOSED_OPERATIONS)
+	    {
+	      i = pthread_mutex_unlock (&channel->lock);
+	      __go_assert (i == 0);
+	      __go_panic_msg ("too many operations on closed channel");
+	    }
+	  channel->selected_for_send = 0;
+	  __go_unlock_and_notify_selects (channel);
+	  return 0;
 	}
 
       /* If somebody else has the channel locked for sending, we have
@@ -47,7 +54,7 @@ __go_send_acquire (struct __go_channel *channel, _Bool for_select)
 	      if (!channel->waiting_to_send)
 		{
 		  __go_assert (channel->next_store == 0);
-		  return;
+		  return 1;
 		}
 	    }
 	  else
@@ -55,7 +62,7 @@ __go_send_acquire (struct __go_channel *channel, _Bool for_select)
 	      /* If there is room on the channel, we are OK.  */
 	      if ((channel->next_store + 1) % channel->num_entries
 		  != channel->next_fetch)
-		return;
+		return 1;
 	    }
 	}
 
@@ -145,14 +152,12 @@ void
 __go_send_small (struct __go_channel *channel, uint64_t val, _Bool for_select)
 {
   if (channel == NULL)
-    {
-      // Block forever.
-      __go_select (0, 0, NULL, NULL);
-    }
+    __go_panic_msg ("send to nil channel");
 
-  __go_assert (channel->element_type->__size <= sizeof (uint64_t));
+  __go_assert (channel->element_size <= sizeof (uint64_t));
 
-  __go_send_acquire (channel, for_select);
+  if (!__go_send_acquire (channel, for_select))
+    return;
 
   channel->data[channel->next_store] = val;
 

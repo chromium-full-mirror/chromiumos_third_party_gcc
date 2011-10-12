@@ -3,16 +3,16 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package inotify implements a wrapper for the Linux inotify system.
+This package implements a wrapper for the Linux inotify system.
 
 Example:
     watcher, err := inotify.NewWatcher()
     if err != nil {
-        log.Fatal(err)
+        log.Exit(err)
     }
     err = watcher.Watch("/tmp")
     if err != nil {
-        log.Fatal(err)
+        log.Exit(err)
     }
     for {
         select {
@@ -33,6 +33,7 @@ import (
 	"syscall"
 	"unsafe"
 )
+
 
 type Event struct {
 	Mask   uint32 // Mask of events
@@ -55,6 +56,7 @@ type Watcher struct {
 	isClosed bool              // Set to true when Close() is first called
 }
 
+
 // NewWatcher creates and returns a new inotify instance using inotify_init(2)
 func NewWatcher() (*Watcher, os.Error) {
 	fd, errno := syscall.InotifyInit()
@@ -73,6 +75,7 @@ func NewWatcher() (*Watcher, os.Error) {
 	go w.readEvents()
 	return w, nil
 }
+
 
 // Close closes an inotify watcher instance
 // It sends a message to the reader goroutine to quit and removes all watches
@@ -106,7 +109,7 @@ func (w *Watcher) AddWatch(path string, flags uint32) os.Error {
 	}
 	wd, errno := syscall.InotifyAddWatch(w.fd, path, flags)
 	if wd == -1 {
-		return &os.PathError{"inotify_add_watch", path, os.Errno(errno)}
+		return os.NewSyscallError("inotify_add_watch", errno)
 	}
 
 	if !found {
@@ -116,10 +119,12 @@ func (w *Watcher) AddWatch(path string, flags uint32) os.Error {
 	return nil
 }
 
+
 // Watch adds path to the watched file set, watching all events.
 func (w *Watcher) Watch(path string) os.Error {
 	return w.AddWatch(path, IN_ALL_EVENTS)
 }
+
 
 // RemoveWatch removes path from the watched file set.
 func (w *Watcher) RemoveWatch(path string) os.Error {
@@ -135,6 +140,7 @@ func (w *Watcher) RemoveWatch(path string) os.Error {
 	return nil
 }
 
+
 // readEvents reads from the inotify file descriptor, converts the
 // received events into Event objects and sends them via the Event channel
 func (w *Watcher) readEvents() {
@@ -147,11 +153,7 @@ func (w *Watcher) readEvents() {
 	for {
 		n, errno = syscall.Read(w.fd, buf[0:])
 		// See if there is a message on the "done" channel
-		var done bool
-		select {
-		case done = <-w.done:
-		default:
-		}
+		_, done := <-w.done
 
 		// If EOF or a "done" message is received
 		if n == 0 || done {
@@ -201,6 +203,7 @@ func (w *Watcher) readEvents() {
 		}
 	}
 }
+
 
 // String formats the event e in the form
 // "filename: 0xEventMask = IN_ACCESS|IN_ATTRIB_|..."

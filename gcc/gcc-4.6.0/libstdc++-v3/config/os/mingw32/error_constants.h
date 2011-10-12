@@ -1,6 +1,6 @@
 // Specific definitions for mingw32 platform  -*- C++ -*-
 
-// Copyright (C) 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+// Copyright (C) 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -32,6 +32,7 @@
 
 #include <bits/c++config.h>
 #include <cerrno>
+
 
 namespace std _GLIBCXX_VISIBILITY(default)
 {
@@ -78,17 +79,13 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 //    network_reset = 				ENETRESET,
 //    network_unreachable = 			ENETUNREACH,
 //    no_buffer_space = 			ENOBUFS,
-#ifdef _GLIBCXX_HAVE_ECHILD
-      no_child_process = 			ECHILD,
-#endif
+//    no_child_process = 			ECHILD,
 //    no_link = 				ENOLINK,
       no_lock_available = 			ENOLCK,
 //    no_message_available = 			ENODATA,
 //    no_message = 				ENOMSG,
 //    no_protocol_option = 			ENOPROTOOPT,
-#ifdef _GLIBCXX_HAVE_ENOSPC
-      no_space_on_device = 			ENOSPC,
-#endif
+//    no_space_on_device = 			ENOSPC,
 //    no_stream_resources = 			ENOSR,
       no_such_device_or_address = 		ENXIO,
       no_such_device = 				ENODEV,
@@ -99,18 +96,12 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 //    not_a_stream = 				ENOSTR,
 //    not_connected = 				ENOTCONN,
       not_enough_memory = 			ENOMEM,
-#ifdef _GLIBCXX_HAVE_ENOTSUP
-      not_supported = 				ENOTSUP,
-#endif
+//    not_supported = 				ENOTSUP,
 //    operation_canceled = 			ECANCELED,
 //    operation_in_progress = 			EINPROGRESS,
-#ifdef _GLIBCXX_HAVE_EPERM
-      operation_not_permitted = 		EPERM,
-#endif
+//    operation_not_permitted = 		EPERM,
 //    operation_not_supported = 		EOPNOTSUPP,
-#ifdef _GLIBCXX_HAVE_EWOULDBLOCK
-      operation_would_block = 			EWOULDBLOCK,
-#endif
+//    operation_would_block = 			EWOULDBLOCK,
 //    owner_dead = 				EOWNERDEAD,
       permission_denied = 			EACCES,
 //    protocol_error = 				EPROTO,
@@ -122,18 +113,13 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 //    state_not_recoverable = 			ENOTRECOVERABLE,
 //    stream_timeout = 				ETIME,
 //    text_file_busy = 				ETXTBSY,
-#ifdef _GLIBCXX_HAVE_ETIMEDOUT
-      timed_out = 				ETIMEDOUT,
-#endif
+//    timed_out = 				ETIMEDOUT,
       too_many_files_open_in_system = 		ENFILE,
       too_many_files_open = 			EMFILE,
       too_many_links = 				EMLINK
-//    too_many_symbolic_link_levels = 		ELOOP,
-#ifdef _GLIBCXX_HAVE_EOVERFLOW
-	,
-      value_too_large = 			EOVERFLOW
-#endif
-//    wrong_protocol_type = 			EPROTOTYPE
+ //   too_many_symbolic_link_levels = 		ELOOP,
+ //   value_too_large = 			EOVERFLOW,
+ //   wrong_protocol_type = 			EPROTOTYPE
    };
 
 _GLIBCXX_END_NAMESPACE_VERSION

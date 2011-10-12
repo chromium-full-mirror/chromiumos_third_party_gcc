@@ -1355,10 +1355,11 @@ record_store (rtx body, bb_info_t bb_info)
 	}
       /* Handle (set (mem:BLK (addr) [... S36 ...]) (const_int 0))
 	 as memset (addr, 0, 36);  */
-      else if (!MEM_SIZE_KNOWN_P (mem)
-	       || MEM_SIZE (mem) <= 0
-	       || MEM_SIZE (mem) > MAX_OFFSET
+      else if (!MEM_SIZE (mem)
+	       || !CONST_INT_P (MEM_SIZE (mem))
 	       || GET_CODE (body) != SET
+	       || INTVAL (MEM_SIZE (mem)) <= 0
+	       || INTVAL (MEM_SIZE (mem)) > MAX_OFFSET
 	       || !CONST_INT_P (SET_SRC (body)))
 	{
 	  if (!store_is_unused)
@@ -1383,7 +1384,7 @@ record_store (rtx body, bb_info_t bb_info)
     }
 
   if (GET_MODE (mem) == BLKmode)
-    width = MEM_SIZE (mem);
+    width = INTVAL (MEM_SIZE (mem));
   else
     {
       width = GET_MODE_SIZE (GET_MODE (mem));
@@ -1709,7 +1710,7 @@ find_shift_sequence (int access_size,
 		  byte = subreg_lowpart_offset (read_mode, new_mode);
 		  ret = simplify_subreg (read_mode, ret, new_mode, byte);
 		  if (ret && CONSTANT_P (ret)
-		      && set_src_cost (ret, speed) <= COSTS_N_INSNS (1))
+		      && rtx_cost (ret, SET, speed) <= COSTS_N_INSNS (1))
 		    return ret;
 		}
 	    }
@@ -1721,7 +1722,8 @@ find_shift_sequence (int access_size,
       /* Try a wider mode if truncating the store mode to NEW_MODE
 	 requires a real instruction.  */
       if (GET_MODE_BITSIZE (new_mode) < GET_MODE_BITSIZE (store_mode)
-	  && !TRULY_NOOP_TRUNCATION_MODES_P (new_mode, store_mode))
+	  && !TRULY_NOOP_TRUNCATION (GET_MODE_BITSIZE (new_mode),
+				     GET_MODE_BITSIZE (store_mode)))
 	continue;
 
       /* Also try a wider mode if the necessary punning is either not
@@ -1789,11 +1791,12 @@ look_for_hardregs (rtx x, const_rtx pat ATTRIBUTE_UNUSED, void *data)
   bitmap regs_set = (bitmap) data;
 
   if (REG_P (x)
-      && HARD_REGISTER_P (x))
+      && REGNO (x) < FIRST_PSEUDO_REGISTER)
     {
-      unsigned int regno = REGNO (x);
-      bitmap_set_range (regs_set, regno,
-			hard_regno_nregs[regno][GET_MODE (x)]);
+      int regno = REGNO (x);
+      int n = hard_regno_nregs[regno][GET_MODE (x)];
+      while (--n >= 0)
+	bitmap_set_bit (regs_set, regno + n);
     }
 }
 
@@ -2319,13 +2322,11 @@ check_mem_read_use (rtx *loc, void *data)
 static bool
 get_call_args (rtx call_insn, tree fn, rtx *args, int nargs)
 {
-  CUMULATIVE_ARGS args_so_far_v;
-  cumulative_args_t args_so_far;
+  CUMULATIVE_ARGS args_so_far;
   tree arg;
   int idx;
 
-  INIT_CUMULATIVE_ARGS (args_so_far_v, TREE_TYPE (fn), NULL_RTX, 0, 3);
-  args_so_far = pack_cumulative_args (&args_so_far_v);
+  INIT_CUMULATIVE_ARGS (args_so_far, TREE_TYPE (fn), NULL_RTX, 0, 3);
 
   arg = TYPE_ARG_TYPES (TREE_TYPE (fn));
   for (idx = 0;
@@ -2334,7 +2335,7 @@ get_call_args (rtx call_insn, tree fn, rtx *args, int nargs)
     {
       enum machine_mode mode = TYPE_MODE (TREE_VALUE (arg));
       rtx reg, link, tmp;
-      reg = targetm.calls.function_arg (args_so_far, mode, NULL_TREE, true);
+      reg = targetm.calls.function_arg (&args_so_far, mode, NULL_TREE, true);
       if (!reg || !REG_P (reg) || GET_MODE (reg) != mode
 	  || GET_MODE_CLASS (mode) != MODE_INT)
 	return false;
@@ -2368,7 +2369,7 @@ get_call_args (rtx call_insn, tree fn, rtx *args, int nargs)
       if (tmp)
 	args[idx] = tmp;
 
-      targetm.calls.function_arg_advance (args_so_far, mode, NULL_TREE, true);
+      targetm.calls.function_arg_advance (&args_so_far, mode, NULL_TREE, true);
     }
   if (arg != void_list_node || idx != nargs)
     return false;
@@ -2516,7 +2517,7 @@ scan_insn (bb_info_t bb_info, rtx insn)
 		  && INTVAL (args[2]) > 0)
 		{
 		  rtx mem = gen_rtx_MEM (BLKmode, args[0]);
-		  set_mem_size (mem, INTVAL (args[2]));
+		  set_mem_size (mem, args[2]);
 		  body = gen_rtx_SET (VOIDmode, mem, args[1]);
 		  mems_found += record_store (body, bb_info);
 		  if (dump_file)
@@ -3940,6 +3941,7 @@ struct rtl_opt_pass pass_rtl_dse1 =
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
+  TODO_dump_func |
   TODO_df_finish | TODO_verify_rtl_sharing |
   TODO_ggc_collect                      /* todo_flags_finish */
  }
@@ -3960,6 +3962,7 @@ struct rtl_opt_pass pass_rtl_dse2 =
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
+  TODO_dump_func |
   TODO_df_finish | TODO_verify_rtl_sharing |
   TODO_ggc_collect                      /* todo_flags_finish */
  }

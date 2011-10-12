@@ -8,7 +8,7 @@
 #include <unistd.h>
 
 #ifndef SCALE
-#define SCALE 10000
+#define SCALE 100000
 #endif
 
 

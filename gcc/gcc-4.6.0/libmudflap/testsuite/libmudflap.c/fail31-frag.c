@@ -9,7 +9,6 @@ int main ()
   return 0;
 }
 int *p;
-__attribute__((noinline))
 int h (int i, int j)
 {
   int k[i];

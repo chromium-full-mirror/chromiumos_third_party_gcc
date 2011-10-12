@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1998-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1998-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -1764,24 +1764,11 @@ package body Xref_Lib is
          then
             begin
                Open (Ali_Name.all, ALIfile);
-
-               --  The cross-reference section in the ALI file may be followed
-               --  by other sections, which can be identified by the starting
-               --  character of every line, which should neither be 'X' nor a
-               --  figure in '1' .. '9'.
-
-               --  The loop tests below also take into account the end-of-file
-               --  possibility.
-
-               while ALIfile.Buffer (ALIfile.Current_Line) = 'X' loop
+               while ALIfile.Buffer (ALIfile.Current_Line) /= EOF loop
                   Parse_X_Filename (ALIfile);
-
-                  while ALIfile.Buffer (ALIfile.Current_Line) in '1' .. '9'
-                  loop
-                     Parse_Identifier_Info
-                       (Pattern, ALIfile, Local_Symbols, Der_Info, Type_Tree,
-                        Wide_Search, Labels_As_Ref => True);
-                  end loop;
+                  Parse_Identifier_Info
+                    (Pattern, ALIfile, Local_Symbols,
+                     Der_Info, Type_Tree, Wide_Search, Labels_As_Ref => True);
                end loop;
 
             exception
@@ -1831,23 +1818,11 @@ package body Xref_Lib is
             if Read_Only or else Is_Writable_File (F) then
                Open (F, ALIfile, True);
 
-               --  The cross-reference section in the ALI file may be followed
-               --  by other sections, which can be identified by the starting
-               --  character of every line, which should neither be 'X' nor a
-               --  figure in '1' .. '9'.
-
-               --  The loop tests below also take into account the end-of-file
-               --  possibility.
-
-               while ALIfile.Buffer (ALIfile.Current_Line) = 'X' loop
+               while ALIfile.Buffer (ALIfile.Current_Line) /= EOF loop
                   Parse_X_Filename (ALIfile);
-
-                  while ALIfile.Buffer (ALIfile.Current_Line) in '1' .. '9'
-                  loop
-                     Parse_Identifier_Info
-                       (Null_Pattern, ALIfile, Local_Symbols, Der_Info,
-                        Labels_As_Ref => False);
-                  end loop;
+                  Parse_Identifier_Info
+                    (Null_Pattern, ALIfile, Local_Symbols, Der_Info,
+                     Labels_As_Ref => False);
                end loop;
             end if;
 

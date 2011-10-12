@@ -10,9 +10,9 @@ func use(x interface{})	{}
 
 // Formatting of if-statement headers.
 func _() {
-	if true {
+	if {
 	}
-	if true {
+	if {
 	}	// no semicolon printed
 	if expr {
 	}
@@ -22,13 +22,14 @@ func _() {
 	}	// no parens printed
 	if expr {
 	}	// no semicolon and parens printed
-	if x := expr; true {
+	if x := expr; {
 		use(x)
 	}
 	if x := expr; expr {
 		use(x)
 	}
 }
+
 
 // Formatting of switch-statement headers.
 func _() {
@@ -54,6 +55,7 @@ func _() {
 		use(x)
 	}
 }
+
 
 // Formatting of switch statement bodies.
 func _() {
@@ -108,19 +110,6 @@ func _() {
 	}
 }
 
-// Formatting of selected select statements.
-func _() {
-	select {}
-	select { /* this comment should not be tab-aligned because the closing } is on the same line */
-	}
-	select {	/* this comment should be tab-aligned */
-	}
-	select {	// this comment should be tab-aligned
-	}
-	select {
-	case <-c:
-	}
-}
 
 // Formatting of for-statement headers.
 func _() {
@@ -159,6 +148,7 @@ func _() {
 		use(x)
 	}	// no parens printed
 }
+
 
 // Don't remove mandatory parentheses around composite literals in control clauses.
 func _() {
@@ -253,6 +243,7 @@ func _() {
 	}
 }
 
+
 // Extra empty lines inside functions. Do respect source code line
 // breaks between statement boundaries but print at most one empty
 // line at a time.
@@ -285,15 +276,18 @@ func _() {
 	}
 }
 
+
 // Formatting around labels.
 func _() {
 L:
 }
 
+
 func _() {
 	// this comment should be indented
 L:	// no semicolon needed
 }
+
 
 func _() {
 	switch 0 {
@@ -308,6 +302,7 @@ func _() {
 	}
 }
 
+
 func _() {
 	f()
 L1:
@@ -317,21 +312,25 @@ L2:
 L3:
 }
 
+
 func _() {
 	// this comment should be indented
 L:
 }
+
 
 func _() {
 L:
 	_ = 0
 }
 
+
 func _() {
 	// this comment should be indented
 L:
 	_ = 0
 }
+
 
 func _() {
 	for {
@@ -342,6 +341,7 @@ func _() {
 	}
 }
 
+
 func _() {
 	// this comment should be indented
 	for {
@@ -352,15 +352,16 @@ func _() {
 	}
 }
 
+
 func _() {
-	if true {
+	if {
 		_ = 0
 	}
 	_ = 0	// the indentation here should not be affected by the long label name
 AnOverlongLabel:
 	_ = 0
 
-	if true {
+	if {
 		_ = 0
 	}
 	_ = 0
@@ -368,6 +369,7 @@ AnOverlongLabel:
 L:
 	_ = 0
 }
+
 
 func _() {
 	for {
@@ -377,6 +379,7 @@ L:
 
 	MoreCode()
 }
+
 
 func _() {
 	for {
@@ -390,6 +393,7 @@ L:	// A comment on the same line as the label, followed by a single empty line.
 	MoreCode()
 }
 
+
 func _() {
 	for {
 		goto L
@@ -399,6 +403,7 @@ L:
 	// There should be a single empty line before this comment.
 	MoreCode()
 }
+
 
 func _() {
 	for {

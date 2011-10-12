@@ -1,11 +1,10 @@
 /* map.h -- the map type for Go.
 
-   Copyright 2009 The Go Authors. All rights reserved.
+   Copyright 2009, 2010 The Go Authors. All rights reserved.
    Use of this source code is governed by a BSD-style
    license that can be found in the LICENSE file.  */
 
 #include <stddef.h>
-#include <stdint.h>
 
 #include "go-type.h"
 
@@ -22,15 +21,15 @@ struct __go_map_descriptor
        key_type key;
        value_type value;
      This is the size of that struct.  */
-  uintptr_t __entry_size;
+  size_t __entry_size;
 
   /* The offset of the key field in a map entry struct.  */
-  uintptr_t __key_offset;
+  size_t __key_offset;
 
   /* The offset of the value field in a map entry struct (the value
      field immediately follows the key field, but there may be some
      bytes inserted for alignment).  */
-  uintptr_t __val_offset;
+  size_t __val_offset;
 };
 
 struct __go_map
@@ -39,10 +38,10 @@ struct __go_map
   const struct __go_map_descriptor *__descriptor;
 
   /* The number of elements in the hash table.  */
-  uintptr_t __element_count;
+  size_t __element_count;
 
   /* The number of entries in the __buckets array.  */
-  uintptr_t __bucket_count;
+  size_t __bucket_count;
 
   /* Each bucket is a pointer to a linked list of map entries.  */
   void **__buckets;
@@ -65,13 +64,13 @@ struct __go_hash_iter
      all the entries in the current bucket.  */
   const void *next_entry;
   /* The bucket index of the current and next entry.  */
-  uintptr_t bucket;
+  size_t bucket;
 };
 
 extern struct __go_map *__go_new_map (const struct __go_map_descriptor *,
-				      uintptr_t);
+				      size_t);
 
-extern uintptr_t __go_map_next_prime (uintptr_t);
+extern unsigned long __go_map_next_prime (unsigned long);
 
 extern void *__go_map_index (struct __go_map *, const void *, _Bool);
 

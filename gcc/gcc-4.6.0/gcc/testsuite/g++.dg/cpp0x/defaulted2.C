@@ -17,8 +17,7 @@ void g() = delete;		// { dg-error "redefinition" }
 
 struct B // { dg-message "user-provided default constructor" }
 {
-  int i;
-  B() = default;		// { dg-message "not user-provided" }
+    B() = default;		// { dg-message "not user-provided" }
 };
 
 const B b;			// { dg-error "uninitialized const" }

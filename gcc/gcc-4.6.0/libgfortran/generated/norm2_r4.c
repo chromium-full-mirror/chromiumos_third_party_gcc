@@ -33,6 +33,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #if defined (HAVE_GFC_REAL_4) && defined (HAVE_GFC_REAL_4) && defined (HAVE_SQRTF) && defined (HAVE_FABSF)
 
 #define MATHFUNC(funcname) funcname ## f
+#define BUILTINMATHFUNC(funcname) MATHFUNC(funcname)
 
 
 extern void norm2_r4 (gfc_array_r4 * const restrict, 
@@ -132,7 +133,7 @@ norm2_r4 (gfc_array_r4 * const restrict retarray,
       count[n] = 0;
       dstride[n] = GFC_DESCRIPTOR_STRIDE(retarray,n);
       if (extent[n] <= 0)
-	return;
+	len = 0;
     }
 
   base = array->data;

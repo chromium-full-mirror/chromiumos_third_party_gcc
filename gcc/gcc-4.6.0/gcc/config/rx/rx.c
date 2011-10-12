@@ -50,7 +50,6 @@
 #include "target.h"
 #include "target-def.h"
 #include "langhooks.h"
-#include "opts.h"
 
 static void rx_print_operand (FILE *, rtx, int);
 
@@ -62,6 +61,8 @@ static void rx_print_operand (FILE *, rtx, int);
 
 static unsigned int flags_from_mode (enum machine_mode mode);
 static unsigned int flags_from_code (enum rtx_code code);
+
+enum rx_cpu_types  rx_cpu_type = RX600;
 
 /* Return true if OP is a reference to an object in a small data area.  */
 
@@ -78,8 +79,7 @@ rx_small_data_operand (rtx op)
 }
 
 static bool
-rx_is_legitimate_address (enum machine_mode mode, rtx x,
-			  bool strict ATTRIBUTE_UNUSED)
+rx_is_legitimate_address (Mmode mode, rtx x, bool strict ATTRIBUTE_UNUSED)
 {
   if (RTX_OK_FOR_BASE (x, strict))
     /* Register Indirect.  */
@@ -118,7 +118,7 @@ rx_is_legitimate_address (enum machine_mode mode, rtx x,
 
 	    if (val < 0)
 	      return false;
-
+	    
 	    switch (GET_MODE_SIZE (mode))
 	      {
 	      default: 
@@ -168,6 +168,8 @@ rx_is_legitimate_address (enum machine_mode mode, rtx x,
 bool
 rx_is_restricted_memory_address (rtx mem, enum machine_mode mode)
 {
+  rtx base, index;
+
   if (! rx_is_legitimate_address
       (mode, mem, reload_in_progress || reload_completed))
     return false;
@@ -183,18 +185,14 @@ rx_is_restricted_memory_address (rtx mem, enum machine_mode mode)
       return false;
 
     case PLUS:
-      {
-	rtx base, index;
-	
-	/* Only allow REG+INT addressing.  */
-	base = XEXP (mem, 0);
-	index = XEXP (mem, 1);
+      /* Only allow REG+INT addressing.  */
+      base = XEXP (mem, 0);
+      index = XEXP (mem, 1);
 
-	if (! RX_REG_P (base) || ! CONST_INT_P (index))
+      if (! RX_REG_P (base) || ! CONST_INT_P (index))
 	  return false;
 
-	return IN_RANGE (INTVAL (index), 0, (0x10000 * GET_MODE_SIZE (mode)) - 1);
-      }
+      return IN_RANGE (INTVAL (index), 0, (0x10000 * GET_MODE_SIZE (mode)) - 1);
 
     case SYMBOL_REF:
       /* Can happen when small data is being supported.
@@ -812,7 +810,7 @@ rx_round_up (unsigned int value, unsigned int alignment)
    occupied by an argument of type TYPE and mode MODE.  */
 
 static unsigned int
-rx_function_arg_size (enum machine_mode mode, const_tree type)
+rx_function_arg_size (Mmode mode, const_tree type)
 {
   unsigned int num_bytes;
 
@@ -832,11 +830,10 @@ rx_function_arg_size (enum machine_mode mode, const_tree type)
    variable parameter list.  */
 
 static rtx
-rx_function_arg (cumulative_args_t cum, enum machine_mode mode,
-		 const_tree type, bool named)
+rx_function_arg (Fargs * cum, Mmode mode, const_tree type, bool named)
 {
   unsigned int next_reg;
-  unsigned int bytes_so_far = *get_cumulative_args (cum);
+  unsigned int bytes_so_far = *cum;
   unsigned int size;
   unsigned int rounded_size;
 
@@ -870,14 +867,14 @@ rx_function_arg (cumulative_args_t cum, enum machine_mode mode,
 }
 
 static void
-rx_function_arg_advance (cumulative_args_t cum, enum machine_mode mode,
-			 const_tree type, bool named ATTRIBUTE_UNUSED)
+rx_function_arg_advance (Fargs * cum, Mmode mode, const_tree type,
+			 bool named ATTRIBUTE_UNUSED)
 {
-  *get_cumulative_args (cum) += rx_function_arg_size (mode, type);
+  *cum += rx_function_arg_size (mode, type);
 }
 
 static unsigned int
-rx_function_arg_boundary (enum machine_mode mode ATTRIBUTE_UNUSED,
+rx_function_arg_boundary (Mmode mode ATTRIBUTE_UNUSED,
 			  const_tree type ATTRIBUTE_UNUSED)
 {
   return 32;
@@ -1569,7 +1566,7 @@ gen_rx_rtsd_vector (unsigned int adjust, unsigned int low, unsigned int high)
 				: plus_constant (stack_pointer_rtx,
 						 i * UNITS_PER_WORD)));
 
-  XVECEXP (vector, 0, count - 1) = ret_rtx;
+  XVECEXP (vector, 0, count - 1) = gen_rtx_RETURN (VOIDmode);
 
   return vector;
 }
@@ -1930,14 +1927,11 @@ enum rx_builtin
   RX_BUILTIN_max
 };
 
-static GTY(()) tree rx_builtins[(int) RX_BUILTIN_max];
-
 static void
 rx_init_builtins (void)
 {
 #define ADD_RX_BUILTIN1(UC_NAME, LC_NAME, RET_TYPE, ARG_TYPE)		\
-   rx_builtins[RX_BUILTIN_##UC_NAME] =					\
-   add_builtin_function ("__builtin_rx_" LC_NAME,			\
+  add_builtin_function ("__builtin_rx_" LC_NAME,			\
 			build_function_type_list (RET_TYPE##_type_node, \
 						  ARG_TYPE##_type_node, \
 						  NULL_TREE),		\
@@ -1945,7 +1939,6 @@ rx_init_builtins (void)
 			BUILT_IN_MD, NULL, NULL_TREE)
 
 #define ADD_RX_BUILTIN2(UC_NAME, LC_NAME, RET_TYPE, ARG_TYPE1, ARG_TYPE2) \
-  rx_builtins[RX_BUILTIN_##UC_NAME] =					\
   add_builtin_function ("__builtin_rx_" LC_NAME,			\
 			build_function_type_list (RET_TYPE##_type_node, \
 						  ARG_TYPE1##_type_node,\
@@ -1955,7 +1948,6 @@ rx_init_builtins (void)
 			BUILT_IN_MD, NULL, NULL_TREE)
 
 #define ADD_RX_BUILTIN3(UC_NAME,LC_NAME,RET_TYPE,ARG_TYPE1,ARG_TYPE2,ARG_TYPE3) \
-  rx_builtins[RX_BUILTIN_##UC_NAME] =					\
   add_builtin_function ("__builtin_rx_" LC_NAME,			\
 			build_function_type_list (RET_TYPE##_type_node, \
 						  ARG_TYPE1##_type_node,\
@@ -1985,17 +1977,6 @@ rx_init_builtins (void)
   ADD_RX_BUILTIN1 (ROUND,   "round",   intSI, float);
   ADD_RX_BUILTIN1 (REVW,    "revw",    intSI, intSI);
   ADD_RX_BUILTIN1 (WAIT,    "wait",    void,  void);
-}
-
-/* Return the RX builtin for CODE.  */
-
-static tree
-rx_builtin_decl (unsigned code, bool initialize_p ATTRIBUTE_UNUSED)
-{
-  if (code >= RX_BUILTIN_max)
-    return error_mark_node;
-
-  return rx_builtins[code];
 }
 
 static rtx
@@ -2272,16 +2253,69 @@ rx_handle_func_attribute (tree * node,
 /* Table of RX specific attributes.  */
 const struct attribute_spec rx_attribute_table[] =
 {
-  /* Name, min_len, max_len, decl_req, type_req, fn_type_req, handler,
-     affects_type_identity.  */
-  { "fast_interrupt", 0, 0, true, false, false, rx_handle_func_attribute,
-    false },
-  { "interrupt",      0, 0, true, false, false, rx_handle_func_attribute,
-    false },
-  { "naked",          0, 0, true, false, false, rx_handle_func_attribute,
-    false },
-  { NULL,             0, 0, false, false, false, NULL, false }
+  /* Name, min_len, max_len, decl_req, type_req, fn_type_req, handler.  */
+  { "fast_interrupt", 0, 0, true, false, false, rx_handle_func_attribute },
+  { "interrupt",      0, 0, true, false, false, rx_handle_func_attribute },
+  { "naked",          0, 0, true, false, false, rx_handle_func_attribute },
+  { NULL,             0, 0, false, false, false, NULL }
 };
+
+/* Extra processing for target specific command line options.  */
+
+static bool
+rx_handle_option (size_t code, const char *  arg ATTRIBUTE_UNUSED, int value)
+{
+  switch (code)
+    {
+    case OPT_mint_register_:
+      switch (value)
+	{
+	case 4:
+	  fixed_regs[10] = call_used_regs [10] = 1;
+	  /* Fall through.  */
+	case 3:
+	  fixed_regs[11] = call_used_regs [11] = 1;
+	  /* Fall through.  */
+	case 2:
+	  fixed_regs[12] = call_used_regs [12] = 1;
+	  /* Fall through.  */
+	case 1:
+	  fixed_regs[13] = call_used_regs [13] = 1;
+	  /* Fall through.  */
+	case 0:
+	  return true;
+	default:
+	  return false;
+	}
+      break;
+
+    case OPT_mmax_constant_size_:
+      /* Make sure that the -mmax-constant_size option is in range.  */
+      return value >= 0 && value <= 4;
+
+    case OPT_mcpu_:
+      if (strcasecmp (arg, "RX610") == 0)
+	rx_cpu_type = RX610;
+      else if (strcasecmp (arg, "RX200") == 0)
+	{
+	  target_flags |= MASK_NO_USE_FPU;
+	  rx_cpu_type = RX200;
+	}
+      else if (strcasecmp (arg, "RX600") != 0)
+	warning (0, "unrecognized argument '%s' to -mcpu= option", arg);
+      break;
+      
+    case OPT_fpu:
+      if (rx_cpu_type == RX200)
+	error ("the RX200 cpu does not have FPU hardware");
+      break;
+
+    default:
+      break;
+    }
+
+  return true;
+}
 
 /* Implement TARGET_OVERRIDE_OPTIONS_AFTER_CHANGE.  */
 
@@ -2313,44 +2347,6 @@ rx_override_options_after_change (void)
 static void
 rx_option_override (void)
 {
-  unsigned int i;
-  cl_deferred_option *opt;
-  VEC(cl_deferred_option,heap) *vec
-    = (VEC(cl_deferred_option,heap) *) rx_deferred_options;
-
-  FOR_EACH_VEC_ELT (cl_deferred_option, vec, i, opt)
-    {
-      switch (opt->opt_index)
-	{
-	case OPT_mint_register_:
-	  switch (opt->value)
-	    {
-	    case 4:
-	      fixed_regs[10] = call_used_regs [10] = 1;
-	      /* Fall through.  */
-	    case 3:
-	      fixed_regs[11] = call_used_regs [11] = 1;
-	      /* Fall through.  */
-	    case 2:
-	      fixed_regs[12] = call_used_regs [12] = 1;
-	      /* Fall through.  */
-	    case 1:
-	      fixed_regs[13] = call_used_regs [13] = 1;
-	      /* Fall through.  */
-	    case 0:
-	      break;
-	    default:
-	      /* Error message already given because rx_handle_option
-		 returned false.  */
-	      break;
-	    }
-	  break;
-
-	default:
-	  gcc_unreachable ();
-	}
-    }
-
   /* This target defaults to strict volatile bitfields.  */
   if (flag_strict_volatile_bitfields < 0)
     flag_strict_volatile_bitfields = 1;
@@ -2364,6 +2360,13 @@ rx_option_override (void)
   if (align_labels == 0 && ! optimize_size)
     align_labels = 3;
 }
+
+/* Implement TARGET_OPTION_OPTIMIZATION_TABLE.  */
+static const struct default_options rx_option_optimization_table[] =
+  {
+    { OPT_LEVELS_1_PLUS, OPT_fomit_frame_pointer, NULL, 1 },
+    { OPT_LEVELS_NONE, 0, NULL, 0 }
+  };
 
 
 static bool
@@ -2419,7 +2422,7 @@ rx_is_ms_bitfield_layout (const_tree record_type ATTRIBUTE_UNUSED)
    operand on the RX.  X is already known to satisfy CONSTANT_P.  */
 
 bool
-rx_is_legitimate_constant (enum machine_mode mode ATTRIBUTE_UNUSED, rtx x)
+rx_is_legitimate_constant (rtx x)
 {
   switch (GET_CODE (x))
     {
@@ -2747,6 +2750,7 @@ rx_match_ccmode (rtx insn, enum machine_mode cc_mode)
 
   return true;
 }
+
 
 int
 rx_align_for_label (rtx lab, int uses_threshold)
@@ -2769,7 +2773,6 @@ rx_max_skip_for_label (rtx lab)
 
   if (lab == NULL_RTX)
     return 0;
-
   op = lab;
   do
     {
@@ -2784,113 +2787,6 @@ rx_max_skip_for_label (rtx lab)
   if (opsize >= 0 && opsize < 8)
     return opsize - 1;
   return 0;
-}
-
-/* Compute the real length of the extending load-and-op instructions.  */
-
-int
-rx_adjust_insn_length (rtx insn, int current_length)
-{
-  rtx extend, mem, offset;
-  bool zero;
-  int factor;
-
-  switch (INSN_CODE (insn))
-    {
-    default:
-      return current_length;
-
-    case CODE_FOR_plussi3_zero_extendhi:
-    case CODE_FOR_andsi3_zero_extendhi:
-    case CODE_FOR_iorsi3_zero_extendhi:
-    case CODE_FOR_xorsi3_zero_extendhi:
-    case CODE_FOR_divsi3_zero_extendhi:
-    case CODE_FOR_udivsi3_zero_extendhi:
-    case CODE_FOR_minussi3_zero_extendhi:
-    case CODE_FOR_smaxsi3_zero_extendhi:
-    case CODE_FOR_sminsi3_zero_extendhi:
-    case CODE_FOR_multsi3_zero_extendhi:
-    case CODE_FOR_comparesi3_zero_extendhi:
-      zero = true;
-      factor = 2;
-      break;
-
-    case CODE_FOR_plussi3_sign_extendhi:
-    case CODE_FOR_andsi3_sign_extendhi:
-    case CODE_FOR_iorsi3_sign_extendhi:
-    case CODE_FOR_xorsi3_sign_extendhi:
-    case CODE_FOR_divsi3_sign_extendhi:
-    case CODE_FOR_udivsi3_sign_extendhi:
-    case CODE_FOR_minussi3_sign_extendhi:
-    case CODE_FOR_smaxsi3_sign_extendhi:
-    case CODE_FOR_sminsi3_sign_extendhi:
-    case CODE_FOR_multsi3_sign_extendhi:
-    case CODE_FOR_comparesi3_sign_extendhi:
-      zero = false;
-      factor = 2;
-      break;
-      
-    case CODE_FOR_plussi3_zero_extendqi:
-    case CODE_FOR_andsi3_zero_extendqi:
-    case CODE_FOR_iorsi3_zero_extendqi:
-    case CODE_FOR_xorsi3_zero_extendqi:
-    case CODE_FOR_divsi3_zero_extendqi:
-    case CODE_FOR_udivsi3_zero_extendqi:
-    case CODE_FOR_minussi3_zero_extendqi:
-    case CODE_FOR_smaxsi3_zero_extendqi:
-    case CODE_FOR_sminsi3_zero_extendqi:
-    case CODE_FOR_multsi3_zero_extendqi:
-    case CODE_FOR_comparesi3_zero_extendqi:
-      zero = true;
-      factor = 1;
-      break;
-      
-    case CODE_FOR_plussi3_sign_extendqi:
-    case CODE_FOR_andsi3_sign_extendqi:
-    case CODE_FOR_iorsi3_sign_extendqi:
-    case CODE_FOR_xorsi3_sign_extendqi:
-    case CODE_FOR_divsi3_sign_extendqi:
-    case CODE_FOR_udivsi3_sign_extendqi:
-    case CODE_FOR_minussi3_sign_extendqi:
-    case CODE_FOR_smaxsi3_sign_extendqi:
-    case CODE_FOR_sminsi3_sign_extendqi:
-    case CODE_FOR_multsi3_sign_extendqi:
-    case CODE_FOR_comparesi3_sign_extendqi:
-      zero = false;
-      factor = 1;
-      break;
-    }      
-
-  /* We are expecting: (SET (REG) (<OP> (REG) (<EXTEND> (MEM)))).  */
-  extend = single_set (insn);
-  gcc_assert (extend != NULL_RTX);
-
-  extend = SET_SRC (extend);
-  if (GET_CODE (XEXP (extend, 0)) == ZERO_EXTEND
-      || GET_CODE (XEXP (extend, 0)) == SIGN_EXTEND)
-    extend = XEXP (extend, 0);
-  else
-    extend = XEXP (extend, 1);
-
-  gcc_assert ((zero && (GET_CODE (extend) == ZERO_EXTEND))
-	      || (! zero && (GET_CODE (extend) == SIGN_EXTEND)));
-    
-  mem = XEXP (extend, 0);
-  gcc_checking_assert (MEM_P (mem));
-  if (REG_P (XEXP (mem, 0)))
-    return (zero && factor == 1) ? 2 : 3;
-
-  /* We are expecting: (MEM (PLUS (REG) (CONST_INT))).  */
-  gcc_checking_assert (GET_CODE (XEXP (mem, 0)) == PLUS);
-  gcc_checking_assert (REG_P (XEXP (XEXP (mem, 0), 0)));
-
-  offset = XEXP (XEXP (mem, 0), 1);
-  gcc_checking_assert (GET_CODE (offset) == CONST_INT);
-
-  if (IN_RANGE (INTVAL (offset), 0, 255 * factor))
-    return (zero && factor == 1) ? 3 : 4;
-
-  return (zero && factor == 1) ? 4 : 5;
 }
 
 #undef  TARGET_ASM_JUMP_ALIGN_MAX_SKIP
@@ -2925,9 +2821,6 @@ rx_adjust_insn_length (rtx insn, int current_length)
 
 #undef  TARGET_INIT_BUILTINS
 #define TARGET_INIT_BUILTINS		rx_init_builtins
-
-#undef  TARGET_BUILTIN_DECL
-#define TARGET_BUILTIN_DECL		rx_builtin_decl
 
 #undef  TARGET_EXPAND_BUILTIN
 #define TARGET_EXPAND_BUILTIN		rx_expand_builtin
@@ -2980,6 +2873,9 @@ rx_adjust_insn_length (rtx insn, int current_length)
 #undef  TARGET_SET_CURRENT_FUNCTION
 #define TARGET_SET_CURRENT_FUNCTION		rx_set_current_function
 
+#undef  TARGET_HANDLE_OPTION
+#define TARGET_HANDLE_OPTION			rx_handle_option
+
 #undef  TARGET_ASM_INTEGER
 #define TARGET_ASM_INTEGER			rx_assemble_integer
 
@@ -3019,18 +2915,21 @@ rx_adjust_insn_length (rtx insn, int current_length)
 #undef  TARGET_OPTION_OVERRIDE
 #define TARGET_OPTION_OVERRIDE			rx_option_override
 
+#undef  TARGET_OPTION_OPTIMIZATION_TABLE
+#define TARGET_OPTION_OPTIMIZATION_TABLE	rx_option_optimization_table
+
 #undef  TARGET_PROMOTE_FUNCTION_MODE
 #define TARGET_PROMOTE_FUNCTION_MODE		rx_promote_function_mode
 
 #undef  TARGET_OVERRIDE_OPTIONS_AFTER_CHANGE
 #define TARGET_OVERRIDE_OPTIONS_AFTER_CHANGE	rx_override_options_after_change
 
+#undef  TARGET_EXCEPT_UNWIND_INFO
+#define TARGET_EXCEPT_UNWIND_INFO		sjlj_except_unwind_info
+
 #undef  TARGET_FLAGS_REGNUM
 #define TARGET_FLAGS_REGNUM			CC_REG
 
-#undef  TARGET_LEGITIMATE_CONSTANT_P
-#define TARGET_LEGITIMATE_CONSTANT_P		rx_is_legitimate_constant
-
 struct gcc_target targetm = TARGET_INITIALIZER;
 
-#include "gt-rx.h"
+/* #include "gt-rx.h" */

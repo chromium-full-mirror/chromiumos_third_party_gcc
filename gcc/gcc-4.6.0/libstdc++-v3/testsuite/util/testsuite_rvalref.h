@@ -68,7 +68,6 @@ namespace __gnu_test
     operator=(rvalstruct&& in)
     {
       bool test __attribute__((unused)) = true;
-      VERIFY( this != &in );
       VERIFY( in.valid == true );
       val = in.val;
       in.valid = false;
@@ -118,7 +117,7 @@ namespace __gnu_test
       ++copycount;
     }
 
-    copycounter(copycounter&& in) noexcept
+    copycounter(copycounter&& in)
     {
       bool test __attribute__((unused)) = true;
       VERIFY( in.valid == true );
@@ -157,7 +156,7 @@ namespace __gnu_test
       return *this;
     }
     
-    ~copycounter() noexcept
+    ~copycounter()
     { valid = false; }
   };
 
@@ -246,16 +245,6 @@ namespace __gnu_test
     VERIFY( lh.ok );
     return lh.val < rh.val;
   }
-
-  struct throwing_move_constructor
-  {
-    throwing_move_constructor() = default;
-
-    throwing_move_constructor(throwing_move_constructor&&)
-    { throw 1; }
-
-    throwing_move_constructor(const throwing_move_constructor&) = default;
-  };
 
 } // namespace __gnu_test
 

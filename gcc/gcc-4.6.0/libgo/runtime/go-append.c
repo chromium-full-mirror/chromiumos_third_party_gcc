@@ -15,22 +15,22 @@
    this, we will always split the stack, because of memcpy and
    memmove.  */
 extern struct __go_open_array
-__go_append (struct __go_open_array, void *, uintptr_t, uintptr_t)
+__go_append (struct __go_open_array, void *, size_t, size_t)
   __attribute__ ((no_split_stack));
 
 struct __go_open_array
-__go_append (struct __go_open_array a, void *bvalues, uintptr_t bcount,
-	     uintptr_t element_size)
+__go_append (struct __go_open_array a, void *bvalues, size_t bcount,
+	     size_t element_size)
 {
-  uintptr_t ucount;
+  size_t ucount;
   int count;
 
   if (bvalues == NULL || bcount == 0)
     return a;
 
-  ucount = (uintptr_t) a.__count + bcount;
+  ucount = (size_t) a.__count + bcount;
   count = (int) ucount;
-  if ((uintptr_t) count != ucount || count <= a.__count)
+  if ((size_t) count != ucount || count <= a.__count)
     __go_panic_msg ("append: slice overflow");
 
   if (count > a.__capacity)

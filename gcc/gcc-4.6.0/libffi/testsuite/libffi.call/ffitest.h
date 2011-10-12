@@ -67,8 +67,6 @@
 #define PRIdLL "ld"
 #undef PRIuLL
 #define PRIuLL "lu"
-#define PRId8 "hd"
-#define PRIu8 "hu"
 #define PRId64 "ld"
 #define PRIu64 "lu"
 #define PRIuPTR "lu"
@@ -83,8 +81,6 @@
 #if defined(__sgi)
 /* IRIX 6.5 <inttypes.h> provides all definitions, but only for C99
    compilations.  */
-#define PRId8 "hhd"
-#define PRIu8 "hhu"
 #if (_MIPS_SZLONG == 32)
 #define PRId64 "lld"
 #define PRIu64 "llu"

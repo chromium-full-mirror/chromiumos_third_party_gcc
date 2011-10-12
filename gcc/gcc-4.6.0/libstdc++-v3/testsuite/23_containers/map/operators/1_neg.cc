@@ -42,3 +42,4 @@ void test01()
   test &= itr == mapByName.end(); // { dg-error "no" } 
 }
 
+// { dg-excess-errors "" }

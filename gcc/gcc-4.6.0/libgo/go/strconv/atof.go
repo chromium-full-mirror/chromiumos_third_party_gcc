@@ -2,15 +2,15 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package strconv implements conversions to and from string representations
-// of basic data types.
-package strconv
-
 // decimal to binary floating point conversion.
 // Algorithm:
 //   1) Store input in multiprecision decimal.
 //   2) Multiply/divide decimal by powers of two until in range [0.5, 1)
 //   3) Multiply by 2^precision and round to get mantissa.
+
+// The strconv package implements conversions to and from
+// string representations of basic data types.
+package strconv
 
 import (
 	"math"
@@ -43,13 +43,11 @@ func special(s string) (f float64, ok bool) {
 	switch {
 	case equalIgnoreCase(s, "nan"):
 		return math.NaN(), true
-	case equalIgnoreCase(s, "-inf"),
-		equalIgnoreCase(s, "-infinity"):
+	case equalIgnoreCase(s, "-inf"):
 		return math.Inf(-1), true
-	case equalIgnoreCase(s, "+inf"),
-		equalIgnoreCase(s, "+infinity"),
-		equalIgnoreCase(s, "inf"),
-		equalIgnoreCase(s, "infinity"):
+	case equalIgnoreCase(s, "+inf"):
+		return math.Inf(1), true
+	case equalIgnoreCase(s, "inf"):
 		return math.Inf(1), true
 	}
 	return

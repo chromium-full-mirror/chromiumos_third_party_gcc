@@ -45,6 +45,9 @@ along with GCC; see the file COPYING3.  If not see
 #undef ENDFILE_SPEC
 #define ENDFILE_SPEC VXWORKS_ENDFILE_SPEC
 
+#undef TARGET_VERSION
+#define TARGET_VERSION fputs (" (SPARC/VxWorks)", stderr);
+
 #undef FUNCTION_PROFILER
 #define FUNCTION_PROFILER VXWORKS_FUNCTION_PROFILER
 

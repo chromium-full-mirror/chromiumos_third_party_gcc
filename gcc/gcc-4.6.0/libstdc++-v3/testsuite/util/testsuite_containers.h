@@ -56,7 +56,7 @@ namespace __gnu_test
   template<typename _Tp, bool _Bt = traits<_Tp>::is_allocator_aware::value>
     struct allocator_aware_types
     {
-      // _Alloc-aware requirements (table 82)
+      // Allocator-aware requirements (table 82)
       typedef _Tp 					 test_type;
       typedef typename test_type::allocator_type      	 allocator_type;
     };

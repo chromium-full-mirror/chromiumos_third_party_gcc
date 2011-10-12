@@ -1,6 +1,5 @@
 /* { dg-do run } */
 /* { dg-options "-O2 -w" } */
-/* { dg-skip-if "TImode not supported" { "avr-*-*" } { "*" } { "" } } */
 
 extern void abort (void);
 

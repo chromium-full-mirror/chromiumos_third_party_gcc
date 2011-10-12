@@ -10,11 +10,9 @@
 #include "go-panic.h"
 #include "channel.h"
 
-/* Prepare to send something on a nonblocking channel.  Return true if
-   we acquired the channel, false if we did not acquire it because
-   there is no space to send a value.  */
+/* Prepare to send something on a nonblocking channel.  */
 
-_Bool
+int
 __go_send_nonblocking_acquire (struct __go_channel *channel)
 {
   int i;
@@ -31,9 +29,16 @@ __go_send_nonblocking_acquire (struct __go_channel *channel)
 
   if (channel->is_closed)
     {
+      ++channel->closed_op_count;
+      if (channel->closed_op_count >= MAX_CLOSED_OPERATIONS)
+	{
+	  i = pthread_mutex_unlock (&channel->lock);
+	  __go_assert (i == 0);
+	  __go_panic_msg ("too many operations on closed channel");
+	}
       i = pthread_mutex_unlock (&channel->lock);
       __go_assert (i == 0);
-      __go_panic_msg ("send on closed channel");
+      return SEND_NONBLOCKING_ACQUIRE_CLOSED;
     }
 
   if (channel->num_entries > 0)
@@ -82,10 +87,10 @@ __go_send_nonblocking_acquire (struct __go_channel *channel)
       i = pthread_mutex_unlock (&channel->lock);
       __go_assert (i == 0);
 
-      return 0;
+      return SEND_NONBLOCKING_ACQUIRE_NOSPACE;
     }
 
-  return 1;
+  return SEND_NONBLOCKING_ACQUIRE_SPACE;
 }
 
 /* Send something 64 bits or smaller on a channel.  */
@@ -93,13 +98,11 @@ __go_send_nonblocking_acquire (struct __go_channel *channel)
 _Bool
 __go_send_nonblocking_small (struct __go_channel *channel, uint64_t val)
 {
-  if (channel == NULL)
-    return 0;
+  __go_assert (channel->element_size <= sizeof (uint64_t));
 
-  __go_assert (channel->element_type->__size <= sizeof (uint64_t));
-
-  if (!__go_send_nonblocking_acquire (channel))
-    return 0;
+  int data = __go_send_nonblocking_acquire (channel);
+  if (data != SEND_NONBLOCKING_ACQUIRE_SPACE)
+    return data == SEND_NONBLOCKING_ACQUIRE_CLOSED;
 
   channel->data[channel->next_store] = val;
 

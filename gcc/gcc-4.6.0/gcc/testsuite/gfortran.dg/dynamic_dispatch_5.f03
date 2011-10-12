@@ -56,7 +56,7 @@ module s_base_mat_mod
 contains 
   subroutine s_scals(d,a,info) 
     implicit none 
-    class(s_base_sparse_mat), intent(inout) :: a
+    class(s_base_sparse_mat), intent(in) :: a
     real(spk_), intent(in)      :: d
     integer, intent(out)            :: info
 
@@ -73,7 +73,7 @@ contains
 
   subroutine s_scal(d,a,info) 
     implicit none 
-    class(s_base_sparse_mat), intent(inout) :: a
+    class(s_base_sparse_mat), intent(in) :: a
     real(spk_), intent(in)      :: d(:)
     integer, intent(out)            :: info
 

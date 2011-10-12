@@ -9,13 +9,11 @@ import (
 	"bytes"
 	"fmt"
 	"http"
-	"http/httptest"
 	"io"
 	"log"
 	"net"
 	"sync"
 	"testing"
-	"url"
 )
 
 var serverAddr string
@@ -24,11 +22,15 @@ var once sync.Once
 func echoServer(ws *Conn) { io.Copy(ws, ws) }
 
 func startServer() {
+	l, e := net.Listen("tcp", "127.0.0.1:0") // any available address
+	if e != nil {
+		log.Exitf("net.Listen tcp :0 %v", e)
+	}
+	serverAddr = l.Addr().String()
+	log.Print("Test WebSocket server listening on ", serverAddr)
 	http.Handle("/echo", Handler(echoServer))
 	http.Handle("/echoDraft75", Draft75Handler(echoServer))
-	server := httptest.NewServer(nil)
-	serverAddr = server.Listener.Addr().String()
-	log.Print("Test WebSocket server listening on ", serverAddr)
+	go http.Serve(l, nil)
 }
 
 // Test the getChallengeResponse function with values from section
@@ -54,7 +56,7 @@ func TestEcho(t *testing.T) {
 	once.Do(startServer)
 
 	// websocket.Dial()
-	client, err := net.Dial("tcp", serverAddr)
+	client, err := net.Dial("tcp", "", serverAddr)
 	if err != nil {
 		t.Fatal("dialing", err)
 	}
@@ -85,7 +87,7 @@ func TestEchoDraft75(t *testing.T) {
 	once.Do(startServer)
 
 	// websocket.Dial()
-	client, err := net.Dial("tcp", serverAddr)
+	client, err := net.Dial("tcp", "", serverAddr)
 	if err != nil {
 		t.Fatal("dialing", err)
 	}
@@ -115,7 +117,7 @@ func TestEchoDraft75(t *testing.T) {
 func TestWithQuery(t *testing.T) {
 	once.Do(startServer)
 
-	client, err := net.Dial("tcp", serverAddr)
+	client, err := net.Dial("tcp", "", serverAddr)
 	if err != nil {
 		t.Fatal("dialing", err)
 	}
@@ -132,7 +134,7 @@ func TestWithQuery(t *testing.T) {
 func TestWithProtocol(t *testing.T) {
 	once.Do(startServer)
 
-	client, err := net.Dial("tcp", serverAddr)
+	client, err := net.Dial("tcp", "", serverAddr)
 	if err != nil {
 		t.Fatal("dialing", err)
 	}
@@ -151,14 +153,14 @@ func TestHTTP(t *testing.T) {
 
 	// If the client did not send a handshake that matches the protocol
 	// specification, the server should abort the WebSocket connection.
-	_, err := http.Get(fmt.Sprintf("http://%s/echo", serverAddr))
+	_, _, err := http.Get(fmt.Sprintf("http://%s/echo", serverAddr))
 	if err == nil {
 		t.Error("Get: unexpected success")
 		return
 	}
-	urlerr, ok := err.(*url.Error)
+	urlerr, ok := err.(*http.URLError)
 	if !ok {
-		t.Errorf("Get: not url.Error %#v", err)
+		t.Errorf("Get: not URLError %#v", err)
 		return
 	}
 	if urlerr.Error != io.ErrUnexpectedEOF {
@@ -170,7 +172,7 @@ func TestHTTP(t *testing.T) {
 func TestHTTPDraft75(t *testing.T) {
 	once.Do(startServer)
 
-	r, err := http.Get(fmt.Sprintf("http://%s/echoDraft75", serverAddr))
+	r, _, err := http.Get(fmt.Sprintf("http://%s/echoDraft75", serverAddr))
 	if err != nil {
 		t.Errorf("Get: error %#v", err)
 		return
@@ -187,12 +189,11 @@ func TestTrailingSpaces(t *testing.T) {
 	once.Do(startServer)
 	for i := 0; i < 30; i++ {
 		// body
-		ws, err := Dial(fmt.Sprintf("ws://%s/echo", serverAddr), "", "http://localhost/")
+		_, err := Dial(fmt.Sprintf("ws://%s/echo", serverAddr), "",
+			"http://localhost/")
 		if err != nil {
-			t.Error("Dial failed:", err.String())
-			break
+			panic("Dial failed: " + err.String())
 		}
-		ws.Close()
 	}
 }
 
@@ -202,7 +203,7 @@ func TestSmallBuffer(t *testing.T) {
 	once.Do(startServer)
 
 	// websocket.Dial()
-	client, err := net.Dial("tcp", serverAddr)
+	client, err := net.Dial("tcp", "", serverAddr)
 	if err != nil {
 		t.Fatal("dialing", err)
 	}

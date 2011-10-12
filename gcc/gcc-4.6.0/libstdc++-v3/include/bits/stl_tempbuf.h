@@ -1,7 +1,6 @@
 // Temporary buffer implementation -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
-// 2010, 2011
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
 // Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
@@ -67,15 +66,15 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /**
    *  @brief Allocates a temporary buffer.
-   *  @param  __len  The number of objects of type Tp.
+   *  @param  len  The number of objects of type Tp.
    *  @return See full description.
    *
    *  Reinventing the wheel, but this time with prettier spokes!
    *
-   *  This function tries to obtain storage for @c __len adjacent Tp
+   *  This function tries to obtain storage for @c len adjacent Tp
    *  objects.  The objects themselves are not constructed, of course.
    *  A pair<> is returned containing <em>the buffer s address and
-   *  capacity (in the units of sizeof(_Tp)), or a pair of 0 values if
+   *  capacity (in the units of sizeof(Tp)), or a pair of 0 values if
    *  no storage can be obtained.</em>  Note that the capacity obtained
    *  may be less than that requested if the memory is unavailable;
    *  you should compare len with the .second return value.
@@ -84,7 +83,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    */
   template<typename _Tp>
     pair<_Tp*, ptrdiff_t>
-    get_temporary_buffer(ptrdiff_t __len) _GLIBCXX_NOEXCEPT
+    get_temporary_buffer(ptrdiff_t __len)
     {
       const ptrdiff_t __max =
 	__gnu_cxx::__numeric_traits<ptrdiff_t>::__max / sizeof(_Tp);
@@ -104,10 +103,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /**
    *  @brief The companion to get_temporary_buffer().
-   *  @param  __p  A buffer previously allocated by get_temporary_buffer.
+   *  @param  p  A buffer previously allocated by get_temporary_buffer.
    *  @return   None.
    *
-   *  Frees the memory pointed to by __p.
+   *  Frees the memory pointed to by p.
    */
   template<typename _Tp>
     inline void

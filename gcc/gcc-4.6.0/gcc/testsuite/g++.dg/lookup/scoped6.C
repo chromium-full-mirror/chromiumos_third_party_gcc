@@ -10,7 +10,7 @@ public:
 class Bar {
   Foo<int> foo_;
 public:
-  Bar() {}  // { dg-message "required" }
+  Bar() {}  // { dg-message "instantiated" }
 };
 
 template class Foo<int>;

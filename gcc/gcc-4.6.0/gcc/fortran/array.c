@@ -237,12 +237,6 @@ coarray:
 			 corank, ar->codimen);
 	      return MATCH_ERROR;
 	    }
-	  if (ar->codimen > corank)
-	    {
-	      gfc_error ("Too many codimensions at %C, expected %d not %d",
-			 corank, ar->codimen);
-	      return MATCH_ERROR;
-	    }
 	  return MATCH_YES;
 	}
 
@@ -289,7 +283,7 @@ gfc_free_array_spec (gfc_array_spec *as)
       gfc_free_expr (as->upper[i]);
     }
 
-  free (as);
+  gfc_free (as);
 }
 
 
@@ -576,13 +570,6 @@ coarray:
       goto cleanup;
     }
 
-  if (as->rank >= GFC_MAX_DIMENSIONS)
-    {
-      gfc_error ("Array specification at %C has more than %d "
-		 "dimensions", GFC_MAX_DIMENSIONS);
-      goto cleanup;
-    }
-
   for (;;)
     {
       as->corank++;
@@ -651,7 +638,7 @@ coarray:
 	  goto cleanup;
 	}
 
-      if (as->rank + as->corank >= GFC_MAX_DIMENSIONS)
+      if (as->corank >= GFC_MAX_DIMENSIONS)
 	{
 	  gfc_error ("Array specification at %C has more than %d "
 		     "dimensions", GFC_MAX_DIMENSIONS);
@@ -764,7 +751,7 @@ gfc_set_array_spec (gfc_symbol *sym, gfc_array_spec *as, locus *error_loc)
 	}
     }
 
-  free (as);
+  gfc_free (as);
   return SUCCESS;
 }
 
@@ -2281,7 +2268,9 @@ gfc_array_ref_shape (gfc_array_ref *ar, mpz_t *shape)
     }
 
 cleanup:
-  gfc_clear_shape (shape, d);
+  for (d--; d >= 0; d--)
+    mpz_clear (shape[d]);
+
   return FAILURE;
 }
 

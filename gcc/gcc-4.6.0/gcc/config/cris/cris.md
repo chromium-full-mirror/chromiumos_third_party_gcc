@@ -191,8 +191,10 @@
 
 (define_delay (eq_attr "slottable" "has_call_slot")
   [(and (eq_attr "slottable" "yes")
-	(ior (not (match_test "RTX_FRAME_RELATED_P (insn)"))
-	     (not (match_test "flag_exceptions"))))
+	(ior (eq (symbol_ref "RTX_FRAME_RELATED_P (insn)")
+		 (const_int 0))
+	     (eq (symbol_ref "flag_exceptions")
+		 (const_int 0))))
    (nil) (nil)])
 
 ;; The insn in the return insn slot must not be the
@@ -202,7 +204,8 @@
 ;; naked RETURN in middle-end.
 (define_delay (eq_attr "slottable" "has_return_slot")
   [(and (eq_attr "slottable" "yes")
-	(not (match_test "dead_or_set_regno_p (insn, CRIS_SRP_REGNUM)")))
+	(eq (symbol_ref "dead_or_set_regno_p (insn, CRIS_SRP_REGNUM)")
+	    (const_int 0)))
    (nil) (nil)])
 
 
@@ -2506,7 +2509,7 @@
 
 ;; The addi insn as it is normally used.
 
-;; Make the ACR alternative taste bad enough to not choose it as a
+;; Make the the ACR alternative taste bad enough to not choose it as a
 ;; preference to avoid spilling problems (unwind-dw2-fde.c at build).
 ;; FIXME: Revisit for new register allocator.
 
@@ -2575,7 +2578,7 @@
   "TARGET_HAS_MUL_INSNS"
   "%!mul<su><mm> %2,%0"
   [(set (attr "slottable")
-	(if_then_else (match_test "TARGET_MUL_BUG")
+	(if_then_else (ne (symbol_ref "TARGET_MUL_BUG") (const_int 0))
 		      (const_string "no")
 		      (const_string "yes")))
    ;; For umuls.[bwd] it's just N unusable here, but let's be safe.
@@ -2598,7 +2601,7 @@
   "TARGET_HAS_MUL_INSNS"
   "%!muls.d %2,%0"
   [(set (attr "slottable")
-	(if_then_else (match_test "TARGET_MUL_BUG")
+	(if_then_else (ne (symbol_ref "TARGET_MUL_BUG") (const_int 0))
 		      (const_string "no")
 		      (const_string "yes")))
    ;; Just N unusable here, but let's be safe.
@@ -3490,7 +3493,9 @@
 }
   [(set (attr "slottable")
  	(if_then_else
- 	 (match_test "cris_return_address_on_stack_for_return ()")
+ 	 (ne (symbol_ref
+	      "(cris_return_address_on_stack_for_return ())")
+ 	     (const_int 0))
  	 (const_string "no")
 	 (const_string "has_return_slot")))])
 

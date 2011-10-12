@@ -1,5 +1,4 @@
 /* { dg-do run } */
-/* { dg-skip-if "Too much RAM needed" { "avr-*-*" } { "*" } { "" } } */
 
 int result[64][16];
 

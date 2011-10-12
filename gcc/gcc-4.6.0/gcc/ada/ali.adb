@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -55,8 +55,6 @@ package body ALI is
       'X'    => True,   -- xref
       'S'    => True,   -- specific dispatching
       'Y'    => True,   -- limited_with
-      'C'    => True,   -- SCO information
-      'F'    => True,   -- Alfa information
       others => False);
 
    --------------------
@@ -503,10 +501,6 @@ package body ALI is
                     or else Nextc = '{' or else Nextc = '}'
                     or else Nextc = '<' or else Nextc = '>'
                     or else Nextc = '=';
-
-                  --  Terminate on comma
-
-                  exit when Nextc = ',';
 
                   --  Terminate if left bracket not part of wide char sequence
                   --  Note that we only recognize brackets notation so far ???
@@ -1447,7 +1441,6 @@ package body ALI is
             UL.Body_Needed_For_SAL      := False;
             UL.Elaborate_Body_Desirable := False;
             UL.Optimize_Alignment       := 'O';
-            UL.Has_Finalizer            := False;
 
             if Debug_Flag_U then
                Write_Str (" ----> reading unit ");
@@ -1633,14 +1626,12 @@ package body ALI is
                   Fatal_Error_Ignore;
                end if;
 
-            --  PF/PR/PU/PK parameters
+            --  PR/PU/PK parameters
 
             elsif C = 'P' then
                C := Getc;
 
-               if C = 'F' then
-                  Units.Table (Units.Last).Has_Finalizer := True;
-               elsif C = 'R' then
+               if C = 'R' then
                   Units.Table (Units.Last).Preelab := True;
                elsif C = 'U' then
                   Units.Table (Units.Last).Pure := True;
@@ -2393,22 +2384,12 @@ package body ALI is
 
                         --  Imported entities reference as in:
                         --    494b<c,__gnat_copy_attribs>25
+                        --  ??? Simply skipped for now
 
                         if Nextc = '<' then
-                           Skipc;
-                           XR.Imported_Lang := Get_Name;
-
-                           pragma Assert (Nextc = ',');
-                           Skipc;
-
-                           XR.Imported_Name := Get_Name;
-
-                           pragma Assert (Nextc = '>');
-                           Skipc;
-
-                        else
-                           XR.Imported_Lang := No_Name;
-                           XR.Imported_Name := No_Name;
+                           while Getc /= '>' loop
+                              null;
+                           end loop;
                         end if;
 
                         XR.Col   := Get_Nat;
@@ -2455,10 +2436,9 @@ package body ALI is
 
       --  Here after dealing with xref sections
 
-      --  Ignore remaining lines, which belong to an additional section of the
-      --  ALI file not considered here (like SCO or Alfa).
-
-      Check_Unknown_Line;
+      if C /= EOF and then C /= 'X' then
+         Fatal_Error;
+      end if;
 
       return Id;
 

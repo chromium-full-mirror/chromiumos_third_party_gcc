@@ -1,7 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009, 2010, 2011
-// Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -63,10 +62,7 @@ namespace detail
 		  double ep, double cp, double mp, bool d) 
     : m_sd(seed), m_n(n), m_m(m), m_tp(tp), m_ip(ip), m_ep(ep), m_cp(cp), 
       m_mp(mp), m_disp(d)
-    { 
-      if (m_disp)
-	xml_test_rand_regression_formatter(seed, n, m, tp, ip, ep, cp, mp);
-    }
+    { }
 
     template<typename Cntnr>
     void
@@ -111,21 +107,26 @@ namespace detail
     double ep = 0.2; 
     double cp = 0.001;
     double mp = 0.25;
-    bool disp = true; // show progress
+    bool disp = false; // show progress
 
     try
       {
 	detail::verify_params(sd, n, m, tp, ip, ep, cp, mp, disp);
       }
-    catch(__gnu_pbds::test::illegal_input_error&)
+    catch (__gnu_pbds::test::illegal_input_error&)
       {
 	detail::usage(name);
 	return -1;
       }
-    catch(...)
+    catch (...)
       {
 	return -2;
       };
+
+    // XXX RAII, constructor takes bool for display
+    xml_test_rand_regression_formatter* p_fmt = 0;
+    if (disp)
+      p_fmt = new xml_test_rand_regression_formatter(sd, n, m, tp, ip, ep, cp, mp);
 
     try
       {
@@ -135,9 +136,13 @@ namespace detail
     catch (...)
       {
 	std::cerr << "Test failed with seed " << sd << std::endl;
+	if (disp)
+	  delete p_fmt;
 	throw;
       }
 
+    if (disp)
+      delete p_fmt;
     return 0;
   }
 
@@ -147,9 +152,8 @@ namespace detail
   usage(const std::string& name)
   {
     using namespace std;
-    cerr << "usage: " << name 
-	 << " <sd> <n> <m> <tp> <ip> <ep> <cp> <mp> ['t' | 'f']" 
-	 << endl << endl;
+    cerr << "usage: " << name << " <sd> <n> <m> <tp> <ip> <ep> <cp> <mp> ['t' | 'f']" <<
+      endl << endl;
 
     cerr << "This test performs basic regression tests on various associative containers."
       "For each container, it performs a sequence of operations. At each iteration, it does "

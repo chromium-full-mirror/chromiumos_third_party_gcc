@@ -35,7 +35,7 @@ func (t *Arith) Mul(args *Args, reply *Reply) os.Error {
 
 func (t *Arith) Div(args *Args, reply *Reply) os.Error {
 	if args.B == 0 {
-		return os.NewError("divide by zero")
+		return os.ErrorString("divide by zero")
 	}
 	reply.C = args.A / args.B
 	return nil
@@ -51,9 +51,9 @@ func init() {
 
 func TestServer(t *testing.T) {
 	type addResp struct {
-		Id     interface{} `json:"id"`
-		Result Reply       `json:"result"`
-		Error  interface{} `json:"error"`
+		Id     interface{} "id"
+		Result Reply       "result"
+		Error  interface{} "error"
 	}
 
 	cli, srv := net.Pipe()

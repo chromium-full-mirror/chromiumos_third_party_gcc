@@ -1,7 +1,7 @@
 #include <stdlib.h>
-#import "../../objc-obj-c++-shared/TestsuiteObject.m"
+#import "../../objc-obj-c++-shared/Object1.h"
 
-@interface Foo : TestsuiteObject
+@interface Foo : Object
 + foo;
 + bar;
 @end

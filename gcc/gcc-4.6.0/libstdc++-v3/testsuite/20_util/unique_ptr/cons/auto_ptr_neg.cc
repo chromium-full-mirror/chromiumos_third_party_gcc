@@ -33,3 +33,4 @@ test01()
   const std::auto_ptr<A> a(new A);
   std::unique_ptr<A> a2(std::move(a)); // { dg-error "no match" }
 }
+// { dg-excess-errors "candidates are" }

@@ -1,6 +1,6 @@
 // Profiling bitset implementation -*- C++ -*-
 
-// Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
+// Copyright (C) 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -52,42 +52,42 @@ namespace __profile
 	friend class bitset;
 	reference();
 
-	reference(const _Base_ref& __base, bitset* __seq) _GLIBCXX_NOEXCEPT
+	reference(const _Base_ref& __base, bitset* __seq)
 	: _Base_ref(__base)
 	{ }
 
       public:
-	reference(const reference& __x) _GLIBCXX_NOEXCEPT
+	reference(const reference& __x)
 	: _Base_ref(__x)
 	{ }
 
 	reference&
-	operator=(bool __x) _GLIBCXX_NOEXCEPT
+	operator=(bool __x)
 	{
 	  *static_cast<_Base_ref*>(this) = __x;
 	  return *this;
 	}
 
 	reference&
-	operator=(const reference& __x) _GLIBCXX_NOEXCEPT
+	operator=(const reference& __x)
 	{
 	  *static_cast<_Base_ref*>(this) = __x;
 	  return *this;
 	}
 
 	bool
-	operator~() const _GLIBCXX_NOEXCEPT
+	operator~() const
 	{
 	  return ~(*static_cast<const _Base_ref*>(this));
 	}
 
-	operator bool() const _GLIBCXX_NOEXCEPT
+	operator bool() const
 	{
 	  return *static_cast<const _Base_ref*>(this);
 	}
 
 	reference&
-	flip() _GLIBCXX_NOEXCEPT
+	flip()
 	{
 	  _Base_ref::flip();
 	  return *this;
@@ -95,11 +95,10 @@ namespace __profile
       };
 
       // 23.3.5.1 constructors:
-      _GLIBCXX_CONSTEXPR bitset() _GLIBCXX_NOEXCEPT
-      : _Base() { }
+      _GLIBCXX_CONSTEXPR bitset() : _Base() { }
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
-      constexpr bitset(unsigned long long __val) noexcept
+      constexpr bitset(unsigned long long __val)
 #else
       bitset(unsigned long __val)
 #endif
@@ -139,42 +138,42 @@ namespace __profile
 
       // 23.3.5.2 bitset operations:
       bitset<_Nb>&
-      operator&=(const bitset<_Nb>& __rhs) _GLIBCXX_NOEXCEPT
+      operator&=(const bitset<_Nb>& __rhs)
       {
 	_M_base() &= __rhs;
 	return *this;
       }
 
       bitset<_Nb>&
-      operator|=(const bitset<_Nb>& __rhs) _GLIBCXX_NOEXCEPT
+      operator|=(const bitset<_Nb>& __rhs)
       {
 	_M_base() |= __rhs;
 	return *this;
       }
 
       bitset<_Nb>&
-      operator^=(const bitset<_Nb>& __rhs) _GLIBCXX_NOEXCEPT
+      operator^=(const bitset<_Nb>& __rhs)
       {
 	_M_base() ^= __rhs;
 	return *this;
       }
 
       bitset<_Nb>&
-      operator<<=(size_t __pos) _GLIBCXX_NOEXCEPT
+      operator<<=(size_t __pos)
       {
 	_M_base() <<= __pos;
 	return *this;
       }
 
       bitset<_Nb>&
-      operator>>=(size_t __pos) _GLIBCXX_NOEXCEPT
+      operator>>=(size_t __pos)
       {
 	_M_base() >>= __pos;
 	return *this;
       }
 
       bitset<_Nb>&
-      set() _GLIBCXX_NOEXCEPT
+      set()
       {
 	_Base::set();
 	return *this;
@@ -190,7 +189,7 @@ namespace __profile
       }
 
       bitset<_Nb>&
-      reset() _GLIBCXX_NOEXCEPT
+      reset()
       {
 	_Base::reset();
 	return *this;
@@ -203,12 +202,10 @@ namespace __profile
 	return *this;
       }
 
-      bitset<_Nb>
-      operator~() const _GLIBCXX_NOEXCEPT
-      { return bitset(~_M_base()); }
+      bitset<_Nb> operator~() const { return bitset(~_M_base()); }
 
       bitset<_Nb>&
-      flip() _GLIBCXX_NOEXCEPT
+      flip()
       {
 	_Base::flip();
 	return *this;
@@ -308,11 +305,11 @@ namespace __profile
       using _Base::size;
 
       bool
-      operator==(const bitset<_Nb>& __rhs) const _GLIBCXX_NOEXCEPT
+      operator==(const bitset<_Nb>& __rhs) const
       { return _M_base() == __rhs; }
 
       bool
-      operator!=(const bitset<_Nb>& __rhs) const _GLIBCXX_NOEXCEPT
+      operator!=(const bitset<_Nb>& __rhs) const
       { return _M_base() != __rhs; }
 
       using _Base::test;
@@ -321,35 +318,33 @@ namespace __profile
       using _Base::none;
 
       bitset<_Nb>
-      operator<<(size_t __pos) const _GLIBCXX_NOEXCEPT
+      operator<<(size_t __pos) const
       { return bitset<_Nb>(_M_base() << __pos); }
 
       bitset<_Nb>
-      operator>>(size_t __pos) const _GLIBCXX_NOEXCEPT
+      operator>>(size_t __pos) const
       { return bitset<_Nb>(_M_base() >> __pos); }
 
       _Base&
-      _M_base() _GLIBCXX_NOEXCEPT
-      { return *this; }
+      _M_base() { return *this; }
 
       const _Base&
-      _M_base() const _GLIBCXX_NOEXCEPT
-      { return *this; }
+      _M_base() const { return *this; }
     };
 
   template<size_t _Nb>
     bitset<_Nb>
-    operator&(const bitset<_Nb>& __x, const bitset<_Nb>& __y) _GLIBCXX_NOEXCEPT
+    operator&(const bitset<_Nb>& __x, const bitset<_Nb>& __y)
     { return bitset<_Nb>(__x) &= __y; }
 
   template<size_t _Nb>
     bitset<_Nb>
-    operator|(const bitset<_Nb>& __x, const bitset<_Nb>& __y) _GLIBCXX_NOEXCEPT
+    operator|(const bitset<_Nb>& __x, const bitset<_Nb>& __y)
     { return bitset<_Nb>(__x) |= __y; }
 
   template<size_t _Nb>
     bitset<_Nb>
-    operator^(const bitset<_Nb>& __x, const bitset<_Nb>& __y) _GLIBCXX_NOEXCEPT
+    operator^(const bitset<_Nb>& __x, const bitset<_Nb>& __y)
     { return bitset<_Nb>(__x) ^= __y; }
 
   template<typename _CharT, typename _Traits, size_t _Nb>

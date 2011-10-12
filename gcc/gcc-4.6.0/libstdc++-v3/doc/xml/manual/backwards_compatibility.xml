@@ -1249,33 +1249,31 @@ AC_DEFUN([AC_HEADER_UNORDERED_SET], [
 
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://www.kegel.com/gcc/gcc4.html">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.kegel.com/gcc/gcc4.html" class="uri">
+    </biblioid>
+    <citetitle>
       Migrating to GCC 4.1
-	</link>
-      </title>
+    </citetitle>
 
     <author><personname><firstname>Dan</firstname><surname>Kegel</surname></personname></author>
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://lists.debian.org/debian-gcc/2006/03/msg00405.html">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://lists.debian.org/debian-gcc/2006/03/msg00405.html" class="uri">
+    </biblioid>
+    <citetitle>
       Building the Whole Debian Archive with GCC 4.1: A Summary
-	</link>
-      </title>
+    </citetitle>
+
     <author><personname><firstname>Martin</firstname><surname>Michlmayr</surname></personname></author>
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://annwm.lbl.gov/~leggett/Atlas/gcc-3.2.html">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://annwm.lbl.gov/~leggett/Atlas/gcc-3.2.html" class="uri">
+    </biblioid>
+    <citetitle>
       Migration guide for GCC-3.2
-	</link>
-      </title>
+    </citetitle>
 
   </biblioentry>
 

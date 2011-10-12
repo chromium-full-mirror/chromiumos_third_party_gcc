@@ -1,7 +1,7 @@
 /* { dg-do run } */
 /* { dg-skip-if "" { *-*-* } { "-fnext-runtime" } { "" } } */
 
-#include <objc/runtime.h>
+#include <objc/encoding.h>
 #include <stdlib.h>
 
 struct f

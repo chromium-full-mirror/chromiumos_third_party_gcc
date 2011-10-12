@@ -6,9 +6,7 @@
 
 #define N 16
 
-/* One x86_64 mingw a long remains 4 bytes sized, but machine word
-   is 8 bytes.  */
-#if LONG_MAX == 2147483647 && !defined (_WIN64)
+#if LONG_MAX == 2147483647
 typedef short half_word;
 #else
 typedef int half_word;

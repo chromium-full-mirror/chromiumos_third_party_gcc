@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -50,7 +50,7 @@ pragma Polling (Off);
 --  elaboration circularities with System.Exception_Tables.
 
 with System;                  use System;
-with System.Exceptions_Debug; use System.Exceptions_Debug;
+with System.Exceptions;       use System.Exceptions;
 with System.Standard_Library; use System.Standard_Library;
 with System.Soft_Links;       use System.Soft_Links;
 
@@ -209,6 +209,16 @@ package body Ada.Exceptions is
 
    end Exception_Traces;
 
+   package Exception_Propagation is
+
+      procedure Setup_Exception
+        (Excep    : EOA;
+         Current  : EOA;
+         Reraised : Boolean := False);
+      --  Dummy routine used to share a-exexda.adb, do nothing
+
+   end Exception_Propagation;
+
    package Stream_Attributes is
 
       --------------------------------
@@ -341,6 +351,18 @@ package body Ada.Exceptions is
    --  (all fields of this exception occurrence are set). Abort is deferred
    --  before the reraise operation.
 
+   --  Save_Occurrence variations: As the management of the private data
+   --  attached to occurrences is delicate, whether or not pointers to such
+   --  data has to be copied in various situations is better made explicit.
+   --  The following procedures provide an internal interface to help making
+   --  this explicit.
+
+   procedure Save_Occurrence_No_Private
+     (Target : out Exception_Occurrence;
+      Source : Exception_Occurrence);
+   --  Copy all the components of Source to Target, except the
+   --  Private_Data pointer.
+
    procedure Transfer_Occurrence
      (Target : Exception_Occurrence_Access;
       Source : Exception_Occurrence);
@@ -381,6 +403,7 @@ package body Ada.Exceptions is
    procedure Rcheck_19 (File : System.Address; Line : Integer);
    procedure Rcheck_20 (File : System.Address; Line : Integer);
    procedure Rcheck_21 (File : System.Address; Line : Integer);
+   procedure Rcheck_22 (File : System.Address; Line : Integer);
    procedure Rcheck_23 (File : System.Address; Line : Integer);
    procedure Rcheck_24 (File : System.Address; Line : Integer);
    procedure Rcheck_25 (File : System.Address; Line : Integer);
@@ -393,14 +416,6 @@ package body Ada.Exceptions is
    procedure Rcheck_32 (File : System.Address; Line : Integer);
    procedure Rcheck_33 (File : System.Address; Line : Integer);
    procedure Rcheck_34 (File : System.Address; Line : Integer);
-
-   procedure Rcheck_22 (File : System.Address; Line : Integer);
-   --  This routine is separated out because it has quite different behavior
-   --  from the others. This is the "finalize/adjust raised exception". This
-   --  subprogram is always called with abort deferred, unlike all other
-   --  Rcheck_* routines, it needs to call Raise_Exception_No_Defer.
-   --
-   --  It should probably have a distinguished name ???
 
    pragma Export (C, Rcheck_00, "__gnat_rcheck_00");
    pragma Export (C, Rcheck_01, "__gnat_rcheck_01");
@@ -662,6 +677,22 @@ package body Ada.Exceptions is
    --  This package can be easily dummied out if we do not want the basic
    --  support for exception messages (such as in Ada 83).
 
+   package body Exception_Propagation is
+
+      procedure Setup_Exception
+        (Excep    : EOA;
+         Current  : EOA;
+         Reraised : Boolean := False)
+      is
+         pragma Warnings (Off, Excep);
+         pragma Warnings (Off, Current);
+         pragma Warnings (Off, Reraised);
+      begin
+         null;
+      end Setup_Exception;
+
+   end Exception_Propagation;
+
    ----------------------
    -- Exception_Traces --
    ----------------------
@@ -814,22 +845,6 @@ package body Ada.Exceptions is
       Raise_Current_Excep (E);
    end Raise_Exception_Always;
 
-   ------------------------------
-   -- Raise_Exception_No_Defer --
-   ------------------------------
-
-   procedure Raise_Exception_No_Defer
-     (E       : Exception_Id;
-      Message : String := "")
-   is
-   begin
-      Exception_Data.Set_Exception_Msg (E, Message);
-
-      --  Do not call Abort_Defer.all, as specified by the spec
-
-      Raise_Current_Excep (E);
-   end Raise_Exception_No_Defer;
-
    -------------------------------------
    -- Raise_From_Controlled_Operation --
    -------------------------------------
@@ -837,41 +852,36 @@ package body Ada.Exceptions is
    procedure Raise_From_Controlled_Operation
      (X : Ada.Exceptions.Exception_Occurrence)
    is
-      Prefix             : constant String := "adjust/finalize raised ";
-      Orig_Msg           : constant String := Exception_Message (X);
-      Orig_Prefix_Length : constant Natural :=
-                             Integer'Min (Prefix'Length, Orig_Msg'Length);
-      Orig_Prefix        : String renames Orig_Msg
-                            (Orig_Msg'First ..
-                             Orig_Msg'First + Orig_Prefix_Length - 1);
-   begin
-      --  Message already has proper prefix, just re-reraise
+      Prefix   : constant String := "adjust/finalize raised ";
+      Orig_Msg : constant String := Exception_Message (X);
+      New_Msg  : constant String := Prefix & Exception_Name (X);
 
-      if Orig_Prefix = Prefix then
+   begin
+      if Orig_Msg'Length >= Prefix'Length
+        and then
+          Orig_Msg (Orig_Msg'First .. Orig_Msg'First + Prefix'Length - 1) =
+                                                                     Prefix
+      then
+         --  Message already has proper prefix, just re-reraise PROGRAM_ERROR
+
          Raise_Exception_No_Defer
            (E       => Program_Error'Identity,
             Message => Orig_Msg);
 
+      elsif Orig_Msg = "" then
+
+         --  No message present: just provide our own
+
+         Raise_Exception_No_Defer
+           (E       => Program_Error'Identity,
+            Message => New_Msg);
+
       else
-         declare
-            New_Msg  : constant String := Prefix & Exception_Name (X);
+         --  Message present, add informational prefix
 
-         begin
-            --  No message present, just provide our own
-
-            if Orig_Msg = "" then
-               Raise_Exception_No_Defer
-                 (E       => Program_Error'Identity,
-                  Message => New_Msg);
-
-            --  Message present, add informational prefix
-
-            else
-               Raise_Exception_No_Defer
-                 (E       => Program_Error'Identity,
-                  Message => New_Msg & ": " & Orig_Msg);
-            end if;
-         end;
+         Raise_Exception_No_Defer
+           (E       => Program_Error'Identity,
+            Message => New_Msg & ": " & Orig_Msg);
       end if;
    end Raise_From_Controlled_Operation;
 
@@ -970,6 +980,7 @@ package body Ada.Exceptions is
       Excep.Exception_Raised := False;
       Excep.Id               := E;
       Excep.Num_Tracebacks   := 0;
+      Excep.Cleanup_Flag     := False;
       Excep.Pid              := Local_Partition_ID;
       Abort_Defer.all;
       Raise_Current_Excep (E);
@@ -1090,17 +1101,8 @@ package body Ada.Exceptions is
    end Rcheck_21;
 
    procedure Rcheck_22 (File : System.Address; Line : Integer) is
-      E : constant Exception_Id := Program_Error_Def'Access;
-
    begin
-      --  This is "finalize/adjust raised exception". This subprogram is always
-      --  called with abort deferred, unlike all other Rcheck_* routines, it
-      --  needs to call Raise_Exception_No_Defer.
-
-      --  This is consistent with Raise_From_Controlled_Operation
-
-      Exception_Data.Set_Exception_C_Msg (E, File, Line, 0, Rmsg_22'Address);
-      Raise_Current_Excep (E);
+      Raise_Program_Error_Msg (File, Line, Rmsg_22'Address);
    end Rcheck_22;
 
    procedure Rcheck_23 (File : System.Address; Line : Integer) is
@@ -1183,7 +1185,7 @@ package body Ada.Exceptions is
    begin
       if X.Id /= null then
          Abort_Defer.all;
-         Save_Occurrence (Get_Current_Excep.all.all, X);
+         Save_Occurrence_No_Private (Get_Current_Excep.all.all, X);
          Raise_Current_Excep (X.Id);
       end if;
    end Reraise_Occurrence;
@@ -1195,7 +1197,7 @@ package body Ada.Exceptions is
    procedure Reraise_Occurrence_Always (X : Exception_Occurrence) is
    begin
       Abort_Defer.all;
-      Save_Occurrence (Get_Current_Excep.all.all, X);
+      Save_Occurrence_No_Private (Get_Current_Excep.all.all, X);
       Raise_Current_Excep (X.Id);
    end Reraise_Occurrence_Always;
 
@@ -1205,7 +1207,7 @@ package body Ada.Exceptions is
 
    procedure Reraise_Occurrence_No_Defer (X : Exception_Occurrence) is
    begin
-      Save_Occurrence (Get_Current_Excep.all.all, X);
+      Save_Occurrence_No_Private (Get_Current_Excep.all.all, X);
       Raise_Current_Excep (X.Id);
    end Reraise_Occurrence_No_Defer;
 
@@ -1218,16 +1220,7 @@ package body Ada.Exceptions is
       Source : Exception_Occurrence)
    is
    begin
-      Target.Id             := Source.Id;
-      Target.Msg_Length     := Source.Msg_Length;
-      Target.Num_Tracebacks := Source.Num_Tracebacks;
-      Target.Pid            := Source.Pid;
-
-      Target.Msg (1 .. Target.Msg_Length) :=
-        Source.Msg (1 .. Target.Msg_Length);
-
-      Target.Tracebacks (1 .. Target.Num_Tracebacks) :=
-        Source.Tracebacks (1 .. Target.Num_Tracebacks);
+      Save_Occurrence_No_Private (Target, Source);
    end Save_Occurrence;
 
    function Save_Occurrence (Source : Exception_Occurrence) return EOA is
@@ -1236,6 +1229,46 @@ package body Ada.Exceptions is
       Save_Occurrence (Target.all, Source);
       return Target;
    end Save_Occurrence;
+
+   --------------------------------
+   -- Save_Occurrence_No_Private --
+   --------------------------------
+
+   procedure Save_Occurrence_No_Private
+     (Target : out Exception_Occurrence;
+      Source : Exception_Occurrence)
+   is
+   begin
+      Target.Id             := Source.Id;
+      Target.Msg_Length     := Source.Msg_Length;
+      Target.Num_Tracebacks := Source.Num_Tracebacks;
+      Target.Pid            := Source.Pid;
+      Target.Cleanup_Flag   := Source.Cleanup_Flag;
+
+      Target.Msg (1 .. Target.Msg_Length) :=
+        Source.Msg (1 .. Target.Msg_Length);
+
+      Target.Tracebacks (1 .. Target.Num_Tracebacks) :=
+        Source.Tracebacks (1 .. Target.Num_Tracebacks);
+   end Save_Occurrence_No_Private;
+
+   -------------------------
+   -- Transfer_Occurrence --
+   -------------------------
+
+   procedure Transfer_Occurrence
+     (Target : Exception_Occurrence_Access;
+      Source : Exception_Occurrence)
+   is
+   begin
+      --  Setup Target as an exception to be propagated in the calling task
+      --  (rendezvous-wise), taking care not to clobber the associated private
+      --  data. Target is expected to be a pointer to the calling task's fixed
+      --  TSD occurrence, which is very different from Get_Current_Excep here
+      --  because this subprogram is called from the called task.
+
+      Save_Occurrence_No_Private (Target.all, Source);
+   end Transfer_Occurrence;
 
    -------------------
    -- String_To_EId --
@@ -1250,6 +1283,22 @@ package body Ada.Exceptions is
 
    function String_To_EO (S : String) return Exception_Occurrence
      renames Stream_Attributes.String_To_EO;
+
+   ------------------------------
+   -- Raise_Exception_No_Defer --
+   ------------------------------
+
+   procedure Raise_Exception_No_Defer
+     (E       : Exception_Id;
+      Message : String := "")
+   is
+   begin
+      Exception_Data.Set_Exception_Msg (E, Message);
+
+      --  Do not call Abort_Defer.all, as specified by the spec
+
+      Raise_Current_Excep (E);
+   end Raise_Exception_No_Defer;
 
    ---------------
    -- To_Stderr --
@@ -1273,28 +1322,5 @@ package body Ada.Exceptions is
          end if;
       end loop;
    end To_Stderr;
-
-   -------------------------
-   -- Transfer_Occurrence --
-   -------------------------
-
-   procedure Transfer_Occurrence
-     (Target : Exception_Occurrence_Access;
-      Source : Exception_Occurrence)
-   is
-   begin
-      Save_Occurrence (Target.all, Source);
-   end Transfer_Occurrence;
-
-   ------------------------
-   -- Triggered_By_Abort --
-   ------------------------
-
-   function Triggered_By_Abort return Boolean is
-      Ex : constant Exception_Occurrence_Access := Get_Current_Excep.all;
-   begin
-      return Ex /= null
-        and then Exception_Identity (Ex.all) = Standard'Abort_Signal'Identity;
-   end Triggered_By_Abort;
 
 end Ada.Exceptions;

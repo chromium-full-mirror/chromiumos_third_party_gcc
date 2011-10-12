@@ -34,6 +34,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "hashtab.h"
 #include "plugin.h"
 
+static void init_attributes (void);
 static void merge_lock_attr_args (tree, tree);
 
 /* Table of the tables of attributes (common, language, format, machine)
@@ -57,7 +58,7 @@ static bool attributes_initialized = false;
 
 static const struct attribute_spec empty_attribute_table[] =
 {
-  { NULL, 0, 0, false, false, false, NULL, false }
+  { NULL, 0, 0, false, false, false, NULL }
 };
 
 /* Return base name of the attribute.  Ie '__attr__' is turned into 'attr'.
@@ -107,14 +108,11 @@ eq_attr (const void *p, const void *q)
 /* Initialize attribute tables, and make some sanity checks
    if --enable-checking.  */
 
-void
+static void
 init_attributes (void)
 {
   size_t i;
   int k;
-
-  if (attributes_initialized)
-    return;
 
   attribute_tables[0] = lang_hooks.common_attribute_table;
   attribute_tables[1] = lang_hooks.attribute_table;
@@ -201,11 +199,6 @@ register_attribute (const struct attribute_spec *attr)
 
   str.str = attr->name;
   str.length = strlen (str.str);
-
-  /* Attribute names in the table must be in the form 'text' and not
-     in the form '__text__'.  */
-  gcc_assert (str.length > 0 && str.str[0] != '_');
-
   slot = htab_find_slot_with_hash (attribute_hash, &str,
 				   substring_hash (str.str, str.length),
 				   INSERT);
@@ -287,7 +280,6 @@ decl_attributes (tree *node, tree attributes, int flags)
   /* A "naked" function attribute implies "noinline" and "noclone" for
      those targets that support it.  */
   if (TREE_CODE (*node) == FUNCTION_DECL
-      && attributes
       && lookup_attribute_spec (get_identifier ("naked"))
       && lookup_attribute ("naked", attributes) != NULL)
     {

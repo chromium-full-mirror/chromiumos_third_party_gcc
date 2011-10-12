@@ -7,4 +7,4 @@ struct S {
   typedef int X;
 };
 
-template void f<S> (int); // { dg-message "required" }
+template void f<S> (int); // { dg-message "instantiated" }

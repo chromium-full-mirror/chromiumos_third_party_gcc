@@ -37,7 +37,6 @@ extern "C"
    interface.  */
 
 extern int go_enable_dump (const char*);
-extern int go_enable_optimize (const char*);
 extern void go_set_prefix (const char*);
 
 extern void go_add_search_path (const char*);
@@ -66,8 +65,6 @@ extern unsigned int go_field_alignment (tree);
 extern void go_trampoline_info (unsigned int *size, unsigned int *alignment);
 
 extern void go_imported_unsafe (void);
-
-extern void go_write_export_data (const char *, unsigned int);
 
 #if defined(__cplusplus) && !defined(ENABLE_BUILD_WITH_CXX)
 } /* End extern "C".  */

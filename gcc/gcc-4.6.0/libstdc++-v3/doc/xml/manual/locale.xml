@@ -562,12 +562,11 @@ global locale" (emphasis Paolo), that is:
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://www.opengroup.org/austin/">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.opengroup.org/austin/" class="uri">
+    </biblioid>
+    <citetitle>
       System Interface Definitions, Issue 7 (IEEE Std. 1003.1-2008)
-	</link>
-      </title>
+    </citetitle>
     <copyright>
       <year>2008</year>
       <holder>

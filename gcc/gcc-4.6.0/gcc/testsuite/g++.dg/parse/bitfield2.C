@@ -22,7 +22,7 @@ struct D
   T t : 3;              // { dg-error "non-integral type" }
 };
 
-D<double> d;            // { dg-message "required" }
+D<double> d;            // { dg-message "instantiated" }
 
 template <typename T>
 struct E

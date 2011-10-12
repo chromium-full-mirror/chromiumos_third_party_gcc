@@ -16,10 +16,12 @@ int bar(int i) LOCKS_EXCLUDED(mu1)
 
 static int foo(int i) SHARED_LOCKS_REQUIRED(mu1)
 {
-  return bar(i); /* { dg-warning "Cannot call function 'bar' with lock 'mu1' held" "annotalysis disabled in google/main" { xfail *-*-* } } */
+  return bar(i); /* { dg-warning "Cannot call function 'bar' with lock 'mu1' held" } */
 }
 
 main()
 {
-  foo(2); /* { dg-warning "Calling function 'foo' requires lock 'mu2'" "annotalysis disabled in google/main" { xfail *-*-* } } */
+  foo(2); /* { dg-warning "Calling function 'foo' requires lock 'mu2'" } */
 }
+
+/* { dg-warning "Calling function 'foo' requires lock 'mu1'" "" { target *-*-* } 24 } */

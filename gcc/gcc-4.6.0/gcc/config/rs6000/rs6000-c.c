@@ -182,10 +182,7 @@ rs6000_macro_to_expand (cpp_reader *pfile, const cpp_token *tok)
 	  expand_this = C_CPP_HASHNODE (__vector_keyword);
 	  expand_bool_pixel = __bool_keyword;
 	}
-      /* The boost libraries have code with Iterator::vector vector in it.  If
-	 we allow the normal handling, this module will be called recursively,
-	 and the vector will be skipped.; */
-      else if (ident && (ident != C_CPP_HASHNODE (__vector_keyword)))
+      else if (ident)
 	{
 	  enum rid rid_code = (enum rid)(ident->rid_code);
 	  if (ident->type == NT_MACRO)

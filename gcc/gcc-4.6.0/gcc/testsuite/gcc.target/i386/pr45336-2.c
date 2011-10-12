@@ -1,5 +1,6 @@
 /* PR target/45336 */
-/* { dg-do compile { target { ! { ia32 } } } } */
+/* { dg-do compile } */
+/* { dg-require-effective-target lp64 } */
 /* { dg-options "-O2 -msse4 -mtune=generic" } */
 /* { dg-final { scan-assembler-not "movsbl" } } */
 /* { dg-final { scan-assembler-not "movswl" } } */

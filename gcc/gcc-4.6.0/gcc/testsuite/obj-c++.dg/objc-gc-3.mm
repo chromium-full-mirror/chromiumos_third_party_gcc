@@ -6,12 +6,11 @@
 /* { dg-options "-fobjc-gc" } */
 /* { dg-prune-output "cc1objplus: warning: '-fobjc-gc' is ignored for '-fgnu-runtime'" } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.h"
-#include "../objc-obj-c++-shared/runtime.h"
+#include "../objc-obj-c++-shared/Object1.h"
 
 @class MyWindow;
 
-@interface MyDocument : TestsuiteObject {
+@interface MyDocument : Object {
     MyWindow *_window;
 }
 @end
@@ -30,7 +29,7 @@
 @end
 
 @interface MyTextFileDocument : MyFileDocument {
-    TestsuiteObject *_textStorage;
+    Object *_textStorage;
     struct __tfdFlags {
         unsigned int immutable:1;
         unsigned int lineEnding:2;

@@ -38,12 +38,9 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #endif
 
 
-enum { EXEC_SYNCHRONOUS = -2, EXEC_NOERROR = 0, EXEC_SYSTEMFAILED,
-       EXEC_CHILDFAILED };
+enum { EXEC_NOERROR = 0, EXEC_SYSTEMFAILED };
 static const char *cmdmsg_values[] =
-  { "",
-    "Termination status of the command-language interpreter cannot be obtained",
-    "Execution of child process impossible" };
+  { "", "Execution of child process impossible" };
 
 
 
@@ -52,7 +49,7 @@ set_cmdstat (int *cmdstat, int value)
 {
   if (cmdstat)
     *cmdstat = value;
-  else if (value > EXEC_NOERROR)
+  else if (value != 0)
     runtime_error ("Could not execute command line");
 }
 
@@ -77,10 +74,10 @@ execute_command_line (const char *command, bool wait, int *exitstat,
       /* Asynchronous execution.  */
       pid_t pid;
 
-      set_cmdstat (cmdstat, EXEC_NOERROR);
+      set_cmdstat (cmdstat, 0);
 
       if ((pid = fork()) < 0)
-	set_cmdstat (cmdstat, EXEC_CHILDFAILED);
+	set_cmdstat (cmdstat, EXEC_SYSTEMFAILED);
       else if (pid == 0)
 	{
 	  /* Child process.  */
@@ -94,15 +91,13 @@ execute_command_line (const char *command, bool wait, int *exitstat,
       /* Synchronous execution.  */
       int res = system (cmd);
 
-      if (res == -1)
+      if (!wait)
+	set_cmdstat (cmdstat, -2);
+      else if (res == -1)
 	set_cmdstat (cmdstat, EXEC_SYSTEMFAILED);
-      else if (!wait)
-	set_cmdstat (cmdstat, EXEC_SYNCHRONOUS);
       else
-	set_cmdstat (cmdstat, EXEC_NOERROR);
-
-      if (res != -1)
 	{
+	  set_cmdstat (cmdstat, 0);
 #if defined(WEXITSTATUS) && defined(WIFEXITED)
 	  *exitstat = WIFEXITED(res) ? WEXITSTATUS(res) : res;
 #else
@@ -112,7 +107,7 @@ execute_command_line (const char *command, bool wait, int *exitstat,
     }
 
   /* Now copy back to the Fortran string if needed.  */
-  if (cmdstat && *cmdstat > EXEC_NOERROR)
+  if (cmdstat && *cmdstat > 0)
     {
       if (cmdmsg)
 	fstrcpy (cmdmsg, cmdmsg_len, cmdmsg_values[*cmdstat],

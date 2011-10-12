@@ -5,14 +5,14 @@
 /* { dg-do compile } */
 /* { dg-options "-fobjc-exceptions" } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.h"
+#include "../objc-obj-c++-shared/Object1.h"
 
 const char *foo(void)
 {
   @try {
     return "foo";
   }
-  @catch (TestsuiteObject* theException) {
+  @catch (Object* theException) {
     return [theException name];
   }
 }

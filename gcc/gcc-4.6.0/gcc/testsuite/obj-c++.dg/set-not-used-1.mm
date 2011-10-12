@@ -2,9 +2,10 @@
 /* { dg-do compile } */
 /* { dg-options "-Wunused-but-set-variable" } */
 
-#import "../objc-obj-c++-shared/TestsuiteObject.m"
+#import "../objc-obj-c++-shared/Object1.h"
+#include <objc/objc-api.h>
 
-@interface obj : TestsuiteObject
+@interface obj : Object
 {
   int value;
 }
@@ -12,7 +13,7 @@
 - (void) setValue: (int)number;
 @end
 
-@implementation obj : TestsuiteObject
+@implementation obj : Object
 
 - (int) value { return value; }
 - (void) setValue: (int)number { value = number; }

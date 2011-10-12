@@ -101,8 +101,6 @@ reshape_'rtype_ccode` ('rtype` * const restrict ret,
 
   if (ret->data == NULL)
     {
-      index_type alloc_size;
-
       rs = 1;
       for (n = 0; n < rdim; n++)
 	{
@@ -113,13 +111,7 @@ reshape_'rtype_ccode` ('rtype` * const restrict ret,
 	  rs *= rex;
 	}
       ret->offset = 0;
-
-      if (unlikely (rs < 1))
-        alloc_size = 1;
-      else
-        alloc_size = rs * sizeof ('rtype_name`);
-
-      ret->data = internal_malloc_size (alloc_size);
+      ret->data = internal_malloc_size ( rs * sizeof ('rtype_name`));
       ret->dtype = (source->dtype & ~GFC_DTYPE_RANK_MASK) | rdim;
     }
 

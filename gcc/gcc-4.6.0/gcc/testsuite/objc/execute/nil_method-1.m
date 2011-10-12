@@ -1,12 +1,12 @@
 /* Contributed by Nicola Pero - Fri Aug 30 12:55:37 2002 */ 
 #include <objc/objc.h>
-#include "../../objc-obj-c++-shared/TestsuiteObject.m"
+#include <objc/Object.h>
 
 /* Test that calling a method of a nil object results in
    nothing to happen (but not a crash), and nil to be
    returned.  */
 
-@interface TestClass : TestsuiteObject
+@interface TestClass : Object
 
 - (void) testVoid;
 - (id) testId;

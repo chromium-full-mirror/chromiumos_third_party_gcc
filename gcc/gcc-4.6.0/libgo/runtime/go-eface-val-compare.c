@@ -4,7 +4,6 @@
    Use of this source code is governed by a BSD-style
    license that can be found in the LICENSE file.  */
 
-#include "go-panic.h"
 #include "go-type.h"
 #include "interface.h"
 
@@ -20,8 +19,6 @@ __go_empty_interface_value_compare (
   const struct __go_type_descriptor *left_descriptor;
 
   left_descriptor = left.__type_descriptor;
-  if (((uintptr_t) left_descriptor & reflectFlags) != 0)
-    __go_panic_msg ("invalid interface value");
   if (left_descriptor == NULL)
     return 1;
   if (!__go_type_descriptors_equal (left_descriptor, right_descriptor))

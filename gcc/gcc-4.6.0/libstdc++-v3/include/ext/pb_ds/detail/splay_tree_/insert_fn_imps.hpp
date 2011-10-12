@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009, 2010i, 2011 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -34,7 +34,7 @@
 // warranty.
 
 /**
- * @file splay_tree_/insert_fn_imps.hpp
+ * @file insert_fn_imps.hpp
  * Contains an implementation class for splay_tree_.
  */
 
@@ -43,12 +43,12 @@ inline std::pair<typename PB_DS_CLASS_C_DEC::point_iterator, bool>
 PB_DS_CLASS_C_DEC::
 insert(const_reference r_value)
 {
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid();)
   std::pair<point_iterator, bool> ins_pair = insert_leaf_imp(r_value);
   ins_pair.first.m_p_nd->m_special = false;
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid());
   splay(ins_pair.first.m_p_nd);
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid());
   return ins_pair;
 }
 
@@ -57,8 +57,7 @@ inline std::pair<typename PB_DS_CLASS_C_DEC::point_iterator, bool>
 PB_DS_CLASS_C_DEC::
 insert_leaf_imp(const_reference r_value)
 {
-  _GLIBCXX_DEBUG_ONLY(base_type::structure_only_assert_valid(__FILE__,
-							     __LINE__);)
+  _GLIBCXX_DEBUG_ONLY(base_type::structure_only_assert_valid();)
   if (base_type::m_size == 0)
     return std::make_pair(base_type::insert_imp_empty(r_value), true);
 
@@ -81,7 +80,7 @@ insert_leaf_imp(const_reference r_value)
   if (p_pot == base_type::m_p_head)
     return std::make_pair(base_type::insert_leaf_new(r_value, base_type::m_p_head->m_p_right, false), true);
 
-  PB_DS_CHECK_KEY_DOES_NOT_EXIST(PB_DS_V2F(r_value))
+  _GLIBCXX_DEBUG_ONLY(base_type::check_key_does_not_exist(PB_DS_V2F(r_value)));
 
   p_nd = p_pot->m_p_left;
   if (p_nd == 0)
@@ -90,5 +89,5 @@ insert_leaf_imp(const_reference r_value)
   while (p_nd->m_p_right != 0)
     p_nd = p_nd->m_p_right;
 
-  return std::make_pair(this->insert_leaf_new(r_value, p_nd, false), true);
+  return std::make_pair(insert_leaf_new(r_value, p_nd, false), true);
 }

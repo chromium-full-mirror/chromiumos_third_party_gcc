@@ -2,22 +2,17 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package json implements encoding and decoding of JSON objects as defined in
-// RFC 4627.
-//
-// See "JSON and Go" for an introduction to this package:
-// http://blog.golang.org/2011/01/json-and-go.html
+// The json package implements encoding and decoding of JSON objects as
+// defined in RFC 4627.
 package json
 
 import (
-	"bytes"
-	"encoding/base64"
 	"os"
+	"bytes"
 	"reflect"
 	"runtime"
 	"sort"
 	"strconv"
-	"unicode"
 	"utf8"
 )
 
@@ -36,39 +31,13 @@ import (
 // String values encode as JSON strings, with each invalid UTF-8 sequence
 // replaced by the encoding of the Unicode replacement character U+FFFD.
 //
-// Array and slice values encode as JSON arrays, except that
-// []byte encodes as a base64-encoded string.
+// Array and slice values encode as JSON arrays.
 //
-// Struct values encode as JSON objects. Each exported struct field
-// becomes a member of the object unless the field is empty and its tag
-// specifies the "omitempty" option. The empty values are false, 0, any
-// nil pointer or interface value, and any array, slice, map, or string of
-// length zero. The object's default key string is the struct field name
-// but can be specified in the struct field's tag value. The "json" key in
-// struct field's tag value is the key name, followed by an optional comma
-// and options. Examples:
-//
-//   // Specifies that Field appears in JSON as key "myName"
-//   Field int `json:"myName"`
-//
-//   // Specifies that Field appears in JSON as key "myName" and
-//   // the field is omitted from the object if its value is empty,
-//   // as defined above.
-//   Field int `json:"myName,omitempty"`
-//
-//   // Field appears in JSON as key "Field" (the default), but
-//   // the field is skipped if empty.
-//   // Note the leading comma.
-//   Field int `json:",omitempty"`
-//
-// The "string" option signals that a field is stored as JSON inside a
-// JSON-encoded string.  This extra level of encoding is sometimes
-// used when communicating with JavaScript programs:
-//
-//    Int64String int64 `json:",string"`
-//
-// The key name will be used if it's a non-empty string consisting of
-// only Unicode letters, digits, dollar signs, hyphens, and underscores.
+// Struct values encode as JSON objects.  Each struct field becomes
+// a member of the object.  By default the object's key name is the
+// struct field name converted to lower case.  If the struct field
+// has a tag, that tag will be used as the name instead.
+// Only exported fields will be encoded.
 //
 // Map values encode as JSON objects.
 // The map's key type must be string; the object keys are used directly
@@ -200,7 +169,7 @@ func (e *encodeState) marshal(v interface{}) (err os.Error) {
 			err = r.(os.Error)
 		}
 	}()
-	e.reflectValue(reflect.ValueOf(v))
+	e.reflectValue(reflect.NewValue(v))
 	return nil
 }
 
@@ -208,34 +177,8 @@ func (e *encodeState) error(err os.Error) {
 	panic(err)
 }
 
-var byteSliceType = reflect.TypeOf([]byte(nil))
-
-func isEmptyValue(v reflect.Value) bool {
-	switch v.Kind() {
-	case reflect.Array, reflect.Map, reflect.Slice, reflect.String:
-		return v.Len() == 0
-	case reflect.Bool:
-		return !v.Bool()
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		return v.Int() == 0
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return v.Uint() == 0
-	case reflect.Float32, reflect.Float64:
-		return v.Float() == 0
-	case reflect.Interface, reflect.Ptr:
-		return v.IsNil()
-	}
-	return false
-}
-
 func (e *encodeState) reflectValue(v reflect.Value) {
-	e.reflectValueQuoted(v, false)
-}
-
-// reflectValueQuoted writes the value in v to the output.
-// If quoted is true, the serialization is wrapped in a JSON string.
-func (e *encodeState) reflectValueQuoted(v reflect.Value, quoted bool) {
-	if !v.IsValid() {
+	if v == nil {
 		e.WriteString("null")
 		return
 	}
@@ -252,43 +195,30 @@ func (e *encodeState) reflectValueQuoted(v reflect.Value, quoted bool) {
 		return
 	}
 
-	writeString := (*encodeState).WriteString
-	if quoted {
-		writeString = (*encodeState).string
-	}
-
-	switch v.Kind() {
-	case reflect.Bool:
-		x := v.Bool()
+	switch v := v.(type) {
+	case *reflect.BoolValue:
+		x := v.Get()
 		if x {
-			writeString(e, "true")
+			e.WriteString("true")
 		} else {
-			writeString(e, "false")
+			e.WriteString("false")
 		}
 
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		writeString(e, strconv.Itoa64(v.Int()))
+	case *reflect.IntValue:
+		e.WriteString(strconv.Itoa64(v.Get()))
 
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		writeString(e, strconv.Uitoa64(v.Uint()))
+	case *reflect.UintValue:
+		e.WriteString(strconv.Uitoa64(v.Get()))
 
-	case reflect.Float32, reflect.Float64:
-		writeString(e, strconv.FtoaN(v.Float(), 'g', -1, v.Type().Bits()))
+	case *reflect.FloatValue:
+		e.WriteString(strconv.FtoaN(v.Get(), 'g', -1, v.Type().Bits()))
 
-	case reflect.String:
-		if quoted {
-			sb, err := Marshal(v.String())
-			if err != nil {
-				e.error(err)
-			}
-			e.string(string(sb))
-		} else {
-			e.string(v.String())
-		}
+	case *reflect.StringValue:
+		e.string(v.Get())
 
-	case reflect.Struct:
+	case *reflect.StructValue:
 		e.WriteByte('{')
-		t := v.Type()
+		t := v.Type().(*reflect.StructType)
 		n := v.NumField()
 		first := true
 		for i := 0; i < n; i++ {
@@ -296,32 +226,23 @@ func (e *encodeState) reflectValueQuoted(v reflect.Value, quoted bool) {
 			if f.PkgPath != "" {
 				continue
 			}
-			tag, omitEmpty, quoted := f.Name, false, false
-			if tv := f.Tag.Get("json"); tv != "" {
-				name, opts := parseTag(tv)
-				if isValidTag(name) {
-					tag = name
-				}
-				omitEmpty = opts.Contains("omitempty")
-				quoted = opts.Contains("string")
-			}
-			fieldValue := v.Field(i)
-			if omitEmpty && isEmptyValue(fieldValue) {
-				continue
-			}
 			if first {
 				first = false
 			} else {
 				e.WriteByte(',')
 			}
-			e.string(tag)
+			if f.Tag != "" {
+				e.string(f.Tag)
+			} else {
+				e.string(f.Name)
+			}
 			e.WriteByte(':')
-			e.reflectValueQuoted(fieldValue, quoted)
+			e.reflectValue(v.Field(i))
 		}
 		e.WriteByte('}')
 
-	case reflect.Map:
-		if v.Type().Key().Kind() != reflect.String {
+	case *reflect.MapValue:
+		if _, ok := v.Type().(*reflect.MapType).Key().(*reflect.StringType); !ok {
 			e.error(&UnsupportedTypeError{v.Type()})
 		}
 		if v.IsNil() {
@@ -329,48 +250,30 @@ func (e *encodeState) reflectValueQuoted(v reflect.Value, quoted bool) {
 			break
 		}
 		e.WriteByte('{')
-		var sv stringValues = v.MapKeys()
+		var sv stringValues = v.Keys()
 		sort.Sort(sv)
 		for i, k := range sv {
 			if i > 0 {
 				e.WriteByte(',')
 			}
-			e.string(k.String())
+			e.string(k.(*reflect.StringValue).Get())
 			e.WriteByte(':')
-			e.reflectValue(v.MapIndex(k))
+			e.reflectValue(v.Elem(k))
 		}
 		e.WriteByte('}')
 
-	case reflect.Array, reflect.Slice:
-		if v.Type() == byteSliceType {
-			e.WriteByte('"')
-			s := v.Interface().([]byte)
-			if len(s) < 1024 {
-				// for small buffers, using Encode directly is much faster.
-				dst := make([]byte, base64.StdEncoding.EncodedLen(len(s)))
-				base64.StdEncoding.Encode(dst, s)
-				e.Write(dst)
-			} else {
-				// for large buffers, avoid unnecessary extra temporary
-				// buffer space.
-				enc := base64.NewEncoder(base64.StdEncoding, e)
-				enc.Write(s)
-				enc.Close()
-			}
-			e.WriteByte('"')
-			break
-		}
+	case reflect.ArrayOrSliceValue:
 		e.WriteByte('[')
 		n := v.Len()
 		for i := 0; i < n; i++ {
 			if i > 0 {
 				e.WriteByte(',')
 			}
-			e.reflectValue(v.Index(i))
+			e.reflectValue(v.Elem(i))
 		}
 		e.WriteByte(']')
 
-	case reflect.Interface, reflect.Ptr:
+	case interfaceOrPtrValue:
 		if v.IsNil() {
 			e.WriteString("null")
 			return
@@ -383,18 +286,6 @@ func (e *encodeState) reflectValueQuoted(v reflect.Value, quoted bool) {
 	return
 }
 
-func isValidTag(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, c := range s {
-		if c != '$' && c != '-' && c != '_' && !unicode.IsLetter(c) && !unicode.IsDigit(c) {
-			return false
-		}
-	}
-	return true
-}
-
 // stringValues is a slice of reflect.Value holding *reflect.StringValue.
 // It implements the methods to sort by string.
 type stringValues []reflect.Value
@@ -402,36 +293,24 @@ type stringValues []reflect.Value
 func (sv stringValues) Len() int           { return len(sv) }
 func (sv stringValues) Swap(i, j int)      { sv[i], sv[j] = sv[j], sv[i] }
 func (sv stringValues) Less(i, j int) bool { return sv.get(i) < sv.get(j) }
-func (sv stringValues) get(i int) string   { return sv[i].String() }
+func (sv stringValues) get(i int) string   { return sv[i].(*reflect.StringValue).Get() }
 
-func (e *encodeState) string(s string) (int, os.Error) {
-	len0 := e.Len()
+func (e *encodeState) string(s string) {
 	e.WriteByte('"')
 	start := 0
 	for i := 0; i < len(s); {
 		if b := s[i]; b < utf8.RuneSelf {
-			if 0x20 <= b && b != '\\' && b != '"' && b != '<' && b != '>' {
+			if 0x20 <= b && b != '\\' && b != '"' {
 				i++
 				continue
 			}
 			if start < i {
 				e.WriteString(s[start:i])
 			}
-			switch b {
-			case '\\', '"':
+			if b == '\\' || b == '"' {
 				e.WriteByte('\\')
 				e.WriteByte(b)
-			case '\n':
-				e.WriteByte('\\')
-				e.WriteByte('n')
-			case '\r':
-				e.WriteByte('\\')
-				e.WriteByte('r')
-			default:
-				// This encodes bytes < 0x20 except for \n and \r,
-				// as well as < and >. The latter are escaped because they
-				// can lead to security holes when user-controlled strings
-				// are rendered into JSON and served to some browsers.
+			} else {
 				e.WriteString(`\u00`)
 				e.WriteByte(hex[b>>4])
 				e.WriteByte(hex[b&0xF])
@@ -450,5 +329,4 @@ func (e *encodeState) string(s string) (int, os.Error) {
 		e.WriteString(s[start:])
 	}
 	e.WriteByte('"')
-	return e.Len() - len0, nil
 }

@@ -7,7 +7,8 @@
    works, but how do we tell the testsuite to test for it ?
 */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.m"
+#import "../objc-obj-c++-shared/Object1.h"
+#import "../objc-obj-c++-shared/next-mapping.h"
 #ifndef __NEXT_RUNTIME__
 #include <objc/NXConstStr.h>
 #endif
@@ -29,7 +30,7 @@ struct __objcFastEnumerationState
     enumeration.  You create the array with some objects; you can
     mutate the array, and you can fast-enumerate it.
  */
-@interface MyArray : TestsuiteObject
+@interface MyArray : Object
 {
   unsigned int length;
   id *objects;
@@ -42,7 +43,7 @@ struct __objcFastEnumerationState
                                        count:(unsigned long)len;
 @end
 
-@implementation MyArray : TestsuiteObject
+@implementation MyArray : Object
 - (id) initWithLength: (unsigned int)l
 	      objects: (id *)o
 {
@@ -89,7 +90,7 @@ struct __objcFastEnumerationState
 int main (void)
 {
   MyArray *array;
-  TestsuiteObject *object;
+  Object *object;
   int counter, i;
   id *objects;
 

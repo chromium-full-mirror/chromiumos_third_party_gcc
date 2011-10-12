@@ -1,7 +1,7 @@
 /* Common subexpression elimination for GNU compiler.
    Copyright (C) 1987, 1988, 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998
-   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
-   2011 Free Software Foundation, Inc.
+   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -475,8 +475,8 @@ struct table_elt
    || (HARD_REGISTER_NUM_P (N)						\
        && FIXED_REGNO_P (N) && REGNO_REG_CLASS (N) != NO_REGS))
 
-#define COST(X) (REG_P (X) ? 0 : notreg_cost (X, SET, 1))
-#define COST_IN(X, OUTER, OPNO) (REG_P (X) ? 0 : notreg_cost (X, OUTER, OPNO))
+#define COST(X) (REG_P (X) ? 0 : notreg_cost (X, SET))
+#define COST_IN(X,OUTER) (REG_P (X) ? 0 : notreg_cost (X, OUTER))
 
 /* Get the number of times this register has been updated in this
    basic block.  */
@@ -552,7 +552,7 @@ static bitmap cse_ebb_live_in, cse_ebb_live_out;
 static sbitmap cse_visited_basic_blocks;
 
 static bool fixed_base_plus_p (rtx x);
-static int notreg_cost (rtx, enum rtx_code, int);
+static int notreg_cost (rtx, enum rtx_code);
 static int approx_reg_cost_1 (rtx *, void *);
 static int approx_reg_cost (rtx);
 static int preferable (int, int, int, int);
@@ -752,7 +752,7 @@ preferable (int cost_a, int regcost_a, int cost_b, int regcost_b)
    from COST macro to keep it simple.  */
 
 static int
-notreg_cost (rtx x, enum rtx_code outer, int opno)
+notreg_cost (rtx x, enum rtx_code outer)
 {
   return ((GET_CODE (x) == SUBREG
 	   && REG_P (SUBREG_REG (x))
@@ -761,10 +761,10 @@ notreg_cost (rtx x, enum rtx_code outer, int opno)
 	   && (GET_MODE_SIZE (GET_MODE (x))
 	       < GET_MODE_SIZE (GET_MODE (SUBREG_REG (x))))
 	   && subreg_lowpart_p (x)
-	   && TRULY_NOOP_TRUNCATION_MODES_P (GET_MODE (x),
-					     GET_MODE (SUBREG_REG (x))))
+	   && TRULY_NOOP_TRUNCATION (GET_MODE_BITSIZE (GET_MODE (x)),
+				     GET_MODE_BITSIZE (GET_MODE (SUBREG_REG (x)))))
 	  ? 0
-	  : rtx_cost (x, outer, opno, optimize_this_for_speed_p) * 2);
+	  : rtx_cost (x, outer, optimize_this_for_speed_p) * 2);
 }
 
 
@@ -796,7 +796,8 @@ init_cse_reg_info (unsigned int nregs)
 	}
 
       /* Reallocate the table with NEW_SIZE entries.  */
-      free (cse_reg_info_table);
+      if (cse_reg_info_table)
+	free (cse_reg_info_table);
       cse_reg_info_table = XNEWVEC (struct cse_reg_info, new_size);
       cse_reg_info_table_size = new_size;
       cse_reg_info_table_first_uninitialized = 0;
@@ -1637,10 +1638,8 @@ insert_with_costs (rtx x, struct table_elt *classp, unsigned int hash,
 	  /* Put it after the last element cheaper than X.  */
 	  struct table_elt *p, *next;
 
-	  for (p = classp;
-	       (next = p->next_same_value) && CHEAPER (next, elt);
-	       p = next)
-	    ;
+	  for (p = classp; (next = p->next_same_value) && CHEAPER (next, elt);
+	       p = next);
 
 	  /* Put it after P and before NEXT.  */
 	  elt->next_same_value = next;
@@ -3065,8 +3064,12 @@ find_comparison_args (enum rtx_code code, rtx *parg1, rtx *parg2,
 		 for STORE_FLAG_VALUE, also look at LT and GE operations.  */
 	      || ((code == NE
 		   || (code == LT
-		       && val_signbit_known_set_p (inner_mode,
-						   STORE_FLAG_VALUE))
+		       && GET_MODE_CLASS (inner_mode) == MODE_INT
+		       && (GET_MODE_BITSIZE (inner_mode)
+			   <= HOST_BITS_PER_WIDE_INT)
+		       && (STORE_FLAG_VALUE
+			   & ((HOST_WIDE_INT) 1
+			      << (GET_MODE_BITSIZE (inner_mode) - 1))))
 #ifdef FLOAT_STORE_FLAG_VALUE
 		   || (code == LT
 		       && SCALAR_FLOAT_MODE_P (inner_mode)
@@ -3081,8 +3084,12 @@ find_comparison_args (enum rtx_code code, rtx *parg1, rtx *parg2,
 	    }
 	  else if ((code == EQ
 		    || (code == GE
-			&& val_signbit_known_set_p (inner_mode,
-						    STORE_FLAG_VALUE))
+			&& GET_MODE_CLASS (inner_mode) == MODE_INT
+			&& (GET_MODE_BITSIZE (inner_mode)
+			    <= HOST_BITS_PER_WIDE_INT)
+			&& (STORE_FLAG_VALUE
+			    & ((HOST_WIDE_INT) 1
+			       << (GET_MODE_BITSIZE (inner_mode) - 1))))
 #ifdef FLOAT_STORE_FLAG_VALUE
 		    || (code == GE
 			&& SCALAR_FLOAT_MODE_P (inner_mode)
@@ -3296,7 +3303,7 @@ fold_rtx (rtx x, rtx insn)
 	   argument.  */
 	if (const_arg != 0
 	    && const_arg != folded_arg
-	    && COST_IN (const_arg, code, i) <= COST_IN (folded_arg, code, i)
+	    && COST_IN (const_arg, code) <= COST_IN (folded_arg, code)
 
 	    /* It's not safe to substitute the operand of a conversion
 	       operator with a constant, as the conversion's identity
@@ -3652,7 +3659,7 @@ fold_rtx (rtx x, rtx insn)
 	      enum rtx_code associate_code;
 
 	      if (is_shift
-		  && (INTVAL (const_arg1) >= GET_MODE_PRECISION (mode)
+		  && (INTVAL (const_arg1) >= GET_MODE_BITSIZE (mode)
 		      || INTVAL (const_arg1) < 0))
 		{
 		  if (SHIFT_COUNT_TRUNCATED)
@@ -3701,7 +3708,7 @@ fold_rtx (rtx x, rtx insn)
                 break;
 
 	      if (is_shift
-		  && (INTVAL (inner_const) >= GET_MODE_PRECISION (mode)
+		  && (INTVAL (inner_const) >= GET_MODE_BITSIZE (mode)
 		      || INTVAL (inner_const) < 0))
 		{
 		  if (SHIFT_COUNT_TRUNCATED)
@@ -3731,7 +3738,7 @@ fold_rtx (rtx x, rtx insn)
 
 	      if (is_shift
 		  && CONST_INT_P (new_const)
-		  && INTVAL (new_const) >= GET_MODE_PRECISION (mode))
+		  && INTVAL (new_const) >= GET_MODE_BITSIZE (mode))
 		{
 		  /* As an exception, we can turn an ASHIFTRT of this
 		     form into a shift of the number of bits - 1.  */
@@ -3961,7 +3968,9 @@ record_jump_cond (enum rtx_code code, enum machine_mode mode, rtx op0,
      is not worth testing for with no SUBREG).  */
 
   /* Note that GET_MODE (op0) may not equal MODE.  */
-  if (code == EQ && paradoxical_subreg_p (op0))
+  if (code == EQ && GET_CODE (op0) == SUBREG
+      && (GET_MODE_SIZE (GET_MODE (op0))
+	  > GET_MODE_SIZE (GET_MODE (SUBREG_REG (op0)))))
     {
       enum machine_mode inner_mode = GET_MODE (SUBREG_REG (op0));
       rtx tem = record_jump_cond_subreg (inner_mode, op1);
@@ -3970,7 +3979,9 @@ record_jump_cond (enum rtx_code code, enum machine_mode mode, rtx op0,
 			  reversed_nonequality);
     }
 
-  if (code == EQ && paradoxical_subreg_p (op1))
+  if (code == EQ && GET_CODE (op1) == SUBREG
+      && (GET_MODE_SIZE (GET_MODE (op1))
+	  > GET_MODE_SIZE (GET_MODE (SUBREG_REG (op1)))))
     {
       enum machine_mode inner_mode = GET_MODE (SUBREG_REG (op1));
       rtx tem = record_jump_cond_subreg (inner_mode, op0);
@@ -4554,7 +4565,9 @@ cse_insn (rtx insn)
 	 treat it as volatile.  It may do the work of an SI in one context
 	 where the extra bits are not being used, but cannot replace an SI
 	 in general.  */
-      if (paradoxical_subreg_p (src))
+      if (GET_CODE (src) == SUBREG
+	  && (GET_MODE_SIZE (GET_MODE (src))
+	      > GET_MODE_SIZE (GET_MODE (SUBREG_REG (src)))))
 	sets[i].src_volatile = 1;
 #endif
 
@@ -4674,13 +4687,13 @@ cse_insn (rtx insn)
 
       if (src_const && src_related == 0 && CONST_INT_P (src_const)
 	  && GET_MODE_CLASS (mode) == MODE_INT
-	  && GET_MODE_PRECISION (mode) < BITS_PER_WORD)
+	  && GET_MODE_BITSIZE (mode) < BITS_PER_WORD)
 	{
 	  enum machine_mode wider_mode;
 
 	  for (wider_mode = GET_MODE_WIDER_MODE (mode);
 	       wider_mode != VOIDmode
-	       && GET_MODE_PRECISION (wider_mode) <= BITS_PER_WORD
+	       && GET_MODE_BITSIZE (wider_mode) <= BITS_PER_WORD
 	       && src_related == 0;
 	       wider_mode = GET_MODE_WIDER_MODE (wider_mode))
 	    {
@@ -4832,7 +4845,9 @@ cse_insn (rtx insn)
 
 	  /* Also skip paradoxical subregs, unless that's what we're
 	     looking for.  */
-	  if (paradoxical_subreg_p (p->exp)
+	  if (code == SUBREG
+	      && (GET_MODE_SIZE (GET_MODE (p->exp))
+		  > GET_MODE_SIZE (GET_MODE (SUBREG_REG (p->exp))))
 	      && ! (src != 0
 		    && GET_CODE (src) == SUBREG
 		    && GET_MODE (src) == GET_MODE (p->exp)
@@ -4941,7 +4956,9 @@ cse_insn (rtx insn)
 	     size, but later may be adjusted so that the upper bits aren't
 	     what we want.  So reject it.  */
 	  if (elt != 0
-	      && paradoxical_subreg_p (elt->exp)
+	      && GET_CODE (elt->exp) == SUBREG
+	      && (GET_MODE_SIZE (GET_MODE (elt->exp))
+		  > GET_MODE_SIZE (GET_MODE (SUBREG_REG (elt->exp))))
 	      /* It is okay, though, if the rtx we're trying to match
 		 will ignore any of the bits we can't predict.  */
 	      && ! (src != 0
@@ -5033,7 +5050,7 @@ cse_insn (rtx insn)
 	      && CONST_INT_P (XEXP (SET_DEST (sets[i].rtl), 1))
 	      && CONST_INT_P (XEXP (SET_DEST (sets[i].rtl), 2))
 	      && REG_P (XEXP (SET_DEST (sets[i].rtl), 0))
-	      && (GET_MODE_PRECISION (GET_MODE (SET_DEST (sets[i].rtl)))
+	      && (GET_MODE_BITSIZE (GET_MODE (SET_DEST (sets[i].rtl)))
 		  >= INTVAL (XEXP (SET_DEST (sets[i].rtl), 1)))
 	      && ((unsigned) INTVAL (XEXP (SET_DEST (sets[i].rtl), 1))
 		  + (unsigned) INTVAL (XEXP (SET_DEST (sets[i].rtl), 2))
@@ -5060,7 +5077,7 @@ cse_insn (rtx insn)
 		  HOST_WIDE_INT mask;
 		  unsigned int shift;
 		  if (BITS_BIG_ENDIAN)
-		    shift = GET_MODE_PRECISION (GET_MODE (dest_reg))
+		    shift = GET_MODE_BITSIZE (GET_MODE (dest_reg))
 			    - INTVAL (pos) - INTVAL (width);
 		  else
 		    shift = INTVAL (pos);
@@ -5702,7 +5719,9 @@ cse_insn (rtx insn)
 	       some tracking to be wrong.
 
 	       ??? Think about this more later.  */
-	    || (paradoxical_subreg_p (dest)
+	    || (GET_CODE (dest) == SUBREG
+		&& (GET_MODE_SIZE (GET_MODE (dest))
+		    > GET_MODE_SIZE (GET_MODE (SUBREG_REG (dest))))
 		&& (GET_CODE (sets[i].src) == SIGN_EXTEND
 		    || GET_CODE (sets[i].src) == ZERO_EXTEND)))
 	  continue;
@@ -6184,9 +6203,7 @@ cse_find_path (basic_block first_bb, struct cse_basic_block_data *data,
 	  else
 	    e = NULL;
 
-	  if (e
-	      && !((e->flags & EDGE_ABNORMAL_CALL) && cfun->has_nonlocal_label)
-	      && e->dest != EXIT_BLOCK_PTR
+	  if (e && e->dest != EXIT_BLOCK_PTR
 	      && single_pred_p (e->dest)
 	      /* Avoid visiting basic blocks twice.  The large comment
 		 above explains why this can happen.  */
@@ -6968,7 +6985,8 @@ delete_trivially_dead_insns (rtx insns, int nreg)
 		df_insn_rescan (insn);
 	      }
 	  }
-      free (replacements);
+      if (replacements)
+	free (replacements);
     }
 
   if (dump_file && ndead)
@@ -7406,6 +7424,7 @@ struct rtl_opt_pass pass_cse =
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
   TODO_df_finish | TODO_verify_rtl_sharing |
+  TODO_dump_func |
   TODO_ggc_collect |
   TODO_verify_flow,                     /* todo_flags_finish */
  }
@@ -7468,6 +7487,7 @@ struct rtl_opt_pass pass_cse2 =
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
   TODO_df_finish | TODO_verify_rtl_sharing |
+  TODO_dump_func |
   TODO_ggc_collect |
   TODO_verify_flow                      /* todo_flags_finish */
  }
@@ -7528,6 +7548,7 @@ struct rtl_opt_pass pass_cse_after_global_opts =
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
   TODO_df_finish | TODO_verify_rtl_sharing |
+  TODO_dump_func |
   TODO_ggc_collect |
   TODO_verify_flow                      /* todo_flags_finish */
  }

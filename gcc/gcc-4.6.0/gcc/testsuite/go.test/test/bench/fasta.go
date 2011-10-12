@@ -37,6 +37,7 @@ POSSIBILITY OF SUCH DAMAGE.
 package main
 
 import (
+	"bytes"
 	"flag"
 	"os"
 )
@@ -48,7 +49,7 @@ var n = flag.Int("n", 1000, "length of result")
 const Line = 60
 
 func Repeat(alu []byte, n int) {
-	buf := append(alu, alu...)
+	buf := bytes.Add(alu, alu)
 	off := 0
 	for n > 0 {
 		m := n
@@ -137,28 +138,28 @@ func main() {
 	flag.Parse()
 
 	iub := []Acid{
-		{prob: 0.27, sym: 'a'},
-		{prob: 0.12, sym: 'c'},
-		{prob: 0.12, sym: 'g'},
-		{prob: 0.27, sym: 't'},
-		{prob: 0.02, sym: 'B'},
-		{prob: 0.02, sym: 'D'},
-		{prob: 0.02, sym: 'H'},
-		{prob: 0.02, sym: 'K'},
-		{prob: 0.02, sym: 'M'},
-		{prob: 0.02, sym: 'N'},
-		{prob: 0.02, sym: 'R'},
-		{prob: 0.02, sym: 'S'},
-		{prob: 0.02, sym: 'V'},
-		{prob: 0.02, sym: 'W'},
-		{prob: 0.02, sym: 'Y'},
+		Acid{prob: 0.27, sym: 'a'},
+		Acid{prob: 0.12, sym: 'c'},
+		Acid{prob: 0.12, sym: 'g'},
+		Acid{prob: 0.27, sym: 't'},
+		Acid{prob: 0.02, sym: 'B'},
+		Acid{prob: 0.02, sym: 'D'},
+		Acid{prob: 0.02, sym: 'H'},
+		Acid{prob: 0.02, sym: 'K'},
+		Acid{prob: 0.02, sym: 'M'},
+		Acid{prob: 0.02, sym: 'N'},
+		Acid{prob: 0.02, sym: 'R'},
+		Acid{prob: 0.02, sym: 'S'},
+		Acid{prob: 0.02, sym: 'V'},
+		Acid{prob: 0.02, sym: 'W'},
+		Acid{prob: 0.02, sym: 'Y'},
 	}
 
 	homosapiens := []Acid{
-		{prob: 0.3029549426680, sym: 'a'},
-		{prob: 0.1979883004921, sym: 'c'},
-		{prob: 0.1975473066391, sym: 'g'},
-		{prob: 0.3015094502008, sym: 't'},
+		Acid{prob: 0.3029549426680, sym: 'a'},
+		Acid{prob: 0.1979883004921, sym: 'c'},
+		Acid{prob: 0.1975473066391, sym: 'g'},
+		Acid{prob: 0.3015094502008, sym: 't'},
 	}
 
 	alu := []byte(
@@ -191,7 +192,9 @@ func (b *buffer) Flush() {
 
 func (b *buffer) WriteString(s string) {
 	p := b.NextWrite(len(s))
-	copy(p, s)
+	for i := 0; i < len(s); i++ {
+		p[i] = s[i]
+	}
 }
 
 func (b *buffer) NextWrite(n int) []byte {
@@ -201,6 +204,6 @@ func (b *buffer) NextWrite(n int) []byte {
 		p = *b
 	}
 	out := p[len(p) : len(p)+n]
-	*b = p[:len(p)+n]
+	*b = p[0 : len(p)+n]
 	return out
 }

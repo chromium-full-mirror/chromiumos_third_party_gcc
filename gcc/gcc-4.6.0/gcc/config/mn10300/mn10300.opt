@@ -18,13 +18,6 @@
 ; along with GCC; see the file COPYING3.  If not see
 ; <http://www.gnu.org/licenses/>.
 
-HeaderInclude
-config/mn10300/mn10300-opts.h
-
-; The selected processor.
-Variable
-enum processor_type mn10300_processor = PROCESSOR_DEFAULT
-
 mam33
 Target
 Target the AM33 processor
@@ -38,7 +31,7 @@ Target Report
 Target the AM34 processor
 
 mtune=
-Target RejectNegative Joined Var(mn10300_tune_string)
+Target RejectNegative Joined
 Tune code for the given processor
 
 mmult-bug
@@ -61,7 +54,3 @@ Return pointers in both a0 and d0
 mliw
 Target Report Mask(ALLOW_LIW)
 Allow gcc to generate LIW instructions
-
-msetlb
-Target Report Mask(ALLOW_SETLB)
-Allow gcc to generate the SETLB and Lcc instructions

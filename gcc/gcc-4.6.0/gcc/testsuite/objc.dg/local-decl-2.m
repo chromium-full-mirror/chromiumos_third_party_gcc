@@ -3,9 +3,9 @@
 /* Author: Ziemowit Laski <zlaski@apple.com>.  */
 /* { dg-do compile } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.h"
+#include "../objc-obj-c++-shared/Object1.h"
 
-@interface Sprite: TestsuiteObject {
+@interface Sprite: Object {
   int sprite, spree;
 }
 + (void)setFoo:(int)foo;

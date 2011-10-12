@@ -168,4 +168,4 @@ program main
 
 end
 
-! { dg-final { cleanup-modules "basestrategy laxwendroffstrategy kestrategy" } }
+! { dg-final { cleanup-modules "BaseStrategy LaxWendroffStrategy KEStrategy" } }

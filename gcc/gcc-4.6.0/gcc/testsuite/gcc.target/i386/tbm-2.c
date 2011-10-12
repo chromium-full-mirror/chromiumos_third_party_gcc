@@ -1,4 +1,5 @@
-/* { dg-do compile { target { ! { ia32 } } } } */
+/* { dg-do compile } */
+/* { dg-require-effective-target lp64 } */
 /* { dg-options "-O2 -mtbm" } */
 /* { dg-final { scan-assembler "bextr\[^\\n]*(%|)rax" } } */
 /* { dg-final { scan-assembler "blcfill\[^\\n]*(%|)rax" } } */

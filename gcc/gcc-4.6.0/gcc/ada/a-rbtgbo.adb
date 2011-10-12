@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2004-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 2004-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -59,18 +59,13 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
            "attempt to tamper with cursors (container is busy)";
       end if;
 
-      --  The lock status (which monitors "element tampering") always implies
-      --  that the busy status (which monitors "cursor tampering") is set too;
-      --  this is a representation invariant. Thus if the busy bit is not set,
-      --  then the lock bit must not be set either.
-
-      pragma Assert (Tree.Lock = 0);
-
-      Tree.First  := 0;
-      Tree.Last   := 0;
-      Tree.Root   := 0;
+      Tree.First := 0;
+      Tree.Last := 0;
+      Tree.Root := 0;
       Tree.Length := 0;
-      Tree.Free   := -1;
+      --  Tree.Busy
+      --  Tree.Lock
+      Tree.Free := -1;
    end Clear_Tree;
 
    ------------------
@@ -81,7 +76,8 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
      (Tree : in out Tree_Type'Class;
       Node : Count_Type)
    is
-      --  CLR p. 274
+
+      --  CLR p274
 
       X : Count_Type;
       W : Count_Type;
@@ -147,7 +143,7 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
             end if;
 
             if (Left (N (W))  = 0 or else Color (N (Left (N (W)))) = Black)
-                 and then
+                  and then
                (Right (N (W)) = 0 or else Color (N (Right (N (W)))) = Black)
             then
                Set_Color (N (W), Red);
@@ -191,7 +187,7 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
      (Tree : in out Tree_Type'Class;
       Node : Count_Type)
    is
-      --  CLR p. 273
+      --  CLR p273
 
       X, Y : Count_Type;
 
@@ -207,9 +203,9 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
       end if;
 
       pragma Assert (Tree.Length > 0);
-      pragma Assert (Tree.Root  /= 0);
+      pragma Assert (Tree.Root /= 0);
       pragma Assert (Tree.First /= 0);
-      pragma Assert (Tree.Last  /= 0);
+      pragma Assert (Tree.Last /= 0);
       pragma Assert (Parent (N (Tree.Root)) = 0);
 
       pragma Assert ((Tree.Length > 1)
@@ -334,13 +330,12 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
                   Set_Right (N (Parent (N (Z))), Y);
                end if;
 
-               Set_Left   (N (Y), Left (N (Z)));
+               Set_Left (N (Y), Z);
                Set_Parent (N (Left (N (Y))), Y);
-               Set_Right  (N (Y), Z);
-
+               Set_Right (N (Y), Z);
                Set_Parent (N (Z), Y);
-               Set_Left   (N (Z), 0);
-               Set_Right  (N (Z), 0);
+               Set_Left (N (Z), 0);
+               Set_Right (N (Z), 0);
 
                declare
                   Y_Color : constant Color_Type := Color (N (Y));
@@ -422,13 +417,13 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
       pragma Assert (Parent (N (Y)) /= Z);
 
       Y_Parent : constant Count_Type := Parent (N (Y));
-      Y_Color  : constant Color_Type := Color (N (Y));
+      Y_Color  : constant Color_Type  := Color (N (Y));
 
    begin
       Set_Parent (N (Y), Parent (N (Z)));
-      Set_Left   (N (Y), Left   (N (Z)));
-      Set_Right  (N (Y), Right  (N (Z)));
-      Set_Color  (N (Y), Color  (N (Z)));
+      Set_Left (N (Y), Left (N (Z)));
+      Set_Right (N (Y), Right (N (Z)));
+      Set_Color (N (Y), Color (N (Z)));
 
       if Tree.Root = Z then
          Tree.Root := Y;
@@ -448,9 +443,9 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
       end if;
 
       Set_Parent (N (Z), Y_Parent);
-      Set_Color  (N (Z), Y_Color);
-      Set_Left   (N (Z), 0);
-      Set_Right  (N (Z), 0);
+      Set_Color (N (Z), Y_Color);
+      Set_Left (N (Z), 0);
+      Set_Right (N (Z), 0);
    end Delete_Swap;
 
    ----------
@@ -531,10 +526,11 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
          --  node onto the head of the free store.
 
          --  ???
-         --  See the comments above for an optimization opportunity. If the
-         --  next link for a node on the free store is negative, then this
-         --  means the remaining nodes on the free store are physically
-         --  contiguous, starting as the absolute value of that index value.
+         --  See the comments above for an optimization opportunity. If
+         --  the next link for a node on the free store is negative, then
+         --  this means the remaining nodes on the free store are
+         --  physically contiguous, starting as the absolute value of
+         --  that index value.
 
          Tree.Free := abs Tree.Free;
 
@@ -590,15 +586,6 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
          Set_Element (N (Node));
          Tree.Free := Tree.Free - 1;
       end if;
-
-      --  When a node is allocated from the free store, its pointer components
-      --  (the links to other nodes in the tree) must also be initialized (to
-      --  0, the equivalent of null). This simplifies the post-allocation
-      --  handling of nodes inserted into terminal positions.
-
-      Set_Parent (N (Node), Parent => 0);
-      Set_Left   (N (Node), Left   => 0);
-      Set_Right  (N (Node), Right  => 0);
    end Generic_Allocate;
 
    -------------------
@@ -696,9 +683,9 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
 
       Set_Color (N (Node), Black);
 
-      Tree.Root   := Node;
-      Tree.First  := Node;
-      Tree.Last   := Node;
+      Tree.Root := Node;
+      Tree.First := Node;
+      Tree.Last := Node;
       Tree.Length := 1;
 
       for J in Count_Type range 2 .. Len loop
@@ -756,7 +743,8 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
       procedure Process (Node : Count_Type);
       pragma Inline (Process);
 
-      procedure Iterate is new Generic_Iteration (Process);
+      procedure Iterate is
+         new Generic_Iteration (Process);
 
       -------------
       -- Process --
@@ -779,7 +767,7 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
    -----------------
 
    procedure Left_Rotate (Tree : in out Tree_Type'Class; X : Count_Type) is
-      --  CLR p. 266
+      --  CLR p266
 
       N : Nodes_Type renames Tree.Nodes;
 
@@ -804,7 +792,7 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
          Set_Right (N (Parent (N (X))), Y);
       end if;
 
-      Set_Left   (N (Y), X);
+      Set_Left (N (Y), X);
       Set_Parent (N (X), Y);
    end Left_Rotate;
 
@@ -816,7 +804,7 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
      (Tree : Tree_Type'Class;
       Node : Count_Type) return Count_Type
    is
-      --  CLR p. 248
+      --  CLR p248
 
       X : Count_Type := Node;
       Y : Count_Type;
@@ -841,7 +829,7 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
      (Tree : Tree_Type'Class;
       Node : Count_Type) return Count_Type
    is
-      --  CLR p. 248
+      --  CLR p248
 
       X : Count_Type := Node;
       Y : Count_Type;
@@ -867,7 +855,7 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
       Node : Count_Type) return Count_Type
    is
    begin
-      --  CLR p. 249
+      --  CLR p249
 
       if Node = 0 then
          return 0;
@@ -934,7 +922,7 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
      (Tree : in out Tree_Type'Class;
       Node : Count_Type)
    is
-      --  CLR p. 268
+      --  CLR p.268
 
       N : Nodes_Type renames Tree.Nodes;
 
@@ -1022,7 +1010,7 @@ package body Ada.Containers.Red_Black_Trees.Generic_Bounded_Operations is
          Set_Right (N (Parent (N (Y))), X);
       end if;
 
-      Set_Right  (N (X), Y);
+      Set_Right (N (X), Y);
       Set_Parent (N (Y), X);
    end Right_Rotate;
 

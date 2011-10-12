@@ -33,39 +33,51 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 compile_options_t compile_options;
 
 
-volatile sig_atomic_t fatal_error_in_progress = 0;
-
 /* A signal handler to allow us to output a backtrace.  */
 void
-backtrace_handler (int signum)
+handler (int signum)
 {
-  /* Since this handler is established for more than one kind of signal, 
-     it might still get invoked recursively by delivery of some other kind
-     of signal.  Use a static variable to keep track of that. */
-  if (fatal_error_in_progress)
-    raise (signum);
-  fatal_error_in_progress = 1;
+  const char * name = NULL, * desc = NULL;
 
-  show_backtrace();
+  switch (signum)
+    {
+#if defined(SIGSEGV)
+      case SIGSEGV:
+	name = "SIGSEGV";
+	desc = "Segmentation fault";
+	break;
+#endif
 
-  /* Now reraise the signal.  We reactivate the signal's
-     default handling, which is to terminate the process.
-     We could just call exit or abort,
-     but reraising the signal sets the return status
-     from the process correctly. */
-  signal (signum, SIG_DFL);
-  raise (signum);
+#if defined(SIGBUS)
+      case SIGBUS:
+	name = "SIGBUS";
+	desc = "Bus error";
+	break;
+#endif
+
+#if defined(SIGILL)
+      case SIGILL:
+	name = "SIGILL";
+	desc = "Illegal instruction";
+	break;
+#endif
+
+#if defined(SIGFPE)
+      case SIGFPE:
+	name = "SIGFPE";
+	desc = "Floating-point exception";
+	break;
+#endif
+    }
+
+  if (name)
+    st_printf ("\nProgram received signal %d (%s): %s.\n", signum, name, desc);
+  else
+    st_printf ("\nProgram received signal %d.\n", signum);
+
+  sys_exit (5);
 }
 
-
-/* Helper function for set_options because we need to access the
-   global variable options which is not seen in set_options.  */
-static void
-maybe_find_addr2line (void)
-{
-  if (options.backtrace == -1)
-    find_addr2line ();
-}
 
 /* Set the usual compile-time options.  */
 extern void set_options (int , int []);
@@ -80,9 +92,8 @@ set_options (int num, int options[])
     compile_options.allow_std = options[1];
   if (num >= 3)
     compile_options.pedantic = options[2];
-  /* options[3] is the removed -fdump-core option. It's place in the
-     options array is retained due to ABI compatibility. Remove when
-     bumping the library ABI.  */
+  if (num >= 4)
+    compile_options.dump_core = options[3];
   if (num >= 5)
     compile_options.backtrace = options[4];
   if (num >= 6)
@@ -92,56 +103,27 @@ set_options (int num, int options[])
   if (num >= 8)
     compile_options.range_check = options[7];
 
-  /* If backtrace is required, we set signal handlers on the POSIX
-     2001 signals with core action.  */
-#if defined(HAVE_SIGNAL) && (defined(SIGQUIT) || defined(SIGILL) \
-			     || defined(SIGABRT) || defined(SIGFPE) \
-			     || defined(SIGSEGV) || defined(SIGBUS) \
-			     || defined(SIGSYS) || defined(SIGTRAP) \
-			     || defined(SIGXCPU) || defined(SIGXFSZ))
+  /* If backtrace is required, we set signal handlers on most common
+     signals.  */
+#if defined(HAVE_SIGNAL) && (defined(SIGSEGV) || defined(SIGBUS) \
+			     || defined(SIGILL) || defined(SIGFPE))
   if (compile_options.backtrace)
     {
-#if defined(SIGQUIT)
-      signal (SIGQUIT, backtrace_handler);
-#endif
-
-#if defined(SIGILL)
-      signal (SIGILL, backtrace_handler);
-#endif
-
-#if defined(SIGABRT)
-      signal (SIGABRT, backtrace_handler);
-#endif
-
-#if defined(SIGFPE)
-      signal (SIGFPE, backtrace_handler);
-#endif
-
 #if defined(SIGSEGV)
-      signal (SIGSEGV, backtrace_handler);
+      signal (SIGSEGV, handler);
 #endif
 
 #if defined(SIGBUS)
-      signal (SIGBUS, backtrace_handler);
+      signal (SIGBUS, handler);
 #endif
 
-#if defined(SIGSYS)
-      signal (SIGSYS, backtrace_handler);
+#if defined(SIGILL)
+      signal (SIGILL, handler);
 #endif
 
-#if defined(SIGTRAP)
-      signal (SIGTRAP, backtrace_handler);
+#if defined(SIGFPE)
+      signal (SIGFPE, handler);
 #endif
-
-#if defined(SIGXCPU)
-      signal (SIGXCPU, backtrace_handler);
-#endif
-
-#if defined(SIGXFSZ)
-      signal (SIGXFSZ, backtrace_handler);
-#endif
-
-      maybe_find_addr2line ();
     }
 #endif
 
@@ -158,6 +140,7 @@ init_compile_options (void)
     | GFC_STD_F2003 | GFC_STD_F2008 | GFC_STD_F95 | GFC_STD_F77
     | GFC_STD_F2008_OBS | GFC_STD_GNU | GFC_STD_LEGACY;
   compile_options.pedantic = 0;
+  compile_options.dump_core = 0;
   compile_options.backtrace = 0;
   compile_options.sign_zero = 1;
   compile_options.range_check = 1;

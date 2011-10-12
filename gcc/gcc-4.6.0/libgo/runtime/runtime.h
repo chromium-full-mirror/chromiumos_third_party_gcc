@@ -50,7 +50,6 @@ typedef	uint8			bool;
 typedef	uint8			byte;
 typedef	struct	M		M;
 typedef	struct	MCache		MCache;
-typedef struct	FixAlloc	FixAlloc;
 typedef	struct	Lock		Lock;
 
 /* We use mutexes for locks.  6g uses futexes directly, and perhaps
@@ -96,7 +95,6 @@ enum
 
 struct	M
 {
-	int32	id;
 	int32	mallocing;
 	int32	gcing;
 	int32	locks;
@@ -104,8 +102,6 @@ struct	M
 	int32	gcing_for_prof;
 	int32	holds_finlock;
 	int32	gcing_for_finlock;
-	int32	profilehz;
-	uint32	fastrand;
 	MCache	*mcache;
 
 	/* For the list of all threads.  */
@@ -155,8 +151,8 @@ void	runtime_lock(Lock*);
 void	runtime_unlock(Lock*);
 void	runtime_destroylock(Lock*);
 
-void runtime_semacquire (uint32 *) asm ("libgo_runtime.runtime.Semacquire");
-void runtime_semrelease (uint32 *) asm ("libgo_runtime.runtime.Semrelease");
+void semacquire (uint32 *) asm ("libgo_runtime.runtime.Semacquire");
+void semrelease (uint32 *) asm ("libgo_runtime.runtime.Semrelease");
 
 /*
  * sleep and wakeup on one-time events.
@@ -167,9 +163,9 @@ void runtime_semrelease (uint32 *) asm ("libgo_runtime.runtime.Semrelease");
  * once notewakeup has been called, all the notesleeps
  * will return.  future notesleeps will return immediately.
  */
-void	runtime_noteclear(Note*);
-void	runtime_notesleep(Note*);
-void	runtime_notewakeup(Note*);
+void	noteclear(Note*);
+void	notesleep(Note*);
+void	notewakeup(Note*);
 
 /* Functions.  */
 #define runtime_printf printf
@@ -189,17 +185,10 @@ void	runtime_walkfintab(void (*fn)(void*), void (*scan)(byte *, int64));
 #define runtime_mmap mmap
 #define runtime_munmap(p, s) munmap((p), (s))
 #define runtime_cas(pval, old, new) __sync_bool_compare_and_swap (pval, old, new)
-#define runtime_casp(pval, old, new) __sync_bool_compare_and_swap (pval, old, new)
-
-void	runtime_sigprof(uint8 *pc, uint8 *sp, uint8 *lr);
-void	runtime_cpuprofinit(void);
-void	runtime_resetcpuprofiler(int32);
-void	runtime_setcpuprofilerate(void(*)(uintptr*, int32), int32);
-uint32	runtime_fastrand1(void);
 
 struct __go_func_type;
-void reflect_call(const struct __go_func_type *, const void *, _Bool, _Bool,
-		  void **, void **)
+void reflect_call(const struct __go_func_type *, const void *, _Bool, void **,
+		  void **)
   asm ("libgo_reflect.reflect.call");
 
 #ifdef __rtems__

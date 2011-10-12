@@ -11,6 +11,7 @@ import "syscall"
 var Args []string // provided by runtime
 var Envs []string // provided by runtime
 
+
 // Getuid returns the numeric user id of the caller.
 func Getuid() int { return syscall.Getuid() }
 
@@ -25,8 +26,8 @@ func Getegid() int { return syscall.Getegid() }
 
 // Getgroups returns a list of the numeric ids of groups that the caller belongs to.
 func Getgroups() ([]int, Error) {
-	gids, e := syscall.Getgroups()
-	return gids, NewSyscallError("getgroups", e)
+	gids, errno := syscall.Getgroups()
+	return gids, NewSyscallError("getgroups", errno)
 }
 
 // Exit causes the current program to exit with the given status code.

@@ -95,6 +95,3 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #endif
 
 #define TARGET_POSIX_IO
-
-#define TARGET_C99_FUNCTIONS 1
-#define TARGET_HAS_SINCOS 1

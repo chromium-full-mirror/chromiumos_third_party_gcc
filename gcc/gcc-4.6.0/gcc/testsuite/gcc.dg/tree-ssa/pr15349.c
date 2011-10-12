@@ -1,6 +1,6 @@
 /* PR 15349.  Merge two PHI nodes.  */
 /* { dg-do compile } */
-/* { dg-options "-O1 -fdump-tree-mergephi2" } */
+/* { dg-options "-O1 -fdump-tree-mergephi" } */
 
 int
 foo (int a, int b)
@@ -23,4 +23,4 @@ foo (int a, int b)
 }
 
 /* { dg-final { scan-tree-dump-times "PHI" 1 "mergephi2"} } */
-/* { dg-final { cleanup-tree-dump "mergephi2" } } */
+/* { dg-final { cleanup-tree-dump "mergephi\[1-2\]" } } */

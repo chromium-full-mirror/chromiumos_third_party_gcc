@@ -1,6 +1,6 @@
 /* RunTime Type Identification
    Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
-   2005, 2006, 2007, 2008, 2009, 2010, 2011
+   2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Mostly written by Jason Merrill (jason@cygnus.com).
 
@@ -192,7 +192,8 @@ build_headof (tree exp)
 
   type = cp_build_qualified_type (ptr_type_node,
 				  cp_type_quals (TREE_TYPE (exp)));
-  return fold_build_pointer_plus (exp, offset);
+  return build2 (POINTER_PLUS_EXPR, type, exp,
+		 convert_to_integer (sizetype, offset));
 }
 
 /* Get a bad_cast node for the program to throw...
@@ -405,8 +406,6 @@ get_tinfo_decl (tree type)
     type = build_function_type (TREE_TYPE (type),
 				TREE_CHAIN (TYPE_ARG_TYPES (type)));
 
-  type = complete_type (type);
-
   /* For a class type, the variable is cached in the type node
      itself.  */
   if (CLASS_TYPE_P (type))
@@ -617,7 +616,7 @@ build_dynamic_cast_1 (tree type, tree expr, tsubst_flags_t complain)
     if (binfo)
       {
 	expr = build_base_path (PLUS_EXPR, convert_from_reference (expr),
-				binfo, 0, complain);
+				binfo, 0);
 	if (TREE_CODE (exprtype) == POINTER_TYPE)
 	  expr = rvalue (expr);
 	return expr;
@@ -918,8 +917,8 @@ tinfo_base_init (tinfo_s *ti, tree target)
       vtable_ptr = cp_build_addr_expr (vtable_ptr, tf_warning_or_error);
 
       /* We need to point into the middle of the vtable.  */
-      vtable_ptr = fold_build_pointer_plus
-	(vtable_ptr,
+      vtable_ptr = build2
+	(POINTER_PLUS_EXPR, TREE_TYPE (vtable_ptr), vtable_ptr,
 	 size_binop (MULT_EXPR,
 		     size_int (2 * TARGET_VTABLE_DATA_ENTRY_DISTANCE),
 		     TYPE_SIZE_UNIT (vtable_entry_type)));

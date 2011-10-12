@@ -1,11 +1,13 @@
 /* Verify that we generate single-precision sine and cosine approximate
-   (fsca) in fast math mode on SH4A with FPU.  */
+   (fsca) in fast math mode.  */
 /* { dg-do compile { target "sh*-*-*" } } */
 /* { dg-options "-O -ffast-math" } */
-/* { dg-skip-if "" { "sh*-*-*" } { "*" } { "-m4a" "-m4a-single" "-m4a-single-only" } }  */
-/* { dg-final { scan-assembler "fsca" } } */
+/* { dg-final { scan-assembler "\tfsca\t" } } */
 
+#if defined __SH4A__ && ! defined __SH4_NOFPU__
 #include <math.h>
 
 float test(float f) { return sinf(f); }
-
+#else
+asm ("fsca\t");
+#endif

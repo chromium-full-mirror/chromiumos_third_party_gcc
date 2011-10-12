@@ -156,7 +156,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
       // NB: per LWG issue 42, semantics different from IS:
       /**
-       *  @brief  Construct string with copy of value of @a __str.
+       *  @brief  Construct string with copy of value of @a str.
        *  @param  __str  Source string.
        */
       __versa_string(const __versa_string& __str)
@@ -168,10 +168,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  @param  __str  Source string.
        *
        *  The newly-constructed %string contains the exact contents of
-       *  @a __str.  The contents of @a __str are a valid, but unspecified
+       *  @a str.  The contents of @a str are a valid, but unspecified
        *  string.
        */
-      __versa_string(__versa_string&& __str) noexcept
+      __versa_string(__versa_string&& __str)
       : __vstring_base(std::move(__str)) { }
 
       /**
@@ -258,7 +258,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       /**
        *  @brief  Destroy the string instance.
        */
-      ~__versa_string() _GLIBCXX_NOEXCEPT { }	
+      ~__versa_string() { }	
 
       /**
        *  @brief  Assign the value of @a str to this string.
@@ -324,7 +324,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  the %string.  Unshares the string.
        */
       iterator
-      begin() _GLIBCXX_NOEXCEPT
+      begin()
       {
 	this->_M_leak();
 	return iterator(this->_M_data());
@@ -335,7 +335,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  character in the %string.
        */
       const_iterator
-      begin() const _GLIBCXX_NOEXCEPT
+      begin() const
       { return const_iterator(this->_M_data()); }
 
       /**
@@ -343,7 +343,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  character in the %string.  Unshares the string.
        */
       iterator
-      end() _GLIBCXX_NOEXCEPT
+      end()
       {
 	this->_M_leak();
 	return iterator(this->_M_data() + this->size());
@@ -354,7 +354,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  last character in the %string.
        */
       const_iterator
-      end() const _GLIBCXX_NOEXCEPT
+      end() const
       { return const_iterator(this->_M_data() + this->size()); }
 
       /**
@@ -363,7 +363,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  order.  Unshares the string.
        */
       reverse_iterator
-      rbegin() _GLIBCXX_NOEXCEPT
+      rbegin()
       { return reverse_iterator(this->end()); }
 
       /**
@@ -372,7 +372,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  reverse element order.
        */
       const_reverse_iterator
-      rbegin() const _GLIBCXX_NOEXCEPT
+      rbegin() const
       { return const_reverse_iterator(this->end()); }
 
       /**
@@ -381,7 +381,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  element order.  Unshares the string.
        */
       reverse_iterator
-      rend() _GLIBCXX_NOEXCEPT
+      rend()
       { return reverse_iterator(this->begin()); }
 
       /**
@@ -390,7 +390,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  is done in reverse element order.
        */
       const_reverse_iterator
-      rend() const _GLIBCXX_NOEXCEPT
+      rend() const
       { return const_reverse_iterator(this->begin()); }
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
@@ -399,7 +399,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  character in the %string.
        */
       const_iterator
-      cbegin() const noexcept
+      cbegin() const
       { return const_iterator(this->_M_data()); }
 
       /**
@@ -407,7 +407,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  last character in the %string.
        */
       const_iterator
-      cend() const noexcept
+      cend() const
       { return const_iterator(this->_M_data() + this->size()); }
 
       /**
@@ -416,7 +416,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  reverse element order.
        */
       const_reverse_iterator
-      crbegin() const noexcept
+      crbegin() const
       { return const_reverse_iterator(this->end()); }
 
       /**
@@ -425,7 +425,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  is done in reverse element order.
        */
       const_reverse_iterator
-      crend() const noexcept
+      crend() const
       { return const_reverse_iterator(this->begin()); }
 #endif
 
@@ -434,18 +434,18 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       ///  Returns the number of characters in the string, not including any
       ///  null-termination.
       size_type
-      size() const _GLIBCXX_NOEXCEPT
+      size() const
       { return this->_M_length(); }
 
       ///  Returns the number of characters in the string, not including any
       ///  null-termination.
       size_type
-      length() const _GLIBCXX_NOEXCEPT
+      length() const
       { return this->_M_length(); }
 
       /// Returns the size() of the largest possible %string.
       size_type
-      max_size() const _GLIBCXX_NOEXCEPT
+      max_size() const
       { return this->_M_max_size(); }
 
       /**
@@ -480,13 +480,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       void
       shrink_to_fit()
       {
-	if (capacity() > size())
-	  {
-	    __try
-	      { this->reserve(0); }
-	    __catch(...)
-	      { }
-	  }
+	__try
+	  { this->reserve(0); }
+	__catch(...)
+	  { }
       }
 #endif
 
@@ -495,7 +492,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  hold before needing to allocate more memory.
        */
       size_type
-      capacity() const _GLIBCXX_NOEXCEPT
+      capacity() const
       { return this->_M_capacity(); }
 
       /**
@@ -523,7 +520,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  Erases the string, making it empty.
        */
       void
-      clear() _GLIBCXX_NOEXCEPT
+      clear()
       { this->_M_clear(); }
 
       /**
@@ -531,7 +528,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  <code>*this == ""</code>.
        */
       bool
-      empty() const _GLIBCXX_NOEXCEPT
+      empty() const
       { return this->size() == 0; }
 
       // Element access:
@@ -1502,7 +1499,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  happen.
       */
       const _CharT*
-      c_str() const _GLIBCXX_NOEXCEPT
+      c_str() const
       { return this->_M_data(); }
 
       /**
@@ -1512,14 +1509,14 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  happen.
       */
       const _CharT*
-      data() const _GLIBCXX_NOEXCEPT
+      data() const
       { return this->_M_data(); }
 
       /**
        *  @brief  Return copy of allocator used to construct this string.
       */
       allocator_type
-      get_allocator() const _GLIBCXX_NOEXCEPT
+      get_allocator() const
       { return allocator_type(this->_M_get_allocator()); }
 
       /**
@@ -1549,7 +1546,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       */
       size_type
       find(const __versa_string& __str, size_type __pos = 0) const
-	_GLIBCXX_NOEXCEPT
       { return this->find(__str.data(), __pos, __str.size()); }
 
       /**
@@ -1580,7 +1576,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  found.  If not found, returns npos.
       */
       size_type
-      find(_CharT __c, size_type __pos = 0) const _GLIBCXX_NOEXCEPT;
+      find(_CharT __c, size_type __pos = 0) const;
 
       /**
        *  @brief  Find last position of a string.
@@ -1594,7 +1590,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       */
       size_type
       rfind(const __versa_string& __str, size_type __pos = npos) const
-	_GLIBCXX_NOEXCEPT
       { return this->rfind(__str.data(), __pos, __str.size()); }
 
       /**
@@ -1640,7 +1635,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  found.  If not found, returns npos.
       */
       size_type
-      rfind(_CharT __c, size_type __pos = npos) const _GLIBCXX_NOEXCEPT;
+      rfind(_CharT __c, size_type __pos = npos) const;
 
       /**
        *  @brief  Find position of a character of string.
@@ -1654,7 +1649,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       */
       size_type
       find_first_of(const __versa_string& __str, size_type __pos = 0) const
-	_GLIBCXX_NOEXCEPT
       { return this->find_first_of(__str.data(), __pos, __str.size()); }
 
       /**
@@ -1702,7 +1696,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  Note: equivalent to find(c, pos).
       */
       size_type
-      find_first_of(_CharT __c, size_type __pos = 0) const _GLIBCXX_NOEXCEPT
+      find_first_of(_CharT __c, size_type __pos = 0) const
       { return this->find(__c, __pos); }
 
       /**
@@ -1718,7 +1712,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       */
       size_type
       find_last_of(const __versa_string& __str, size_type __pos = npos) const
-	_GLIBCXX_NOEXCEPT
       { return this->find_last_of(__str.data(), __pos, __str.size()); }
 
       /**
@@ -1766,7 +1759,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  Note: equivalent to rfind(c, pos).
       */
       size_type
-      find_last_of(_CharT __c, size_type __pos = npos) const _GLIBCXX_NOEXCEPT
+      find_last_of(_CharT __c, size_type __pos = npos) const
       { return this->rfind(__c, __pos); }
 
       /**
@@ -1781,7 +1774,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       */
       size_type
       find_first_not_of(const __versa_string& __str, size_type __pos = 0) const
-	_GLIBCXX_NOEXCEPT
       { return this->find_first_not_of(__str.data(), __pos, __str.size()); }
 
       /**
@@ -1828,8 +1820,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  index where it was found.  If not found, returns npos.
       */
       size_type
-      find_first_not_of(_CharT __c, size_type __pos = 0) const
-	_GLIBCXX_NOEXCEPT;
+      find_first_not_of(_CharT __c, size_type __pos = 0) const;
 
       /**
        *  @brief  Find last position of a character not in string.
@@ -1844,7 +1835,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       */
       size_type
       find_last_not_of(const __versa_string& __str,
-		       size_type __pos = npos) const _GLIBCXX_NOEXCEPT
+		       size_type __pos = npos) const
       { return this->find_last_not_of(__str.data(), __pos, __str.size()); }
 
       /**
@@ -1891,8 +1882,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  index where it was found.  If not found, returns npos.
       */
       size_type
-      find_last_not_of(_CharT __c, size_type __pos = npos) const
-	_GLIBCXX_NOEXCEPT;
+      find_last_not_of(_CharT __c, size_type __pos = npos) const;
 
       /**
        *  @brief  Get a substring.
@@ -2037,14 +2027,14 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
       /**
        *  @brief  Compare substring against a character array.
-       *  @param __pos  Index of first character of substring.
+       *  @param __pos1  Index of first character of substring.
        *  @param __n1  Number of characters in substring.
        *  @param __s  character array to compare against.
        *  @param __n2  Number of characters of s.
        *  @return  Integer < 0, 0, or > 0.
        *
        *  Form the substring of this string from the @a __n1
-       *  characters starting at @a __pos.  Form a string from the
+       *  characters starting at @a __pos1.  Form a string from the
        *  first @a __n2 characters of @a __s.  Returns an integer < 0
        *  if this substring is ordered before the string from @a __s,
        *  0 if their values are equivalent, or > 0 if this substring
@@ -2052,11 +2042,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *  effective length rlen of the strings to compare as the
        *  smallest of the length of the substring and @a __n2.  The
        *  function then compares the two strings by calling
-       *  traits::compare(substring.data(),__s,rlen).  If the result of
+       *  traits::compare(substring.data(),s,rlen).  If the result of
        *  the comparison is nonzero returns it, otherwise the shorter
        *  one is ordered first.
        *
-       *  NB: __s must have at least n2 characters, <em>\\0</em> has no special
+       *  NB: s must have at least n2 characters, <em>\\0</em> has no special
        *  meaning.
       */
       int

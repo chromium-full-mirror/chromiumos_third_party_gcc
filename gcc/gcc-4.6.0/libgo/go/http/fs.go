@@ -12,44 +12,11 @@ import (
 	"mime"
 	"os"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 	"utf8"
 )
-
-// A Dir implements http.FileSystem using the native file
-// system restricted to a specific directory tree.
-type Dir string
-
-func (d Dir) Open(name string) (File, os.Error) {
-	if filepath.Separator != '/' && strings.IndexRune(name, filepath.Separator) >= 0 {
-		return nil, os.NewError("http: invalid character in file path")
-	}
-	f, err := os.Open(filepath.Join(string(d), filepath.FromSlash(path.Clean("/"+name))))
-	if err != nil {
-		return nil, err
-	}
-	return f, nil
-}
-
-// A FileSystem implements access to a collection of named files.
-// The elements in a file path are separated by slash ('/', U+002F)
-// characters, regardless of host operating system convention.
-type FileSystem interface {
-	Open(name string) (File, os.Error)
-}
-
-// A File is returned by a FileSystem's Open method and can be
-// served by the FileServer implementation.
-type File interface {
-	Close() os.Error
-	Stat() (*os.FileInfo, os.Error)
-	Readdir(count int) ([]os.FileInfo, os.Error)
-	Read([]byte) (int, os.Error)
-	Seek(offset int64, whence int) (int64, os.Error)
-}
 
 // Heuristic: b is text if it is valid UTF-8 and doesn't
 // contain any unprintable ASCII or Unicode characters.
@@ -77,8 +44,7 @@ func isText(b []byte) bool {
 	return true
 }
 
-func dirList(w ResponseWriter, f File) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+func dirList(w ResponseWriter, f *os.File) {
 	fmt.Fprintf(w, "<pre>\n")
 	for {
 		dirs, err := f.Readdir(100)
@@ -97,19 +63,16 @@ func dirList(w ResponseWriter, f File) {
 	fmt.Fprintf(w, "</pre>\n")
 }
 
-// name is '/'-separated, not filepath.Separator.
-func serveFile(w ResponseWriter, r *Request, fs FileSystem, name string, redirect bool) {
+func serveFile(w ResponseWriter, r *Request, name string, redirect bool) {
 	const indexPage = "/index.html"
 
 	// redirect .../index.html to .../
-	// can't use Redirect() because that would make the path absolute,
-	// which would be a problem running under StripPrefix
 	if strings.HasSuffix(r.URL.Path, indexPage) {
-		localRedirect(w, r, "./")
+		Redirect(w, r, r.URL.Path[0:len(r.URL.Path)-len(indexPage)+1], StatusMovedPermanently)
 		return
 	}
 
-	f, err := fs.Open(name)
+	f, err := os.Open(name, os.O_RDONLY, 0)
 	if err != nil {
 		// TODO expose actual error?
 		NotFound(w, r)
@@ -130,27 +93,27 @@ func serveFile(w ResponseWriter, r *Request, fs FileSystem, name string, redirec
 		url := r.URL.Path
 		if d.IsDirectory() {
 			if url[len(url)-1] != '/' {
-				localRedirect(w, r, path.Base(url)+"/")
+				Redirect(w, r, url+"/", StatusMovedPermanently)
 				return
 			}
 		} else {
 			if url[len(url)-1] == '/' {
-				localRedirect(w, r, "../"+path.Base(url))
+				Redirect(w, r, url[0:len(url)-1], StatusMovedPermanently)
 				return
 			}
 		}
 	}
 
-	if t, _ := time.Parse(TimeFormat, r.Header.Get("If-Modified-Since")); t != nil && d.Mtime_ns/1e9 <= t.Seconds() {
+	if t, _ := time.Parse(TimeFormat, r.Header["If-Modified-Since"]); t != nil && d.Mtime_ns/1e9 <= t.Seconds() {
 		w.WriteHeader(StatusNotModified)
 		return
 	}
-	w.Header().Set("Last-Modified", time.SecondsToUTC(d.Mtime_ns/1e9).Format(TimeFormat))
+	w.SetHeader("Last-Modified", time.SecondsToUTC(d.Mtime_ns/1e9).Format(TimeFormat))
 
 	// use contents of index.html for directory, if present
 	if d.IsDirectory() {
 		index := name + indexPage
-		ff, err := fs.Open(index)
+		ff, err := os.Open(index, os.O_RDONLY, 0)
 		if err == nil {
 			defer ff.Close()
 			dd, err := ff.Stat()
@@ -171,50 +134,43 @@ func serveFile(w ResponseWriter, r *Request, fs FileSystem, name string, redirec
 	size := d.Size
 	code := StatusOK
 
-	// If Content-Type isn't set, use the file's extension to find it.
-	if w.Header().Get("Content-Type") == "" {
-		ctype := mime.TypeByExtension(filepath.Ext(name))
-		if ctype == "" {
-			// read a chunk to decide between utf-8 text and binary
-			var buf [1024]byte
-			n, _ := io.ReadFull(f, buf[:])
-			b := buf[:n]
-			if isText(b) {
-				ctype = "text/plain; charset=utf-8"
-			} else {
-				// generic binary
-				ctype = "application/octet-stream"
-			}
-			f.Seek(0, os.SEEK_SET) // rewind to output whole file
+	// use extension to find content type.
+	ext := path.Ext(name)
+	if ctype := mime.TypeByExtension(ext); ctype != "" {
+		w.SetHeader("Content-Type", ctype)
+	} else {
+		// read first chunk to decide between utf-8 text and binary
+		var buf [1024]byte
+		n, _ := io.ReadFull(f, buf[:])
+		b := buf[:n]
+		if isText(b) {
+			w.SetHeader("Content-Type", "text-plain; charset=utf-8")
+		} else {
+			w.SetHeader("Content-Type", "application/octet-stream") // generic binary
 		}
-		w.Header().Set("Content-Type", ctype)
+		f.Seek(0, 0) // rewind to output whole file
 	}
 
 	// handle Content-Range header.
 	// TODO(adg): handle multiple ranges
-	ranges, err := parseRange(r.Header.Get("Range"), size)
-	if err == nil && len(ranges) > 1 {
-		err = os.NewError("multiple ranges not supported")
-	}
-	if err != nil {
+	ranges, err := parseRange(r.Header["Range"], size)
+	if err != nil || len(ranges) > 1 {
 		Error(w, err.String(), StatusRequestedRangeNotSatisfiable)
 		return
 	}
 	if len(ranges) == 1 {
 		ra := ranges[0]
-		if _, err := f.Seek(ra.start, os.SEEK_SET); err != nil {
+		if _, err := f.Seek(ra.start, 0); err != nil {
 			Error(w, err.String(), StatusRequestedRangeNotSatisfiable)
 			return
 		}
 		size = ra.length
 		code = StatusPartialContent
-		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", ra.start, ra.start+ra.length-1, d.Size))
+		w.SetHeader("Content-Range", fmt.Sprintf("bytes %d-%d/%d", ra.start, ra.start+ra.length-1, d.Size))
 	}
 
-	w.Header().Set("Accept-Ranges", "bytes")
-	if w.Header().Get("Content-Encoding") == "" {
-		w.Header().Set("Content-Length", strconv.Itoa64(size))
-	}
+	w.SetHeader("Accept-Ranges", "bytes")
+	w.SetHeader("Content-Length", strconv.Itoa64(size))
 
 	w.WriteHeader(code)
 
@@ -223,44 +179,30 @@ func serveFile(w ResponseWriter, r *Request, fs FileSystem, name string, redirec
 	}
 }
 
-// localRedirect gives a Moved Permanently response.
-// It does not convert relative paths to absolute paths like Redirect does.
-func localRedirect(w ResponseWriter, r *Request, newPath string) {
-	if q := r.URL.RawQuery; q != "" {
-		newPath += "?" + q
-	}
-	w.Header().Set("Location", newPath)
-	w.WriteHeader(StatusMovedPermanently)
-}
-
 // ServeFile replies to the request with the contents of the named file or directory.
 func ServeFile(w ResponseWriter, r *Request, name string) {
-	dir, file := filepath.Split(name)
-	serveFile(w, r, Dir(dir), file, false)
+	serveFile(w, r, name, false)
 }
 
 type fileHandler struct {
-	root FileSystem
+	root   string
+	prefix string
 }
 
 // FileServer returns a handler that serves HTTP requests
 // with the contents of the file system rooted at root.
-//
-// To use the operating system's file system implementation,
-// use http.Dir:
-//
-//     http.Handle("/", http.FileServer(http.Dir("/tmp")))
-func FileServer(root FileSystem) Handler {
-	return &fileHandler{root}
-}
+// It strips prefix from the incoming requests before
+// looking up the file name in the file system.
+func FileServer(root, prefix string) Handler { return &fileHandler{root, prefix} }
 
 func (f *fileHandler) ServeHTTP(w ResponseWriter, r *Request) {
-	upath := r.URL.Path
-	if !strings.HasPrefix(upath, "/") {
-		upath = "/" + upath
-		r.URL.Path = upath
+	path := r.URL.Path
+	if !strings.HasPrefix(path, f.prefix) {
+		NotFound(w, r)
+		return
 	}
-	serveFile(w, r, f.root, path.Clean(upath), true)
+	path = path[len(f.prefix):]
+	serveFile(w, r, f.root+"/"+path, true)
 }
 
 // httpRange specifies the byte range to be sent to the client.
@@ -278,7 +220,7 @@ func parseRange(s string, size int64) ([]httpRange, os.Error) {
 		return nil, os.NewError("invalid range")
 	}
 	var ranges []httpRange
-	for _, ra := range strings.Split(s[len(b):], ",") {
+	for _, ra := range strings.Split(s[len(b):], ",", -1) {
 		i := strings.Index(ra, "-")
 		if i < 0 {
 			return nil, os.NewError("invalid range")

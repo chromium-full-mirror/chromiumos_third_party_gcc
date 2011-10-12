@@ -2,24 +2,23 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package sort_test
+package sort
 
 import (
 	"fmt"
-	"math"
 	"rand"
-	. "sort"
 	"strconv"
 	"testing"
 )
 
+
 var ints = [...]int{74, 59, 238, -784, 9845, 959, 905, 0, 0, 42, 7586, -5467984, 7586}
-var float64s = [...]float64{74.3, 59.0, math.Inf(1), 238.2, -784.0, 2.3, math.NaN(), math.NaN(), math.Inf(-1), 9845.768, -959.7485, 905, 7.8, 7.8}
+var float64s = [...]float64{74.3, 59.0, 238.2, -784.0, 2.3, 9845.768, -959.7485, 905, 7.8, 7.8}
 var strings = [...]string{"", "Hello", "foo", "bar", "foo", "f00", "%*&^*&^&", "***"}
 
-func TestSortIntSlice(t *testing.T) {
+func TestSortIntArray(t *testing.T) {
 	data := ints
-	a := IntSlice(data[0:])
+	a := IntArray(data[0:])
 	Sort(a)
 	if !IsSorted(a) {
 		t.Errorf("sorted %v", ints)
@@ -27,9 +26,9 @@ func TestSortIntSlice(t *testing.T) {
 	}
 }
 
-func TestSortFloat64Slice(t *testing.T) {
+func TestSortFloat64Array(t *testing.T) {
 	data := float64s
-	a := Float64Slice(data[0:])
+	a := Float64Array(data[0:])
 	Sort(a)
 	if !IsSorted(a) {
 		t.Errorf("sorted %v", float64s)
@@ -37,9 +36,9 @@ func TestSortFloat64Slice(t *testing.T) {
 	}
 }
 
-func TestSortStringSlice(t *testing.T) {
+func TestSortStringArray(t *testing.T) {
 	data := strings
-	a := StringSlice(data[0:])
+	a := StringArray(data[0:])
 	Sort(a)
 	if !IsSorted(a) {
 		t.Errorf("sorted %v", strings)
@@ -47,27 +46,27 @@ func TestSortStringSlice(t *testing.T) {
 	}
 }
 
-func TestInts(t *testing.T) {
+func TestSortInts(t *testing.T) {
 	data := ints
-	Ints(data[0:])
+	SortInts(data[0:])
 	if !IntsAreSorted(data[0:]) {
 		t.Errorf("sorted %v", ints)
 		t.Errorf("   got %v", data)
 	}
 }
 
-func TestFloat64s(t *testing.T) {
+func TestSortFloat64s(t *testing.T) {
 	data := float64s
-	Float64s(data[0:])
+	SortFloat64s(data[0:])
 	if !Float64sAreSorted(data[0:]) {
 		t.Errorf("sorted %v", float64s)
 		t.Errorf("   got %v", data)
 	}
 }
 
-func TestStrings(t *testing.T) {
+func TestSortStrings(t *testing.T) {
 	data := strings
-	Strings(data[0:])
+	SortStrings(data[0:])
 	if !StringsAreSorted(data[0:]) {
 		t.Errorf("sorted %v", strings)
 		t.Errorf("   got %v", data)
@@ -75,18 +74,14 @@ func TestStrings(t *testing.T) {
 }
 
 func TestSortLarge_Random(t *testing.T) {
-	n := 1000000
-	if testing.Short() {
-		n /= 100
-	}
-	data := make([]int, n)
+	data := make([]int, 1000000)
 	for i := 0; i < len(data); i++ {
 		data[i] = rand.Intn(100)
 	}
 	if IntsAreSorted(data) {
 		t.Fatalf("terrible rand.rand")
 	}
-	Ints(data)
+	SortInts(data)
 	if !IntsAreSorted(data) {
 		t.Errorf("sort didn't sort - 1M ints")
 	}
@@ -100,7 +95,7 @@ func BenchmarkSortString1K(b *testing.B) {
 			data[i] = strconv.Itoa(i ^ 0x2cc)
 		}
 		b.StartTimer()
-		Strings(data)
+		SortStrings(data)
 		b.StopTimer()
 	}
 }
@@ -113,7 +108,7 @@ func BenchmarkSortInt1K(b *testing.B) {
 			data[i] = i ^ 0x2cc
 		}
 		b.StartTimer()
-		Ints(data)
+		SortInts(data)
 		b.StopTimer()
 	}
 }
@@ -126,7 +121,7 @@ func BenchmarkSortInt64K(b *testing.B) {
 			data[i] = i ^ 0xcccc
 		}
 		b.StartTimer()
-		Ints(data)
+		SortInts(data)
 		b.StopTimer()
 	}
 }
@@ -162,7 +157,7 @@ func (d *testingData) Len() int           { return len(d.data) }
 func (d *testingData) Less(i, j int) bool { return d.data[i] < d.data[j] }
 func (d *testingData) Swap(i, j int) {
 	if d.nswap >= d.maxswap {
-		d.t.Errorf("%s: used %d swaps sorting slice of %d", d.desc, d.nswap, len(d.data))
+		d.t.Errorf("%s: used %d swaps sorting array of %d", d.desc, d.nswap, len(d.data))
 		d.t.FailNow()
 	}
 	d.nswap++
@@ -179,9 +174,6 @@ func lg(n int) int {
 
 func TestBentleyMcIlroy(t *testing.T) {
 	sizes := []int{100, 1023, 1024, 1025}
-	if testing.Short() {
-		sizes = []int{100, 127, 128, 129}
-	}
 	dists := []string{"sawtooth", "rand", "stagger", "plateau", "shuffle"}
 	modes := []string{"copy", "reverse", "reverse1", "reverse2", "sort", "dither"}
 	var tmp1, tmp2 [1025]int
@@ -242,9 +234,9 @@ func TestBentleyMcIlroy(t *testing.T) {
 						for i := 0; i < n; i++ {
 							mdata[i] = data[i]
 						}
-						// Ints is known to be correct
+						// SortInts is known to be correct
 						// because mode Sort runs after mode _Copy.
-						Ints(mdata)
+						SortInts(mdata)
 					case _Dither:
 						for i := 0; i < n; i++ {
 							mdata[i] = data[i] + i%5
@@ -256,13 +248,13 @@ func TestBentleyMcIlroy(t *testing.T) {
 					Sort(d)
 
 					// If we were testing C qsort, we'd have to make a copy
-					// of the slice and sort it ourselves and then compare
+					// of the array and sort it ourselves and then compare
 					// x against it, to ensure that qsort was only permuting
 					// the data, not (for example) overwriting it with zeros.
 					//
 					// In go, we don't have to be so paranoid: since the only
 					// mutating method Sort can call is TestingData.swap,
-					// it suffices here just to check that the final slice is sorted.
+					// it suffices here just to check that the final array is sorted.
 					if !IntsAreSorted(mdata) {
 						t.Errorf("%s: ints not sorted", desc)
 						t.Errorf("\t%v", mdata)
@@ -272,11 +264,4 @@ func TestBentleyMcIlroy(t *testing.T) {
 			}
 		}
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

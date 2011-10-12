@@ -34,7 +34,7 @@
 // warranty.
 
 /**
- * @file bin_search_tree_/info_fn_imps.hpp
+ * @file info_fn_imps.hpp
  * Contains an implementation class for bin_search_tree_.
  */
 

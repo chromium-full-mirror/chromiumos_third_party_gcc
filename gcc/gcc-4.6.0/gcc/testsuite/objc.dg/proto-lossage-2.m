@@ -2,14 +2,13 @@
    provide a suitable method.  */
 /* { dg-do compile } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.h"
-#include <objc/objc.h>
+#include "../objc-obj-c++-shared/Object1.h"
 
 @protocol Zot
 -(void) zot;
 @end
 
-@interface Foo : TestsuiteObject <Zot>
+@interface Foo : Object <Zot>
 @end
 
 int foo()

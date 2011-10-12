@@ -420,7 +420,6 @@ register_callback (const char *plugin_name,
 	  }
       /* Fall through.  */
       case PLUGIN_FINISH_TYPE:
-      case PLUGIN_FINISH_DECL:
       case PLUGIN_START_UNIT:
       case PLUGIN_FINISH_UNIT:
       case PLUGIN_PRE_GENERICIZE:
@@ -497,7 +496,6 @@ invoke_plugin_callbacks_full (int event, void *gcc_data)
 	gcc_assert (event < event_last);
       /* Fall through.  */
       case PLUGIN_FINISH_TYPE:
-      case PLUGIN_FINISH_DECL:
       case PLUGIN_START_UNIT:
       case PLUGIN_FINISH_UNIT:
       case PLUGIN_PRE_GENERICIZE:

@@ -4,9 +4,9 @@
 /* { dg-do compile } */
 /* { dg-skip-if "" { *-*-* } { "-fnext-runtime" } { "" } } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.h"
+#include <objc/Object.h>
 
-@interface FooBar: TestsuiteObject
+@interface FooBar: Object
 - (void)boo;
 @end
 

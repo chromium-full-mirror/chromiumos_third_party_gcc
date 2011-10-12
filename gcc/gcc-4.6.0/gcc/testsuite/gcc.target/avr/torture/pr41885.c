@@ -1,4 +1,4 @@
-/* { dg-options "-w -std=c99 -fno-inline" } */
+/* { dg-options "-w -std=c99" } */
 /* { dg-do run } */
 
 #include <limits.h>

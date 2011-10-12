@@ -12,23 +12,20 @@
 void
 __go_send_big (struct __go_channel* channel, const void *val, _Bool for_select)
 {
-  uintptr_t element_size;
   size_t alloc_size;
   size_t offset;
 
   if (channel == NULL)
-    {
-      // Block forever.
-      __go_select (0, 0, NULL, NULL);
-    }
+    __go_panic_msg ("send to nil channel");
 
-  element_size = channel->element_type->__size;
-  alloc_size = (element_size + sizeof (uint64_t) - 1) / sizeof (uint64_t);
+  alloc_size = ((channel->element_size + sizeof (uint64_t) - 1)
+		/ sizeof (uint64_t));
 
-  __go_send_acquire (channel, for_select);
+  if (!__go_send_acquire (channel, for_select))
+    return;
 
   offset = channel->next_store * alloc_size;
-  __builtin_memcpy (&channel->data[offset], val, element_size);
+  __builtin_memcpy (&channel->data[offset], val, channel->element_size);
 
   __go_send_release (channel);
 }

@@ -47,6 +47,15 @@ func bigcap() {
 	g1 = make([]int, 10, big)
 }
 
+const (
+	addrBits = 8*uint(unsafe.Sizeof((*byte)(nil)))
+	sh = addrBits/2 - 2
+)
+var g2 [][1<<sh][1<<sh]byte
+func overflow() {
+	g2 = make([][1<<sh][1<<sh]byte, 64)
+}
+
 var g3 map[int]int
 func badmapcap() {
 	g3 = make(map[int]int, minus1)
@@ -64,8 +73,6 @@ func badchancap() {
 func bigchancap() {
 	g4 = make(chan int, big)
 }
-
-const addrBits = unsafe.Sizeof((*byte)(nil))
 
 var g5 chan [1<<15]byte
 func overflowchan() {
@@ -85,6 +92,7 @@ func main() {
 	shouldfail(badcap, "badcap")
 	shouldfail(badcap1, "badcap1")
 	shouldfail(bigcap, "bigcap")
+	shouldfail(overflow, "overflow")
 	shouldfail(badmapcap, "badmapcap")
 	shouldfail(bigmapcap, "bigmapcap")
 	shouldfail(badchancap, "badchancap")

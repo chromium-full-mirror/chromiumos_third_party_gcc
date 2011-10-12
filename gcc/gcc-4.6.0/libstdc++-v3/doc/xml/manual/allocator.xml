@@ -504,12 +504,11 @@
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://www.drdobbs.com/cpp/184403759">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.drdobbs.com/cpp/184403759" class="uri">
+    </biblioid>
+    <citetitle>
       The Standard Librarian: What Are Allocators Good For?
-	</link>
-      </title>
+    </citetitle>
 
     <author><personname><firstname>Matt</firstname><surname>Austern</surname></personname></author>
     <publisher>
@@ -520,23 +519,21 @@
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://www.cs.umass.edu/~emery/hoard">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.cs.umass.edu/~emery/hoard/" class="uri">
+    </biblioid>
+    <citetitle>
       The Hoard Memory Allocator
-	</link>
-      </title>
+    </citetitle>
 
     <author><personname><firstname>Emery</firstname><surname>Berger</surname></personname></author>
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://www.cs.umass.edu/~emery/pubs/berger-oopsla2002.pdf">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.cs.umass.edu/~emery/pubs/berger-oopsla2002.pdf" class="uri">
+    </biblioid>
+    <citetitle>
       Reconsidering Custom Memory Allocation
-	</link>
-      </title>
+    </citetitle>
 
     <author><personname><firstname>Emery</firstname><surname>Berger</surname></personname></author>
     <author><personname><firstname>Ben</firstname><surname>Zorn</surname></personname></author>
@@ -549,13 +546,11 @@
 
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://www.angelikalanger.com/Articles/C++Report/Allocators/Allocators.html">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.angelikalanger.com/Articles/C++Report/Allocators/Allocators.html" class="uri">
+    </biblioid>
+    <citetitle>
       Allocator Types
-	</link>
-      </title>
-
+    </citetitle>
 
     <author><personname><firstname>Klaus</firstname><surname>Kreft</surname></personname></author>
     <author><personname><firstname>Angelika</firstname><surname>Langer</surname></personname></author>

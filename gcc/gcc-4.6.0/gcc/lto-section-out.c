@@ -39,7 +39,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "pointer-set.h"
 #include "bitmap.h"
 #include "langhooks.h"
-#include "data-streamer.h"
 #include "lto-streamer.h"
 #include "lto-compress.h"
 
@@ -195,8 +194,8 @@ lto_write_stream (struct lto_output_stream *obs)
 
 /* Adds a new block to output stream OBS.  */
 
-void
-lto_append_block (struct lto_output_stream *obs)
+static void
+append_block (struct lto_output_stream *obs)
 {
   struct lto_char_ptr_base *new_block;
 
@@ -235,6 +234,23 @@ lto_append_block (struct lto_output_stream *obs)
 }
 
 
+/* Write a character to the output block.  */
+
+void
+lto_output_1_stream (struct lto_output_stream *obs, char c)
+{
+  /* No space left.  */
+  if (obs->left_in_block == 0)
+    append_block (obs);
+
+  /* Write the actual character.  */
+  *obs->current_pointer = c;
+  obs->current_pointer++;
+  obs->total_size++;
+  obs->left_in_block--;
+}
+
+
 /* Write raw DATA of length LEN to the output block OB.  */
 
 void
@@ -247,7 +263,7 @@ lto_output_data_stream (struct lto_output_stream *obs, const void *data,
 
       /* No space left.  */
       if (obs->left_in_block == 0)
-	lto_append_block (obs);
+	append_block (obs);
 
       /* Determine how many bytes to copy in this loop.  */
       if (len <= obs->left_in_block)
@@ -263,6 +279,71 @@ lto_output_data_stream (struct lto_output_stream *obs, const void *data,
       data = (const char *) data + copy;
       len -= copy;
     }
+}
+
+
+/* Output an unsigned LEB128 quantity to OBS.  */
+
+void
+lto_output_uleb128_stream (struct lto_output_stream *obs,
+			   unsigned HOST_WIDE_INT work)
+{
+  do
+    {
+      unsigned int byte = (work & 0x7f);
+      work >>= 7;
+      if (work != 0)
+	/* More bytes to follow.  */
+	byte |= 0x80;
+
+      lto_output_1_stream (obs, byte);
+    }
+  while (work != 0);
+}
+
+/* Identical to output_uleb128_stream above except using unsigned
+   HOST_WIDEST_INT type.  For efficiency on host where unsigned HOST_WIDEST_INT
+   is not native, we only use this if we know that HOST_WIDE_INT is not wide
+   enough.  */
+
+void
+lto_output_widest_uint_uleb128_stream (struct lto_output_stream *obs,
+				       unsigned HOST_WIDEST_INT work)
+{
+  do
+    {
+      unsigned int byte = (work & 0x7f);
+      work >>= 7;
+      if (work != 0)
+	/* More bytes to follow.  */
+	byte |= 0x80;
+
+      lto_output_1_stream (obs, byte);
+    }
+  while (work != 0);
+}
+
+
+/* Output a signed LEB128 quantity.  */
+
+void
+lto_output_sleb128_stream (struct lto_output_stream *obs, HOST_WIDE_INT work)
+{
+  int more, byte;
+
+  do
+    {
+      byte = (work & 0x7f);
+      /* arithmetic shift */
+      work >>= 7;
+      more = !((work == 0 && (byte & 0x40) == 0)
+	       || (work == -1 && (byte & 0x40) != 0));
+      if (more)
+	byte |= 0x80;
+
+      lto_output_1_stream (obs, byte);
+    }
+  while (more);
 }
 
 
@@ -304,7 +385,7 @@ lto_output_decl_index (struct lto_output_stream *obs,
     }
 
   if (obs)
-    streamer_write_uhwi_stream (obs, index);
+    lto_output_uleb128_stream (obs, index);
   *this_index = index;
   return new_entry_p;
 }

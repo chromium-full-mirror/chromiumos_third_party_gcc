@@ -3,11 +3,11 @@
 
 /* { dg-do compile } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.h"
+#include "../objc-obj-c++-shared/Object1.h"
 #include <iostream>
 #include <string>
 
-@interface iostream: TestsuiteObject
+@interface iostream: Object
 @end
 
 int main(void) {

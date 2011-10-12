@@ -3,6 +3,7 @@
  * Tue Sep 19 4:29AM
  */
 
+#include "../../objc-obj-c++-shared/Protocol1.h"
 #include <objc/objc.h>
 
 @protocol MyProtocol
@@ -24,7 +25,7 @@ int main (void)
 
   [object methodA];
 
-  return 0;
+   exit (0);
 }
 
 

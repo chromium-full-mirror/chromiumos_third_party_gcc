@@ -153,11 +153,14 @@ pack_internal (gfc_array_char *ret, const gfc_array_char *array,
 	  GFC_DIMENSION_SET(ret->dim[0], 0, total-1, 1);
 
 	  ret->offset = 0;
-	  /* internal_malloc_size allocates a single byte for zero size.  */
-	  ret->data = internal_malloc_size (size * total);
-
 	  if (total == 0)
-	    return;      /* In this case, nothing remains to be done.  */
+	    {
+	      /* In this case, nothing remains to be done.  */
+	      ret->data = internal_malloc_size (1);
+	      return;
+	    }
+	  else
+	    ret->data = internal_malloc_size (size * total);
 	}
       else 
 	{
@@ -520,10 +523,13 @@ pack_s_internal (gfc_array_char *ret, const gfc_array_char *array,
 
       ret->offset = 0;
 
-      ret->data = internal_malloc_size (size * total);
-
       if (total == 0)
-	return;
+	{
+	  ret->data = internal_malloc_size (1);
+	  return;
+	}
+      else
+	ret->data = internal_malloc_size (size * total);
     }
 
   rstride0 = GFC_DESCRIPTOR_STRIDE_BYTES(ret,0);

@@ -2,7 +2,7 @@
 // { dg-options "-std=gnu++0x" }
 // { dg-require-cstdint "" }
 
-// Copyright (C) 2008, 2009, 2010, 2011 Free Software Foundation
+// Copyright (C) 2008, 2009 Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -26,7 +26,7 @@
 void
 test01()
 {
-  std::chrono::duration<int> d1(1.0); // { dg-error "no matching|no type" }
+  std::chrono::duration<int> d1(1.0); // { dg-error "no matching" }
 }
 
 void
@@ -35,10 +35,7 @@ test02()
   using namespace std::chrono;
   
   duration<int, std::micro> d2(8);
-  duration<int, std::milli> d2_copy(d2); // { dg-error "no matching|no type" }
+  duration<int, std::milli> d2_copy(d2); // { dg-error "no matching" }
 }
 
-// { dg-prune-output "include" }
-
-// Discard a bogus warning showing up with -Wall.
-// { dg-prune-output "suggest parentheses around" }
+// { dg-excess-errors "candidates are" }

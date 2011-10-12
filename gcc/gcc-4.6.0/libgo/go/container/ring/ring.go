@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package ring implements operations on circular lists.
+// The ring package implements operations on circular lists.
 package ring
 
 // A Ring is an element of a circular list, or ring.
@@ -16,11 +16,13 @@ type Ring struct {
 	Value      interface{} // for use by client; untouched by this library
 }
 
+
 func (r *Ring) init() *Ring {
 	r.next = r
 	r.prev = r
 	return r
 }
+
 
 // Next returns the next ring element. r must not be empty.
 func (r *Ring) Next() *Ring {
@@ -30,6 +32,7 @@ func (r *Ring) Next() *Ring {
 	return r.next
 }
 
+
 // Prev returns the previous ring element. r must not be empty.
 func (r *Ring) Prev() *Ring {
 	if r.next == nil {
@@ -37,6 +40,7 @@ func (r *Ring) Prev() *Ring {
 	}
 	return r.prev
 }
+
 
 // Move moves n % r.Len() elements backward (n < 0) or forward (n >= 0)
 // in the ring and returns that ring element. r must not be empty.
@@ -58,6 +62,7 @@ func (r *Ring) Move(n int) *Ring {
 	return r
 }
 
+
 // New creates a ring of n elements.
 func New(n int) *Ring {
 	if n <= 0 {
@@ -73,6 +78,7 @@ func New(n int) *Ring {
 	r.prev = p
 	return r
 }
+
 
 // Link connects ring r with with ring s such that r.Next()
 // becomes s and returns the original value for r.Next().
@@ -104,6 +110,7 @@ func (r *Ring) Link(s *Ring) *Ring {
 	return n
 }
 
+
 // Unlink removes n % r.Len() elements from the ring r, starting
 // at r.Next(). If n % r.Len() == 0, r remains unchanged.
 // The result is the removed subring. r must not be empty.
@@ -114,6 +121,7 @@ func (r *Ring) Unlink(n int) *Ring {
 	}
 	return r.Link(r.Move(n + 1))
 }
+
 
 // Len computes the number of elements in ring r.
 // It executes in time proportional to the number of elements.
@@ -129,13 +137,17 @@ func (r *Ring) Len() int {
 	return n
 }
 
-// Do calls function f on each element of the ring, in forward order.
-// The behavior of Do is undefined if f changes *r.
-func (r *Ring) Do(f func(interface{})) {
-	if r != nil {
-		f(r.Value)
-		for p := r.Next(); p != r; p = p.next {
-			f(p.Value)
+
+func (r *Ring) Iter() <-chan interface{} {
+	c := make(chan interface{})
+	go func() {
+		if r != nil {
+			c <- r.Value
+			for p := r.Next(); p != r; p = p.next {
+				c <- p.Value
+			}
 		}
-	}
+		close(c)
+	}()
+	return c
 }

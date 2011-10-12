@@ -1,8 +1,10 @@
-2011-09-29  Jan Beulich  <jbeulich@suse.com>
+2011-06-27  Release Manager
 
-	* tools/Makefile.am (TOOLS_ZIP): Make writable the copied subtrees
-	asm/ and classes/.
-	* tools/Makefile.in: Re-generate.
+	* GCC 4.6.1 released.
+
+2011-03-25  Release Manager
+
+	* GCC 4.6.0 released.
 
 2010-06-03  Andrew John Hughes  <ahughes@redhat.com>
 

@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-Wuninitialized -O2 -fno-tree-tail-merge" } */
+/* { dg-options "-Wuninitialized -O2" } */
 
 int g;
 void bar (void);

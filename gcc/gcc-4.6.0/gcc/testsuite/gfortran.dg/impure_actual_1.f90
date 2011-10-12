@@ -18,8 +18,8 @@ CONTAINS
  END FUNCTION J
 END MODULE M1
 USE M1
- write(6,*) J(L) ! { dg-error "Mismatch in PURE attribute" }
+ write(6,*) J(L) ! { dg-error "Expected a PURE procedure for argument" }
 END
 
-! { dg-final { cleanup-modules "m1" } }
+! { dg-final { cleanup-modules "M1" } }
 

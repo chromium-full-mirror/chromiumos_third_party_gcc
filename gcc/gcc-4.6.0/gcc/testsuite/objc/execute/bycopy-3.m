@@ -9,18 +9,27 @@
  * interfere with what we are testing, which is that the `bycopy'
  * keyword generates the _F_BYCOPY qualifier for the return type.  */
 
+extern void exit (int) __attribute__ ((noreturn));
 extern int printf (const char *, ...);
 
-#include <objc/objc.h>
-#include "../../objc-obj-c++-shared/runtime.h"
-#include "../../objc-obj-c++-shared/TestsuiteObject.m"
+#include <objc/Protocol.h>
+
+#ifndef __NEXT_RUNTIME__
+#include <objc/encoding.h>
+#endif
 
 @protocol MyProtocol
 + (bycopy id<MyProtocol>) bycopyMethod;
 @end
 
 /* This no-op class to keep it compile under broken gcc 3.x */
-@interface MyObject : TestsuiteObject <MyProtocol> 
+@interface MyObject : Object <MyProtocol> 
+#ifdef __OBJC2__
++ (id) initialize;
++ (id) alloc;
++ new;
+- init;
+#endif
 @end
 
 @implementation MyObject
@@ -28,6 +37,12 @@ extern int printf (const char *, ...);
 {
   return [MyObject alloc];
 }
+#ifdef __OBJC2__
++ initialize {return self;}
++ alloc { return class_createInstance (self, 0);}
++ new { return [[self alloc] init]; }
+- init {return self;}
+#endif
 @end
 
 /* The following header, together with the implementation included below,
@@ -37,7 +52,7 @@ extern int printf (const char *, ...);
 
 int main (void)
 {
-  struct objc_method_description method;
+  struct objc_method_description *method;
   const char *method_types;
   unsigned qualifiers;
   Protocol *protocol;
@@ -49,18 +64,16 @@ int main (void)
   protocol = @protocol (MyProtocol);
 
   /* Ask to the protocol for the description of the method bycopyMethod */
-  method = protocol_getMethodDescription (protocol, @selector (bycopyMethod),
-					  YES, NO);
+  method = [protocol descriptionForClassMethod: @selector (bycopyMethod)];
+  if (method == NULL)
+    {
+      printf ("Could not find method bycopyMethod in protocol!\n");
+      exit (1);
+    }
 
   /* Get the method types for the method - which encode return type,
      arguments etc. */
-  method_types = method.types;
-
-  if (method_types == NULL)
-    {
-      printf ("Could not find method bycopyMethod in protocol!\n");
-      return 1;
-    }
+  method_types = method->types;
 
   /* Get the qualifiers for the return type */
   qualifiers = objc_get_type_qualifiers (method_types);
@@ -69,7 +82,7 @@ int main (void)
   if (! (qualifiers & _F_BYCOPY))
     {
       printf ("Failed - selector does not contain _F_BYCOPY qualifier!\n");
-      return 1;
+      exit (1);
     }
 
   /* Else, happy end */

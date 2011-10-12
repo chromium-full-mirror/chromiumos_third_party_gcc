@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+// Copyright (C) 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -80,6 +80,7 @@ namespace __gnu_parallel
       *  @param __result Begin iterator of output sequence.
       *  @param __bin_op Associative binary function.
       *  @param __n Length of sequence.
+      *  @param __num_threads Number of threads to use.
       *  @return End iterator of output sequence.
       */
   template<typename _IIter,
@@ -123,7 +124,7 @@ namespace __gnu_parallel
 	  __borders = new _DifferenceType[__num_threads + 2];
 
 	  if (__s.partial_sum_dilation == 1.0f)
-	    __equally_split(__n, __num_threads + 1, __borders);
+	    equally_split(__n, __num_threads + 1, __borders);
 	  else
 	    {
 	      _DifferenceType __first_part_length =

@@ -4,12 +4,8 @@
 
 package big
 
-import (
-	"bytes"
-	"fmt"
-	"gob"
-	"testing"
-)
+import "testing"
+
 
 var setStringTests = []struct {
 	in, out string
@@ -56,27 +52,6 @@ func TestRatSetString(t *testing.T) {
 	}
 }
 
-func TestRatScan(t *testing.T) {
-	var buf bytes.Buffer
-	for i, test := range setStringTests {
-		x := new(Rat)
-		buf.Reset()
-		buf.WriteString(test.in)
-
-		_, err := fmt.Fscanf(&buf, "%v", x)
-		if err == nil != test.ok {
-			if test.ok {
-				t.Errorf("#%d error: %s", i, err.String())
-			} else {
-				t.Errorf("#%d expected error", i)
-			}
-			continue
-		}
-		if err == nil && x.RatString() != test.out {
-			t.Errorf("#%d got %s want %s", i, x.RatString(), test.out)
-		}
-	}
-}
 
 var floatStringTests = []struct {
 	in   string
@@ -84,13 +59,12 @@ var floatStringTests = []struct {
 	out  string
 }{
 	{"0", 0, "0"},
-	{"0", 4, "0.0000"},
+	{"0", 4, "0"},
 	{"1", 0, "1"},
-	{"1", 2, "1.00"},
+	{"1", 2, "1"},
 	{"-1", 0, "-1"},
 	{".25", 2, "0.25"},
 	{".25", 1, "0.3"},
-	{".25", 3, "0.250"},
 	{"-1/3", 3, "-0.333"},
 	{"-2/3", 4, "-0.6667"},
 	{"0.96", 1, "1.0"},
@@ -110,6 +84,7 @@ func TestFloatString(t *testing.T) {
 	}
 }
 
+
 func TestRatSign(t *testing.T) {
 	zero := NewRat(0, 1)
 	for _, a := range setStringTests {
@@ -122,6 +97,7 @@ func TestRatSign(t *testing.T) {
 		}
 	}
 }
+
 
 var ratCmpTests = []struct {
 	rat1, rat2 string
@@ -150,6 +126,7 @@ func TestRatCmp(t *testing.T) {
 	}
 }
 
+
 func TestIsInt(t *testing.T) {
 	one := NewInt(1)
 	for _, a := range setStringTests {
@@ -162,6 +139,7 @@ func TestIsInt(t *testing.T) {
 		}
 	}
 }
+
 
 func TestRatAbs(t *testing.T) {
 	zero := NewRat(0, 1)
@@ -180,6 +158,7 @@ func TestRatAbs(t *testing.T) {
 	}
 }
 
+
 type ratBinFun func(z, x, y *Rat) *Rat
 type ratBinArg struct {
 	x, y, z string
@@ -195,6 +174,7 @@ func testRatBin(t *testing.T, i int, name string, f ratBinFun, a ratBinArg) {
 		t.Errorf("%s #%d got %s want %s", name, i, out, z)
 	}
 }
+
 
 var ratBinTests = []struct {
 	x, y      string
@@ -252,6 +232,7 @@ func TestRatBin(t *testing.T) {
 	}
 }
 
+
 func TestIssue820(t *testing.T) {
 	x := NewRat(3, 1)
 	y := NewRat(2, 1)
@@ -277,6 +258,7 @@ func TestIssue820(t *testing.T) {
 	}
 }
 
+
 var setFrac64Tests = []struct {
 	a, b int64
 	out  string
@@ -295,38 +277,6 @@ func TestRatSetFrac64Rat(t *testing.T) {
 		x := new(Rat).SetFrac64(test.a, test.b)
 		if x.RatString() != test.out {
 			t.Errorf("#%d got %s want %s", i, x.RatString(), test.out)
-		}
-	}
-}
-
-func TestRatGobEncoding(t *testing.T) {
-	var medium bytes.Buffer
-	enc := gob.NewEncoder(&medium)
-	dec := gob.NewDecoder(&medium)
-	for i, test := range gobEncodingTests {
-		for j := 0; j < 4; j++ {
-			medium.Reset() // empty buffer for each test case (in case of failures)
-			stest := test
-			if j&1 != 0 {
-				// negative numbers
-				stest = "-" + test
-			}
-			if j%2 != 0 {
-				// fractions
-				stest = stest + "." + test
-			}
-			var tx Rat
-			tx.SetString(stest)
-			if err := enc.Encode(&tx); err != nil {
-				t.Errorf("#%d%c: encoding failed: %s", i, 'a'+j, err)
-			}
-			var rx Rat
-			if err := dec.Decode(&rx); err != nil {
-				t.Errorf("#%d%c: decoding failed: %s", i, 'a'+j, err)
-			}
-			if rx.Cmp(&tx) != 0 {
-				t.Errorf("#%d%c: transmission failed: got %s want %s", i, 'a'+j, &rx, &tx)
-			}
 		}
 	}
 }

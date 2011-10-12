@@ -6,7 +6,6 @@ package bytes_test
 
 import (
 	. "bytes"
-	"reflect"
 	"testing"
 	"unicode"
 	"utf8"
@@ -202,10 +201,7 @@ func TestIndexByte(t *testing.T) {
 
 // test a larger buffer with different sizes and alignments
 func TestIndexByteBig(t *testing.T) {
-	var n = 1024
-	if testing.Short() {
-		n = 128
-	}
+	const n = 1024
 	b := make([]byte, n)
 	for i := 0; i < n; i++ {
 		// different start alignments
@@ -316,7 +312,7 @@ var explodetests = []ExplodeTest{
 
 func TestExplode(t *testing.T) {
 	for _, tt := range explodetests {
-		a := SplitN([]byte(tt.s), nil, tt.n)
+		a := Split([]byte(tt.s), nil, tt.n)
 		result := arrayOfString(a)
 		if !eq(result, tt.a) {
 			t.Errorf(`Explode("%s", %d) = %v; want %v`, tt.s, tt.n, result, tt.a)
@@ -328,6 +324,7 @@ func TestExplode(t *testing.T) {
 		}
 	}
 }
+
 
 type SplitTest struct {
 	s   string
@@ -354,7 +351,7 @@ var splittests = []SplitTest{
 
 func TestSplit(t *testing.T) {
 	for _, tt := range splittests {
-		a := SplitN([]byte(tt.s), []byte(tt.sep), tt.n)
+		a := Split([]byte(tt.s), []byte(tt.sep), tt.n)
 		result := arrayOfString(a)
 		if !eq(result, tt.a) {
 			t.Errorf(`Split(%q, %q, %d) = %v; want %v`, tt.s, tt.sep, tt.n, result, tt.a)
@@ -366,12 +363,6 @@ func TestSplit(t *testing.T) {
 		s := Join(a, []byte(tt.sep))
 		if string(s) != tt.s {
 			t.Errorf(`Join(Split(%q, %q, %d), %q) = %q`, tt.s, tt.sep, tt.n, tt.sep, s)
-		}
-		if tt.n < 0 {
-			b := Split([]byte(tt.s), []byte(tt.sep))
-			if !reflect.DeepEqual(a, b) {
-				t.Errorf("Split disagrees withSplitN(%q, %q, %d) = %v; want %v", tt.s, tt.sep, tt.n, b, a)
-			}
 		}
 	}
 }
@@ -394,7 +385,7 @@ var splitaftertests = []SplitTest{
 
 func TestSplitAfter(t *testing.T) {
 	for _, tt := range splitaftertests {
-		a := SplitAfterN([]byte(tt.s), []byte(tt.sep), tt.n)
+		a := SplitAfter([]byte(tt.s), []byte(tt.sep), tt.n)
 		result := arrayOfString(a)
 		if !eq(result, tt.a) {
 			t.Errorf(`Split(%q, %q, %d) = %v; want %v`, tt.s, tt.sep, tt.n, result, tt.a)
@@ -403,12 +394,6 @@ func TestSplitAfter(t *testing.T) {
 		s := Join(a, nil)
 		if string(s) != tt.s {
 			t.Errorf(`Join(Split(%q, %q, %d), %q) = %q`, tt.s, tt.sep, tt.n, tt.sep, s)
-		}
-		if tt.n < 0 {
-			b := SplitAfter([]byte(tt.s), []byte(tt.sep))
-			if !reflect.DeepEqual(a, b) {
-				t.Errorf("SplitAfter disagrees withSplitAfterN(%q, %q, %d) = %v; want %v", tt.s, tt.sep, tt.n, b, a)
-			}
 		}
 	}
 }
@@ -660,6 +645,7 @@ func TestRunes(t *testing.T) {
 		}
 	}
 }
+
 
 type TrimTest struct {
 	f               func([]byte, string) []byte

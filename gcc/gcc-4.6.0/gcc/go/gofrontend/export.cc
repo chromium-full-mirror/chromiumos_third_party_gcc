@@ -5,10 +5,20 @@
 // license that can be found in the LICENSE file.
 
 #include "go-system.h"
-
 #include "sha1.h"
 
-#include "go-c.h"
+#ifndef ENABLE_BUILD_WITH_CXX
+extern "C"
+{
+#endif
+
+#include "machmode.h"
+#include "output.h"
+#include "target.h"
+
+#ifndef ENABLE_BUILD_WITH_CXX
+}
+#endif
 
 #include "gogo.h"
 #include "types.h"
@@ -256,7 +266,7 @@ Export::write_type(const Type* type)
     {
       // This type was already in the table.
       int index = p->second;
-      go_assert(index != 0);
+      gcc_assert(index != 0);
       char buf[30];
       snprintf(buf, sizeof buf, "<type %d>", index);
       this->write_c_string(buf);
@@ -279,7 +289,7 @@ Export::write_type(const Type* type)
       if (named_type != NULL)
 	{
 	  // The builtin types should have been predefined.
-	  go_assert(named_type->location() != BUILTINS_LOCATION
+	  gcc_assert(named_type->location() != BUILTINS_LOCATION
 		     || (named_type->named_object()->package()->name()
 			 == "unsafe"));
 	  named_object = named_type->named_object();
@@ -345,16 +355,16 @@ void
 Export::register_builtin_type(Gogo* gogo, const char* name, Builtin_code code)
 {
   Named_object* named_object = gogo->lookup_global(name);
-  go_assert(named_object != NULL && named_object->is_type());
+  gcc_assert(named_object != NULL && named_object->is_type());
   std::pair<Type_refs::iterator, bool> ins =
     this->type_refs_.insert(std::make_pair(named_object->type_value(), code));
-  go_assert(ins.second);
+  gcc_assert(ins.second);
 
   // We also insert the underlying type.  We can see the underlying
   // type at least for string and bool.
   Type* real_type = named_object->type_value()->real_type();
   ins = this->type_refs_.insert(std::make_pair(real_type, code));
-  go_assert(ins.second);
+  gcc_assert(ins.second);
 }
 
 // Class Export::Stream.
@@ -406,6 +416,7 @@ Export::Stream::write_checksum(const std::string& s)
 // Class Stream_to_section.
 
 Stream_to_section::Stream_to_section()
+  : section_(NULL)
 {
 }
 
@@ -414,5 +425,15 @@ Stream_to_section::Stream_to_section()
 void
 Stream_to_section::do_write(const char* bytes, size_t length)
 {
-  go_write_export_data (bytes, length);
+  section* sec = (section*) this->section_;
+  if (sec == NULL)
+    {
+      gcc_assert(targetm.have_named_sections);
+
+      sec = get_section(".go_export", SECTION_DEBUG, NULL);
+      this->section_ = (void*) sec;
+    }
+
+  switch_to_section(sec);
+  assemble_string(bytes, length);
 }

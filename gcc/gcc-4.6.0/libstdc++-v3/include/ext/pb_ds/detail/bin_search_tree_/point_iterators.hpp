@@ -34,7 +34,7 @@
 // warranty.
 
 /**
- * @file bin_search_tree_/point_iterators.hpp
+ * @file point_iterators.hpp
  * Contains an implementation class for bin_search_tree_.
  */
 
@@ -58,7 +58,7 @@ namespace __gnu_pbds
 						Reference,		\
 						Const_Reference,	\
 						Is_Forward_Iterator,	\
-						_Alloc>
+						Allocator>
 
 #define PB_DS_TREE_CONST_ODIR_IT_C_DEC					\
     bin_search_tree_const_it_<						\
@@ -69,7 +69,7 @@ namespace __gnu_pbds
 						Reference,		\
 						Const_Reference,	\
 						!Is_Forward_Iterator,	\
-						_Alloc>
+						Allocator>
 
 #define PB_DS_TREE_IT_C_DEC						\
     bin_search_tree_it_<						\
@@ -80,7 +80,7 @@ namespace __gnu_pbds
 						Reference,		\
 						Const_Reference,	\
 						Is_Forward_Iterator,	\
-						_Alloc>
+						Allocator>
 
 #define PB_DS_TREE_ODIR_IT_C_DEC					\
     bin_search_tree_it_<						\
@@ -91,9 +91,9 @@ namespace __gnu_pbds
 							Reference,	\
 							Const_Reference, \
 							!Is_Forward_Iterator, \
-							_Alloc>
+							Allocator>
 
-    /// Const iterator.
+    // Const iterator.
     template<typename Node_Pointer,
 	     typename Value_Type,
 	     typename Pointer,
@@ -101,17 +101,27 @@ namespace __gnu_pbds
 	     typename Reference,
 	     typename Const_Reference,
 	     bool Is_Forward_Iterator,
-	     typename _Alloc>
+	     class Allocator>
     class bin_search_tree_const_it_
     {
+
     public:
-      typedef std::bidirectional_iterator_tag 		iterator_category;
-      typedef typename _Alloc::difference_type 	difference_type;
-      typedef Value_Type 				value_type;
-      typedef Pointer 					pointer;
-      typedef Const_Pointer 				const_pointer;
-      typedef Reference 				reference;
-      typedef Const_Reference 				const_reference;
+
+      typedef std::bidirectional_iterator_tag iterator_category;
+
+      typedef typename Allocator::difference_type difference_type;
+
+      typedef Value_Type value_type;
+
+      typedef Pointer pointer;
+
+      typedef Const_Pointer const_pointer;
+
+      typedef Reference reference;
+
+      typedef Const_Reference const_reference;
+
+    public:
 
       inline
       bin_search_tree_const_it_(const Node_Pointer p_nd = 0) 
@@ -270,7 +280,7 @@ namespace __gnu_pbds
       Node_Pointer m_p_nd;
     };
 
-    /// Iterator.
+    // Iterator.
     template<typename Node_Pointer,
 	     typename Value_Type,
 	     typename Pointer,
@@ -278,10 +288,14 @@ namespace __gnu_pbds
 	     typename Reference,
 	     typename Const_Reference,
 	     bool Is_Forward_Iterator,
-	     typename _Alloc>
-    class bin_search_tree_it_ : public PB_DS_TREE_CONST_IT_C_DEC
+	     class Allocator>
+    class bin_search_tree_it_ : 
+      public PB_DS_TREE_CONST_IT_C_DEC
+
     {
+
     public:
+
       inline
       bin_search_tree_it_(const Node_Pointer p_nd = 0) 
       : PB_DS_TREE_CONST_IT_C_DEC((Node_Pointer)p_nd)

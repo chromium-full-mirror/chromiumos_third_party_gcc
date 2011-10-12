@@ -50,7 +50,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "params.h"
 #include "l-ipo.h"
 #include "profile.h"
-#include "ipa-inline.h"
 
 /* In this file value profile based optimizations are placed.  Currently the
    following optimizations are implemented (for more detailed descriptions
@@ -613,7 +612,17 @@ gimple_value_profile_transformations (void)
     }
 
   if (changed)
-    counts_to_freqs ();
+    {
+      counts_to_freqs ();
+      /* Value profile transformations may change inline parameters
+         a lot (e.g., indirect call promotion introduces new direct calls).
+         The update is also needed to avoid compiler ICE -- when MULTI
+         target icall promotion happens, the caller's size may become
+         negative when the promoted direct calls get promoted.  */
+      /* Guard this for LIPO for now.  */
+      if (L_IPO_COMP_MODE)
+        compute_inline_parameters (cgraph_node (current_function_decl));
+    }
 
   return changed;
 }
@@ -1159,8 +1168,8 @@ init_node_map (void)
 void
 del_node_map (void)
 {
-   if (L_IPO_COMP_MODE)
-     return;
+  if (L_IPO_COMP_MODE)
+    return;
 
    VEC_free (cgraph_node_ptr, heap, cgraph_node_map);
    cgraph_node_map = NULL;
@@ -1247,7 +1256,7 @@ init_gid_map (void)
       if (!f || DECL_ABSTRACT (n->decl))
         continue;
       /* The global function id computed at profile-use time
-        is slightly different from the one computed in
+         is slightly different from the one computed in
          instrumentation runtime -- for the latter, the intra-
          module function ident is 1 based while in profile-use
          phase, it is zero based. See get_next_funcdef_no in
@@ -1292,7 +1301,6 @@ find_func_by_global_id (unsigned HOST_WIDE_INT gid)
     return entp->node;
   return NULL;
 }
-
 
 /* Perform sanity check on the indirect call target. Due to race conditions,
    false function target may be attributed to an indirect call site. If the
@@ -1606,6 +1614,7 @@ gimple_ic_transform_mult_targ (gimple stmt, histogram_value histogram)
     {
       /* TODO: should mark the call edge. */
       DECL_DISREGARD_INLINE_LIMITS (direct_call1->decl) = 1;
+      direct_call1->local.disregard_inline_limits = 1;
     }
   if (dump_file)
     {
@@ -1644,6 +1653,7 @@ gimple_ic_transform_mult_targ (gimple stmt, histogram_value histogram)
         {
           /* TODO: should mark the call edge.  */
           DECL_DISREGARD_INLINE_LIMITS (direct_call2->decl) = 1;
+          direct_call2->local.disregard_inline_limits = 1;
         }
       if (dump_file)
         {
@@ -1891,13 +1901,13 @@ gimple_stringops_transform (gimple_stmt_iterator *gsi)
   else
     prob = 0;
   dest = gimple_call_arg (stmt, 0);
-  dest_align = get_pointer_alignment (dest);
+  dest_align = get_pointer_alignment (dest, BIGGEST_ALIGNMENT);
   switch (fcode)
     {
     case BUILT_IN_MEMCPY:
     case BUILT_IN_MEMPCPY:
       src = gimple_call_arg (stmt, 1);
-      src_align = get_pointer_alignment (src);
+      src_align = get_pointer_alignment (src, BIGGEST_ALIGNMENT);
       if (!can_move_by_pieces (val, MIN (dest_align, src_align)))
 	return false;
       break;
@@ -2047,7 +2057,6 @@ gimple_indirect_call_to_profile (gimple stmt, histogram_values *values)
   tree callee;
 
   if (gimple_code (stmt) != GIMPLE_CALL
-      || gimple_call_internal_p (stmt)
       || gimple_call_fndecl (stmt) != NULL_TREE)
     return;
 

@@ -46,4 +46,4 @@ end module
   use c
   call useCreate
 end
-! { dg-final { cleanup-modules "a b c" } }
+! { dg-final { cleanup-modules "A B C" } }

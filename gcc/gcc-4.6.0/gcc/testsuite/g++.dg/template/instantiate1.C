@@ -9,11 +9,11 @@ template <class T> struct X {
 };
 
 template <class T> struct Y {
-  X<T> x;			// { dg-message "required" }
+  X<T> x;			// { dg-message "instantiated" }
 };
 
 template <class T> struct Z {	// { dg-error "declaration" }
-  Y<Z<T> > y;			// { dg-message "required" }
+  Y<Z<T> > y;			// { dg-message "instantiated" }
 };
 
 struct ZZ : Z<int>

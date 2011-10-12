@@ -1,8 +1,9 @@
-#import "../../objc-obj-c++-shared/TestsuiteObject.m"
+#import "../../objc-obj-c++-shared/Object1.h"
 
 int main(void)
 {
-  [TestsuiteObject class];
+  [Object class];
   return 0;
 }
 
+#import "../../objc-obj-c++-shared/Object1-implementation.h"

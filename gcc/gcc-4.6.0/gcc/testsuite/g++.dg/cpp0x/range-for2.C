@@ -8,7 +8,7 @@
 struct iterator
 {
     int x;
-    explicit iterator(int v) :x(v) {}
+    iterator(int v) :x(v) {}
     iterator &operator ++() { ++x; return *this; }
     int operator *() { return x; }
     bool operator != (const iterator &o) { return x != o.x; }
@@ -36,6 +36,6 @@ namespace foo
 int main()
 {
     foo::container c(1,4);
-    for (int it : c)
+    for (iterator it : c)
         ;
 }

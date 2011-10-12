@@ -35,6 +35,7 @@ type SectionHeader struct {
 	Characteristics      uint32
 }
 
+
 type Section struct {
 	SectionHeader
 
@@ -56,6 +57,7 @@ type ImportDirectory struct {
 	FirstThunk         uint32
 
 	dll string
+	rva []uint32
 }
 
 // Data reads and returns the contents of the PE section.
@@ -67,6 +69,7 @@ func (s *Section) Data() ([]byte, os.Error) {
 
 // Open returns a new ReadSeeker reading the PE section.
 func (s *Section) Open() io.ReadSeeker { return io.NewSectionReader(s.sr, 0, 1<<63-1) }
+
 
 type FormatError struct {
 	off int64
@@ -85,7 +88,7 @@ func (e *FormatError) String() string {
 
 // Open opens the named file using os.Open and prepares it for use as a PE binary.
 func Open(name string) (*File, os.Error) {
-	f, err := os.Open(name)
+	f, err := os.Open(name, os.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +113,7 @@ func (f *File) Close() os.Error {
 	return err
 }
 
-// NewFile creates a new File for accessing a PE binary in an underlying reader.
+// NewFile creates a new File for acecssing a PE binary in an underlying reader.
 func NewFile(r io.ReaderAt) (*File, os.Error) {
 	f := new(File)
 	sr := io.NewSectionReader(r, 0, 1<<63-1)
@@ -130,7 +133,7 @@ func NewFile(r io.ReaderAt) (*File, os.Error) {
 	} else {
 		base = int64(0)
 	}
-	sr.Seek(base, os.SEEK_SET)
+	sr.Seek(base, 0)
 	if err := binary.Read(sr, binary.LittleEndian, &f.FileHeader); err != nil {
 		return nil, err
 	}
@@ -138,7 +141,7 @@ func NewFile(r io.ReaderAt) (*File, os.Error) {
 		return nil, os.NewError("Invalid PE File Format.")
 	}
 	// get symbol string table
-	sr.Seek(int64(f.FileHeader.PointerToSymbolTable+18*f.FileHeader.NumberOfSymbols), os.SEEK_SET)
+	sr.Seek(int64(f.FileHeader.PointerToSymbolTable+18*f.FileHeader.NumberOfSymbols), 0)
 	var l uint32
 	if err := binary.Read(sr, binary.LittleEndian, &l); err != nil {
 		return nil, err
@@ -147,9 +150,9 @@ func NewFile(r io.ReaderAt) (*File, os.Error) {
 	if _, err := r.ReadAt(ss, int64(f.FileHeader.PointerToSymbolTable+18*f.FileHeader.NumberOfSymbols)); err != nil {
 		return nil, err
 	}
-	sr.Seek(base, os.SEEK_SET)
+	sr.Seek(base, 0)
 	binary.Read(sr, binary.LittleEndian, &f.FileHeader)
-	sr.Seek(int64(f.FileHeader.SizeOfOptionalHeader), os.SEEK_CUR) //Skip OptionalHeader
+	sr.Seek(int64(f.FileHeader.SizeOfOptionalHeader), 1) //Skip OptionalHeader
 	f.Sections = make([]*Section, f.FileHeader.NumberOfSections)
 	for i := 0; i < int(f.FileHeader.NumberOfSections); i++ {
 		sh := new(SectionHeader32)
@@ -243,7 +246,6 @@ func (f *File) DWARF() (*dwarf.Data, os.Error) {
 // satisfied by other libraries at dynamic load time.
 // It does not return weak symbols.
 func (f *File) ImportedSymbols() ([]string, os.Error) {
-	pe64 := f.Machine == IMAGE_FILE_MACHINE_AMD64
 	ds := f.Section(".idata")
 	if ds == nil {
 		// not dynamic, so no libraries
@@ -265,40 +267,32 @@ func (f *File) ImportedSymbols() ([]string, os.Error) {
 		}
 		ida = append(ida, dt)
 	}
+	for i, _ := range ida {
+		for len(d) > 0 {
+			va := binary.LittleEndian.Uint32(d[0:4])
+			d = d[4:]
+			if va == 0 {
+				break
+			}
+			ida[i].rva = append(ida[i].rva, va)
+		}
+	}
+	for _, _ = range ida {
+		for len(d) > 0 {
+			va := binary.LittleEndian.Uint32(d[0:4])
+			d = d[4:]
+			if va == 0 {
+				break
+			}
+		}
+	}
 	names, _ := ds.Data()
 	var all []string
 	for _, dt := range ida {
 		dt.dll, _ = getString(names, int(dt.Name-ds.VirtualAddress))
-		d, _ = ds.Data()
-		// seek to OriginalFirstThunk
-		d = d[dt.OriginalFirstThunk-ds.VirtualAddress:]
-		for len(d) > 0 {
-			if pe64 { // 64bit
-				va := binary.LittleEndian.Uint64(d[0:8])
-				d = d[8:]
-				if va == 0 {
-					break
-				}
-				if va&0x8000000000000000 > 0 { // is Ordinal
-					// TODO add dynimport ordinal support.
-				} else {
-					fn, _ := getString(names, int(uint32(va)-ds.VirtualAddress+2))
-					all = append(all, fn+":"+dt.dll)
-				}
-			} else { // 32bit
-				va := binary.LittleEndian.Uint32(d[0:4])
-				d = d[4:]
-				if va == 0 {
-					break
-				}
-				if va&0x80000000 > 0 { // is Ordinal
-					// TODO add dynimport ordinal support.
-					//ord := va&0x0000FFFF
-				} else {
-					fn, _ := getString(names, int(va-ds.VirtualAddress+2))
-					all = append(all, fn+":"+dt.dll)
-				}
-			}
+		for _, va := range dt.rva {
+			fn, _ := getString(names, int(va-ds.VirtualAddress+2))
+			all = append(all, fn+":"+dt.dll)
 		}
 	}
 

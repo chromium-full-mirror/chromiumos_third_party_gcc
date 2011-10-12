@@ -10,14 +10,15 @@ import (
 	"os"
 	"strings"
 	"testing"
-	"utf8"
 )
+
 
 // A StringReader delivers its data one string segment at a time via Read.
 type StringReader struct {
 	data []string
 	step int
 }
+
 
 func (r *StringReader) Read(p []byte) (n int, err os.Error) {
 	if r.step < len(r.data) {
@@ -29,6 +30,7 @@ func (r *StringReader) Read(p []byte) (n int, err os.Error) {
 	}
 	return
 }
+
 
 func readRuneSegments(t *testing.T, segments []string) {
 	got := ""
@@ -46,6 +48,7 @@ func readRuneSegments(t *testing.T, segments []string) {
 	}
 }
 
+
 var segmentList = [][]string{
 	{},
 	{""},
@@ -57,11 +60,13 @@ var segmentList = [][]string{
 	{"Hello", ", ", "", "World", "!"},
 }
 
+
 func TestNext(t *testing.T) {
 	for _, s := range segmentList {
 		readRuneSegments(t, s)
 	}
 }
+
 
 type token struct {
 	tok  int
@@ -71,15 +76,15 @@ type token struct {
 var f100 = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 
 var tokenList = []token{
-	{Comment, "// line comments"},
-	{Comment, "//"},
-	{Comment, "////"},
-	{Comment, "// comment"},
-	{Comment, "// /* comment */"},
-	{Comment, "// // comment //"},
-	{Comment, "//" + f100},
+	{Comment, "// line comments\n"},
+	{Comment, "//\n"},
+	{Comment, "////\n"},
+	{Comment, "// comment\n"},
+	{Comment, "// /* comment */\n"},
+	{Comment, "// // comment //\n"},
+	{Comment, "//" + f100 + "\n"},
 
-	{Comment, "// general comments"},
+	{Comment, "// general comments\n"},
 	{Comment, "/**/"},
 	{Comment, "/***/"},
 	{Comment, "/* comment */"},
@@ -88,7 +93,7 @@ var tokenList = []token{
 	{Comment, "/*\n comment\n*/"},
 	{Comment, "/*" + f100 + "*/"},
 
-	{Comment, "// identifiers"},
+	{Comment, "// identifiers\n"},
 	{Ident, "a"},
 	{Ident, "a0"},
 	{Ident, "foobar"},
@@ -110,21 +115,21 @@ var tokenList = []token{
 	{Ident, "bar９８７６"},
 	{Ident, f100},
 
-	{Comment, "// decimal ints"},
+	{Comment, "// decimal ints\n"},
 	{Int, "0"},
 	{Int, "1"},
 	{Int, "9"},
 	{Int, "42"},
 	{Int, "1234567890"},
 
-	{Comment, "// octal ints"},
+	{Comment, "// octal ints\n"},
 	{Int, "00"},
 	{Int, "01"},
 	{Int, "07"},
 	{Int, "042"},
 	{Int, "01234567"},
 
-	{Comment, "// hexadecimal ints"},
+	{Comment, "// hexadecimal ints\n"},
 	{Int, "0x0"},
 	{Int, "0x1"},
 	{Int, "0xf"},
@@ -138,7 +143,7 @@ var tokenList = []token{
 	{Int, "0X123456789abcDEF"},
 	{Int, "0X" + f100},
 
-	{Comment, "// floats"},
+	{Comment, "// floats\n"},
 	{Float, "0."},
 	{Float, "1."},
 	{Float, "42."},
@@ -168,7 +173,7 @@ var tokenList = []token{
 	{Float, "42E+10"},
 	{Float, "01234567890E-10"},
 
-	{Comment, "// chars"},
+	{Comment, "// chars\n"},
 	{Char, `' '`},
 	{Char, `'a'`},
 	{Char, `'本'`},
@@ -189,7 +194,7 @@ var tokenList = []token{
 	{Char, `'\U00000000'`},
 	{Char, `'\U0000ffAB'`},
 
-	{Comment, "// strings"},
+	{Comment, "// strings\n"},
 	{String, `" "`},
 	{String, `"a"`},
 	{String, `"本"`},
@@ -211,13 +216,13 @@ var tokenList = []token{
 	{String, `"\U0000ffAB"`},
 	{String, `"` + f100 + `"`},
 
-	{Comment, "// raw strings"},
+	{Comment, "// raw strings\n"},
 	{String, "``"},
 	{String, "`\\`"},
 	{String, "`" + "\n\n/* foobar */\n\n" + "`"},
 	{String, "`" + f100 + "`"},
 
-	{Comment, "// individual characters"},
+	{Comment, "// individual characters\n"},
 	// NUL character is not allowed
 	{'\x01', "\x01"},
 	{' ' - 1, string(' ' - 1)},
@@ -228,6 +233,7 @@ var tokenList = []token{
 	{'(', "("},
 }
 
+
 func makeSource(pattern string) *bytes.Buffer {
 	var buf bytes.Buffer
 	for _, k := range tokenList {
@@ -235,6 +241,7 @@ func makeSource(pattern string) *bytes.Buffer {
 	}
 	return &buf
 }
+
 
 func checkTok(t *testing.T, s *Scanner, line, got, want int, text string) {
 	if got != want {
@@ -255,6 +262,7 @@ func checkTok(t *testing.T, s *Scanner, line, got, want int, text string) {
 	}
 }
 
+
 func countNewlines(s string) int {
 	n := 0
 	for _, ch := range s {
@@ -265,8 +273,9 @@ func countNewlines(s string) int {
 	return n
 }
 
+
 func testScan(t *testing.T, mode uint) {
-	s := new(Scanner).Init(makeSource(" \t%s\n"))
+	s := new(Scanner).Init(makeSource(" \t%s\t\n\r"))
 	s.Mode = mode
 	tok := s.Scan()
 	line := 1
@@ -277,13 +286,15 @@ func testScan(t *testing.T, mode uint) {
 		}
 		line += countNewlines(k.text) + 1 // each token is on a new line
 	}
-	checkTok(t, s, line, tok, EOF, "")
+	checkTok(t, s, line, tok, -1, "")
 }
+
 
 func TestScan(t *testing.T) {
 	testScan(t, GoTokens)
 	testScan(t, GoTokens&^SkipComments)
 }
+
 
 func TestPosition(t *testing.T) {
 	src := makeSource("\t\t\t\t%s\n")
@@ -305,11 +316,8 @@ func TestPosition(t *testing.T) {
 		pos.Line += countNewlines(k.text) + 1 // each token is on a new line
 		s.Scan()
 	}
-	// make sure there were no token-internal errors reported by scanner
-	if s.ErrorCount != 0 {
-		t.Errorf("%d errors", s.ErrorCount)
-	}
 }
+
 
 func TestScanZeroMode(t *testing.T) {
 	src := makeSource("%s\n")
@@ -327,10 +335,8 @@ func TestScanZeroMode(t *testing.T) {
 	if tok != EOF {
 		t.Fatalf("tok = %s, want EOF", TokenString(tok))
 	}
-	if s.ErrorCount != 0 {
-		t.Errorf("%d errors", s.ErrorCount)
-	}
 }
+
 
 func testScanSelectedMode(t *testing.T, mode uint, class int) {
 	src := makeSource("%s\n")
@@ -343,10 +349,8 @@ func testScanSelectedMode(t *testing.T, mode uint, class int) {
 		}
 		tok = s.Scan()
 	}
-	if s.ErrorCount != 0 {
-		t.Errorf("%d errors", s.ErrorCount)
-	}
 }
+
 
 func TestScanSelectedMask(t *testing.T) {
 	testScanSelectedMode(t, 0, 0)
@@ -360,8 +364,9 @@ func TestScanSelectedMask(t *testing.T) {
 	testScanSelectedMode(t, ScanComments, Comment)
 }
 
+
 func TestScanNext(t *testing.T) {
-	s := new(Scanner).Init(bytes.NewBufferString("if a == bcd /* comment */ {\n\ta += c\n} // line comment ending in eof"))
+	s := new(Scanner).Init(bytes.NewBufferString("if a == bcd /* comment */ {\n\ta += c\n}"))
 	checkTok(t, s, 1, s.Scan(), Ident, "if")
 	checkTok(t, s, 1, s.Scan(), Ident, "a")
 	checkTok(t, s, 1, s.Scan(), '=', "=")
@@ -376,10 +381,8 @@ func TestScanNext(t *testing.T) {
 	checkTok(t, s, 2, s.Scan(), Ident, "c")
 	checkTok(t, s, 3, s.Scan(), '}', "}")
 	checkTok(t, s, 3, s.Scan(), -1, "")
-	if s.ErrorCount != 0 {
-		t.Errorf("%d errors", s.ErrorCount)
-	}
 }
+
 
 func TestScanWhitespace(t *testing.T) {
 	var buf bytes.Buffer
@@ -401,15 +404,13 @@ func TestScanWhitespace(t *testing.T) {
 	}
 }
 
-func testError(t *testing.T, src, pos, msg string, tok int) {
+
+func testError(t *testing.T, src, msg string, tok int) {
 	s := new(Scanner).Init(bytes.NewBufferString(src))
 	errorCalled := false
 	s.Error = func(s *Scanner, m string) {
 		if !errorCalled {
 			// only look at first error
-			if p := s.Pos().String(); p != pos {
-				t.Errorf("pos = %q, want %q for %q", p, pos, src)
-			}
 			if m != msg {
 				t.Errorf("msg = %q, want %q for %q", m, msg, src)
 			}
@@ -428,139 +429,54 @@ func testError(t *testing.T, src, pos, msg string, tok int) {
 	}
 }
 
+
 func TestError(t *testing.T) {
-	testError(t, "\x00", "1:1", "illegal character NUL", 0)
-	testError(t, "\x80", "1:1", "illegal UTF-8 encoding", utf8.RuneError)
-	testError(t, "\xff", "1:1", "illegal UTF-8 encoding", utf8.RuneError)
-
-	testError(t, "a\x00", "1:2", "illegal character NUL", Ident)
-	testError(t, "ab\x80", "1:3", "illegal UTF-8 encoding", Ident)
-	testError(t, "abc\xff", "1:4", "illegal UTF-8 encoding", Ident)
-
-	testError(t, `"a`+"\x00", "1:3", "illegal character NUL", String)
-	testError(t, `"ab`+"\x80", "1:4", "illegal UTF-8 encoding", String)
-	testError(t, `"abc`+"\xff", "1:5", "illegal UTF-8 encoding", String)
-
-	testError(t, "`a"+"\x00", "1:3", "illegal character NUL", String)
-	testError(t, "`ab"+"\x80", "1:4", "illegal UTF-8 encoding", String)
-	testError(t, "`abc"+"\xff", "1:5", "illegal UTF-8 encoding", String)
-
-	testError(t, `'\"'`, "1:3", "illegal char escape", Char)
-	testError(t, `"\'"`, "1:3", "illegal char escape", String)
-
-	testError(t, `01238`, "1:6", "illegal octal number", Int)
-	testError(t, `'aa'`, "1:4", "illegal char literal", Char)
-
-	testError(t, `'`, "1:2", "literal not terminated", Char)
-	testError(t, `'`+"\n", "1:2", "literal not terminated", Char)
-	testError(t, `"abc`, "1:5", "literal not terminated", String)
-	testError(t, `"abc`+"\n", "1:5", "literal not terminated", String)
-	testError(t, "`abc\n", "2:1", "literal not terminated", String)
-	testError(t, `/*/`, "1:4", "comment not terminated", EOF)
+	testError(t, `01238`, "illegal octal number", Int)
+	testError(t, `'\"'`, "illegal char escape", Char)
+	testError(t, `'aa'`, "illegal char literal", Char)
+	testError(t, `'`, "literal not terminated", Char)
+	testError(t, `"\'"`, "illegal char escape", String)
+	testError(t, `"abc`, "literal not terminated", String)
+	testError(t, "`abc", "literal not terminated", String)
+	testError(t, `//`, "comment not terminated", EOF)
+	testError(t, `/*/`, "comment not terminated", EOF)
+	testError(t, `"abc`+"\x00"+`def"`, "illegal character NUL", String)
+	testError(t, `"abc`+"\xff"+`def"`, "illegal UTF-8 encoding", String)
 }
 
-func checkPos(t *testing.T, got, want Position) {
-	if got.Offset != want.Offset || got.Line != want.Line || got.Column != want.Column {
-		t.Errorf("got offset, line, column = %d, %d, %d; want %d, %d, %d",
-			got.Offset, got.Line, got.Column, want.Offset, want.Line, want.Column)
+
+func checkPos(t *testing.T, s *Scanner, offset, line, column, char int) {
+	pos := s.Pos()
+	if pos.Offset != offset {
+		t.Errorf("offset = %d, want %d", pos.Offset, offset)
 	}
-}
-
-func checkNextPos(t *testing.T, s *Scanner, offset, line, column, char int) {
-	if ch := s.Next(); ch != char {
+	if pos.Line != line {
+		t.Errorf("line = %d, want %d", pos.Line, line)
+	}
+	if pos.Column != column {
+		t.Errorf("column = %d, want %d", pos.Column, column)
+	}
+	ch := s.Scan()
+	if ch != char {
 		t.Errorf("ch = %s, want %s", TokenString(ch), TokenString(char))
 	}
-	want := Position{Offset: offset, Line: line, Column: column}
-	checkPos(t, s.Pos(), want)
 }
 
-func checkScanPos(t *testing.T, s *Scanner, offset, line, column, char int) {
-	want := Position{Offset: offset, Line: line, Column: column}
-	checkPos(t, s.Pos(), want)
-	if ch := s.Scan(); ch != char {
-		t.Errorf("ch = %s, want %s", TokenString(ch), TokenString(char))
-		if string(ch) != s.TokenText() {
-			t.Errorf("tok = %q, want %q", s.TokenText(), string(ch))
-		}
-	}
-	checkPos(t, s.Position, want)
-}
 
 func TestPos(t *testing.T) {
-	// corner case: empty source
-	s := new(Scanner).Init(bytes.NewBufferString(""))
-	checkPos(t, s.Pos(), Position{Offset: 0, Line: 1, Column: 1})
-	s.Peek() // peek doesn't affect the position
-	checkPos(t, s.Pos(), Position{Offset: 0, Line: 1, Column: 1})
-
-	// corner case: source with only a newline
-	s = new(Scanner).Init(bytes.NewBufferString("\n"))
-	checkPos(t, s.Pos(), Position{Offset: 0, Line: 1, Column: 1})
-	checkNextPos(t, s, 1, 2, 1, '\n')
-	// after EOF position doesn't change
-	for i := 10; i > 0; i-- {
-		checkScanPos(t, s, 1, 2, 1, EOF)
-	}
-	if s.ErrorCount != 0 {
-		t.Errorf("%d errors", s.ErrorCount)
-	}
-
-	// corner case: source with only a single character
-	s = new(Scanner).Init(bytes.NewBufferString("本"))
-	checkPos(t, s.Pos(), Position{Offset: 0, Line: 1, Column: 1})
-	checkNextPos(t, s, 3, 1, 2, '本')
-	// after EOF position doesn't change
-	for i := 10; i > 0; i-- {
-		checkScanPos(t, s, 3, 1, 2, EOF)
-	}
-	if s.ErrorCount != 0 {
-		t.Errorf("%d errors", s.ErrorCount)
-	}
-
-	// positions after calling Next
-	s = new(Scanner).Init(bytes.NewBufferString("  foo६४  \n\n本語\n"))
-	checkNextPos(t, s, 1, 1, 2, ' ')
-	s.Peek() // peek doesn't affect the position
-	checkNextPos(t, s, 2, 1, 3, ' ')
-	checkNextPos(t, s, 3, 1, 4, 'f')
-	checkNextPos(t, s, 4, 1, 5, 'o')
-	checkNextPos(t, s, 5, 1, 6, 'o')
-	checkNextPos(t, s, 8, 1, 7, '६')
-	checkNextPos(t, s, 11, 1, 8, '४')
-	checkNextPos(t, s, 12, 1, 9, ' ')
-	checkNextPos(t, s, 13, 1, 10, ' ')
-	checkNextPos(t, s, 14, 2, 1, '\n')
-	checkNextPos(t, s, 15, 3, 1, '\n')
-	checkNextPos(t, s, 18, 3, 2, '本')
-	checkNextPos(t, s, 21, 3, 3, '語')
-	checkNextPos(t, s, 22, 4, 1, '\n')
-	// after EOF position doesn't change
-	for i := 10; i > 0; i-- {
-		checkScanPos(t, s, 22, 4, 1, EOF)
-	}
-	if s.ErrorCount != 0 {
-		t.Errorf("%d errors", s.ErrorCount)
-	}
-
-	// positions after calling Scan
-	s = new(Scanner).Init(bytes.NewBufferString("abc\n本語\n\nx"))
+	s := new(Scanner).Init(bytes.NewBufferString("abc\n012\n\nx"))
 	s.Mode = 0
 	s.Whitespace = 0
-	checkScanPos(t, s, 0, 1, 1, 'a')
-	s.Peek() // peek doesn't affect the position
-	checkScanPos(t, s, 1, 1, 2, 'b')
-	checkScanPos(t, s, 2, 1, 3, 'c')
-	checkScanPos(t, s, 3, 1, 4, '\n')
-	checkScanPos(t, s, 4, 2, 1, '本')
-	checkScanPos(t, s, 7, 2, 2, '語')
-	checkScanPos(t, s, 10, 2, 3, '\n')
-	checkScanPos(t, s, 11, 3, 1, '\n')
-	checkScanPos(t, s, 12, 4, 1, 'x')
-	// after EOF position doesn't change
-	for i := 10; i > 0; i-- {
-		checkScanPos(t, s, 13, 4, 2, EOF)
-	}
-	if s.ErrorCount != 0 {
-		t.Errorf("%d errors", s.ErrorCount)
-	}
+	checkPos(t, s, 0, 1, 1, 'a')
+	checkPos(t, s, 1, 1, 2, 'b')
+	checkPos(t, s, 2, 1, 3, 'c')
+	checkPos(t, s, 3, 2, 0, '\n')
+	checkPos(t, s, 4, 2, 1, '0')
+	checkPos(t, s, 5, 2, 2, '1')
+	checkPos(t, s, 6, 2, 3, '2')
+	checkPos(t, s, 7, 3, 0, '\n')
+	checkPos(t, s, 8, 4, 0, '\n')
+	checkPos(t, s, 9, 4, 1, 'x')
+	checkPos(t, s, 9, 4, 1, EOF)
+	checkPos(t, s, 9, 4, 1, EOF) // after EOF, position doesn't change
 }

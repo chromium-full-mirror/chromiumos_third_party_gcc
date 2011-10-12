@@ -3,9 +3,9 @@
 /* { dg-do compile } */
 /* { dg-options "-Wreturn-type -Wextra" } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.h"
+#include "../objc-obj-c++-shared/Object1.h"
 
-@interface Foo: TestsuiteObject
+@interface Foo: Object
 - (id) meth1;
 - (void) meth2;
 @end
@@ -15,7 +15,7 @@ extern int bar;
 @implementation Foo
 - (id) meth1 {
   if (bar)
-    return [TestsuiteObject new];
+    return [Object new];
   return; /* { dg-warning "'return' with no value, in function returning non-void" } */
 } 
 - (void) meth2 {

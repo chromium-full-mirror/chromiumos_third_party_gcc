@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-/*	Package datafmt implements syntax-directed, type-driven formatting
+/*	The datafmt package implements syntax-directed, type-driven formatting
 	of arbitrary data structures. Formatting a data structure consists of
 	two phases: first, a parser reads a format specification and builds a
 	"compiled" format. Then, the format can be applied repeatedly to
@@ -211,6 +211,7 @@ import (
 	"runtime"
 )
 
+
 // ----------------------------------------------------------------------------
 // Format representation
 
@@ -227,10 +228,12 @@ import (
 //
 type Formatter func(state *State, value interface{}, ruleName string) bool
 
+
 // A FormatterMap is a set of custom formatters.
 // It maps a rule name to a formatter function.
 //
 type FormatterMap map[string]Formatter
+
 
 // A parsed format expression is built from the following nodes.
 //
@@ -266,10 +269,12 @@ type (
 	}
 )
 
+
 // A Format is the result of parsing a format specification.
 // The format may be applied repeatedly to format values.
 //
 type Format map[string]expr
+
 
 // ----------------------------------------------------------------------------
 // Formatting
@@ -288,6 +293,7 @@ type Environment interface {
 	Copy() Environment
 }
 
+
 // State represents the current formatting state.
 // It is provided as argument to custom formatters.
 //
@@ -303,6 +309,7 @@ type State struct {
 	separator expr           // possibly nil
 }
 
+
 func newState(fmt Format, env Environment, errors chan os.Error) *State {
 	s := new(State)
 	s.fmt = fmt
@@ -310,12 +317,12 @@ func newState(fmt Format, env Environment, errors chan os.Error) *State {
 	s.errors = errors
 	s.linePos = token.Position{Line: 1}
 
-	// if we have a default rule, cache its expression for fast access
+	// if we have a default rule, cache it's expression for fast access
 	if x, found := fmt["default"]; found {
 		s.default_ = x
 	}
 
-	// if we have a global separator rule, cache its expression for fast access
+	// if we have a global separator rule, cache it's expression for fast access
 	if x, found := fmt["/"]; found {
 		s.separator = x
 	}
@@ -323,13 +330,16 @@ func newState(fmt Format, env Environment, errors chan os.Error) *State {
 	return s
 }
 
+
 // Env returns the environment passed to Format.Apply.
 func (s *State) Env() interface{} { return s.env }
+
 
 // LinePos returns the position of the current line beginning
 // in the state's output buffer. Line numbers start at 1.
 //
 func (s *State) LinePos() token.Position { return s.linePos }
+
 
 // Pos returns the position of the next byte to be written to the
 // output buffer. Line numbers start at 1.
@@ -338,6 +348,7 @@ func (s *State) Pos() token.Position {
 	offs := s.output.Len()
 	return token.Position{Line: s.linePos.Line, Column: offs - s.linePos.Offset, Offset: offs}
 }
+
 
 // Write writes data to the output buffer, inserting the indentation
 // string after each newline or form feed character. It cannot return an error.
@@ -360,12 +371,14 @@ func (s *State) Write(data []byte) (int, os.Error) {
 	return n + n3, nil
 }
 
+
 type checkpoint struct {
 	env       Environment
 	hasOutput bool
 	outputLen int
 	linePos   token.Position
 }
+
 
 func (s *State) save() checkpoint {
 	saved := checkpoint{nil, s.hasOutput, s.output.Len(), s.linePos}
@@ -375,15 +388,18 @@ func (s *State) save() checkpoint {
 	return saved
 }
 
+
 func (s *State) restore(m checkpoint) {
 	s.env = m.env
 	s.output.Truncate(m.outputLen)
 }
 
+
 func (s *State) error(msg string) {
 	s.errors <- os.NewError(msg)
 	runtime.Goexit()
 }
+
 
 // TODO At the moment, unnamed types are simply mapped to the default
 //      names below. For instance, all unnamed arrays are mapped to
@@ -392,20 +408,20 @@ func (s *State) error(msg string) {
 //
 
 func typename(typ reflect.Type) string {
-	switch typ.Kind() {
-	case reflect.Array:
+	switch typ.(type) {
+	case *reflect.ArrayType:
 		return "array"
-	case reflect.Slice:
+	case *reflect.SliceType:
 		return "array"
-	case reflect.Chan:
+	case *reflect.ChanType:
 		return "chan"
-	case reflect.Func:
+	case *reflect.FuncType:
 		return "func"
-	case reflect.Interface:
+	case *reflect.InterfaceType:
 		return "interface"
-	case reflect.Map:
+	case *reflect.MapType:
 		return "map"
-	case reflect.Ptr:
+	case *reflect.PtrType:
 		return "ptr"
 	}
 	return typ.String()
@@ -423,6 +439,7 @@ func (s *State) getFormat(name string) expr {
 	s.error(fmt.Sprintf("no format rule for type: '%s'", name))
 	return nil
 }
+
 
 // eval applies a format expression fexpr to a value. If the expression
 // evaluates internally to a non-nil []byte, that slice is appended to
@@ -502,38 +519,38 @@ func (s *State) eval(fexpr expr, value reflect.Value, index int) bool {
 
 		case "*":
 			// indirection: operation is type-specific
-			switch v := value; v.Kind() {
-			case reflect.Array:
+			switch v := value.(type) {
+			case *reflect.ArrayValue:
 				if v.Len() <= index {
 					return false
 				}
-				value = v.Index(index)
+				value = v.Elem(index)
 
-			case reflect.Slice:
+			case *reflect.SliceValue:
 				if v.IsNil() || v.Len() <= index {
 					return false
 				}
-				value = v.Index(index)
+				value = v.Elem(index)
 
-			case reflect.Map:
+			case *reflect.MapValue:
 				s.error("reflection support for maps incomplete")
 
-			case reflect.Ptr:
+			case *reflect.PtrValue:
 				if v.IsNil() {
 					return false
 				}
 				value = v.Elem()
 
-			case reflect.Interface:
+			case *reflect.InterfaceValue:
 				if v.IsNil() {
 					return false
 				}
 				value = v.Elem()
 
-			case reflect.Chan:
+			case *reflect.ChanValue:
 				s.error("reflection support for chans incomplete")
 
-			case reflect.Func:
+			case *reflect.FuncValue:
 				s.error("reflection support for funcs incomplete")
 
 			default:
@@ -543,9 +560,9 @@ func (s *State) eval(fexpr expr, value reflect.Value, index int) bool {
 		default:
 			// value is value of named field
 			var field reflect.Value
-			if sval := value; sval.Kind() == reflect.Struct {
+			if sval, ok := value.(*reflect.StructValue); ok {
 				field = sval.FieldByName(t.fieldName)
-				if !field.IsValid() {
+				if field == nil {
 					// TODO consider just returning false in this case
 					s.error(fmt.Sprintf("error: no field `%s` in `%s`", t.fieldName, value.Type()))
 				}
@@ -577,7 +594,7 @@ func (s *State) eval(fexpr expr, value reflect.Value, index int) bool {
 		s.eval(t.indent, value, index)
 		// if the indentation evaluates to nil, the state's output buffer
 		// didn't change - either way it's ok to append the difference to
-		// the current indentation
+		// the current identation
 		s.indent.Write(s.output.Bytes()[mark.outputLen:s.output.Len()])
 		s.restore(mark)
 
@@ -636,6 +653,7 @@ func (s *State) eval(fexpr expr, value reflect.Value, index int) bool {
 	return false
 }
 
+
 // Eval formats each argument according to the format
 // f and returns the resulting []byte and os.Error. If
 // an error occurred, the []byte contains the partially
@@ -653,8 +671,8 @@ func (f Format) Eval(env Environment, args ...interface{}) ([]byte, os.Error) {
 
 	go func() {
 		for _, v := range args {
-			fld := reflect.ValueOf(v)
-			if !fld.IsValid() {
+			fld := reflect.NewValue(v)
+			if fld == nil {
 				errors <- os.NewError("nil argument")
 				return
 			}
@@ -669,6 +687,7 @@ func (f Format) Eval(env Environment, args ...interface{}) ([]byte, os.Error) {
 	err := <-errors
 	return s.output.Bytes(), err
 }
+
 
 // ----------------------------------------------------------------------------
 // Convenience functions
@@ -686,6 +705,7 @@ func (f Format) Fprint(w io.Writer, env Environment, args ...interface{}) (int, 
 	return w.Write(data)
 }
 
+
 // Print formats each argument according to the format f
 // and writes to standard output. The result is the total
 // number of bytes written and an os.Error, if any.
@@ -693,6 +713,7 @@ func (f Format) Fprint(w io.Writer, env Environment, args ...interface{}) (int, 
 func (f Format) Print(args ...interface{}) (int, os.Error) {
 	return f.Fprint(os.Stdout, nil, args...)
 }
+
 
 // Sprint formats each argument according to the format f
 // and returns the resulting string. If an error occurs

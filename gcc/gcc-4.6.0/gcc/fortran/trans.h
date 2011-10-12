@@ -1,5 +1,5 @@
 /* Header for code translation functions
-   Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+   Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
    Contributed by Paul Brook
 
@@ -94,18 +94,6 @@ typedef struct gfc_se
 gfc_se;
 
 
-/* Denotes different types of coarray.
-   Please keep in sync with libgfortran/caf/libcaf.h.  */
-typedef enum 
-{
-  GFC_CAF_COARRAY_STATIC,
-  GFC_CAF_COARRAY_ALLOC,
-  GFC_CAF_LOCK,
-  GFC_CAF_LOCK_COMP
-}
-gfc_coarray_type;
-
-
 /* Scalarization State chain.  Created by walking an expression tree before
    creating the scalarization loops. Then passed as part of a gfc_se structure
    to translate the expression inside the loop.  Note that these chains are
@@ -116,7 +104,7 @@ gfc_coarray_type;
 
 typedef struct gfc_ss_info
 {
-  int dimen, codimen;
+  int dimen;
   /* The ref that holds information on this section.  */
   gfc_ref *ref;
   /* The descriptor of this array.  */
@@ -210,7 +198,7 @@ typedef struct gfc_ss
     {
       /* The rank of the temporary.  May be less than the rank of the
          assigned expression.  */
-      int dimen, codimen;
+      int dimen;
       tree type;
     }
     temp;
@@ -243,7 +231,7 @@ typedef struct gfc_loopinfo
   stmtblock_t pre;
   stmtblock_t post;
 
-  int dimen, codimen;
+  int dimen;
 
   /* All the SS involved with this loop.  */
   gfc_ss *ss;
@@ -331,6 +319,9 @@ void gfc_conv_string_parameter (gfc_se * se);
 /* Compare two strings.  */
 tree gfc_build_compare_string (tree, tree, tree, tree, int, enum tree_code);
 
+/* Add an item to the end of TREE_LIST.  */
+tree gfc_chainon_list (tree, tree);
+
 /* When using the gfc_conv_* make sure you understand what they do, i.e.
    when a POST chain may be created, and what the returned expression may be
    used for.  Note that character strings have special handling.  This
@@ -357,8 +348,7 @@ tree gfc_evaluate_now (tree, stmtblock_t *);
 /* Find the appropriate variant of a math intrinsic.  */
 tree gfc_builtin_decl_for_float_kind (enum built_in_function, int);
 
-/* Intrinsic procedure handling.  */
-tree gfc_conv_intrinsic_subroutine (gfc_code *);
+/* Intrinsic function handling.  */
 void gfc_conv_intrinsic_function (gfc_se *, gfc_expr *);
 
 /* Is the intrinsic expanded inline.  */
@@ -368,6 +358,8 @@ bool gfc_inline_intrinsic_function_p (gfc_expr *);
    This is true for array-returning intrinsics, unless
    gfc_inline_intrinsic_function_p returns true.  */
 int gfc_is_intrinsic_libcall (gfc_expr *);
+
+tree gfc_conv_intrinsic_move_alloc (gfc_code *);
 
 /* Used to call ordinary functions/subroutines
    and procedure pointer components.  */
@@ -517,10 +509,6 @@ void gfc_generate_constructors (void);
 /* Get the string length of an array constructor.  */
 bool get_array_ctor_strlen (stmtblock_t *, gfc_constructor_base, tree *);
 
-/* Mark a condition as likely or unlikely.  */
-tree gfc_likely (tree);
-tree gfc_unlikely (tree);
-
 /* Generate a runtime error call.  */
 tree gfc_trans_runtime_error (bool, locus*, const char*, ...);
 
@@ -541,12 +529,11 @@ tree gfc_call_malloc (stmtblock_t *, tree, tree);
 /* Build a memcpy call.  */
 tree gfc_build_memcpy_call (tree, tree, tree);
 
-/* Allocate memory for allocatable variables, with optional status variable.  */
-void gfc_allocate_allocatable (stmtblock_t*, tree, tree, tree,
-			       tree, tree, tree, gfc_expr*);
+/* Allocate memory for arrays, with optional status variable.  */
+tree gfc_allocate_array_with_status (stmtblock_t*, tree, tree, tree, gfc_expr*);
 
 /* Allocate memory, with optional status variable.  */
-void gfc_allocate_using_malloc (stmtblock_t *, tree, tree, tree);
+tree gfc_allocate_with_status (stmtblock_t *, tree, tree);
 
 /* Generate code to deallocate an array.  */
 tree gfc_deallocate_with_status (tree, tree, bool, gfc_expr*);
@@ -625,23 +612,6 @@ extern GTY(()) tree gfor_fndecl_fdate;
 extern GTY(()) tree gfor_fndecl_in_pack;
 extern GTY(()) tree gfor_fndecl_in_unpack;
 extern GTY(()) tree gfor_fndecl_associated;
-
-
-/* Coarray run-time library function decls.  */
-extern GTY(()) tree gfor_fndecl_caf_init;
-extern GTY(()) tree gfor_fndecl_caf_finalize;
-extern GTY(()) tree gfor_fndecl_caf_register;
-extern GTY(()) tree gfor_fndecl_caf_critical;
-extern GTY(()) tree gfor_fndecl_caf_end_critical;
-extern GTY(()) tree gfor_fndecl_caf_sync_all;
-extern GTY(()) tree gfor_fndecl_caf_sync_images;
-extern GTY(()) tree gfor_fndecl_caf_error_stop;
-extern GTY(()) tree gfor_fndecl_caf_error_stop_str;
-
-/* Coarray global variables for num_images/this_image.  */
-extern GTY(()) tree gfort_gvar_caf_num_images;
-extern GTY(()) tree gfort_gvar_caf_this_image;
-
 
 /* Math functions.  Many other math functions are handled in
    trans-intrinsic.c.  */
@@ -724,7 +694,7 @@ enum gfc_array_kind
    variable-sized in some other frontends.  Due to gengtype deficiency the GTY
    options of such types have to agree across all frontends. */
 struct GTY((variable_size))	lang_type	 {
-  int rank, corank;
+  int rank;
   enum gfc_array_kind akind;
   tree lbound[GFC_MAX_DIMENSIONS];
   tree ubound[GFC_MAX_DIMENSIONS];
@@ -736,8 +706,6 @@ struct GTY((variable_size))	lang_type	 {
   tree span;
   tree base_decl[2];
   tree nonrestricted_type;
-  tree caf_token;
-  tree caf_offset;
 };
 
 struct GTY((variable_size)) lang_decl {
@@ -750,16 +718,12 @@ struct GTY((variable_size)) lang_decl {
   tree stringlen;
   tree addr;
   tree span;
-  /* For assumed-shape coarrays.  */
-  tree token, caf_offset;
 };
 
 
 #define GFC_DECL_ASSIGN_ADDR(node) DECL_LANG_SPECIFIC(node)->addr
 #define GFC_DECL_STRING_LEN(node) DECL_LANG_SPECIFIC(node)->stringlen
 #define GFC_DECL_SPAN(node) DECL_LANG_SPECIFIC(node)->span
-#define GFC_DECL_TOKEN(node) DECL_LANG_SPECIFIC(node)->token
-#define GFC_DECL_CAF_OFFSET(node) DECL_LANG_SPECIFIC(node)->caf_offset
 #define GFC_DECL_SAVED_DESCRIPTOR(node) \
   (DECL_LANG_SPECIFIC(node)->saved_descriptor)
 #define GFC_DECL_PACKED_ARRAY(node) DECL_LANG_FLAG_0(node)
@@ -785,9 +749,6 @@ struct GTY((variable_size)) lang_decl {
 #define GFC_TYPE_ARRAY_STRIDE(node, dim) \
   (TYPE_LANG_SPECIFIC(node)->stride[dim])
 #define GFC_TYPE_ARRAY_RANK(node) (TYPE_LANG_SPECIFIC(node)->rank)
-#define GFC_TYPE_ARRAY_CORANK(node) (TYPE_LANG_SPECIFIC(node)->corank)
-#define GFC_TYPE_ARRAY_CAF_TOKEN(node) (TYPE_LANG_SPECIFIC(node)->caf_token)
-#define GFC_TYPE_ARRAY_CAF_OFFSET(node) (TYPE_LANG_SPECIFIC(node)->caf_offset)
 #define GFC_TYPE_ARRAY_SIZE(node) (TYPE_LANG_SPECIFIC(node)->size)
 #define GFC_TYPE_ARRAY_OFFSET(node) (TYPE_LANG_SPECIFIC(node)->offset)
 #define GFC_TYPE_ARRAY_AKIND(node) (TYPE_LANG_SPECIFIC(node)->akind)

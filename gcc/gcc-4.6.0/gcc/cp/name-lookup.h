@@ -53,7 +53,7 @@ extern binding_entry binding_table_find (binding_table, tree);
 typedef struct cxx_binding cxx_binding;
 
 /* The datatype used to implement C++ scope.  */
-typedef struct cp_binding_level cp_binding_level;
+typedef struct cp_binding_level cxx_scope;
 
 /* Nonzero if this binding is for a local scope, as opposed to a class
    or namespace scope.  */
@@ -71,7 +71,7 @@ struct GTY(()) cxx_binding {
   /* The type entity this name is bound to.  */
   tree type;
   /* The scope at which this binding was made.  */
-  cp_binding_level *scope;
+  cxx_scope *scope;
   unsigned value_is_inherited : 1;
   unsigned is_local : 1;
 };
@@ -110,8 +110,6 @@ typedef enum scope_kind {
   sk_catch,	     /* A catch-block.  */
   sk_for,	     /* The scope of the variable declared in a
 			for-init-statement.  */
-  sk_cond,	     /* The scope of the variable declared in the condition
-			of an if or switch statement.  */
   sk_function_parms, /* The scope containing function parameters.  */
   sk_class,	     /* The scope containing the members of a class.  */
   sk_scoped_enum,    /* The scope containing the enumertors of a C++0x
@@ -143,7 +141,7 @@ typedef enum tag_scope {
 } tag_scope;
 
 typedef struct GTY(()) cp_class_binding {
-  cxx_binding *base;
+  cxx_binding base;
   /* The bound name.  */
   tree identifier;
 } cp_class_binding;
@@ -186,83 +184,86 @@ DEF_VEC_ALLOC_O(cp_label_binding,gc);
    is duplicated in the IDENTIFIER_GLOBAL_VALUEs of all identifiers.  */
 
 struct GTY(()) cp_binding_level {
-  /* A chain of _DECL nodes for all variables, constants, functions,
-      and typedef types.  These are in the reverse of the order
-      supplied.  There may be OVERLOADs on this list, too, but they
-      are wrapped in TREE_LISTs; the TREE_VALUE is the OVERLOAD.  */
-  tree names;
+    /* A chain of _DECL nodes for all variables, constants, functions,
+       and typedef types.  These are in the reverse of the order
+       supplied.  There may be OVERLOADs on this list, too, but they
+       are wrapped in TREE_LISTs; the TREE_VALUE is the OVERLOAD.  */
+    tree names;
 
-  /* A chain of NAMESPACE_DECL nodes.  */
-  tree namespaces;
+    /* Count of elements in names chain.  */
+    size_t names_size;
 
-  /* An array of static functions and variables (for namespaces only) */
-  VEC(tree,gc) *static_decls;
+    /* A chain of NAMESPACE_DECL nodes.  */
+    tree namespaces;
 
-  /* A list of USING_DECL nodes.  */
-  tree usings;
+    /* An array of static functions and variables (for namespaces only) */
+    VEC(tree,gc) *static_decls;
 
-  /* A list of used namespaces. PURPOSE is the namespace,
-      VALUE the common ancestor with this binding_level's namespace.  */
-  tree using_directives;
+    /* A list of USING_DECL nodes.  */
+    tree usings;
 
-  /* For the binding level corresponding to a class, the entities
-      declared in the class or its base classes.  */
-  VEC(cp_class_binding,gc) *class_shadowed;
+    /* A list of used namespaces. PURPOSE is the namespace,
+       VALUE the common ancestor with this binding_level's namespace.  */
+    tree using_directives;
 
-  /* Similar to class_shadowed, but for IDENTIFIER_TYPE_VALUE, and
-      is used for all binding levels. The TREE_PURPOSE is the name of
-      the entity, the TREE_TYPE is the associated type.  In addition
-      the TREE_VALUE is the IDENTIFIER_TYPE_VALUE before we entered
-      the class.  */
-  tree type_shadowed;
+    /* For the binding level corresponding to a class, the entities
+       declared in the class or its base classes.  */
+    VEC(cp_class_binding,gc) *class_shadowed;
 
-  /* Similar to class_shadowed, but for IDENTIFIER_LABEL_VALUE, and
-      used for all binding levels.  */
-  VEC(cp_label_binding,gc) *shadowed_labels;
+    /* Similar to class_shadowed, but for IDENTIFIER_TYPE_VALUE, and
+       is used for all binding levels. The TREE_PURPOSE is the name of
+       the entity, the TREE_TYPE is the associated type.  In addition
+       the TREE_VALUE is the IDENTIFIER_TYPE_VALUE before we entered
+       the class.  */
+    tree type_shadowed;
 
-  /* For each level (except not the global one),
-      a chain of BLOCK nodes for all the levels
-      that were entered and exited one level down.  */
-  tree blocks;
+    /* Similar to class_shadowed, but for IDENTIFIER_LABEL_VALUE, and
+       used for all binding levels.  */
+    VEC(cp_label_binding,gc) *shadowed_labels;
 
-  /* The entity (namespace, class, function) the scope of which this
-      binding contour corresponds to.  Otherwise NULL.  */
-  tree this_entity;
+    /* For each level (except not the global one),
+       a chain of BLOCK nodes for all the levels
+       that were entered and exited one level down.  */
+    tree blocks;
 
-  /* The binding level which this one is contained in (inherits from).  */
-  cp_binding_level *level_chain;
+    /* The entity (namespace, class, function) the scope of which this
+       binding contour corresponds to.  Otherwise NULL.  */
+    tree this_entity;
 
-  /* List of VAR_DECLS saved from a previous for statement.
-      These would be dead in ISO-conforming code, but might
-      be referenced in ARM-era code.  */
-  VEC(tree,gc) *dead_vars_from_for;
+    /* The binding level which this one is contained in (inherits from).  */
+    struct cp_binding_level *level_chain;
 
-  /* STATEMENT_LIST for statements in this binding contour.
-      Only used at present for SK_CLEANUP temporary bindings.  */
-  tree statement_list;
+    /* List of VAR_DECLS saved from a previous for statement.
+       These would be dead in ISO-conforming code, but might
+       be referenced in ARM-era code.  */
+    VEC(tree,gc) *dead_vars_from_for;
 
-  /* Binding depth at which this level began.  */
-  int binding_depth;
+    /* STATEMENT_LIST for statements in this binding contour.
+       Only used at present for SK_CLEANUP temporary bindings.  */
+    tree statement_list;
 
-  /* The kind of scope that this object represents.  However, a
-      SK_TEMPLATE_SPEC scope is represented with KIND set to
-      SK_TEMPLATE_PARMS and EXPLICIT_SPEC_P set to true.  */
-  ENUM_BITFIELD (scope_kind) kind : 4;
+    /* Binding depth at which this level began.  */
+    int binding_depth;
 
-  /* True if this scope is an SK_TEMPLATE_SPEC scope.  This field is
-      only valid if KIND == SK_TEMPLATE_PARMS.  */
-  BOOL_BITFIELD explicit_spec_p : 1;
+    /* The kind of scope that this object represents.  However, a
+       SK_TEMPLATE_SPEC scope is represented with KIND set to
+       SK_TEMPLATE_PARMS and EXPLICIT_SPEC_P set to true.  */
+    ENUM_BITFIELD (scope_kind) kind : 4;
 
-  /* true means make a BLOCK for this level regardless of all else.  */
-  unsigned keep : 1;
+    /* True if this scope is an SK_TEMPLATE_SPEC scope.  This field is
+       only valid if KIND == SK_TEMPLATE_PARMS.  */
+    BOOL_BITFIELD explicit_spec_p : 1;
 
-  /* Nonzero if this level can safely have additional
-      cleanup-needing variables added to it.  */
-  unsigned more_cleanups_ok : 1;
-  unsigned have_cleanups : 1;
+    /* true means make a BLOCK for this level regardless of all else.  */
+    unsigned keep : 1;
 
-  /* 24 bits left to fill a 32-bit word.  */
-};
+    /* Nonzero if this level can safely have additional
+       cleanup-needing variables added to it.  */
+    unsigned more_cleanups_ok : 1;
+    unsigned have_cleanups : 1;
+
+    /* 24 bits left to fill a 32-bit word.  */
+  };
 
 /* The binding level currently in effect.  */
 
@@ -288,15 +289,14 @@ extern GTY(()) tree global_type_node;
 #define global_scope_p(SCOPE) \
   ((SCOPE) == NAMESPACE_LEVEL (global_namespace))
 
-extern cp_binding_level *leave_scope (void);
+extern cxx_scope *leave_scope (void);
 extern bool kept_level_p (void);
-extern bool global_bindings_p (void);
+extern int global_bindings_p (void);
 extern bool toplevel_bindings_p	(void);
 extern bool namespace_bindings_p (void);
-extern bool local_bindings_p (void);
 extern bool template_parm_scope_p (void);
 extern scope_kind innermost_scope_kind (void);
-extern cp_binding_level *begin_scope (scope_kind, tree);
+extern cxx_scope *begin_scope (scope_kind, tree);
 extern void print_binding_stack	(void);
 extern void push_to_top_level (void);
 extern void pop_from_top_level (void);
@@ -307,7 +307,7 @@ extern tree push_scope (tree);
 extern void pop_scope (tree);
 extern tree push_inner_scope (tree);
 extern void pop_inner_scope (tree, tree);
-extern void push_binding_level (cp_binding_level *);
+extern void push_binding_level (struct cp_binding_level *);
 
 extern void push_namespace (tree);
 extern void pop_namespace (void);
@@ -316,7 +316,7 @@ extern void pop_nested_namespace (tree);
 extern bool handle_namespace_attrs (tree, tree);
 extern void pushlevel_class (void);
 extern void poplevel_class (void);
-extern tree pushdecl_with_scope (tree, cp_binding_level *, bool);
+extern tree pushdecl_with_scope (tree, cxx_scope *, bool);
 extern tree lookup_name_prefer_type (tree, int);
 extern tree lookup_name_real (tree, int, int, bool, int, int);
 extern tree lookup_type_scope (tree, tag_scope);

@@ -48,10 +48,10 @@ namespace __gnu_pbds
   {
 #define PB_DS_BASE_C_DEC \
     std::multimap<Key, Data, Less_Fn, \
-      typename _Alloc::template rebind<std::pair<const Key, Data> >::other>
+      typename Allocator::template rebind<std::pair<const Key, Data> >::other>
 
     template<typename Key, typename Data, class Less_Fn = std::less<Key>,
-	     typename _Alloc = std::allocator<char> >
+	     class Allocator = std::allocator<char> >
     class native_multimap : public PB_DS_BASE_C_DEC
     {
     private:
@@ -60,10 +60,10 @@ namespace __gnu_pbds
     public:
       typedef native_tree_tag container_category;
 
-      typedef _Alloc allocator;
+      typedef Allocator allocator;
 
       typedef
-      typename _Alloc::template rebind<
+      typename Allocator::template rebind<
 	std::pair<Key, Data> >::other::const_reference
       const_reference;
 

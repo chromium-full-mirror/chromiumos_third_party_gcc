@@ -1,4 +1,4 @@
-/* { dg-do link { target pie } } */
+/* { dg-do link { target *-*-darwin[912]* *-*-linux* } } */
 /* { dg-options "-fpie" } */
 
 int main(void)

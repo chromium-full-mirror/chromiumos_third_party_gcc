@@ -1,6 +1,6 @@
 /* Definitions for C parsing and type checking.
    Copyright (C) 1987, 1993, 1994, 1995, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011
+   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -266,8 +266,6 @@ struct c_declspecs {
   BOOL_BITFIELD complex_p : 1;
   /* Whether "inline" was specified.  */
   BOOL_BITFIELD inline_p : 1;
-  /* Whether "_Noreturn" was speciied.  */
-  BOOL_BITFIELD noreturn_p : 1;
   /* Whether "__thread" was specified.  */
   BOOL_BITFIELD thread_p : 1;
   /* Whether "const" was specified.  */
@@ -317,12 +315,11 @@ struct c_arg_info {
   /* A list of non-parameter decls (notably enumeration constants)
      defined with the parameters.  */
   tree others;
-  /* A compound expression of VLA sizes from the parameters, or NULL.
-     In a function definition, these are used to ensure that
-     side-effects in sizes of arrays converted to pointers (such as a
-     parameter int i[n++]) take place; otherwise, they are
-     ignored.  */
-  tree pending_sizes;
+  /* A VEC of VLA sizes from the parameters.  In a function
+     definition, these are used to ensure that side-effects in sizes
+     of arrays converted to pointers (such as a parameter int i[n++])
+     take place; otherwise, they are ignored.  */
+  VEC(tree,gc) *pending_sizes;
   /* True when these arguments had [*].  */
   BOOL_BITFIELD had_vla_unspec : 1;
 };
@@ -415,7 +412,7 @@ extern struct obstack parser_obstack;
 extern tree c_break_label;
 extern tree c_cont_label;
 
-extern bool global_bindings_p (void);
+extern int global_bindings_p (void);
 extern void push_scope (void);
 extern tree pop_scope (void);
 extern void c_bindings_start_stmt_expr (struct c_spot_bindings *);
@@ -448,17 +445,17 @@ extern void finish_function (void);
 extern tree finish_struct (location_t, tree, tree, tree,
 			   struct c_struct_parse_info *);
 extern struct c_arg_info *build_arg_info (void);
-extern struct c_arg_info *get_parm_info (bool, tree);
+extern struct c_arg_info *get_parm_info (bool);
 extern tree grokfield (location_t, struct c_declarator *,
 		       struct c_declspecs *, tree, tree *);
 extern tree groktypename (struct c_type_name *, tree *, bool *);
-extern tree grokparm (const struct c_parm *, tree *);
+extern tree grokparm (const struct c_parm *);
 extern tree implicitly_declare (location_t, tree);
 extern void keep_next_level (void);
 extern void pending_xref_error (void);
 extern void c_push_function_context (void);
 extern void c_pop_function_context (void);
-extern void push_parm_decl (const struct c_parm *, tree *);
+extern void push_parm_decl (const struct c_parm *);
 extern struct c_declarator *set_array_declarator_inner (struct c_declarator *,
 							struct c_declarator *);
 extern tree c_builtin_function (tree);
@@ -598,6 +595,11 @@ extern int current_function_returns_abnormally;
 /* Nonzero means we are reading code that came from a system header file.  */
 
 extern int system_header_p;
+
+/* True means global_bindings_p should return false even if the scope stack
+   says we are in file scope.  */
+
+extern bool c_override_global_bindings_to_false;
 
 /* In c-decl.c */
 extern void c_finish_incomplete_decl (tree);

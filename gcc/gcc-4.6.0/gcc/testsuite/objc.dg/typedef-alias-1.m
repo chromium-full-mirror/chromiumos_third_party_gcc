@@ -1,16 +1,15 @@
 /* Typedefs of ObjC types should work without any bogus warnings. */
 /* { dg-do compile } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.h"
-#include <objc/objc.h>
+#include "../objc-obj-c++-shared/Object1.h"
 
-typedef TestsuiteObject MyObject;
+typedef Object MyObject;
 
 int main (int argc, const char * argv[])
 {
-    TestsuiteObject* a = nil;
+    Object* a = nil;
     MyObject* b = a;
-    TestsuiteObject* c = b;
+    Object* c = b;
 
     return 0;
 }

@@ -2,7 +2,7 @@
    tree_flow_call_edges_add.  */
 
 /* { dg-do compile } */
-/* { dg-options "-O1 -fprofile-generate -Wno-attributes" } */
+/* { dg-options "-O1 -fprofile-generate" } */
 
 static __attribute__ ((always_inline)) void 
 baz ()

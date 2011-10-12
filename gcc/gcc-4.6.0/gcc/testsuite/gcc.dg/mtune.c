@@ -4,5 +4,4 @@
 /* { dg-error "mtune" "" { target *-*-* } 0 } */
 /* { dg-bogus "march" "" { target *-*-* } 0 } */
 /* { dg-bogus "mcpu" "" { target *-*-* } 0 } */
-/* { dg-prune-output "note: valid arguments.*" } */
 int i;

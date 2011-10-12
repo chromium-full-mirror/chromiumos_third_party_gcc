@@ -44,7 +44,7 @@ acquire (uint32 *addr)
    and it remains nonnegative.  */
 
 void
-runtime_semacquire (uint32 *addr)
+semacquire (uint32 *addr)
 {
   while (1)
     {
@@ -86,7 +86,7 @@ runtime_semacquire (uint32 *addr)
    process.  */
 
 void
-runtime_semrelease (uint32 *addr)
+semrelease (uint32 *addr)
 {
   int32_t val;
 

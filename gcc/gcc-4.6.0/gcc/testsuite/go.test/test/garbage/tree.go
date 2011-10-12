@@ -39,6 +39,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"runtime"
 	"time"
 )
 
@@ -94,7 +95,10 @@ func main() {
 	fmt.Printf("long lived tree of depth %d\t check: %d\n", maxDepth, longLivedTree.itemCheck())
 
 	t1 := time.Nanoseconds()
+	st := &runtime.MemStats
 
 	// Standard gotest benchmark output, collected by build dashboard.
-	gcstats("BenchmarkTree", *n, t1-t0)
+	fmt.Printf("garbage.BenchmarkTree %d %d ns/op\n", *n, (t1-t0)/int64(*n))
+	fmt.Printf("garbage.BenchmarkTreePause %d %d ns/op\n", st.NumGC, int64(st.PauseNs)/int64(st.NumGC))
+
 }

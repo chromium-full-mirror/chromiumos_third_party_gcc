@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009, 2010, 2011 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009, 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -34,14 +34,14 @@
 // warranty.
 
 /**
- * @file splay_tree_/erase_fn_imps.hpp
+ * @file erase_fn_imps.hpp
  * Contains an implementation class for splay_tree_.
  */
 
 PB_DS_CLASS_T_DEC
 inline bool
 PB_DS_CLASS_C_DEC::
-erase(key_const_reference r_key)
+erase(const_key_reference r_key)
 {
   point_iterator it = find(r_key);
   if (it == base_type::end())
@@ -55,13 +55,13 @@ inline typename PB_DS_CLASS_C_DEC::iterator
 PB_DS_CLASS_C_DEC::
 erase(iterator it)
 {
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid());
   if (it == base_type::end())
     return it;
   iterator ret_it = it;
   ++ret_it;
   erase_node(it.m_p_nd);
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid());
   return ret_it;
 }
 
@@ -70,13 +70,13 @@ inline typename PB_DS_CLASS_C_DEC::reverse_iterator
 PB_DS_CLASS_C_DEC::
 erase(reverse_iterator it)
 {
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid());
   if (it.m_p_nd == base_type::m_p_head)
     return (it);
   reverse_iterator ret_it = it;
   ++ret_it;
   erase_node(it.m_p_nd);
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid());
   return ret_it;
 }
 
@@ -86,7 +86,7 @@ inline typename PB_DS_CLASS_C_DEC::size_type
 PB_DS_CLASS_C_DEC::
 erase_if(Pred pred)
 {
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid();)
   size_type num_ersd = 0;
   iterator it = base_type::begin();
   while (it != base_type::end())
@@ -99,7 +99,7 @@ erase_if(Pred pred)
       else
 	++it;
     }
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid();)
   return num_ersd;
 }
 
@@ -111,7 +111,7 @@ erase_node(node_pointer p_nd)
   _GLIBCXX_DEBUG_ASSERT(p_nd != 0);
   splay(p_nd);
 
-  PB_DS_ASSERT_VALID((*this))
+  _GLIBCXX_DEBUG_ONLY(assert_valid();)
   _GLIBCXX_DEBUG_ASSERT(p_nd == this->m_p_head->m_p_parent);
 
   node_pointer p_l = p_nd->m_p_left;
@@ -124,7 +124,7 @@ erase_node(node_pointer p_nd)
       base_type::m_p_head->m_p_parent = p_l;
       if (p_l != 0)
 	p_l->m_p_parent = base_type::m_p_head;
-      PB_DS_ASSERT_VALID((*this))
+      _GLIBCXX_DEBUG_ONLY(assert_valid();)
       return;
     }
 
@@ -141,8 +141,8 @@ erase_node(node_pointer p_nd)
   p_target_r->m_p_left = p_l;
   if (p_l != 0)
     p_l->m_p_parent = p_target_r;
-  PB_DS_ASSERT_VALID((*this))
-  this->apply_update(p_target_r, (node_update*)this);
+  _GLIBCXX_DEBUG_ONLY(assert_valid();)
+  apply_update(p_target_r, (node_update* )this);
 }
 
 PB_DS_CLASS_T_DEC

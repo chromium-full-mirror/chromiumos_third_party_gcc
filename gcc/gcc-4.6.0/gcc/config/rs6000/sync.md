@@ -1,6 +1,5 @@
 ;; Machine description for PowerPC synchronization instructions.
-;; Copyright (C) 2005, 2007, 2008, 2009, 2011
-;; Free Software Foundation, Inc.
+;; Copyright (C) 2005, 2007, 2008, 2009 Free Software Foundation, Inc.
 ;; Contributed by Geoffrey Keating.
 
 ;; This file is part of GCC.
@@ -592,7 +591,7 @@
 
 (define_insn "isync"
   [(set (mem:BLK (match_scratch 0 "X"))
-	(unspec_volatile:BLK [(mem:BLK (match_scratch 1 "X"))] UNSPECV_ISYNC))]
+	(unspec_volatile:BLK [(mem:BLK (match_scratch 1 "X"))] UNSPEC_ISYNC))]
   ""
   "{ics|isync}"
   [(set_attr "type" "isync")])
@@ -611,7 +610,7 @@
 ; Some AIX assemblers don't accept lwsync, so we use a .long.
 (define_insn "lwsync"
   [(set (mem:BLK (match_scratch 0 "X"))
-	(unspec_volatile:BLK [(mem:BLK (match_scratch 1 "X"))] UNSPECV_LWSYNC))]
+	(unspec_volatile:BLK [(mem:BLK (match_scratch 1 "X"))] UNSPEC_LWSYNC))]
   ""
 {
   if (TARGET_NO_LWSYNC)

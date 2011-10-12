@@ -9,10 +9,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "../objc-obj-c++-shared/TestsuiteObject.m"
+#include "../objc-obj-c++-shared/Object1.h"
 
 // ObjectiveC class header
-@interface ObjCclass : TestsuiteObject {
+@interface ObjCclass : Object {
 }
 -(void)method1;
 -(void)method2;
@@ -64,3 +64,4 @@ void CPPclass::function1()
 	abort ();
 }
 
+#include "../objc-obj-c++-shared/Object1-implementation.h"

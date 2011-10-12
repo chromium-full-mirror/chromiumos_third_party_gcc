@@ -57,7 +57,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "integrate.h"
 #include "langhooks.h"
 #include "target.h"
-#include "common/common-target.h"
 #include "cfglayout.h"
 #include "gimple.h"
 #include "tree-pass.h"
@@ -213,7 +212,8 @@ free_after_compilation (struct function *f)
   prologue_insn_hash = NULL;
   epilogue_insn_hash = NULL;
 
-  free (crtl->emit.regno_pointer_align);
+  if (crtl->emit.regno_pointer_align)
+    free (crtl->emit.regno_pointer_align);
 
   memset (crtl, 0, sizeof (struct rtl_data));
   f->eh = NULL;
@@ -1494,7 +1494,16 @@ instantiate_virtual_regs_in_rtx (rtx *loc, void *data)
 static int
 safe_insn_predicate (int code, int operand, rtx x)
 {
-  return code < 0 || insn_operand_matches ((enum insn_code) code, operand, x);
+  const struct insn_operand_data *op_data;
+
+  if (code < 0)
+    return true;
+
+  op_data = &insn_data[code].operand[operand];
+  if (op_data->predicate == NULL)
+    return true;
+
+  return op_data->predicate (x, op_data->mode);
 }
 
 /* A subroutine of instantiate_virtual_regs.  Instantiate any virtual
@@ -1939,6 +1948,17 @@ instantiate_virtual_regs (void)
      frame_pointer_rtx.  */
   virtuals_instantiated = 1;
 
+  /* See allocate_dynamic_stack_space for the rationale.  */
+#ifdef SETJMP_VIA_SAVE_AREA
+  if (flag_stack_usage && cfun->calls_setjmp)
+    {
+      int align = PREFERRED_STACK_BOUNDARY / BITS_PER_UNIT;
+      dynamic_offset = (dynamic_offset + align - 1) / align * align;
+      current_function_dynamic_stack_size
+	+= current_function_dynamic_alloc_count * dynamic_offset;
+    }
+#endif
+
   return 0;
 }
 
@@ -1957,7 +1977,7 @@ struct rtl_opt_pass pass_instantiate_virtual_regs =
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
-  0                                     /* todo_flags_finish */
+  TODO_dump_func                        /* todo_flags_finish */
  }
 };
 
@@ -2129,8 +2149,7 @@ pass_by_reference (CUMULATIVE_ARGS *ca, enum machine_mode mode,
 	}
     }
 
-  return targetm.calls.pass_by_reference (pack_cumulative_args (ca), mode,
-					  type, named_arg);
+  return targetm.calls.pass_by_reference (ca, mode, type, named_arg);
 }
 
 /* Return true if TYPE, which is passed by reference, should be callee
@@ -2142,8 +2161,7 @@ reference_callee_copied (CUMULATIVE_ARGS *ca, enum machine_mode mode,
 {
   if (type && TREE_ADDRESSABLE (type))
     return false;
-  return targetm.calls.callee_copies (pack_cumulative_args (ca), mode, type,
-				      named_arg);
+  return targetm.calls.callee_copies (ca, mode, type, named_arg);
 }
 
 /* Structures to communicate between the subroutines of assign_parms.
@@ -2152,10 +2170,7 @@ reference_callee_copied (CUMULATIVE_ARGS *ca, enum machine_mode mode,
 
 struct assign_parm_data_all
 {
-  /* When INIT_CUMULATIVE_ARGS gets revamped, allocating CUMULATIVE_ARGS
-     should become a job of the target or otherwise encapsulated.  */
-  CUMULATIVE_ARGS args_so_far_v;
-  cumulative_args_t args_so_far;
+  CUMULATIVE_ARGS args_so_far;
   struct args_size stack_args_size;
   tree function_result_decl;
   tree orig_fnargs;
@@ -2195,12 +2210,11 @@ assign_parms_initialize_all (struct assign_parm_data_all *all)
   fntype = TREE_TYPE (current_function_decl);
 
 #ifdef INIT_CUMULATIVE_INCOMING_ARGS
-  INIT_CUMULATIVE_INCOMING_ARGS (all->args_so_far_v, fntype, NULL_RTX);
+  INIT_CUMULATIVE_INCOMING_ARGS (all->args_so_far, fntype, NULL_RTX);
 #else
-  INIT_CUMULATIVE_ARGS (all->args_so_far_v, fntype, NULL_RTX,
+  INIT_CUMULATIVE_ARGS (all->args_so_far, fntype, NULL_RTX,
 			current_function_decl, -1);
 #endif
-  all->args_so_far = pack_cumulative_args (&all->args_so_far_v);
 
 #ifdef REG_PARM_STACK_SPACE
   all->reg_parm_stack_space = REG_PARM_STACK_SPACE (current_function_decl);
@@ -2321,7 +2335,7 @@ assign_parm_find_data_types (struct assign_parm_data_all *all, tree parm,
     data->named_arg = 1;  /* No variadic parms.  */
   else if (DECL_CHAIN (parm))
     data->named_arg = 1;  /* Not the last non-variadic parm. */
-  else if (targetm.calls.strict_argument_naming (all->args_so_far))
+  else if (targetm.calls.strict_argument_naming (&all->args_so_far))
     data->named_arg = 1;  /* Only variadic ones are unnamed.  */
   else
     data->named_arg = 0;  /* Treat as variadic.  */
@@ -2357,7 +2371,7 @@ assign_parm_find_data_types (struct assign_parm_data_all *all, tree parm,
     passed_type = TREE_TYPE (first_field (passed_type));
 
   /* See if this arg was passed by invisible reference.  */
-  if (pass_by_reference (&all->args_so_far_v, passed_mode,
+  if (pass_by_reference (&all->args_so_far, passed_mode,
 			 passed_type, data->named_arg))
     {
       passed_type = nominal_type = build_pointer_type (passed_type);
@@ -2386,7 +2400,7 @@ assign_parms_setup_varargs (struct assign_parm_data_all *all,
 {
   int varargs_pretend_bytes = 0;
 
-  targetm.calls.setup_incoming_varargs (all->args_so_far,
+  targetm.calls.setup_incoming_varargs (&all->args_so_far,
 					data->promoted_mode,
 					data->passed_type,
 					&varargs_pretend_bytes, no_rtl);
@@ -2415,7 +2429,7 @@ assign_parm_find_entry_rtl (struct assign_parm_data_all *all,
       return;
     }
 
-  entry_parm = targetm.calls.function_incoming_arg (all->args_so_far,
+  entry_parm = targetm.calls.function_incoming_arg (&all->args_so_far,
 						    data->promoted_mode,
 						    data->passed_type,
 						    data->named_arg);
@@ -2439,10 +2453,10 @@ assign_parm_find_entry_rtl (struct assign_parm_data_all *all,
 #endif
   if (!in_regs && !data->named_arg)
     {
-      if (targetm.calls.pretend_outgoing_varargs_named (all->args_so_far))
+      if (targetm.calls.pretend_outgoing_varargs_named (&all->args_so_far))
 	{
 	  rtx tem;
-	  tem = targetm.calls.function_incoming_arg (all->args_so_far,
+	  tem = targetm.calls.function_incoming_arg (&all->args_so_far,
 						     data->promoted_mode,
 						     data->passed_type, true);
 	  in_regs = tem != NULL;
@@ -2459,7 +2473,7 @@ assign_parm_find_entry_rtl (struct assign_parm_data_all *all,
     {
       int partial;
 
-      partial = targetm.calls.arg_partial_bytes (all->args_so_far,
+      partial = targetm.calls.arg_partial_bytes (&all->args_so_far,
 						 data->promoted_mode,
 						 data->passed_type,
 						 data->named_arg);
@@ -2577,13 +2591,16 @@ assign_parm_find_stack_rtl (tree parm, struct assign_parm_data_one *data)
       if (data->promoted_mode != BLKmode
 	  && data->promoted_mode != DECL_MODE (parm))
 	{
-	  set_mem_size (stack_parm, GET_MODE_SIZE (data->promoted_mode));
-	  if (MEM_EXPR (stack_parm) && MEM_OFFSET_KNOWN_P (stack_parm))
+	  set_mem_size (stack_parm,
+			GEN_INT (GET_MODE_SIZE (data->promoted_mode)));
+	  if (MEM_EXPR (stack_parm) && MEM_OFFSET (stack_parm))
 	    {
 	      int offset = subreg_lowpart_offset (DECL_MODE (parm),
 						  data->promoted_mode);
 	      if (offset)
-		set_mem_offset (stack_parm, MEM_OFFSET (stack_parm) - offset);
+		set_mem_offset (stack_parm,
+				plus_constant (MEM_OFFSET (stack_parm),
+					       -offset));
 	    }
 	}
     }
@@ -2870,7 +2887,9 @@ assign_parm_setup_block (struct assign_parm_data_all *all,
 	      int by = (UNITS_PER_WORD - size) * BITS_PER_UNIT;
 	      rtx reg = gen_rtx_REG (word_mode, REGNO (entry_parm));
 
-	      x = expand_shift (LSHIFT_EXPR, word_mode, reg, by, NULL_RTX, 1);
+	      x = expand_shift (LSHIFT_EXPR, word_mode, reg,
+				build_int_cst (NULL_TREE, by),
+				NULL_RTX, 1);
 	      tem = change_address (mem, word_mode, 0);
 	      emit_move_insn (tem, x);
 	    }
@@ -2903,8 +2922,12 @@ static void
 record_hard_reg_sets (rtx x, const_rtx pat ATTRIBUTE_UNUSED, void *data)
 {
   HARD_REG_SET *pset = (HARD_REG_SET *)data;
-  if (REG_P (x) && HARD_REGISTER_P (x))
-    add_to_hard_reg_set (pset, GET_MODE (x), REGNO (x));
+  if (REG_P (x) && REGNO (x) < FIRST_PSEUDO_REGISTER)
+    {
+      int nregs = hard_regno_nregs[REGNO (x)][GET_MODE (x)];
+      while (nregs-- > 0)
+	SET_HARD_REG_BIT (*pset, REGNO (x) + nregs);
+    }
 }
 
 /* A subroutine of assign_parms.  Allocate a pseudo to hold the current
@@ -2991,8 +3014,8 @@ assign_parm_setup_reg (struct assign_parm_data_all *all, tree parm,
       op0 = parmreg;
       op1 = validated_mem;
       if (icode != CODE_FOR_nothing
-	  && insn_operand_matches (icode, 0, op0)
-	  && insn_operand_matches (icode, 1, op1))
+	  && insn_data[icode].operand[0].predicate (op0, promoted_nominal_mode)
+	  && insn_data[icode].operand[1].predicate (op1, data->passed_mode))
 	{
 	  enum rtx_code code = unsignedp ? ZERO_EXTEND : SIGN_EXTEND;
 	  rtx insn, insns;
@@ -3197,9 +3220,10 @@ assign_parm_setup_stack (struct assign_parm_data_all *all, tree parm,
 	  /* ??? This may need a big-endian conversion on sparc64.  */
 	  data->stack_parm
 	    = adjust_address (data->stack_parm, data->nominal_mode, 0);
-	  if (offset && MEM_OFFSET_KNOWN_P (data->stack_parm))
+	  if (offset && MEM_OFFSET (data->stack_parm))
 	    set_mem_offset (data->stack_parm,
-			    MEM_OFFSET (data->stack_parm) + offset);
+			    plus_constant (MEM_OFFSET (data->stack_parm),
+					   offset));
 	}
     }
 
@@ -3380,18 +3404,10 @@ assign_parms (tree fndecl)
 	}
 
       /* Record permanently how this parm was passed.  */
-      if (data.passed_pointer)
-	{
-	  rtx incoming_rtl
-	    = gen_rtx_MEM (TYPE_MODE (TREE_TYPE (data.passed_type)),
-			   data.entry_parm);
-	  set_decl_incoming_rtl (parm, incoming_rtl, true);
-	}
-      else
-	set_decl_incoming_rtl (parm, data.entry_parm, false);
+      set_decl_incoming_rtl (parm, data.entry_parm, data.passed_pointer);
 
       /* Update info on where next arg arrives in registers.  */
-      targetm.calls.function_arg_advance (all.args_so_far, data.promoted_mode,
+      targetm.calls.function_arg_advance (&all.args_so_far, data.promoted_mode,
 					  data.passed_type, data.named_arg);
 
       assign_parm_adjust_stack_rtl (&data);
@@ -3501,7 +3517,7 @@ assign_parms (tree fndecl)
   /* For stdarg.h function, save info about
      regs and stack space used by the named args.  */
 
-  crtl->args.info = all.args_so_far_v;
+  crtl->args.info = all.args_so_far;
 
   /* Set the rtx used for the function return value.  Put this in its
      own variable so any optimizers that need this information don't have
@@ -3590,7 +3606,7 @@ gimplify_parameters (void)
 	continue;
 
       /* Update info on where next arg arrives in registers.  */
-      targetm.calls.function_arg_advance (all.args_so_far, data.promoted_mode,
+      targetm.calls.function_arg_advance (&all.args_so_far, data.promoted_mode,
 					  data.passed_type, data.named_arg);
 
       /* ??? Once upon a time variable_size stuffed parameter list
@@ -3609,7 +3625,7 @@ gimplify_parameters (void)
       if (data.passed_pointer)
 	{
           tree type = TREE_TYPE (data.passed_type);
-	  if (reference_callee_copied (&all.args_so_far_v, TYPE_MODE (type),
+	  if (reference_callee_copied (&all.args_so_far, TYPE_MODE (type),
 				       type, data.named_arg))
 	    {
 	      tree local, t;
@@ -3642,7 +3658,7 @@ gimplify_parameters (void)
 		  t = built_in_decls[BUILT_IN_ALLOCA];
 		  t = build_call_expr (t, 1, DECL_SIZE_UNIT (parm));
 		  /* The call has been built for a variable-sized object.  */
-		  CALL_ALLOCA_FOR_VAR_P (t) = 1;
+		  ALLOCA_FOR_VAR_P (t) = 1;
 		  t = fold_convert (ptr_type, t);
 		  t = build2 (MODIFY_EXPR, TREE_TYPE (addr), addr, t);
 		  gimplify_and_add (t, &stmts);
@@ -3702,7 +3718,7 @@ locate_and_pad_parm (enum machine_mode passed_mode, tree type, int in_regs,
 {
   tree sizetree;
   enum direction where_pad;
-  unsigned int boundary, round_boundary;
+  unsigned int boundary;
   int reg_parm_stack_space = 0;
   int part_size_in_regs;
 
@@ -3734,8 +3750,6 @@ locate_and_pad_parm (enum machine_mode passed_mode, tree type, int in_regs,
     = type ? size_in_bytes (type) : size_int (GET_MODE_SIZE (passed_mode));
   where_pad = FUNCTION_ARG_PADDING (passed_mode, type);
   boundary = targetm.calls.function_arg_boundary (passed_mode, type);
-  round_boundary = targetm.calls.function_arg_round_boundary (passed_mode,
-							      type);
   locate->where_pad = where_pad;
 
   /* Alignment can't exceed MAX_SUPPORTED_STACK_ALIGNMENT.  */
@@ -3782,8 +3796,8 @@ locate_and_pad_parm (enum machine_mode passed_mode, tree type, int in_regs,
     tree s2 = sizetree;
     if (where_pad != none
 	&& (!host_integerp (sizetree, 1)
-	    || (tree_low_cst (sizetree, 1) * BITS_PER_UNIT) % round_boundary))
-      s2 = round_up (s2, round_boundary / BITS_PER_UNIT);
+	    || (tree_low_cst (sizetree, 1) * BITS_PER_UNIT) % PARM_BOUNDARY))
+      s2 = round_up (s2, PARM_BOUNDARY / BITS_PER_UNIT);
     SUB_PARM_SIZE (locate->slot_offset, s2);
   }
 
@@ -3835,8 +3849,8 @@ locate_and_pad_parm (enum machine_mode passed_mode, tree type, int in_regs,
 
   if (where_pad != none
       && (!host_integerp (sizetree, 1)
-	  || (tree_low_cst (sizetree, 1) * BITS_PER_UNIT) % round_boundary))
-    sizetree = round_up (sizetree, round_boundary / BITS_PER_UNIT);
+	  || (tree_low_cst (sizetree, 1) * BITS_PER_UNIT) % PARM_BOUNDARY))
+    sizetree = round_up (sizetree, PARM_BOUNDARY / BITS_PER_UNIT);
 
   ADD_PARM_SIZE (locate->size, sizetree);
 
@@ -4171,34 +4185,6 @@ blocks_nreverse (tree t)
   return prev;
 }
 
-/* Concatenate two chains of blocks (chained through BLOCK_CHAIN)
-   by modifying the last node in chain 1 to point to chain 2.  */
-
-tree
-block_chainon (tree op1, tree op2)
-{
-  tree t1;
-
-  if (!op1)
-    return op2;
-  if (!op2)
-    return op1;
-
-  for (t1 = op1; BLOCK_CHAIN (t1); t1 = BLOCK_CHAIN (t1))
-    continue;
-  BLOCK_CHAIN (t1) = op2;
-
-#ifdef ENABLE_TREE_CHECKING
-  {
-    tree t2;
-    for (t2 = op2; t2; t2 = BLOCK_CHAIN (t2))
-      gcc_assert (t2 != t1);
-  }
-#endif
-
-  return op1;
-}
-
 /* Count the subblocks of the list starting with BLOCK.  If VECTOR is
    non-NULL, list them all into VECTOR, in a depth-first preorder
    traversal of the block tree.  Also clear TREE_ASM_WRITTEN in all
@@ -4478,7 +4464,7 @@ prepare_function_start (void)
   init_expr ();
   default_rtl_profile ();
 
-  if (flag_stack_usage_info)
+  if (flag_stack_usage)
     {
       cfun->su = ggc_alloc_cleared_stack_usage ();
       cfun->su->static_stack_size = -1;
@@ -4528,7 +4514,6 @@ init_function_start (tree subr)
   else
     allocate_struct_function (subr, false);
   prepare_function_start ();
-  decide_function_section (subr);
 
   /* Warn if this value is an aggregate type,
      regardless of which calling convention we are using for it.  */
@@ -4799,12 +4784,11 @@ expand_function_start (tree subr)
       if (!DECL_RTL_SET_P (var))
 	expand_decl (var);
 
-      t_save = build4 (ARRAY_REF,
-		       TREE_TYPE (TREE_TYPE (cfun->nonlocal_goto_save_area)),
+      t_save = build4 (ARRAY_REF, ptr_type_node,
 		       cfun->nonlocal_goto_save_area,
 		       integer_zero_node, NULL_TREE, NULL_TREE);
       r_save = expand_expr (t_save, NULL_RTX, VOIDmode, EXPAND_WRITE);
-      gcc_assert (GET_MODE (r_save) == Pmode);
+      r_save = convert_memory_address (Pmode, r_save);
 
       emit_move_insn (r_save, targetm.builtin_setjmp_frame_value ());
       update_nonlocal_goto_save_area ();
@@ -4827,8 +4811,9 @@ expand_function_start (tree subr)
 #endif
     }
 
-  /* If we are doing generic stack checking, the probe should go here.  */
-  if (flag_stack_check == GENERIC_STACK_CHECK)
+  /* After the display initializations is where the stack checking
+     probe should go.  */
+  if(flag_stack_check)
     stack_check_probe_note = emit_note (NOTE_INSN_DELETED);
 
   /* Make sure there is a line number after the function entry setup code.  */
@@ -4993,7 +4978,7 @@ expand_function_end (void)
   /* Output the label for the actual return from the function.  */
   emit_label (return_label);
 
-  if (targetm_common.except_unwind_info (&global_options) == UI_SJLJ)
+  if (targetm.except_unwind_info (&global_options) == UI_SJLJ)
     {
       /* Let except.c know where it should emit the call to unregister
 	 the function context for sjlj exceptions.  */
@@ -5152,7 +5137,7 @@ expand_function_end (void)
      may trap are not moved into the epilogue by scheduling, because
      we don't always emit unwind information for the epilogue.  */
   if (cfun->can_throw_non_call_exceptions
-      && targetm_common.except_unwind_info (&global_options) != UI_SJLJ)
+      && targetm.except_unwind_info (&global_options) != UI_SJLJ)
     emit_insn (gen_blockage ());
 
   /* If stack protection is enabled for this function, check the guard.  */
@@ -5305,31 +5290,13 @@ prologue_epilogue_contains (const_rtx insn)
 }
 
 #ifdef HAVE_return
-/* Insert use of return register before the end of BB.  */
-
-static void
-emit_use_return_register_into_block (basic_block bb)
-{
-  rtx seq;
-  start_sequence ();
-  use_return_register ();
-  seq = get_insns ();
-  end_sequence ();
-  emit_insn_before (seq, BB_END (bb));
-}
-
 /* Insert gen_return at the end of block BB.  This also means updating
    block_for_insn appropriately.  */
 
 static void
 emit_return_into_block (basic_block bb)
 {
-  rtx jump = emit_jump_insn_after (gen_return (), BB_END (bb));
-  rtx pat = PATTERN (jump);
-  if (GET_CODE (pat) == PARALLEL)
-    pat = XVECEXP (pat, 0, 0);
-  gcc_assert (ANY_RETURN_P (pat));
-  JUMP_LABEL (jump) = pat;
+  emit_jump_insn_after (gen_return (), BB_END (bb));
 }
 #endif /* HAVE_return */
 
@@ -5342,7 +5309,8 @@ thread_prologue_and_epilogue_insns (void)
 {
   bool inserted;
   rtx seq ATTRIBUTE_UNUSED, epilogue_end ATTRIBUTE_UNUSED;
-  edge entry_edge, e;
+  edge entry_edge ATTRIBUTE_UNUSED;
+  edge e;
   edge_iterator ei;
 
   rtl_profile_for_bb (ENTRY_BLOCK_PTR);
@@ -5374,6 +5342,10 @@ thread_prologue_and_epilogue_insns (void)
       record_insns (seq, NULL, &prologue_insn_hash);
       set_insn_locators (seq, prologue_locator);
 
+      /* This relies on the fact that committing the edge insertion
+	 will look for basic blocks within the inserted instructions,
+	 which in turn relies on the fact that we are not in CFG
+	 layout mode here.  */
       insert_insn_on_edge (seq, entry_edge);
       inserted = true;
 #endif
@@ -5471,15 +5443,6 @@ thread_prologue_and_epilogue_insns (void)
 		 with a simple return instruction.  */
 	      if (simplejump_p (jump))
 		{
-		  /* The use of the return register might be present in the exit
-		     fallthru block.  Either:
-		     - removing the use is safe, and we should remove the use in
-		       the exit fallthru block, or
-		     - removing the use is not safe, and we should add it here.
-		     For now, we conservatively choose the latter.  Either of the
-		     2 helps in crossjumping.  */
-		  emit_use_return_register_into_block (bb);
-
 		  emit_return_into_block (bb);
 		  delete_insn (jump);
 		}
@@ -5488,14 +5451,11 @@ thread_prologue_and_epilogue_insns (void)
 		 that with a conditional return instruction.  */
 	      else if (condjump_p (jump))
 		{
-		  if (! redirect_jump (jump, ret_rtx, 0))
+		  if (! redirect_jump (jump, 0, 0))
 		    {
 		      ei_next (&ei2);
 		      continue;
 		    }
-
-		  /* See comment in simple_jump_p case above.  */
-		  emit_use_return_register_into_block (bb);
 
 		  /* If this block has only one successor, it both jumps
 		     and falls through to the fallthru block, so we can't
@@ -5571,8 +5531,6 @@ thread_prologue_and_epilogue_insns (void)
 #ifdef HAVE_epilogue
   if (HAVE_epilogue)
     {
-      rtx returnjump;
-
       start_sequence ();
       epilogue_end = emit_note (NOTE_INSN_EPILOGUE_BEG);
       seq = gen_epilogue ();
@@ -5583,25 +5541,11 @@ thread_prologue_and_epilogue_insns (void)
       record_insns (seq, NULL, &epilogue_insn_hash);
       set_insn_locators (seq, epilogue_locator);
 
-      returnjump = get_last_insn ();
       seq = get_insns ();
       end_sequence ();
 
       insert_insn_on_edge (seq, e);
       inserted = true;
-
-      if (JUMP_P (returnjump))
-	{
-	  rtx pat = PATTERN (returnjump);
-	  if (GET_CODE (pat) == PARALLEL)
-	    pat = XVECEXP (pat, 0, 0);
-	  if (ANY_RETURN_P (pat))
-	    JUMP_LABEL (returnjump) = pat;
-	  else
-	    JUMP_LABEL (returnjump) = ret_rtx;
-	}
-      else
-	returnjump = NULL_RTX;
     }
   else
 #endif
@@ -5624,22 +5568,12 @@ thread_prologue_and_epilogue_insns (void)
 	  cur_bb->aux = cur_bb->next_bb;
       cfg_layout_finalize ();
     }
-
 epilogue_done:
   default_rtl_profile ();
 
   if (inserted)
     {
-      sbitmap blocks;
-
       commit_edge_insertions ();
-
-      /* Look for basic blocks within the prologue insns.  */
-      blocks = sbitmap_alloc (last_basic_block);
-      sbitmap_zero (blocks);
-      SET_BIT (blocks, entry_edge->dest->index);
-      find_many_sub_basic_blocks (blocks);
-      sbitmap_free (blocks);
 
       /* The epilogue insns we inserted may cause the exit edge to no longer
 	 be fallthru.  */
@@ -5974,7 +5908,7 @@ rest_of_handle_thread_prologue_and_epilogue (void)
   thread_prologue_and_epilogue_insns ();
 
   /* The stack usage info is finalized during prologue expansion.  */
-  if (flag_stack_usage_info)
+  if (flag_stack_usage)
     output_stack_usage ();
 
   return 0;
@@ -5995,6 +5929,7 @@ struct rtl_opt_pass pass_thread_prologue_and_epilogue =
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   TODO_verify_flow,                     /* todo_flags_start */
+  TODO_dump_func |
   TODO_df_verify |
   TODO_df_finish | TODO_verify_rtl_sharing |
   TODO_ggc_collect                      /* todo_flags_finish */
@@ -6196,7 +6131,7 @@ struct rtl_opt_pass pass_match_asm_constraints =
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   0,					/* todo_flags_start */
-  0                                     /* todo_flags_finish */
+  TODO_dump_func                       /* todo_flags_finish */
  }
 };
 

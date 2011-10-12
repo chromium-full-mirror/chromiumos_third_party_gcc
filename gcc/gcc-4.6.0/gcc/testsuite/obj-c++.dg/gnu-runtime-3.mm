@@ -4,10 +4,10 @@
 /* { dg-do run } */
 /* { dg-skip-if "" { *-*-* } { "-fnext-runtime" } { "" } } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.m"
+#include <objc/Object.h>
 #include <stdlib.h>
 
-@interface FooBar: TestsuiteObject
+@interface FooBar: Object
 - (void)boo;
 @end
 

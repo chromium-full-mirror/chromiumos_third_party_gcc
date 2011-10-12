@@ -3,7 +3,7 @@
 /* Contributed by Ziemowit Laski <zlaski@apple.com>.  */
 #include <stdio.h>
 #include <stdlib.h>
-#import "../../objc-obj-c++-shared/TestsuiteObject.m"
+#import "../../objc-obj-c++-shared/Object1.h"
 #include <objc/objc.h>
 
 int bappy (int (*blargh) (int a, int b, int c))
@@ -11,7 +11,7 @@ int bappy (int (*blargh) (int a, int b, int c))
   return blargh (4, 7, 2) + 3;
 }
 
-@interface Foo: TestsuiteObject
+@interface Foo: Object
 + (int)foo;
 @end
 

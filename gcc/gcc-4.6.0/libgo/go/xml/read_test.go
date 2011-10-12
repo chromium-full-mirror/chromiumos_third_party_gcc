@@ -13,16 +13,16 @@ import (
 
 func TestUnmarshalFeed(t *testing.T) {
 	var f Feed
-	if err := Unmarshal(StringReader(atomFeedString), &f); err != nil {
+	if err := Unmarshal(StringReader(rssFeedString), &f); err != nil {
 		t.Fatalf("Unmarshal: %s", err)
 	}
-	if !reflect.DeepEqual(f, atomFeed) {
-		t.Fatalf("have %#v\nwant %#v", f, atomFeed)
+	if !reflect.DeepEqual(f, rssFeed) {
+		t.Fatalf("have %#v\nwant %#v", f, rssFeed)
 	}
 }
 
 // hget http://codereview.appspot.com/rss/mine/rsc
-const atomFeedString = `
+const rssFeedString = `
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en-us"><title>Code Review - My issues</title><link href="http://codereview.appspot.com/" rel="alternate"></link><li-nk href="http://codereview.appspot.com/rss/mine/rsc" rel="self"></li-nk><id>http://codereview.appspot.com/</id><updated>2009-10-04T01:35:58+00:00</updated><author><name>rietveld&lt;&gt;</name></author><entry><title>rietveld: an attempt at pubsubhubbub
 </title><link hre-f="http://codereview.appspot.com/126085" rel="alternate"></link><updated>2009-10-04T01:35:58+00:00</updated><author><name>email-address-removed</name></author><id>urn:md5:134d9179c41f806be79b3a5f7877d19a</id><summary type="html">
@@ -78,7 +78,7 @@ not being used from outside intra_region_diff.py.
 </summary></entry></feed> 	   `
 
 type Feed struct {
-	XMLName Name `xml:"http://www.w3.org/2005/Atom feed"`
+	XMLName Name "http://www.w3.org/2005/Atom feed"
 	Title   string
 	Id      string
 	Link    []Link
@@ -97,25 +97,25 @@ type Entry struct {
 }
 
 type Link struct {
-	Rel  string `xml:"attr"`
-	Href string `xml:"attr"`
+	Rel  string "attr"
+	Href string "attr"
 }
 
 type Person struct {
 	Name     string
 	URI      string
 	Email    string
-	InnerXML string `xml:"innerxml"`
+	InnerXML string "innerxml"
 }
 
 type Text struct {
-	Type string `xml:"attr"`
-	Body string `xml:"chardata"`
+	Type string "attr"
+	Body string "chardata"
 }
 
 type Time string
 
-var atomFeed = Feed{
+var rssFeed = Feed{
 	XMLName: Name{"http://www.w3.org/2005/Atom", "feed"},
 	Title:   "Code Review - My issues",
 	Link: []Link{
@@ -255,18 +255,18 @@ type PathTestItem struct {
 }
 
 type PathTestA struct {
-	Items         []PathTestItem `xml:">item1"`
+	Items         []PathTestItem ">item1"
 	Before, After string
 }
 
 type PathTestB struct {
-	Other         []PathTestItem `xml:"items>Item1"`
+	Other         []PathTestItem "items>Item1"
 	Before, After string
 }
 
 type PathTestC struct {
-	Values1       []string `xml:"items>item1>value"`
-	Values2       []string `xml:"items>item2>value"`
+	Values1       []string "items>item1>value"
+	Values2       []string "items>item2>value"
 	Before, After string
 }
 
@@ -275,7 +275,7 @@ type PathTestSet struct {
 }
 
 type PathTestD struct {
-	Other         PathTestSet `xml:"items>"`
+	Other         PathTestSet "items>"
 	Before, After string
 }
 
@@ -288,7 +288,9 @@ var pathTests = []interface{}{
 
 func TestUnmarshalPaths(t *testing.T) {
 	for _, pt := range pathTests {
-		v := reflect.New(reflect.TypeOf(pt).Elem()).Interface()
+		p := reflect.MakeZero(reflect.NewValue(pt).Type()).(*reflect.PtrValue)
+		p.PointTo(reflect.MakeZero(p.Type().(*reflect.PtrType).Elem()))
+		v := p.Interface()
 		if err := Unmarshal(StringReader(pathTestString), v); err != nil {
 			t.Fatalf("Unmarshal: %s", err)
 		}
@@ -299,22 +301,22 @@ func TestUnmarshalPaths(t *testing.T) {
 }
 
 type BadPathTestA struct {
-	First  string `xml:"items>item1"`
-	Other  string `xml:"items>item2"`
-	Second string `xml:"items>"`
+	First  string "items>item1"
+	Other  string "items>item2"
+	Second string "items>"
 }
 
 type BadPathTestB struct {
-	Other  string `xml:"items>item2>value"`
-	First  string `xml:"items>item1"`
-	Second string `xml:"items>item1>value"`
+	Other  string "items>item2>value"
+	First  string "items>item1"
+	Second string "items>item1>value"
 }
 
 var badPathTests = []struct {
 	v, e interface{}
 }{
-	{&BadPathTestA{}, &TagPathError{reflect.TypeOf(BadPathTestA{}), "First", "items>item1", "Second", "items>"}},
-	{&BadPathTestB{}, &TagPathError{reflect.TypeOf(BadPathTestB{}), "First", "items>item1", "Second", "items>item1>value"}},
+	{&BadPathTestA{}, &TagPathError{reflect.Typeof(BadPathTestA{}), "First", "items>item1", "Second", "items>"}},
+	{&BadPathTestB{}, &TagPathError{reflect.Typeof(BadPathTestB{}), "First", "items>item1", "Second", "items>item1>value"}},
 }
 
 func TestUnmarshalBadPaths(t *testing.T) {
@@ -324,48 +326,4 @@ func TestUnmarshalBadPaths(t *testing.T) {
 			t.Fatalf("Unmarshal with %#v didn't fail properly: %#v", tt.v, err)
 		}
 	}
-}
-
-func TestUnmarshalAttrs(t *testing.T) {
-	var f AttrTest
-	if err := Unmarshal(StringReader(attrString), &f); err != nil {
-		t.Fatalf("Unmarshal: %s", err)
-	}
-	if !reflect.DeepEqual(f, attrStruct) {
-		t.Fatalf("have %#v\nwant %#v", f, attrStruct)
-	}
-}
-
-type AttrTest struct {
-	Test1 Test1
-	Test2 Test2
-}
-
-type Test1 struct {
-	Int   int     `xml:"attr"`
-	Float float64 `xml:"attr"`
-	Uint8 uint8   `xml:"attr"`
-}
-
-type Test2 struct {
-	Bool bool `xml:"attr"`
-}
-
-const attrString = `
-<?xml version="1.0" charset="utf-8"?>
-<attrtest>
-  <test1 int="8" float="23.5" uint8="255"/>
-  <test2 bool="true"/>
-</attrtest>
-`
-
-var attrStruct = AttrTest{
-	Test1: Test1{
-		Int:   8,
-		Float: 23.5,
-		Uint8: 255,
-	},
-	Test2: Test2{
-		Bool: true,
-	},
 }

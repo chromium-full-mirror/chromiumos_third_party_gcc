@@ -171,7 +171,6 @@ namespace __gnu_parallel
     {
       typedef _LoserTreeBase<_Tp, _Compare> _Base;
       using _Base::_M_k;
-      using _Base::_M_comp;
       using _Base::_M_losers;
       using _Base::_M_first_insert;
 
@@ -264,7 +263,6 @@ namespace __gnu_parallel
       typedef _LoserTreeBase<_Tp, _Compare> _Base;
       using _Base::_M_log_k;
       using _Base::_M_k;
-      using _Base::_M_comp;
       using _Base::_M_losers;
       using _Base::_M_first_insert;
 
@@ -411,7 +409,6 @@ namespace __gnu_parallel
     {
       typedef _LoserTreePointerBase<_Tp, _Compare> _Base;
       using _Base::_M_k;
-      using _Base::_M_comp;
       using _Base::_M_losers;
 
     public:
@@ -493,7 +490,6 @@ namespace __gnu_parallel
     {
       typedef _LoserTreePointerBase<_Tp, _Compare> _Base;
       using _Base::_M_k;
-      using _Base::_M_comp;
       using _Base::_M_losers;
 
     public:
@@ -648,7 +644,6 @@ namespace __gnu_parallel
     {
       typedef _LoserTreeUnguardedBase<_Tp, _Compare> _Base;
       using _Base::_M_k;
-      using _Base::_M_comp;
       using _Base::_M_losers;
 
   public:
@@ -736,7 +731,6 @@ namespace __gnu_parallel
     {
       typedef _LoserTreeUnguardedBase<_Tp, _Compare> _Base;
       using _Base::_M_k;
-      using _Base::_M_comp;
       using _Base::_M_losers;
 
     public:
@@ -893,7 +887,6 @@ namespace __gnu_parallel
     {
       typedef _LoserTreePointerUnguardedBase<_Tp, _Compare> _Base;
       using _Base::_M_k;
-      using _Base::_M_comp;
       using _Base::_M_losers;
 
     public:
@@ -979,7 +972,6 @@ namespace __gnu_parallel
     {
       typedef _LoserTreePointerUnguardedBase<_Tp, _Compare> _Base;
       using _Base::_M_k;
-      using _Base::_M_comp;
       using _Base::_M_losers;
 
   public:

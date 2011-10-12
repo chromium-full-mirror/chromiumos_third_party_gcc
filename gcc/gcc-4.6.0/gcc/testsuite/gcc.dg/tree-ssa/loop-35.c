@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O2 -fdump-tree-lim1-details" } */
+/* { dg-options "-O2 -fdump-tree-lim-details" } */
 
 int x;
 int a[100];
@@ -9,13 +9,6 @@ struct a
   int X;
   int Y;
 };
-
-/* Word size is long long for 64-bit mingw target.  */
-#ifdef _WIN64
-#define LONG long long
-#else
-#define LONG long
-#endif
 
 struct a arr[100];
 
@@ -43,7 +36,7 @@ void test2(struct a *A, int b)
     }
 }
 
-void test3(unsigned LONG b)
+void test3(unsigned long b)
 {
   unsigned i;
 
@@ -55,7 +48,7 @@ void test3(unsigned LONG b)
     }
 }
 
-void test4(struct a *A, unsigned LONG b)
+void test4(struct a *A, unsigned long b)
 {
   unsigned i;
 
@@ -69,4 +62,4 @@ void test4(struct a *A, unsigned LONG b)
 /* long index not hoisted for avr target PR 36561 */
 /* { dg-final { scan-tree-dump-times "Executing store motion of" 8 "lim1" { xfail { "avr-*-*" } } } } */
 /* { dg-final { scan-tree-dump-times "Executing store motion of" 6 "lim1" { target { "avr-*-*" } } } } */
-/* { dg-final { cleanup-tree-dump "lim1" } } */
+/* { dg-final { cleanup-tree-dump "lim\[1-2\]" } } */

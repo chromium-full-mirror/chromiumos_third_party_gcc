@@ -4,14 +4,14 @@
 /* { dg-options "-fobjc-exceptions" } */
 /* { dg-do compile } */
 
-#include "../objc-obj-c++-shared/TestsuiteObject.h"
+#include "../objc-obj-c++-shared/Object1.h"
 #include <stdio.h>
 #include <setjmp.h>
 
-@interface Frob: TestsuiteObject
+@interface Frob: Object
 @end
 
-@implementation Frob: TestsuiteObject
+@implementation Frob: Object
 @end
 
 static int exc_control = 0;

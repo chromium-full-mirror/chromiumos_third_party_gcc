@@ -11,21 +11,18 @@
 _Bool
 __go_send_nonblocking_big (struct __go_channel* channel, const void *val)
 {
-  uintptr_t element_size;
   size_t alloc_size;
   size_t offset;
 
-  if (channel == NULL)
-    return 0;
+  alloc_size = ((channel->element_size + sizeof (uint64_t) - 1)
+		/ sizeof (uint64_t));
 
-  element_size = channel->element_type->__size;
-  alloc_size = (element_size + sizeof (uint64_t) - 1) / sizeof (uint64_t);
-
-  if (!__go_send_nonblocking_acquire (channel))
-    return 0;
+  int data = __go_send_nonblocking_acquire (channel);
+  if (data != SEND_NONBLOCKING_ACQUIRE_SPACE)
+    return data == SEND_NONBLOCKING_ACQUIRE_CLOSED;
 
   offset = channel->next_store * alloc_size;
-  __builtin_memcpy (&channel->data[offset], val, element_size);
+  __builtin_memcpy (&channel->data[offset], val, channel->element_size);
 
   __go_send_release (channel);
 

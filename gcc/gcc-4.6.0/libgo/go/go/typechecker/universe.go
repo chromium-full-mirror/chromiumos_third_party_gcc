@@ -11,19 +11,21 @@ import "go/ast"
 // The Universe scope contains all predeclared identifiers.
 var Universe *ast.Scope
 
+
 func def(obj *ast.Object) {
 	alt := Universe.Insert(obj)
-	if alt != nil {
+	if alt != obj {
 		panic("object declared twice")
 	}
 }
+
 
 func init() {
 	Universe = ast.NewScope(nil)
 
 	// basic types
-	for n, name := range BasicTypes {
-		typ := NewType(Basic)
+	for n, name := range ast.BasicTypes {
+		typ := ast.NewType(ast.Basic)
 		typ.N = n
 		obj := ast.NewObj(ast.Typ, name)
 		obj.Type = typ

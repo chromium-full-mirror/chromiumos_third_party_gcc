@@ -69,7 +69,6 @@ ialias_redirect (omp_get_level)
 ialias_redirect (omp_get_ancestor_thread_num)
 ialias_redirect (omp_get_team_size)
 ialias_redirect (omp_get_active_level)
-ialias_redirect (omp_in_final)
 #endif
 
 #ifndef LIBGOMP_GNU_SYMBOL_VERSIONING
@@ -428,10 +427,4 @@ int32_t
 omp_get_active_level_ (void)
 {
   return omp_get_active_level ();
-}
-
-int32_t
-omp_in_final_ (void)
-{
-  return omp_in_final ();
 }

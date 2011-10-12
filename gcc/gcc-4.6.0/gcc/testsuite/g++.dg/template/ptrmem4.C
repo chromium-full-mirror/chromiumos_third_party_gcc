@@ -16,5 +16,6 @@ struct SpyExample
 
 void SpyExample::ready()
 {
-  queryAliases(inputs); // { dg-error "matching|unresolved" }
+  queryAliases(inputs); // { dg-error "matching" }
+  // { dg-message "candidate" "candidate note" { target *-*-* } 19 }
 }

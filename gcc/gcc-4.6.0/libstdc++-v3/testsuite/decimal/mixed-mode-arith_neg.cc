@@ -137,3 +137,4 @@ bad_divideeq (void)
   a128 /= ld;		// { dg-error "error" }
 }
 
+// { dg-excess-errors "notes about candidates" }

@@ -1,7 +1,8 @@
 /* Test that data prefetch instructions are not generated for i386 variants
    that do not support those instructions.  */
 
-/* { dg-do compile { target { { i?86-*-* x86_64-*-* } && ia32 } } } */
+/* { dg-do compile { target i?86-*-* x86_64-*-* } } */
+/* { dg-require-effective-target ilp32 } */
 
 extern void exit (int);
 

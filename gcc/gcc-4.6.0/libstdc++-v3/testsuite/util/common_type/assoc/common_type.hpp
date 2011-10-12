@@ -1,6 +1,6 @@
 // -*- C++ -*-
 
-// Copyright (C) 2005, 2006, 2009, 2011 Free Software Foundation, Inc.
+// Copyright (C) 2005, 2006, 2009 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the terms
@@ -49,15 +49,15 @@ namespace __gnu_pbds
 	     typename Data,
 	     class Hash_Fn = typename __gnu_pbds::detail::default_hash_fn<Key>::type,
 	     class Eq_Fn = std::equal_to<Key>,
-	     typename _Alloc = std::allocator<std::pair<const Key, Data> > >
+	     class Allocator = std::allocator<std::pair<const Key, Data> > >
     struct hash_common_types
     {
     private:
-      typedef typename _Alloc::size_type size_type;
+      typedef typename Allocator::size_type size_type;
 
       typedef
       __gnu_pbds::test::hash_load_check_resize_trigger_t_<
-	_Alloc,
+	Allocator,
 	1, 8,
 	1, 2,
 	false>
@@ -65,7 +65,7 @@ namespace __gnu_pbds
 
       typedef
       __gnu_pbds::test::hash_load_check_resize_trigger_t_<
-	_Alloc,
+	Allocator,
 	1, 8,
 	1, 2,
 	true>
@@ -73,7 +73,7 @@ namespace __gnu_pbds
 
       typedef
       __gnu_pbds::test::hash_load_check_resize_trigger_t_<
-	_Alloc,
+	Allocator,
 	1, 8,
 	1, 1,
 	false>
@@ -81,34 +81,37 @@ namespace __gnu_pbds
 
       typedef
       __gnu_pbds::test::cc_hash_max_collision_check_resize_trigger_t_<
-	_Alloc,
+	Allocator,
 	1, 2,
 	false>
       no_access_half_max_col_check_check_resize_trigger_policy;
 
       typedef
       __gnu_pbds::test::cc_hash_max_collision_check_resize_trigger_t_<
-	_Alloc,
+	Allocator,
 	1, 2,
 	true>
       access_half_max_col_check_check_resize_trigger_policy;
 
-      typedef __gnu_pbds::test::linear_probe_fn_t_<Key, _Alloc> lin_p_t;
+      typedef __gnu_pbds::test::linear_probe_fn_t_<Key, Allocator> lin_p_t;
 
-      typedef __gnu_pbds::test::quadratic_probe_fn_t_<Key, _Alloc> quad_p_t;
+      typedef __gnu_pbds::test::quadratic_probe_fn_t_<Key, Allocator> quad_p_t;
 
       typedef
       typename __gnu_cxx::typelist::create4<
 	__gnu_pbds::detail::false_type,
-	__gnu_pbds::test::direct_mask_range_hashing_t_<_Alloc>,
+	__gnu_pbds::test::direct_mask_range_hashing_t_<
+	Allocator>,
 	no_access_half_load_check_resize_trigger_policy,
-	__gnu_pbds::test::hash_exponential_size_policy_t_<_Alloc> >::type
+	__gnu_pbds::test::hash_exponential_size_policy_t_<
+	Allocator> >::type
       performance_cc_policy0;
 
       typedef
       typename __gnu_cxx::typelist::create4<
 	__gnu_pbds::detail::false_type,
-	__gnu_pbds::test::direct_mod_range_hashing_t_<_Alloc>,
+	__gnu_pbds::test::direct_mod_range_hashing_t_<
+	Allocator>,
 	no_access_half_load_check_resize_trigger_policy,
 	__gnu_pbds::test::hash_prime_size_policy_t_>::type
       performance_cc_policy1;
@@ -116,15 +119,18 @@ namespace __gnu_pbds
       typedef
       typename __gnu_cxx::typelist::create4<
 	__gnu_pbds::detail::false_type,
-	__gnu_pbds::test::direct_mask_range_hashing_t_<_Alloc>,
+	__gnu_pbds::test::direct_mask_range_hashing_t_<
+	Allocator>,
 	no_access_one_load_check_resize_trigger_policy,
-	__gnu_pbds::test::hash_exponential_size_policy_t_<_Alloc> >::type
+	__gnu_pbds::test::hash_exponential_size_policy_t_<
+	Allocator> >::type
       performance_cc_policy2;
 
       typedef
       typename __gnu_cxx::typelist::create4<
 	__gnu_pbds::detail::false_type,
-	__gnu_pbds::test::direct_mod_range_hashing_t_<_Alloc>,
+	__gnu_pbds::test::direct_mod_range_hashing_t_<
+	Allocator>,
 	no_access_one_load_check_resize_trigger_policy,
 	__gnu_pbds::test::hash_prime_size_policy_t_ >::type
       performance_cc_policy3;
@@ -132,57 +138,69 @@ namespace __gnu_pbds
       typedef
       typename __gnu_cxx::typelist::create4<
 	__gnu_pbds::detail::true_type,
-	__gnu_pbds::test::direct_mask_range_hashing_t_<_Alloc>,
+	__gnu_pbds::test::direct_mask_range_hashing_t_<
+	Allocator>,
 	no_access_half_load_check_resize_trigger_policy,
-	__gnu_pbds::test::hash_exponential_size_policy_t_<_Alloc> >::type
+	__gnu_pbds::test::hash_exponential_size_policy_t_<
+	Allocator> >::type
       performance_cc_policy4;
 
       typedef
       typename __gnu_cxx::typelist::create4<
 	__gnu_pbds::detail::false_type,
-	__gnu_pbds::test::direct_mask_range_hashing_t_<_Alloc>,
+	__gnu_pbds::test::direct_mask_range_hashing_t_<
+	Allocator>,
 	no_access_half_max_col_check_check_resize_trigger_policy,
-	__gnu_pbds::test::hash_exponential_size_policy_t_<_Alloc> >::type
+	__gnu_pbds::test::hash_exponential_size_policy_t_<
+	Allocator> >::type
       performance_cc_policy5;
 
       typedef
       typename __gnu_cxx::typelist::create4<
 	__gnu_pbds::detail::false_type,
-	__gnu_pbds::test::direct_mask_range_hashing_t_<_Alloc>,
+	__gnu_pbds::test::direct_mask_range_hashing_t_<
+	Allocator>,
 	access_half_max_col_check_check_resize_trigger_policy,
-	__gnu_pbds::test::hash_exponential_size_policy_t_<_Alloc> >::type
+	__gnu_pbds::test::hash_exponential_size_policy_t_<
+	Allocator> >::type
       regression_cc_policy0;
 
       typedef
       typename __gnu_cxx::typelist::create4<
 	__gnu_pbds::detail::false_type,
-	__gnu_pbds::test::direct_mask_range_hashing_t_<_Alloc>,
+	__gnu_pbds::test::direct_mask_range_hashing_t_<
+	Allocator>,
 	access_half_load_check_resize_trigger_policy,
-	__gnu_pbds::test::hash_exponential_size_policy_t_<_Alloc> >::type
+	__gnu_pbds::test::hash_exponential_size_policy_t_<
+	Allocator> >::type
       regression_cc_policy1;
 
       typedef
       typename __gnu_cxx::typelist::create4<
 	__gnu_pbds::detail::true_type,
-	__gnu_pbds::test::direct_mod_range_hashing_t_<_Alloc>,
+	__gnu_pbds::test::direct_mod_range_hashing_t_<
+	Allocator>,
 	no_access_half_load_check_resize_trigger_policy,
-	__gnu_pbds::test::hash_prime_size_policy_t_>::type
+	__gnu_pbds::test::hash_prime_size_policy_t_ >::type
       regression_cc_policy2;
 
       typedef
       typename __gnu_cxx::typelist::create5<
 	__gnu_pbds::detail::false_type,
 	lin_p_t,
-	__gnu_pbds::test::direct_mask_range_hashing_t_<_Alloc>,
+	__gnu_pbds::test::direct_mask_range_hashing_t_<
+	Allocator>,
 	no_access_half_load_check_resize_trigger_policy,
-	__gnu_pbds::test::hash_exponential_size_policy_t_<_Alloc> >::type
+	__gnu_pbds::test::hash_exponential_size_policy_t_<
+	Allocator> >::type
       performance_gp_policy0;
 
       typedef
       typename __gnu_cxx::typelist::create5<
 	__gnu_pbds::detail::false_type,
 	quad_p_t,
-	__gnu_pbds::test::direct_mod_range_hashing_t_<_Alloc>,
+	__gnu_pbds::test::direct_mod_range_hashing_t_<
+	Allocator>,
 	no_access_half_load_check_resize_trigger_policy,
 	__gnu_pbds::test::hash_prime_size_policy_t_ >::type
       performance_gp_policy1;
@@ -191,7 +209,8 @@ namespace __gnu_pbds
       typename __gnu_cxx::typelist::create5<
 	__gnu_pbds::detail::false_type,
 	quad_p_t,
-	__gnu_pbds::test::direct_mod_range_hashing_t_<_Alloc>,
+	__gnu_pbds::test::direct_mod_range_hashing_t_<
+	Allocator>,
 	access_half_load_check_resize_trigger_policy,
 	__gnu_pbds::test::hash_prime_size_policy_t_>::type
       regression_gp_policy0;
@@ -200,9 +219,11 @@ namespace __gnu_pbds
       typename __gnu_cxx::typelist::create5<
 	__gnu_pbds::detail::true_type,
 	lin_p_t,
-	__gnu_pbds::test::direct_mask_range_hashing_t_<_Alloc>,
+	__gnu_pbds::test::direct_mask_range_hashing_t_<
+	Allocator>,
 	access_half_load_check_resize_trigger_policy,
-	__gnu_pbds::test::hash_exponential_size_policy_t_<_Alloc> >::type
+	__gnu_pbds::test::hash_exponential_size_policy_t_<
+	Allocator> >::type
       regression_gp_policy1;
 
       typedef
@@ -239,7 +260,8 @@ namespace __gnu_pbds
       {
       private:
         typedef
-	typename __gnu_cxx::typelist::at_index<Policy_Tl, 0>::type
+	typename __gnu_cxx::typelist::at_index<
+	Policy_Tl, 0>::type
 	store_hash_indicator;
 
         enum
@@ -247,13 +269,19 @@ namespace __gnu_pbds
             store_hash = store_hash_indicator::value
 	  };
 
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 1>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	  Policy_Tl, 1>::type
 	comb_hash_fn;
 
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 2>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	  Policy_Tl, 2>::type
 	trigger_policy;
 
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 3>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	  Policy_Tl, 3>::type
 	size_policy;
 
       public:
@@ -264,10 +292,12 @@ namespace __gnu_pbds
 	Hash_Fn,
 	Eq_Fn,
 	comb_hash_fn,
-	__gnu_pbds::hash_standard_resize_policy<size_policy, trigger_policy,
-						false>,
+	__gnu_pbds::hash_standard_resize_policy<
+	size_policy,
+	trigger_policy,
+	false>,
 	store_hash,
-	_Alloc>
+	Allocator>
 	type;
       };
 
@@ -276,7 +306,8 @@ namespace __gnu_pbds
       {
       private:
         typedef
-	typename __gnu_cxx::typelist::at_index<Policy_Tl, 0>::type
+	typename __gnu_cxx::typelist::at_index<
+	Policy_Tl, 0>::type
 	store_hash_indicator;
 
         enum
@@ -284,13 +315,19 @@ namespace __gnu_pbds
             store_hash = store_hash_indicator::value
 	  };
 
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 1>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	  Policy_Tl, 1>::type
 	comb_hash_fn;
 
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 2>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	  Policy_Tl, 2>::type
 	trigger_policy;
 
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 3>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	  Policy_Tl, 3>::type
 	size_policy;
 
       public:
@@ -301,10 +338,12 @@ namespace __gnu_pbds
 	Hash_Fn,
 	Eq_Fn,
 	comb_hash_fn,
-	__gnu_pbds::hash_standard_resize_policy<size_policy, trigger_policy,
-						true>,
+	__gnu_pbds::hash_standard_resize_policy<
+	size_policy,
+	trigger_policy,
+	true>,
 	store_hash,
-	_Alloc>
+	Allocator>
 	type;
       };
 
@@ -312,7 +351,9 @@ namespace __gnu_pbds
       struct no_access_generic_gp_hash_table_t
       {
       private:
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 0>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	Policy_Tl, 0>::type
 	store_hash_indicator;
 
         enum
@@ -320,16 +361,24 @@ namespace __gnu_pbds
             store_hash = store_hash_indicator::value
 	  };
 
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 1>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	  Policy_Tl, 1>::type
 	probe_fn;
 
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 2>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	  Policy_Tl, 2>::type
 	comb_probe_fn;
 
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 3>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	  Policy_Tl, 3>::type
 	trigger_policy;
 
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 4>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	  Policy_Tl, 4>::type
 	size_policy;
 
       public:
@@ -341,10 +390,12 @@ namespace __gnu_pbds
 	Eq_Fn,
 	comb_probe_fn,
 	probe_fn,
-	__gnu_pbds::hash_standard_resize_policy<size_policy, trigger_policy,
-						false>,
+	__gnu_pbds::hash_standard_resize_policy<
+	size_policy,
+	trigger_policy,
+	false>,
 	store_hash,
-	_Alloc>
+	Allocator>
 	type;
       };
 
@@ -352,7 +403,9 @@ namespace __gnu_pbds
       struct access_generic_gp_hash_table_t
       {
       private:
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 0>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	Policy_Tl, 0>::type
 	store_hash_indicator;
 
         enum
@@ -360,16 +413,24 @@ namespace __gnu_pbds
             store_hash = store_hash_indicator::value
 	  };
 
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 1>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	  Policy_Tl, 1>::type
 	probe_fn;
 
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 2>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	  Policy_Tl, 2>::type
 	comb_probe_fn;
 
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 3>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	  Policy_Tl, 3>::type
 	trigger_policy;
 
-        typedef typename __gnu_cxx::typelist::at_index<Policy_Tl, 4>::type
+        typedef
+	typename __gnu_cxx::typelist::at_index<
+	  Policy_Tl, 4>::type
 	size_policy;
 
       public:
@@ -381,10 +442,12 @@ namespace __gnu_pbds
 	Eq_Fn,
 	comb_probe_fn,
 	probe_fn,
-	__gnu_pbds::hash_standard_resize_policy<size_policy, trigger_policy,
-						true>,
+	__gnu_pbds::hash_standard_resize_policy<
+	size_policy,
+	trigger_policy,
+	true>,
 	store_hash,
-	_Alloc>
+	Allocator>
 	type;
       };
 
@@ -449,15 +512,19 @@ namespace __gnu_pbds
 	     class Comb_Probe_Fn_TL,
 	     class Eq_Fn =
 	     std::equal_to<Key>,
-	     typename _Alloc = std::allocator<std::pair<const Key, Data> > >
+	     class Allocator =
+	     std::allocator<
+      std::pair<
+      const Key,
+      Data> > >
     struct ranged_hash_common_types
     {
     private:
-      typedef typename _Alloc::size_type size_type;
+      typedef typename Allocator::size_type size_type;
 
       typedef
       __gnu_pbds::test::hash_load_check_resize_trigger_t_<
-	_Alloc,
+	Allocator,
 	1, 8,
 	1, 2,
 	false>
@@ -465,7 +532,7 @@ namespace __gnu_pbds
 
       typedef
       __gnu_pbds::test::hash_load_check_resize_trigger_t_<
-	_Alloc,
+	Allocator,
 	1, 8,
 	1, 1,
 	false>
@@ -474,14 +541,14 @@ namespace __gnu_pbds
       typedef
       __gnu_pbds::hash_standard_resize_policy<
 	__gnu_pbds::test::hash_exponential_size_policy_t_<
-	_Alloc>,
+	Allocator>,
 	no_access_half_load_check_resize_trigger_policy>
       mask_half_resize_policy_t;
 
       typedef
       __gnu_pbds::hash_standard_resize_policy<
 	__gnu_pbds::test::hash_exponential_size_policy_t_<
-	_Alloc>,
+	Allocator>,
 	no_access_one_load_check_resize_trigger_policy>
       mask_one_resize_policy_t;
 
@@ -500,14 +567,18 @@ namespace __gnu_pbds
       template<typename Comb_Hash_Fn_>
       struct half_resize_policy_selector;
 
-      template<typename _Alloc_>
-      struct half_resize_policy_selector<__gnu_pbds::test::direct_mask_range_hashing_t_<_Alloc_> >
+      template<typename Allocator_>
+      struct half_resize_policy_selector<
+        __gnu_pbds::test::direct_mask_range_hashing_t_<
+	Allocator_> >
       {
         typedef mask_half_resize_policy_t type;
       };
 
-      template<typename _Alloc_>
-      struct half_resize_policy_selector<__gnu_pbds::test::direct_mod_range_hashing_t_<_Alloc_> >
+      template<typename Allocator_>
+      struct half_resize_policy_selector<
+        __gnu_pbds::test::direct_mod_range_hashing_t_<
+	Allocator_> >
       {
         typedef mod_half_resize_policy_t type;
       };
@@ -515,14 +586,18 @@ namespace __gnu_pbds
       template<typename Comb_Hash_Fn_>
       struct one_resize_policy_selector;
 
-      template<typename _Alloc_>
-      struct one_resize_policy_selector<__gnu_pbds::test::direct_mask_range_hashing_t_<_Alloc_> >
+      template<typename Allocator_>
+      struct one_resize_policy_selector<
+        __gnu_pbds::test::direct_mask_range_hashing_t_<
+	Allocator_> >
       {
         typedef mask_one_resize_policy_t type;
       };
 
-      template<typename _Alloc_>
-      struct one_resize_policy_selector<__gnu_pbds::test::direct_mod_range_hashing_t_<_Alloc_> >
+      template<typename Allocator_>
+      struct one_resize_policy_selector<
+        __gnu_pbds::test::direct_mod_range_hashing_t_<
+	Allocator_> >
       {
         typedef mod_one_resize_policy_t type;
       };
@@ -534,11 +609,13 @@ namespace __gnu_pbds
 	__gnu_pbds::cc_hash_table<
 	  Key,
 	  Data,
-	  __gnu_pbds::null_type,
+	  __gnu_pbds::null_hash_fn,
 	  Eq_Fn,
 	  Comb_Hash_Fn,
-	  typename one_resize_policy_selector<typename Comb_Hash_Fn::comb_fn>::type, 
-	  false, _Alloc>
+	  typename one_resize_policy_selector<
+	  typename Comb_Hash_Fn::comb_fn>::type,
+	  false,
+	  Allocator>
 	type;
       };
 
@@ -555,13 +632,14 @@ namespace __gnu_pbds
 	__gnu_pbds::gp_hash_table<
 	  Key,
 	  Data,
-	  __gnu_pbds::null_type,
+	  __gnu_pbds::null_hash_fn,
 	  Eq_Fn,
 	  Comb_Probe_Fn,
-	  __gnu_pbds::null_type,
-	  typename half_resize_policy_selector<typename Comb_Probe_Fn::comb_fn>::type,
+	  __gnu_pbds::null_probe_fn,
+	  typename half_resize_policy_selector<
+	  typename Comb_Probe_Fn::comb_fn>::type,
 	  false,
-	  _Alloc>
+	  Allocator>
 	type;
       };
 
@@ -580,15 +658,16 @@ namespace __gnu_pbds
     };
 
     template<typename Key, typename Data, class Eq_Fn = std::equal_to<Key>,
-	     typename _Alloc = std::allocator<char> >
+	     class Allocator =
+	     std::allocator<char> >
     class lu_common_types
     {
     private:
-      typedef typename _Alloc::size_type size_type;
+      typedef typename Allocator::size_type size_type;
 
-      typedef __gnu_pbds::test::lu_move_to_front_policy_t_ mtf_u;
+      typedef __gnu_pbds::test::move_to_front_lu_policy_t_ mtf_u;
 
-      typedef __gnu_pbds::test::lu_counter_policy_t_<_Alloc, 5> cnt_5_u;
+      typedef __gnu_pbds::test::counter_lu_policy_t_<Allocator, 5> cnt_5_u;
 
       typedef typename __gnu_cxx::typelist::create1<mtf_u>::type lu_policy0;
 
@@ -608,17 +687,20 @@ namespace __gnu_pbds
 
       public:
         typedef
-	__gnu_pbds::list_update<Key, Data, Eq_Fn, update_policy_t, _Alloc>
+	__gnu_pbds::list_update<Key, Data, Eq_Fn, update_policy_t, Allocator>
 	type;
       };
 
       typedef
-      typename __gnu_cxx::typelist::transform<lu_policies,
+      typename __gnu_cxx::typelist::transform<
+	lu_policies,
 	generic_list_update_t>::type
       lu_types;
 
       typedef
-      typename __gnu_cxx::typelist::at_index<lu_types, 0>::type
+      typename __gnu_cxx::typelist::at_index<
+	lu_types,
+	0>::type
       min_lu_type;
 
     public:
@@ -629,12 +711,12 @@ namespace __gnu_pbds
     };
 
     template<typename Key, typename Data, class Cmp_Fn = std::less<Key>,
-	     template<typename Node_CItr,
-		      class Node_Itr,
+	     template<typename Const_Node_Iterator,
+		      class Node_Iterator,
 		      class Cmp_Fn_,
-		      typename _Alloc_>
-    class Node_Update = __gnu_pbds::null_node_update,
-	     typename _Alloc = std::allocator<std::pair<const Key, Data> > >
+		      class Allocator_>
+    class Node_Update = __gnu_pbds::null_tree_node_update,
+	     class Allocator = std::allocator<std::pair<const Key, Data> > >
     struct tree_common_types
     {
     private:
@@ -645,7 +727,7 @@ namespace __gnu_pbds
       Cmp_Fn,
       __gnu_pbds::ov_tree_tag,
       Node_Update,
-      _Alloc>
+      Allocator>
       ov_tree_assoc_container_t;
 
       typedef
@@ -655,7 +737,7 @@ namespace __gnu_pbds
 	Cmp_Fn,
 	__gnu_pbds::rb_tree_tag,
 	Node_Update,
-	_Alloc>
+	Allocator>
       rb_tree_assoc_container_t;
 
       typedef
@@ -665,7 +747,7 @@ namespace __gnu_pbds
 	Cmp_Fn,
 	__gnu_pbds::splay_tree_tag,
 	Node_Update,
-	_Alloc>
+	Allocator>
       splay_tree_assoc_container_t;
 
     public:
@@ -691,19 +773,19 @@ namespace __gnu_pbds
 
     template<typename Key,
 	     typename Data,
-	     class _ATraits =
-	     typename __gnu_pbds::detail::default_trie_access_traits<Key>::type,
+	     class E_Access_Traits =
+	     typename __gnu_pbds::detail::default_trie_e_access_traits<Key>::type,
 	     class Tag = __gnu_pbds::pat_trie_tag,
-	     template<typename Node_CItr,
-		      typename Node_Itr,
-		      class _ATraits_,
-		      typename _Alloc_>
-    class Node_Update = __gnu_pbds::null_node_update,
-	     typename _Alloc = std::allocator<char> >
+	     template<typename Const_Node_Iterator,
+		      typename Node_Iterator,
+		      class E_Access_Traits_,
+		      typename Allocator_>
+    class Node_Update = __gnu_pbds::null_trie_node_update,
+	     class Allocator = std::allocator<char> >
     class trie_common_types
     {
     private:
-      typedef __gnu_pbds::trie<Key, Data, _ATraits, Tag, Node_Update, _Alloc> type;
+      typedef __gnu_pbds::trie<Key, Data, E_Access_Traits, Tag, Node_Update, Allocator> type;
 
     public:
       typedef typename __gnu_cxx::typelist::create1<type>::type performance_tl;

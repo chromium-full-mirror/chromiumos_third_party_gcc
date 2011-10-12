@@ -31,7 +31,7 @@ int main()
   Bar<int> bar;
 
   bar.baz ();
-  bar.foo (); // { dg-message "required" "" }
+  bar.foo (); // { dg-message "instantiated" "" }
   
   return 0;
 }

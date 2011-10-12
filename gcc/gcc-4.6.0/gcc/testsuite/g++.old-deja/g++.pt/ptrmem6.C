@@ -13,9 +13,9 @@ public:
 };
 
 template <void (A::*)() >
-void g() {}			// { dg-message "void g" }
+void g() {}			// { dg-message "note" }
 template <int A::*>
-void h() {}			// { dg-message "void h" }
+void h() {}			// { dg-message "note" }
 
 
 int main() {

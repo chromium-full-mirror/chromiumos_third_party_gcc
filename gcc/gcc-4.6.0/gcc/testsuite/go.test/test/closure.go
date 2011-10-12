@@ -98,15 +98,4 @@ func main() {
 		println("newfunc returned broken funcs")
 		panic("fail")
 	}
-
-	ff(1)
-}
-
-func ff(x int) {
-	call(func() {
-		_ = x
-	})
-}
-
-func call(func()) {
 }

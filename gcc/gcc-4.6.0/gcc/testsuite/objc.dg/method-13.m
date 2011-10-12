@@ -6,7 +6,12 @@
 /* { dg-xfail-run-if "Needs OBJC2 ABI" { *-*-darwin* && { lp64 && { ! objc2 } } } { "-fnext-runtime" } { "" } } */
 
 #include <objc/objc.h>
-#include "../objc-obj-c++-shared/runtime.h"
+
+#ifdef __NEXT_RUNTIME__
+#define OBJC_GETCLASS objc_getClass
+#else
+#define OBJC_GETCLASS objc_get_class
+#endif
 
 extern void abort(void);
 extern int strcmp(const char *, const char *);
@@ -43,14 +48,16 @@ extern int strcmp(const char *, const char *);
 @end
 
 @implementation Root
+#ifdef __NEXT_RUNTIME__
 + initialize { return self; }
+#endif
 - (const char *) method1 { return "Root::-method1"; }
 + (const char *) method2 { return "Root::+method2"; }
 @end
 
 int main(void)
 {
-  Class obj = objc_getClass("Derived");
+  Class obj = OBJC_GETCLASS("Derived");
 
   /* None of the following should elicit compiler-time warnings.  */
 

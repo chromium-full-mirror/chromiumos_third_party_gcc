@@ -2,8 +2,7 @@
 // { dg-options "" }
 // PRMS Id: 4992
 
-// { dg-prune-output "extended init" }
-
 int *f(){
   return new int[1] = { 1 };   // { dg-error "lvalue" "err" }
+  // { dg-warning "extended init" "warn" { target *-*-* } 6 }
 }

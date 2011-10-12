@@ -1,6 +1,8 @@
 /* Contributed by Nicola Pero - Tue Mar  6 23:05:53 CET 2001 */
 
+#include "../../objc-obj-c++-shared/next-mapping.h"
 #include <objc/objc.h>
+#include <objc/objc-api.h>
 
 /* Tests creating a root class and a subclass with a class methods */
 
@@ -11,7 +13,9 @@
 @end
 
 @implementation RootClass
+#ifdef __NEXT_RUNTIME__                                   
 + initialize { return self; }
+#endif
 @end
 
 static int class_variable = 0;
@@ -44,7 +48,7 @@ int main (void)
   test_that_class_has_class_method ("SubClass", @selector (setState:));
   test_that_class_has_class_method ("SubClass", @selector (state));
 
-  class = objc_getClass ("SubClass");
+  class = objc_lookup_class ("SubClass");
   test_accessor_method (class, 0, -1, -1, 1, 1);
 
   return 0;

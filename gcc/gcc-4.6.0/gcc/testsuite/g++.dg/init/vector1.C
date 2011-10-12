@@ -1,7 +1,6 @@
 // PR c++/19263
 // { dg-do run }
-// { dg-options "-O2 -fpermissive" }
-// { dg-prune-output "narrowing" }
+// { dg-options "-O2" }
 
 typedef signed char v8qi __attribute__ ((vector_size (8)));
 

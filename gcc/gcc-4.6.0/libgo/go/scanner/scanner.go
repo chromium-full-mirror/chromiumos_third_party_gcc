@@ -2,11 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package scanner provides a scanner and tokenizer for UTF-8-encoded text.
-// It takes an io.Reader providing the source, which then can be tokenized
-// through repeated calls to the Scan function.  For compatibility with
-// existing tools, the NUL character is not allowed (implementation
-// restriction).
+// A scanner and tokenizer for UTF-8-encoded text.  Takes an io.Reader
+// providing the source, which then can be tokenized through repeated calls
+// to the Scan function.  For compatibility with existing tools, the NUL
+// character is not allowed (implementation restriction).
 //
 // By default, a Scanner skips white space and Go comments and recognizes all
 // literals as defined by the Go language specification.  It may be
@@ -34,7 +33,6 @@ import (
 	"utf8"
 )
 
-// TODO(gri): Consider changing this to use the new (token) Position package.
 
 // A source position is represented by a Position value.
 // A position is valid if Line > 0.
@@ -42,11 +40,13 @@ type Position struct {
 	Filename string // filename, if any
 	Offset   int    // byte offset, starting at 0
 	Line     int    // line number, starting at 1
-	Column   int    // column number, starting at 1 (character count per line)
+	Column   int    // column number, starting at 0 (character count per line)
 }
+
 
 // IsValid returns true if the position is valid.
 func (pos *Position) IsValid() bool { return pos.Line > 0 }
+
 
 func (pos Position) String() string {
 	s := pos.Filename
@@ -61,6 +61,7 @@ func (pos Position) String() string {
 	}
 	return s
 }
+
 
 // Predefined mode bits to control recognition of tokens. For instance,
 // to configure a Scanner such that it only recognizes (Go) identifiers,
@@ -80,6 +81,7 @@ const (
 	GoTokens       = ScanIdents | ScanFloats | ScanChars | ScanStrings | ScanRawStrings | ScanComments | SkipComments
 )
 
+
 // The result of Scan is one of the following tokens or a Unicode character.
 const (
 	EOF = -(iota + 1)
@@ -93,6 +95,7 @@ const (
 	skipComment
 )
 
+
 var tokenString = map[int]string{
 	EOF:       "EOF",
 	Ident:     "Ident",
@@ -104,17 +107,20 @@ var tokenString = map[int]string{
 	Comment:   "Comment",
 }
 
+
 // TokenString returns a (visible) string for a token or Unicode character.
 func TokenString(tok int) string {
 	if s, found := tokenString[tok]; found {
 		return s
 	}
-	return fmt.Sprintf("%q", string(tok))
+	return fmt.Sprintf("U+%04X", tok)
 }
+
 
 // GoWhitespace is the default value for the Scanner's Whitespace field.
 // Its value selects Go's white space characters.
 const GoWhitespace = 1<<'\t' | 1<<'\n' | 1<<'\r' | 1<<' '
+
 
 const bufLen = 1024 // at least utf8.UTFMax
 
@@ -130,17 +136,15 @@ type Scanner struct {
 
 	// Source position
 	srcBufOffset int // byte offset of srcBuf[0] in source
-	line         int // line count
-	column       int // character count
-	lastLineLen  int // length of last line in characters (for correct column reporting)
-	lastCharLen  int // length of last character in bytes
+	line         int // newline count + 1
+	column       int // character count on line
 
 	// Token text buffer
 	// Typically, token text is stored completely in srcBuf, but in general
 	// the token text's head may be buffered in tokBuf while the token text's
 	// tail is stored in srcBuf.
 	tokBuf bytes.Buffer // token text head that is not in srcBuf anymore
-	tokPos int          // token text tail position (srcBuf index); valid if >= 0
+	tokPos int          // token text tail position (srcBuf index)
 	tokEnd int          // token text tail end (srcBuf index)
 
 	// One character look-ahead
@@ -170,14 +174,14 @@ type Scanner struct {
 	Position
 }
 
-// Init initializes a Scanner with a new source and returns s.
+
+// Init initializes a Scanner with a new source and returns itself.
 // Error is set to nil, ErrorCount is set to 0, Mode is set to GoTokens,
 // and Whitespace is set to GoWhitespace.
 func (s *Scanner) Init(src io.Reader) *Scanner {
 	s.src = src
 
 	// initialize source buffer
-	// (the first call to next() will fill it by calling src.Read)
 	s.srcBuf[0] = utf8.RuneSelf // sentinel
 	s.srcPos = 0
 	s.srcEnd = 0
@@ -186,15 +190,12 @@ func (s *Scanner) Init(src io.Reader) *Scanner {
 	s.srcBufOffset = 0
 	s.line = 1
 	s.column = 0
-	s.lastLineLen = 0
-	s.lastCharLen = 0
 
 	// initialize token text buffer
-	// (required for first call to next()).
 	s.tokPos = -1
 
 	// initialize one character look-ahead
-	s.ch = -1 // no char read yet
+	s.ch = s.next()
 
 	// initialize public fields
 	s.Error = nil
@@ -205,17 +206,13 @@ func (s *Scanner) Init(src io.Reader) *Scanner {
 	return s
 }
 
-// TODO(gri): The code for next() and the internal scanner state could benefit
-//            from a rethink. While next() is optimized for the common ASCII
-//            case, the "corrections" needed for proper position tracking undo
-//            some of the attempts for fast-path optimization.
 
 // next reads and returns the next Unicode character. It is designed such
 // that only a minimal amount of work needs to be done in the common ASCII
 // case (one test to check for both ASCII and end-of-buffer, and one test
 // to check for newlines).
 func (s *Scanner) next() int {
-	ch, width := int(s.srcBuf[s.srcPos]), 1
+	ch := int(s.srcBuf[s.srcPos])
 
 	if ch >= utf8.RuneSelf {
 		// uncommon case: not ASCII or not enough bytes
@@ -225,97 +222,75 @@ func (s *Scanner) next() int {
 			if s.tokPos >= 0 {
 				s.tokBuf.Write(s.srcBuf[s.tokPos:s.srcPos])
 				s.tokPos = 0
-				// s.tokEnd is set by Scan()
 			}
 			// move unread bytes to beginning of buffer
 			copy(s.srcBuf[0:], s.srcBuf[s.srcPos:s.srcEnd])
 			s.srcBufOffset += s.srcPos
 			// read more bytes
-			// (an io.Reader must return os.EOF when it reaches
-			// the end of what it is reading - simply returning
-			// n == 0 will make this loop retry forever; but the
-			// error is in the reader implementation in that case)
 			i := s.srcEnd - s.srcPos
 			n, err := s.src.Read(s.srcBuf[i:bufLen])
-			s.srcPos = 0
 			s.srcEnd = i + n
+			s.srcPos = 0
 			s.srcBuf[s.srcEnd] = utf8.RuneSelf // sentinel
 			if err != nil {
 				if s.srcEnd == 0 {
-					if s.lastCharLen > 0 {
-						// previous character was not EOF
-						s.column++
-					}
-					s.lastCharLen = 0
 					return EOF
 				}
 				if err != os.EOF {
 					s.error(err.String())
+					break
 				}
-				// If err == EOF, we won't be getting more
-				// bytes; break to avoid infinite loop. If
-				// err is something else, we don't know if
-				// we can get more bytes; thus also break.
-				break
 			}
 		}
 		// at least one byte
 		ch = int(s.srcBuf[s.srcPos])
 		if ch >= utf8.RuneSelf {
 			// uncommon case: not ASCII
+			var width int
 			ch, width = utf8.DecodeRune(s.srcBuf[s.srcPos:s.srcEnd])
 			if ch == utf8.RuneError && width == 1 {
-				// advance for correct error position
-				s.srcPos += width
-				s.lastCharLen = width
-				s.column++
 				s.error("illegal UTF-8 encoding")
-				return ch
 			}
+			s.srcPos += width - 1
 		}
 	}
 
-	// advance
-	s.srcPos += width
-	s.lastCharLen = width
+	s.srcPos++
 	s.column++
-
-	// special situations
 	switch ch {
 	case 0:
 		// implementation restriction for compatibility with other tools
 		s.error("illegal character NUL")
 	case '\n':
 		s.line++
-		s.lastLineLen = s.column
 		s.column = 0
 	}
 
 	return ch
 }
 
+
 // Next reads and returns the next Unicode character.
 // It returns EOF at the end of the source. It reports
-// a read error by calling s.Error, if not nil; otherwise
-// it prints an error message to os.Stderr. Next does not
+// a read error by calling s.Error, if set, or else
+// prints an error message to os.Stderr. Next does not
 // update the Scanner's Position field; use Pos() to
 // get the current position.
 func (s *Scanner) Next() int {
 	s.tokPos = -1 // don't collect token text
-	ch := s.Peek()
+	ch := s.ch
 	s.ch = s.next()
 	return ch
 }
+
 
 // Peek returns the next Unicode character in the source without advancing
 // the scanner. It returns EOF if the scanner's position is at the last
 // character of the source.
 func (s *Scanner) Peek() int {
-	if s.ch < 0 {
-		s.ch = s.next()
-	}
 	return s.ch
 }
+
 
 func (s *Scanner) error(msg string) {
 	s.ErrorCount++
@@ -323,8 +298,9 @@ func (s *Scanner) error(msg string) {
 		s.Error(s, msg)
 		return
 	}
-	fmt.Fprintf(os.Stderr, "%s: %s\n", s.Position, msg)
+	fmt.Fprintf(os.Stderr, "%s: %s", s.Position, msg)
 }
+
 
 func (s *Scanner) scanIdentifier() int {
 	ch := s.next() // read character after first '_' or letter
@@ -333,6 +309,7 @@ func (s *Scanner) scanIdentifier() int {
 	}
 	return ch
 }
+
 
 func digitVal(ch int) int {
 	switch {
@@ -346,7 +323,9 @@ func digitVal(ch int) int {
 	return 16 // larger than any legal digit val
 }
 
+
 func isDecimal(ch int) bool { return '0' <= ch && ch <= '9' }
+
 
 func (s *Scanner) scanMantissa(ch int) int {
 	for isDecimal(ch) {
@@ -355,12 +334,14 @@ func (s *Scanner) scanMantissa(ch int) int {
 	return ch
 }
 
+
 func (s *Scanner) scanFraction(ch int) int {
 	if ch == '.' {
 		ch = s.scanMantissa(s.next())
 	}
 	return ch
 }
+
 
 func (s *Scanner) scanExponent(ch int) int {
 	if ch == 'e' || ch == 'E' {
@@ -372,6 +353,7 @@ func (s *Scanner) scanExponent(ch int) int {
 	}
 	return ch
 }
+
 
 func (s *Scanner) scanNumber(ch int) (int, int) {
 	// isDecimal(ch)
@@ -417,6 +399,7 @@ func (s *Scanner) scanNumber(ch int) (int, int) {
 	return Int, ch
 }
 
+
 func (s *Scanner) scanDigits(ch, base, n int) int {
 	for n > 0 && digitVal(ch) < base {
 		ch = s.next()
@@ -427,6 +410,7 @@ func (s *Scanner) scanDigits(ch, base, n int) int {
 	}
 	return ch
 }
+
 
 func (s *Scanner) scanEscape(quote int) int {
 	ch := s.next() // read character after '/'
@@ -448,6 +432,7 @@ func (s *Scanner) scanEscape(quote int) int {
 	return ch
 }
 
+
 func (s *Scanner) scanString(quote int) (n int) {
 	ch := s.next() // read character after quote
 	for ch != quote {
@@ -465,6 +450,7 @@ func (s *Scanner) scanString(quote int) (n int) {
 	return
 }
 
+
 func (s *Scanner) scanRawString() {
 	ch := s.next() // read character after '`'
 	for ch != '`' {
@@ -476,47 +462,59 @@ func (s *Scanner) scanRawString() {
 	}
 }
 
+
 func (s *Scanner) scanChar() {
 	if s.scanString('\'') != 1 {
 		s.error("illegal char literal")
 	}
 }
 
-func (s *Scanner) scanComment(ch int) int {
-	// ch == '/' || ch == '*'
-	if ch == '/' {
-		// line comment
-		ch = s.next() // read character after "//"
-		for ch != '\n' && ch >= 0 {
-			ch = s.next()
-		}
-		return ch
-	}
 
-	// general comment
-	ch = s.next() // read character after "/*"
+func (s *Scanner) scanLineComment() {
+	ch := s.next() // read character after "//"
+	for ch != '\n' {
+		if ch < 0 {
+			s.error("comment not terminated")
+			return
+		}
+		ch = s.next()
+	}
+}
+
+
+func (s *Scanner) scanGeneralComment() {
+	ch := s.next() // read character after "/*"
 	for {
 		if ch < 0 {
 			s.error("comment not terminated")
-			break
+			return
 		}
 		ch0 := ch
 		ch = s.next()
 		if ch0 == '*' && ch == '/' {
-			ch = s.next()
 			break
 		}
 	}
-	return ch
 }
+
+
+func (s *Scanner) scanComment(ch int) {
+	// ch == '/' || ch == '*'
+	if ch == '/' {
+		s.scanLineComment()
+		return
+	}
+	s.scanGeneralComment()
+}
+
 
 // Scan reads the next token or Unicode character from source and returns it.
 // It only recognizes tokens t for which the respective Mode bit (1<<-t) is set.
 // It returns EOF at the end of the source. It reports scanner errors (read and
-// token errors) by calling s.Error, if not nil; otherwise it prints an error
-// message to os.Stderr.
+// token errors) by calling s.Error, if set; otherwise it prints an error message
+// to os.Stderr.
 func (s *Scanner) Scan() int {
-	ch := s.Peek()
+	ch := s.ch
 
 	// reset token text position
 	s.tokPos = -1
@@ -529,22 +527,12 @@ redo:
 
 	// start collecting token text
 	s.tokBuf.Reset()
-	s.tokPos = s.srcPos - s.lastCharLen
+	s.tokPos = s.srcPos - 1
 
 	// set token position
-	// (this is a slightly optimized version of the code in Pos())
 	s.Offset = s.srcBufOffset + s.tokPos
-	if s.column > 0 {
-		// common case: last character was not a '\n'
-		s.Line = s.line
-		s.Column = s.column
-	} else {
-		// last character was a '\n'
-		// (we cannot be at the beginning of the source
-		// since we have called next() at least once)
-		s.Line = s.line - 1
-		s.Column = s.lastLineLen
-	}
+	s.Line = s.line
+	s.Column = s.column
 
 	// determine token value
 	tok := ch
@@ -588,11 +576,13 @@ redo:
 			if (ch == '/' || ch == '*') && s.Mode&ScanComments != 0 {
 				if s.Mode&SkipComments != 0 {
 					s.tokPos = -1 // don't collect token text
-					ch = s.scanComment(ch)
+					s.scanComment(ch)
+					ch = s.next()
 					goto redo
 				}
-				ch = s.scanComment(ch)
+				s.scanComment(ch)
 				tok = Comment
+				ch = s.next()
 			}
 		case '`':
 			if s.Mode&ScanRawStrings != 0 {
@@ -606,33 +596,27 @@ redo:
 	}
 
 	// end of token text
-	s.tokEnd = s.srcPos - s.lastCharLen
+	s.tokEnd = s.srcPos - 1
 
 	s.ch = ch
 	return tok
 }
 
-// Pos returns the position of the character immediately after
-// the character or token returned by the last call to Next or Scan.
-func (s *Scanner) Pos() (pos Position) {
-	pos.Filename = s.Filename
-	pos.Offset = s.srcBufOffset + s.srcPos - s.lastCharLen
-	switch {
-	case s.column > 0:
-		// common case: last character was not a '\n'
-		pos.Line = s.line
-		pos.Column = s.column
-	case s.lastLineLen > 0:
-		// last character was a '\n'
-		pos.Line = s.line - 1
-		pos.Column = s.lastLineLen
-	default:
-		// at the beginning of the source
-		pos.Line = 1
-		pos.Column = 1
+
+// Position returns the current source position. If called before Next()
+// or Scan(), it returns the position of the next Unicode character or token
+// returned by these functions. If called afterwards, it returns the position
+// immediately after the last character of the most recent token or character
+// scanned.
+func (s *Scanner) Pos() Position {
+	return Position{
+		s.Filename,
+		s.srcBufOffset + s.srcPos - 1,
+		s.line,
+		s.column,
 	}
-	return
 }
+
 
 // TokenText returns the string corresponding to the most recently scanned token.
 // Valid after calling Scan().

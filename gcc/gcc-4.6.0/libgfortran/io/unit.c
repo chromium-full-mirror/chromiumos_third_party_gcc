@@ -483,9 +483,11 @@ free_internal_unit (st_parameter_dt *dtp)
 
   if (dtp->u.p.current_unit != NULL)
     {
-      free (dtp->u.p.current_unit->ls);
+      if (dtp->u.p.current_unit->ls != NULL)
+	free (dtp->u.p.current_unit->ls);
   
-      free (dtp->u.p.current_unit->s);
+      if (dtp->u.p.current_unit->s)
+	free (dtp->u.p.current_unit->s);
   
       destroy_unit_mutex (dtp->u.p.current_unit);
     }
@@ -650,7 +652,8 @@ close_unit_1 (gfc_unit *u, int locked)
 
   delete_unit (u);
 
-  free (u->file);
+  if (u->file)
+    free (u->file);
   u->file = NULL;
   u->file_len = 0;
 

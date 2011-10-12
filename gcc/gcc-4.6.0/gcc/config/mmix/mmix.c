@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler, for MMIX.
    Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
-   2010, 2011
+   2010
    Free Software Foundation, Inc.
    Contributed by Hans-Peter Nilsson (hp@bitrange.com)
 
@@ -118,8 +118,8 @@ static void mmix_asm_output_source_filename (FILE *, const char *);
 static void mmix_output_shiftvalue_op_from_str
   (FILE *, const char *, HOST_WIDEST_INT);
 static void mmix_output_shifted_value (FILE *, HOST_WIDEST_INT);
-static void mmix_output_condition (FILE *, const_rtx, int);
-static HOST_WIDEST_INT mmix_intval (const_rtx);
+static void mmix_output_condition (FILE *, rtx, int);
+static HOST_WIDEST_INT mmix_intval (rtx);
 static void mmix_output_octa (FILE *, HOST_WIDEST_INT, int);
 static bool mmix_assemble_integer (rtx, unsigned int, int);
 static struct machine_function *mmix_init_machine_status (void);
@@ -129,44 +129,45 @@ static void mmix_emit_sp_add (HOST_WIDE_INT offset);
 static void mmix_target_asm_function_prologue (FILE *, HOST_WIDE_INT);
 static void mmix_target_asm_function_end_prologue (FILE *);
 static void mmix_target_asm_function_epilogue (FILE *, HOST_WIDE_INT);
-static reg_class_t mmix_preferred_reload_class (rtx, reg_class_t);
-static reg_class_t mmix_preferred_output_reload_class (rtx, reg_class_t);
 static bool mmix_legitimate_address_p (enum machine_mode, rtx, bool);
-static bool mmix_legitimate_constant_p (enum machine_mode, rtx);
 static void mmix_reorg (void);
 static void mmix_asm_output_mi_thunk
   (FILE *, tree, HOST_WIDE_INT, HOST_WIDE_INT, tree);
 static void mmix_setup_incoming_varargs
-  (cumulative_args_t, enum machine_mode, tree, int *, int);
+  (CUMULATIVE_ARGS *, enum machine_mode, tree, int *, int);
 static void mmix_file_start (void);
 static void mmix_file_end (void);
-static bool mmix_rtx_costs (rtx, int, int, int, int *, bool);
-static int mmix_register_move_cost (enum machine_mode,
-				    reg_class_t, reg_class_t);
+static bool mmix_rtx_costs (rtx, int, int, int *, bool);
 static rtx mmix_struct_value_rtx (tree, int);
 static enum machine_mode mmix_promote_function_mode (const_tree,
 						     enum machine_mode,
 	                                             int *, const_tree, int);
-static void mmix_function_arg_advance (cumulative_args_t, enum machine_mode,
+static void mmix_function_arg_advance (CUMULATIVE_ARGS *, enum machine_mode,
 				       const_tree, bool);
-static rtx mmix_function_arg_1 (const cumulative_args_t, enum machine_mode,
+static rtx mmix_function_arg_1 (const CUMULATIVE_ARGS *, enum machine_mode,
 				const_tree, bool, bool);
-static rtx mmix_function_incoming_arg (cumulative_args_t, enum machine_mode,
+static rtx mmix_function_incoming_arg (CUMULATIVE_ARGS *, enum machine_mode,
 				       const_tree, bool);
-static rtx mmix_function_arg (cumulative_args_t, enum machine_mode,
+static rtx mmix_function_arg (CUMULATIVE_ARGS *, enum machine_mode,
 			      const_tree, bool);
 static rtx mmix_function_value (const_tree, const_tree, bool);
 static rtx mmix_libcall_value (enum machine_mode, const_rtx);
 static bool mmix_function_value_regno_p (const unsigned int);
-static bool mmix_pass_by_reference (cumulative_args_t,
+static bool mmix_pass_by_reference (CUMULATIVE_ARGS *,
 				    enum machine_mode, const_tree, bool);
 static bool mmix_frame_pointer_required (void);
 static void mmix_asm_trampoline_template (FILE *);
 static void mmix_trampoline_init (rtx, tree, rtx);
-static void mmix_print_operand (FILE *, rtx, int);
-static void mmix_print_operand_address (FILE *, rtx);
-static bool mmix_print_operand_punct_valid_p (unsigned char);
 static void mmix_conditional_register_usage (void);
+
+/* TARGET_OPTION_OPTIMIZATION_TABLE.  */
+
+static const struct default_options mmix_option_optimization_table[] =
+  {
+    { OPT_LEVELS_1_PLUS, OPT_fregmove, NULL, 1 },
+    { OPT_LEVELS_2_PLUS, OPT_fomit_frame_pointer, NULL, 1 },
+    { OPT_LEVELS_NONE, 0, NULL, 0 }
+  };
 
 /* Target structure macros.  Listed by node.  See `Using and Porting GCC'
    for a general description.  */
@@ -193,13 +194,6 @@ static void mmix_conditional_register_usage (void);
 #undef TARGET_ASM_FUNCTION_EPILOGUE
 #define TARGET_ASM_FUNCTION_EPILOGUE mmix_target_asm_function_epilogue
 
-#undef TARGET_PRINT_OPERAND
-#define TARGET_PRINT_OPERAND mmix_print_operand
-#undef TARGET_PRINT_OPERAND_ADDRESS
-#define TARGET_PRINT_OPERAND_ADDRESS mmix_print_operand_address
-#undef TARGET_PRINT_OPERAND_PUNCT_VALID_P
-#define TARGET_PRINT_OPERAND_PUNCT_VALID_P mmix_print_operand_punct_valid_p
-
 #undef TARGET_ENCODE_SECTION_INFO
 #define TARGET_ENCODE_SECTION_INFO  mmix_encode_section_info
 #undef TARGET_STRIP_NAME_ENCODING
@@ -225,9 +219,6 @@ static void mmix_conditional_register_usage (void);
 #define TARGET_RTX_COSTS mmix_rtx_costs
 #undef TARGET_ADDRESS_COST
 #define TARGET_ADDRESS_COST hook_int_rtx_bool_0
-
-#undef TARGET_REGISTER_MOVE_COST
-#define TARGET_REGISTER_MOVE_COST mmix_register_move_cost
 
 #undef TARGET_MACHINE_DEPENDENT_REORG
 #define TARGET_MACHINE_DEPENDENT_REORG mmix_reorg
@@ -256,16 +247,11 @@ static void mmix_conditional_register_usage (void);
 #define TARGET_PASS_BY_REFERENCE mmix_pass_by_reference
 #undef TARGET_CALLEE_COPIES
 #define TARGET_CALLEE_COPIES hook_bool_CUMULATIVE_ARGS_mode_tree_bool_true
-
-#undef TARGET_PREFERRED_RELOAD_CLASS
-#define TARGET_PREFERRED_RELOAD_CLASS mmix_preferred_reload_class
-#undef TARGET_PREFERRED_OUTPUT_RELOAD_CLASS
-#define TARGET_PREFERRED_OUTPUT_RELOAD_CLASS mmix_preferred_output_reload_class
+#undef TARGET_DEFAULT_TARGET_FLAGS
+#define TARGET_DEFAULT_TARGET_FLAGS TARGET_DEFAULT
 
 #undef TARGET_LEGITIMATE_ADDRESS_P
 #define TARGET_LEGITIMATE_ADDRESS_P	mmix_legitimate_address_p
-#undef TARGET_LEGITIMATE_CONSTANT_P
-#define TARGET_LEGITIMATE_CONSTANT_P	mmix_legitimate_constant_p
 
 #undef TARGET_FRAME_POINTER_REQUIRED
 #define TARGET_FRAME_POINTER_REQUIRED mmix_frame_pointer_required
@@ -277,6 +263,8 @@ static void mmix_conditional_register_usage (void);
 
 #undef TARGET_OPTION_OVERRIDE
 #define TARGET_OPTION_OVERRIDE mmix_option_override
+#undef TARGET_OPTION_OPTIMIZATION_TABLE
+#define TARGET_OPTION_OPTIMIZATION_TABLE mmix_option_optimization_table
 
 struct gcc_target targetm = TARGET_INITIALIZER;
 
@@ -421,22 +409,23 @@ mmix_local_regno (int regno)
   return regno <= MMIX_LAST_STACK_REGISTER_REGNUM && !call_used_regs[regno];
 }
 
-/* TARGET_PREFERRED_RELOAD_CLASS.
+/* PREFERRED_RELOAD_CLASS.
    We need to extend the reload class of REMAINDER_REG and HIMULT_REG.  */
 
-static reg_class_t
-mmix_preferred_reload_class (rtx x, reg_class_t rclass)
+enum reg_class
+mmix_preferred_reload_class (rtx x ATTRIBUTE_UNUSED, enum reg_class rclass)
 {
   /* FIXME: Revisit.  */
   return GET_CODE (x) == MOD && GET_MODE (x) == DImode
     ? REMAINDER_REG : rclass;
 }
 
-/* TARGET_PREFERRED_OUTPUT_RELOAD_CLASS.
+/* PREFERRED_OUTPUT_RELOAD_CLASS.
    We need to extend the reload class of REMAINDER_REG and HIMULT_REG.  */
 
-static reg_class_t
-mmix_preferred_output_reload_class (rtx x, reg_class_t rclass)
+enum reg_class
+mmix_preferred_output_reload_class (rtx x ATTRIBUTE_UNUSED,
+				    enum reg_class rclass)
 {
   /* FIXME: Revisit.  */
   return GET_CODE (x) == MOD && GET_MODE (x) == DImode
@@ -648,10 +637,9 @@ mmix_initial_elimination_offset (int fromreg, int toreg)
 }
 
 static void
-mmix_function_arg_advance (cumulative_args_t argsp_v, enum machine_mode mode,
+mmix_function_arg_advance (CUMULATIVE_ARGS *argsp, enum machine_mode mode,
 			   const_tree type, bool named ATTRIBUTE_UNUSED)
 {
-  CUMULATIVE_ARGS *argsp = get_cumulative_args (argsp_v);
   int arg_size = MMIX_FUNCTION_ARG_SIZE (mode, type);
 
   argsp->regs = ((targetm.calls.must_pass_in_stack (mode, type)
@@ -665,14 +653,12 @@ mmix_function_arg_advance (cumulative_args_t argsp_v, enum machine_mode mode,
 /* Helper function for mmix_function_arg and mmix_function_incoming_arg.  */
 
 static rtx
-mmix_function_arg_1 (const cumulative_args_t argsp_v,
+mmix_function_arg_1 (const CUMULATIVE_ARGS *argsp,
 		     enum machine_mode mode,
 		     const_tree type,
 		     bool named ATTRIBUTE_UNUSED,
 		     bool incoming)
 {
-  CUMULATIVE_ARGS *argsp = get_cumulative_args (argsp_v);
-
   /* Last-argument marker.  */
   if (type == void_type_node)
     return (argsp->regs < MMIX_MAX_ARGS_IN_REGS)
@@ -699,7 +685,7 @@ mmix_function_arg_1 (const cumulative_args_t argsp_v,
    one that must go on stack.  */
 
 static rtx
-mmix_function_arg (cumulative_args_t argsp,
+mmix_function_arg (CUMULATIVE_ARGS *argsp,
 		   enum machine_mode mode,
 		   const_tree type,
 		   bool named)
@@ -708,7 +694,7 @@ mmix_function_arg (cumulative_args_t argsp,
 }
 
 static rtx
-mmix_function_incoming_arg (cumulative_args_t argsp,
+mmix_function_incoming_arg (CUMULATIVE_ARGS *argsp,
 			    enum machine_mode mode,
 			    const_tree type,
 			    bool named)
@@ -720,11 +706,9 @@ mmix_function_incoming_arg (cumulative_args_t argsp,
    everything that goes by value.  */
 
 static bool
-mmix_pass_by_reference (cumulative_args_t argsp_v, enum machine_mode mode,
+mmix_pass_by_reference (CUMULATIVE_ARGS *argsp, enum machine_mode mode,
 			const_tree type, bool named ATTRIBUTE_UNUSED)
 {
-  CUMULATIVE_ARGS *argsp = get_cumulative_args (argsp_v);
-
   /* FIXME: Check: I'm not sure the must_pass_in_stack check is
      necessary.  */
   if (targetm.calls.must_pass_in_stack (mode, type))
@@ -987,14 +971,12 @@ mmix_function_profiler (FILE *stream ATTRIBUTE_UNUSED,
    can parse all arguments in registers, to improve performance.  */
 
 static void
-mmix_setup_incoming_varargs (cumulative_args_t args_so_farp_v,
+mmix_setup_incoming_varargs (CUMULATIVE_ARGS *args_so_farp,
 			     enum machine_mode mode,
 			     tree vartype,
 			     int *pretend_sizep,
 			     int second_time ATTRIBUTE_UNUSED)
 {
-  CUMULATIVE_ARGS *args_so_farp = get_cumulative_args (args_so_farp_v);
-
   /* The last named variable has been handled, but
      args_so_farp has not been advanced for it.  */
   if (args_so_farp->regs + 1 < MMIX_MAX_ARGS_IN_REGS)
@@ -1170,10 +1152,10 @@ mmix_legitimate_address_p (enum machine_mode mode ATTRIBUTE_UNUSED,
   return TARGET_BASE_ADDRESSES && mmix_constant_address_p (x);
 }
 
-/* Implement TARGET_LEGITIMATE_CONSTANT_P.  */
+/* LEGITIMATE_CONSTANT_P.  */
 
-static bool
-mmix_legitimate_constant_p (enum machine_mode mode ATTRIBUTE_UNUSED, rtx x)
+int
+mmix_legitimate_constant_p (rtx x)
 {
   RTX_CODE code = GET_CODE (x);
 
@@ -1229,7 +1211,6 @@ static bool
 mmix_rtx_costs (rtx x ATTRIBUTE_UNUSED,
 		int code ATTRIBUTE_UNUSED,
 		int outer_code ATTRIBUTE_UNUSED,
-		int opno ATTRIBUTE_UNUSED,
 		int *total ATTRIBUTE_UNUSED,
 		bool speed ATTRIBUTE_UNUSED)
 {
@@ -1239,15 +1220,12 @@ mmix_rtx_costs (rtx x ATTRIBUTE_UNUSED,
   return false;
 }
 
-/* TARGET_REGISTER_MOVE_COST.
+/* REGISTER_MOVE_COST.  */
 
-   The special registers can only move to and from general regs, and we
-   need to check that their constraints match, so say 3 for them.  */
-
-static int
+int
 mmix_register_move_cost (enum machine_mode mode ATTRIBUTE_UNUSED,
-			 reg_class_t from,
-			 reg_class_t to)
+			 enum reg_class from,
+			 enum reg_class to)
 {
   return (from == GENERAL_REGS && from == to) ? 2 : 3;
 }
@@ -1577,9 +1555,9 @@ mmix_asm_output_def (FILE *stream, const char *name, const char *value)
   fputc ('\n', stream);
 }
 
-/* TARGET_PRINT_OPERAND.  */
+/* PRINT_OPERAND.  */
 
-static void
+void
 mmix_print_operand (FILE *stream, rtx x, int code)
 {
   /* When we add support for different codes later, we can, when needed,
@@ -1804,10 +1782,10 @@ mmix_print_operand (FILE *stream, rtx x, int code)
     }
 }
 
-/* TARGET_PRINT_OPERAND_PUNCT_VALID_P.  */
+/* PRINT_OPERAND_PUNCT_VALID_P.  */
 
-static bool
-mmix_print_operand_punct_valid_p (unsigned char code)
+int
+mmix_print_operand_punct_valid_p (int code ATTRIBUTE_UNUSED)
 {
   /* A '+' is used for branch prediction, similar to other ports.  */
   return code == '+'
@@ -1815,9 +1793,9 @@ mmix_print_operand_punct_valid_p (unsigned char code)
     || code == '.';
 }
 
-/* TARGET_PRINT_OPERAND_ADDRESS.  */
+/* PRINT_OPERAND_ADDRESS.  */
 
-static void
+void
 mmix_print_operand_address (FILE *stream, rtx x)
 {
   if (REG_P (x))
@@ -1851,7 +1829,7 @@ mmix_print_operand_address (FILE *stream, rtx x)
 	}
     }
 
-  if (TARGET_BASE_ADDRESSES && mmix_legitimate_constant_p (Pmode, x))
+  if (TARGET_BASE_ADDRESSES && mmix_legitimate_constant_p (x))
     {
       output_addr_const (stream, x);
       return;
@@ -2644,7 +2622,7 @@ mmix_output_shifted_value (FILE *stream, HOST_WIDEST_INT value)
    same as swapping the arguments).  */
 
 static void
-mmix_output_condition (FILE *stream, const_rtx x, int reversed)
+mmix_output_condition (FILE *stream, rtx x, int reversed)
 {
   struct cc_conv
   {
@@ -2749,7 +2727,7 @@ mmix_output_condition (FILE *stream, const_rtx x, int reversed)
 /* Return the bit-value for a const_int or const_double.  */
 
 static HOST_WIDEST_INT
-mmix_intval (const_rtx x)
+mmix_intval (rtx x)
 {
   unsigned HOST_WIDEST_INT retval;
 

@@ -76,8 +76,8 @@
 ;; disabled.
 
 (define_attr "sb1_fp_pipes" "one,two"
-  (cond [(and (match_test "TARGET_FLOAT64")
-	      (not (match_test "TARGET_FP_EXCEPTIONS")))
+  (cond [(and (ne (symbol_ref "TARGET_FLOAT64") (const_int 0))
+	      (eq (symbol_ref "TARGET_FP_EXCEPTIONS") (const_int 0)))
 	 (const_string "two")]
 	(const_string "one")))
 
@@ -149,13 +149,15 @@
 (define_insn_reservation "ir_sb1_fpload" 0
   (and (eq_attr "cpu" "sb1,sb1a")
        (and (eq_attr "type" "fpload")
-	    (match_test "TARGET_FLOAT64")))
+	    (ne (symbol_ref "TARGET_FLOAT64")
+		(const_int 0))))
   "sb1_ls0 | sb1_ls1")
 
 (define_insn_reservation "ir_sb1_fpload_32bitfp" 1
   (and (eq_attr "cpu" "sb1,sb1a")
        (and (eq_attr "type" "fpload")
-	    (not (match_test "TARGET_FLOAT64"))))
+	    (eq (symbol_ref "TARGET_FLOAT64")
+		(const_int 0))))
   "sb1_ls0 | sb1_ls1")
 
 ;; Indexed loads can only execute on LS1 pipe.
@@ -163,13 +165,15 @@
 (define_insn_reservation "ir_sb1_fpidxload" 0
   (and (eq_attr "cpu" "sb1,sb1a")
        (and (eq_attr "type" "fpidxload")
-	    (match_test "TARGET_FLOAT64")))
+	    (ne (symbol_ref "TARGET_FLOAT64")
+		(const_int 0))))
   "sb1_ls1")
 
 (define_insn_reservation "ir_sb1_fpidxload_32bitfp" 1
   (and (eq_attr "cpu" "sb1,sb1a")
        (and (eq_attr "type" "fpidxload")
-	    (not (match_test "TARGET_FLOAT64"))))
+	    (eq (symbol_ref "TARGET_FLOAT64")
+		(const_int 0))))
   "sb1_ls1")
 
 ;; prefx can only execute on the ls1 pipe.

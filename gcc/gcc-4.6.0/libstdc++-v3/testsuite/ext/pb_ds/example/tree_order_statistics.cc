@@ -57,7 +57,7 @@ using namespace __gnu_pbds;
 typedef
 tree<
   int,
-  null_type,
+  null_mapped_type,
   less<int>,
   rb_tree_tag,
   // This policy updates nodes' metadata for order statistics.

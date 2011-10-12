@@ -1,4 +1,3 @@
-// { dg-options "-std=c++98 -pedantic-errors" }
 // { dg-do assemble  }
 
 // Overly simplified from testcase by "B. K. Oxley" <binkley@bigfoot.com>

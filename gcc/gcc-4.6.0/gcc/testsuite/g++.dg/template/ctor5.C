@@ -5,4 +5,4 @@ template<typename T> struct A
   A() : T(0) {} // { dg-error "base" }
 };
 
-A<int*> a; // { dg-message "required" }
+A<int*> a; // { dg-message "instantiated" }

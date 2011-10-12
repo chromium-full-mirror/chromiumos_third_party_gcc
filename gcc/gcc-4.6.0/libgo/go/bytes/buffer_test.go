@@ -6,11 +6,11 @@ package bytes_test
 
 import (
 	. "bytes"
-	"os"
 	"rand"
 	"testing"
 	"utf8"
 )
+
 
 const N = 10000  // make this bigger for a larger (and slower) test
 var data string  // test data for write tests
@@ -46,6 +46,7 @@ func check(t *testing.T, testname string, buf *Buffer, s string) {
 	}
 }
 
+
 // Fill buf through n writes of string fus.
 // The initial contents of buf corresponds to the string s;
 // the result is the final contents of buf returned as a string.
@@ -64,6 +65,7 @@ func fillString(t *testing.T, testname string, buf *Buffer, s string, n int, fus
 	}
 	return s
 }
+
 
 // Fill buf through n writes of byte slice fub.
 // The initial contents of buf corresponds to the string s;
@@ -84,15 +86,18 @@ func fillBytes(t *testing.T, testname string, buf *Buffer, s string, n int, fub 
 	return s
 }
 
+
 func TestNewBuffer(t *testing.T) {
 	buf := NewBuffer(bytes)
 	check(t, "NewBuffer", buf, data)
 }
 
+
 func TestNewBufferString(t *testing.T) {
 	buf := NewBufferString(data)
 	check(t, "NewBufferString", buf, data)
 }
+
 
 // Empty buf through repeated reads into fub.
 // The initial contents of buf corresponds to the string s.
@@ -113,6 +118,7 @@ func empty(t *testing.T, testname string, buf *Buffer, s string, fub []byte) {
 
 	check(t, testname+" (empty 4)", buf, "")
 }
+
 
 func TestBasicOperations(t *testing.T) {
 	var buf Buffer
@@ -168,31 +174,26 @@ func TestBasicOperations(t *testing.T) {
 	}
 }
 
+
 func TestLargeStringWrites(t *testing.T) {
 	var buf Buffer
-	limit := 30
-	if testing.Short() {
-		limit = 9
-	}
-	for i := 3; i < limit; i += 3 {
+	for i := 3; i < 30; i += 3 {
 		s := fillString(t, "TestLargeWrites (1)", &buf, "", 5, data)
 		empty(t, "TestLargeStringWrites (2)", &buf, s, make([]byte, len(data)/i))
 	}
 	check(t, "TestLargeStringWrites (3)", &buf, "")
 }
 
+
 func TestLargeByteWrites(t *testing.T) {
 	var buf Buffer
-	limit := 30
-	if testing.Short() {
-		limit = 9
-	}
-	for i := 3; i < limit; i += 3 {
+	for i := 3; i < 30; i += 3 {
 		s := fillBytes(t, "TestLargeWrites (1)", &buf, "", 5, bytes)
 		empty(t, "TestLargeByteWrites (2)", &buf, s, make([]byte, len(data)/i))
 	}
 	check(t, "TestLargeByteWrites (3)", &buf, "")
 }
+
 
 func TestLargeStringReads(t *testing.T) {
 	var buf Buffer
@@ -203,6 +204,7 @@ func TestLargeStringReads(t *testing.T) {
 	check(t, "TestLargeStringReads (3)", &buf, "")
 }
 
+
 func TestLargeByteReads(t *testing.T) {
 	var buf Buffer
 	for i := 3; i < 30; i += 3 {
@@ -211,6 +213,7 @@ func TestLargeByteReads(t *testing.T) {
 	}
 	check(t, "TestLargeByteReads (3)", &buf, "")
 }
+
 
 func TestMixedReadsAndWrites(t *testing.T) {
 	var buf Buffer
@@ -231,12 +234,14 @@ func TestMixedReadsAndWrites(t *testing.T) {
 	empty(t, "TestMixedReadsAndWrites (2)", &buf, s, make([]byte, buf.Len()))
 }
 
+
 func TestNil(t *testing.T) {
 	var b *Buffer
 	if b.String() != "<nil>" {
-		t.Errorf("expected <nil>; got %q", b.String())
+		t.Errorf("expcted <nil>; got %q", b.String())
 	}
 }
+
 
 func TestReadFrom(t *testing.T) {
 	var buf Buffer
@@ -248,6 +253,7 @@ func TestReadFrom(t *testing.T) {
 	}
 }
 
+
 func TestWriteTo(t *testing.T) {
 	var buf Buffer
 	for i := 3; i < 30; i += 3 {
@@ -257,6 +263,7 @@ func TestWriteTo(t *testing.T) {
 		empty(t, "TestReadFrom (2)", &b, s, make([]byte, len(data)))
 	}
 }
+
 
 func TestRuneIO(t *testing.T) {
 	const NRune = 1000
@@ -307,6 +314,7 @@ func TestRuneIO(t *testing.T) {
 	}
 }
 
+
 func TestNext(t *testing.T) {
 	b := []byte{0, 1, 2, 3, 4}
 	tmp := make([]byte, 5)
@@ -336,41 +344,6 @@ func TestNext(t *testing.T) {
 					}
 				}
 			}
-		}
-	}
-}
-
-var readBytesTests = []struct {
-	buffer   string
-	delim    byte
-	expected []string
-	err      os.Error
-}{
-	{"", 0, []string{""}, os.EOF},
-	{"a\x00", 0, []string{"a\x00"}, nil},
-	{"abbbaaaba", 'b', []string{"ab", "b", "b", "aaab"}, nil},
-	{"hello\x01world", 1, []string{"hello\x01"}, nil},
-	{"foo\nbar", 0, []string{"foo\nbar"}, os.EOF},
-	{"alpha\nbeta\ngamma\n", '\n', []string{"alpha\n", "beta\n", "gamma\n"}, nil},
-	{"alpha\nbeta\ngamma", '\n', []string{"alpha\n", "beta\n", "gamma"}, os.EOF},
-}
-
-func TestReadBytes(t *testing.T) {
-	for _, test := range readBytesTests {
-		buf := NewBufferString(test.buffer)
-		var err os.Error
-		for _, expected := range test.expected {
-			var bytes []byte
-			bytes, err = buf.ReadBytes(test.delim)
-			if string(bytes) != expected {
-				t.Errorf("expected %q, got %q", expected, bytes)
-			}
-			if err != nil {
-				break
-			}
-		}
-		if err != test.err {
-			t.Errorf("expected error %v, got %v", test.err, err)
 		}
 	}
 }

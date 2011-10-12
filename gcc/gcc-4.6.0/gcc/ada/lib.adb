@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -33,18 +33,16 @@ pragma Style_Checks (All_Checks);
 --  Subprogram ordering not enforced in this unit
 --  (because of some logical groupings).
 
-with Atree;    use Atree;
-with Csets;    use Csets;
-with Einfo;    use Einfo;
-with Fname;    use Fname;
-with Output;   use Output;
-with Sinfo;    use Sinfo;
-with Sinput;   use Sinput;
-with Stand;    use Stand;
-with Stringt;  use Stringt;
-with Tree_IO;  use Tree_IO;
-with Uname;    use Uname;
-with Widechar; use Widechar;
+with Atree;   use Atree;
+with Einfo;   use Einfo;
+with Fname;   use Fname;
+with Output;  use Output;
+with Sinfo;   use Sinfo;
+with Sinput;  use Sinput;
+with Stand;   use Stand;
+with Stringt; use Stringt;
+with Tree_IO; use Tree_IO;
+with Uname;   use Uname;
 
 package body Lib is
 
@@ -293,14 +291,10 @@ package body Lib is
 
       Sloc1 := S1;
       Sloc2 := S2;
-
-      Unum1 := Get_Source_Unit (Sloc1);
-      Unum2 := Get_Source_Unit (Sloc2);
+      Unum1 := Get_Code_Unit (Sloc1);
+      Unum2 := Get_Code_Unit (Sloc2);
 
       loop
-         --  Step 1: Check whether the two locations are in the same source
-         --  file.
-
          Sind1 := Get_Source_File_Index (Sloc1);
          Sind2 := Get_Source_File_Index (Sloc2);
 
@@ -314,27 +308,28 @@ package body Lib is
             end if;
          end if;
 
-         --  Step 2: Check subunits. If a subunit is instantiated, follow the
-         --  instantiation chain rather than the stub chain.
+         --  OK, the two nodes are in separate source elements, but this is not
+         --  decisive, because of the issue of subunits and instantiations.
+
+         --  First we deal with subunits, since if the subunit is in an
+         --  instantiation, we know that the parent is in the corresponding
+         --  instantiation, since that is the only way we can have a subunit
+         --  that is part of an instantiation.
 
          Unit1 := Unit (Cunit (Unum1));
          Unit2 := Unit (Cunit (Unum2));
-         Inst1 := Instantiation (Sind1);
-         Inst2 := Instantiation (Sind2);
 
          if Nkind (Unit1) = N_Subunit
            and then Present (Corresponding_Stub (Unit1))
-           and then Inst1 = No_Location
          then
+            --  Both in subunits. They could have a common ancestor. If they
+            --  do, then the deeper one must have a longer unit name. Replace
+            --  the deeper one with its corresponding stub, in order to find
+            --  nearest common ancestor, if any.
+
             if Nkind (Unit2) = N_Subunit
               and then Present (Corresponding_Stub (Unit2))
-              and then Inst2 = No_Location
             then
-               --  Both locations refer to subunits which may have a common
-               --  ancestor. If they do, the deeper subunit must have a longer
-               --  unit name. Replace the deeper one with its corresponding
-               --  stub in order to find the nearest ancestor.
-
                if Length_Of_Name (Unit_Name (Unum1)) <
                   Length_Of_Name (Unit_Name (Unum2))
                then
@@ -348,7 +343,7 @@ package body Lib is
                   goto Continue;
                end if;
 
-            --  Sloc1 in subunit, Sloc2 not
+            --  Nod1 in subunit, Nod2 not
 
             else
                Sloc1 := Sloc (Corresponding_Stub (Unit1));
@@ -356,24 +351,27 @@ package body Lib is
                goto Continue;
             end if;
 
-         --  Sloc2 in subunit, Sloc1 not
+         --  Nod2 in subunit, Nod1 not
 
          elsif Nkind (Unit2) = N_Subunit
            and then Present (Corresponding_Stub (Unit2))
-           and then Inst2 = No_Location
          then
             Sloc2 := Sloc (Corresponding_Stub (Unit2));
             Unum2 := Get_Source_Unit (Sloc2);
             goto Continue;
          end if;
 
-         --  Step 3: Check instances. The two locations may yield a common
-         --  ancestor.
+         --  At this stage we know that neither is a subunit, so we deal
+         --  with instantiations, since we could have a common ancestor
+
+         Inst1 := Instantiation (Sind1);
+         Inst2 := Instantiation (Sind2);
 
          if Inst1 /= No_Location then
-            if Inst2 /= No_Location then
 
-               --  Both locations denote instantiations
+            --  Both are instantiations
+
+            if Inst2 /= No_Location then
 
                Depth1 := Instantiation_Depth (Sloc1);
                Depth2 := Instantiation_Depth (Sloc2);
@@ -396,7 +394,7 @@ package body Lib is
                   goto Continue;
                end if;
 
-            --  Sloc1 is an instantiation
+            --  Only first node is in instantiation
 
             else
                Sloc1 := Inst1;
@@ -404,7 +402,7 @@ package body Lib is
                goto Continue;
             end if;
 
-         --  Sloc2 is an instantiation
+         --  Only second node is instantiation
 
          elsif Inst2 /= No_Location then
             Sloc2 := Inst2;
@@ -412,9 +410,10 @@ package body Lib is
             goto Continue;
          end if;
 
-         --  Step 4: One location in the spec, the other in the corresponding
-         --  body of the same unit. The location in the spec is considered
-         --  earlier.
+         --  No instantiations involved, so we are not in the same unit
+         --  However, there is one case still to check, namely the case
+         --  where one location is in the spec, and the other in the
+         --  corresponding body (the spec location is earlier).
 
          if Nkind (Unit1) = N_Subprogram_Body
               or else
@@ -433,8 +432,8 @@ package body Lib is
             end if;
          end if;
 
-         --  At this point it is certain that the two locations denote two
-         --  entirely separate units.
+         --  If that special case does not occur, then we are certain that
+         --  the two locations are really in separate units.
 
          return No;
 
@@ -478,62 +477,6 @@ package body Lib is
    begin
       return Check_Same_Extended_Unit (S1, S2) = Yes_Before;
    end Earlier_In_Extended_Unit;
-
-   -----------------------
-   -- Exact_Source_Name --
-   -----------------------
-
-   function Exact_Source_Name (Loc : Source_Ptr) return String is
-      U    : constant Unit_Number_Type  := Get_Source_Unit (Loc);
-      Buf  : constant Source_Buffer_Ptr := Source_Text (Source_Index (U));
-      Orig : constant Source_Ptr        := Original_Location (Loc);
-      P    : Source_Ptr;
-
-      WC   : Char_Code;
-      Err  : Boolean;
-      pragma Warnings (Off, WC);
-      pragma Warnings (Off, Err);
-
-   begin
-      --  Entity is character literal
-
-      if Buf (Orig) = ''' then
-         return String (Buf (Orig .. Orig + 2));
-
-      --  Entity is operator symbol
-
-      elsif Buf (Orig) = '"' or else Buf (Orig) = '%' then
-         P := Orig;
-
-         loop
-            P := P + 1;
-            exit when Buf (P) = Buf (Orig);
-         end loop;
-
-         return String (Buf (Orig .. P));
-
-      --  Entity is identifier
-
-      else
-         P := Orig;
-
-         loop
-            if Is_Start_Of_Wide_Char (Buf, P) then
-               Scan_Wide (Buf, P, WC, Err);
-            elsif not Identifier_Char (Buf (P)) then
-               exit;
-            else
-               P := P + 1;
-            end if;
-         end loop;
-
-         --  Write out the identifier by copying the exact source characters
-         --  used in its declaration. Note that this means wide characters will
-         --  be in their original encoded form.
-
-         return String (Buf (Orig .. P - 1));
-      end if;
-   end Exact_Source_Name;
 
    ----------------------------
    -- Entity_Is_In_Main_Unit --

@@ -1,6 +1,5 @@
 // PR c++/47263
-// PR c++/49260
-// { dg-options "-std=c++0x -fno-asynchronous-unwind-tables -fno-dwarf2-cfi-asm" }
+// { dg-options -std=c++0x }
 // { dg-do run }
 
 #include <exception>

@@ -45,7 +45,7 @@
 #define DIRS_EQ(A, B) ((A)->dev == (B)->dev \
 	&& INO_T_EQ((A)->ino, (B)->ino))
 #else
-#define DIRS_EQ(A, B) (!filename_cmp ((A)->canonical_name, (B)->canonical_name))
+#define DIRS_EQ(A, B) (!strcmp ((A)->canonical_name, (B)->canonical_name))
 #endif
 
 static const char dir_separator_str[] = { DIR_SEPARATOR, 0 };
@@ -147,7 +147,7 @@ add_standard_paths (const char *sysroot, const char *iprefix,
 		 now.  */
 	      if (sysroot && p->add_sysroot)
 		continue;
-	      if (!filename_ncmp (p->fname, cpp_GCC_INCLUDE_DIR, len))
+	      if (!strncmp (p->fname, cpp_GCC_INCLUDE_DIR, len))
 		{
 		  char *str = concat (iprefix, p->fname + len, NULL);
 		  if (p->multilib && imultilib)
@@ -168,7 +168,7 @@ add_standard_paths (const char *sysroot, const char *iprefix,
 	  if (sysroot && p->add_sysroot)
 	    str = concat (sysroot, p->fname, NULL);
 	  else if (!p->add_sysroot && relocated
-		   && !filename_ncmp (p->fname, cpp_PREFIX, cpp_PREFIX_len))
+		   && strncmp (p->fname, cpp_PREFIX, cpp_PREFIX_len) == 0)
 	    {
  	      static const char *relocated_prefix;
 	      /* If this path starts with the configure-time prefix,
@@ -362,8 +362,6 @@ merge_include_chains (const char *sysroot, cpp_reader *pfile, int verbose)
 void
 split_quote_chain (void)
 {
-  free_path (heads[QUOTE], REASON_QUIET);
-  free_path (tails[QUOTE], REASON_QUIET);
   heads[QUOTE] = heads[BRACKET];
   tails[QUOTE] = tails[BRACKET];
   heads[BRACKET] = NULL;

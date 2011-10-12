@@ -8,7 +8,7 @@
 template <class T> struct A : T {
   void h(T t) {
     f(t);
-    g(t);     // { dg-message "" }
+    g(t);     // { dg-error "" "" { xfail *-*-* } }
   }
 };
 
@@ -21,7 +21,7 @@ void f(B) {}
 
 int main()
 {
-  A<B> ab;
+  A<B> ab;   // { dg-error "" "" { xfail *-*-* } }
   B b;
-  ab.h(b);   // { dg-message "required" }
+  ab.h(b);
 }

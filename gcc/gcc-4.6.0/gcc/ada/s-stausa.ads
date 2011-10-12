@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---         Copyright (C) 2004-2011, Free Software Foundation, Inc.          --
+--         Copyright (C) 2004-2010, Free Software Foundation, Inc.          --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -57,8 +57,11 @@ package System.Stack_Usage is
       --  Amount of stack used. The value is calculated on the basis of the
       --  mechanism used by GNAT to allocate it, and it is NOT a precise value.
 
-      Stack_Size : Natural;
-      --  Size of the stack
+      Variation : Natural;
+      --  Possible variation in the amount of used stack. The real stack usage
+      --  may vary in the range Value +/- Variation
+
+      Max_Size : Natural;
    end record;
 
    type Result_Array_Type is array (Positive range <>) of Task_Result;
@@ -88,9 +91,8 @@ package System.Stack_Usage is
    --  begin
    --     Initialize_Analyzer (A,
    --                          "Task t",
-   --                          A_Storage_Size,
-   --                          0,
    --                          A_Storage_Size - A_Guard,
+   --                          A_Guard
    --                          To_Stack_Address (Bottom_Of_Stack'Address));
    --     Fill_Stack (A);
    --     Some_User_Code;
@@ -113,9 +115,7 @@ package System.Stack_Usage is
    --       before the call to the instrumentation procedure.
 
    --     Strategy: The user of this package should measure the bottom of stack
-   --       before the call to Fill_Stack and pass it in parameter. The impact
-   --       is very minor unless the stack used is very small, but in this case
-   --       you aren't very interested by the figure.
+   --       before the call to Fill_Stack and pass it in parameter.
 
    --  Instrumentation threshold at writing:
 
@@ -212,29 +212,32 @@ package System.Stack_Usage is
    --  the memory will look like that:
    --
    --                                                             Stack growing
-   --  ---------------------------------------------------------------------->
-   --  |<--------------------->|<----------------------------------->|
-   --  |  Stack frames to      | Memory filled with Analyzer.Pattern |
-   --  |  Fill_Stack           |                                     |
-   --  ^                       |                                     ^
-   --  Analyzer.Stack_Base     |                      Analyzer.Pattern_Limit
-   --                          ^
-   --                    Analyzer.Pattern_Limit +/- Analyzer.Pattern_Size
+   --  ----------------------------------------------------------------------->
+   --  |<---------------------->|<----------------------------------->|
+   --  |  Stack frame           | Memory filled with Analyzer.Pattern |
+   --  |  of Fill_Stack         |                                     |
+   --  |  (deallocated at       |                                     |
+   --  |  the end of the call)  |                                     |
+   --  ^                        |                                     ^
+   --  Analyzer.Bottom_Of_Stack |                  Analyzer.Top_Pattern_Mark
+   --                           ^
+   --                    Analyzer.Bottom_Pattern_Mark
    --
 
    procedure Initialize_Analyzer
      (Analyzer         : in out Stack_Analyzer;
       Task_Name        : String;
-      Stack_Size       : Natural;
-      Stack_Base       : Stack_Address;
-      Pattern_Size     : Natural;
+      My_Stack_Size    : Natural;
+      Max_Pattern_Size : Natural;
+      Bottom           : Stack_Address;
+      Top              : Stack_Address;
       Pattern          : Interfaces.Unsigned_32 := 16#DEAD_BEEF#);
    --  Should be called before any use of a Stack_Analyzer, to initialize it.
    --  Max_Pattern_Size is the size of the pattern zone, might be smaller than
-   --  the full stack size Stack_Size in order to take into account e.g. the
-   --  secondary stack and a guard against overflow. The actual size taken
-   --  will be readjusted with data already used at the time the stack is
-   --  actually filled.
+   --  the full stack size in order to take into account e.g. the secondary
+   --  stack and a guard against overflow. The actual size taken will be
+   --  readjusted with data already used at the time the stack is actually
+   --  filled.
 
    Is_Enabled : Boolean := False;
    --  When this flag is true, then stack analysis is enabled
@@ -250,14 +253,16 @@ package System.Stack_Usage is
    --                                                             Stack growing
    --  ----------------------------------------------------------------------->
    --  |<---------------------->|<-------------->|<--------->|<--------->|
-   --  |  Stack frames          | Array of       | used      |  Memory   |
-   --  |  to Compute_Result     | Analyzer.Probe | during    |   filled  |
-   --  |                        | elements       |  the      |    with   |
-   --  |                        |                | execution |  pattern  |
+   --  |  Stack frame           | Array of       | used      |  Memory   |
+   --  |  of Compute_Result     | Analyzer.Probe | during    |   filled  |
+   --  |  (deallocated at       | elements       |  the      |    with   |
+   --  |  the end of the call)  |                | execution |  pattern  |
+   --  |                        ^                |           |           |
+   --  |                   Bottom_Pattern_Mark   |           |           |
    --  |                                                     |           |
    --  |<---------------------------------------------------->           |
    --                  Stack used                                        ^
-   --                                                           Pattern_Limit
+   --                                                     Top_Pattern_Mark
 
    procedure Report_Result (Analyzer : Stack_Analyzer);
    --  Store the results of the computation in memory, at the address
@@ -283,10 +288,6 @@ private
       Task_Name : String (1 .. Task_Name_Length);
       --  Name of the task
 
-      Stack_Base : Stack_Address;
-      --  Address of the base of the stack, as given by the caller of
-      --  Initialize_Analyzer.
-
       Stack_Size : Natural;
       --  Entire size of the analyzed stack
 
@@ -296,8 +297,11 @@ private
       Pattern : Pattern_Type;
       --  Pattern used to recognize untouched memory
 
-      Pattern_Limit : Stack_Address;
-      --  Bound of the pattern area farthest to the base
+      Bottom_Pattern_Mark : Stack_Address;
+      --  Bound of the pattern area on the stack closest to the bottom
+
+      Top_Pattern_Mark : Stack_Address;
+      --  Topmost bound of the pattern area on the stack
 
       Topmost_Touched_Mark : Stack_Address;
       --  Topmost address of the pattern area whose value it is pointing
@@ -305,7 +309,11 @@ private
       --  compensated, it is the topmost value of the stack pointer during
       --  the execution.
 
-      Pattern_Overlay_Address : System.Address;
+      Bottom_Of_Stack : Stack_Address;
+      --  Address of the bottom of the stack, as given by the caller of
+      --  Initialize_Analyzer.
+
+      Stack_Overlay_Address : System.Address;
       --  Address of the stack abstraction object we overlay over a
       --  task's real stack, typically a pattern-initialized array.
 

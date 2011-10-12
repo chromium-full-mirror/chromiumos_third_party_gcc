@@ -1,6 +1,6 @@
 /* Basic block reordering routines for the GNU compiler.
-   Copyright (C) 2000, 2001, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
-   2011 Free Software Foundation, Inc.
+   Copyright (C) 2000, 2001, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -33,7 +33,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "cfglayout.h"
 #include "cfgloop.h"
 #include "target.h"
-#include "common/common-target.h"
 #include "ggc.h"
 #include "alloc-pool.h"
 #include "flags.h"
@@ -55,6 +54,7 @@ static void change_scope (rtx, tree, tree);
 
 void verify_insn_chain (void);
 static void fixup_fallthru_exit_predecessor (void);
+static tree insn_scope (const_rtx);
 
 rtx
 unlink_insn_chain (rtx first, rtx last)
@@ -254,8 +254,8 @@ insn_locators_alloc (void)
   locations_locators_locs = VEC_alloc (int, heap, 32);
   locations_locators_vals = VEC_alloc (location_t, heap, 32);
 
-  curr_location = UNKNOWN_LOCATION;
-  last_location = UNKNOWN_LOCATION;
+  last_location = -1;
+  curr_location = -1;
   curr_block = NULL;
   last_block = NULL;
   curr_rtl_loc = 0;
@@ -324,7 +324,7 @@ get_curr_insn_block (void)
 int
 curr_insn_locator (void)
 {
-  if (curr_rtl_loc == -1 || curr_location == UNKNOWN_LOCATION)
+  if (curr_rtl_loc == -1)
     return 0;
   if (last_block != curr_block)
     {
@@ -379,7 +379,7 @@ struct rtl_opt_pass pass_into_cfg_layout_mode =
   PROP_cfglayout,                       /* properties_provided */
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
-  0                                     /* todo_flags_finish */
+  TODO_dump_func,                       /* todo_flags_finish */
  }
 };
 
@@ -398,7 +398,7 @@ struct rtl_opt_pass pass_outof_cfg_layout_mode =
   0,                                    /* properties_provided */
   PROP_cfglayout,                       /* properties_destroyed */
   0,                                    /* todo_flags_start */
-  0                                     /* todo_flags_finish */
+  TODO_dump_func,                       /* todo_flags_finish */
  }
 };
 
@@ -499,7 +499,7 @@ locator_scope (int loc)
 }
 
 /* Return lexical scope block insn belongs to.  */
-tree
+static tree
 insn_scope (const_rtx insn)
 {
   return locator_scope (INSN_LOCATOR (insn));
@@ -777,8 +777,7 @@ fixup_reorder_chain (void)
     {
       edge e_fall, e_taken, e;
       rtx bb_end_insn;
-      rtx ret_label = NULL_RTX;
-      basic_block nb, src_bb;
+      basic_block nb;
       edge_iterator ei;
 
       if (EDGE_COUNT (bb->succs) == 0)
@@ -797,7 +796,6 @@ fixup_reorder_chain (void)
       bb_end_insn = BB_END (bb);
       if (JUMP_P (bb_end_insn))
 	{
-	  ret_label = JUMP_LABEL (bb_end_insn);
 	  if (any_condjump_p (bb_end_insn))
 	    {
 	      /* This might happen if the conditional jump has side
@@ -907,11 +905,8 @@ fixup_reorder_chain (void)
 	    continue;
 	}
 
-      /* We got here if we need to add a new jump insn. 
-	 Note force_nonfallthru can delete E_FALL and thus we have to
-	 save E_FALL->src prior to the call to force_nonfallthru.  */
-      src_bb = e_fall->src;
-      nb = force_nonfallthru_and_redirect (e_fall, e_fall->dest, ret_label);
+      /* We got here if we need to add a new jump insn.  */
+      nb = force_nonfallthru (e_fall);
       if (nb)
 	{
 	  nb->il.rtl->visited = 1;
@@ -921,11 +916,11 @@ fixup_reorder_chain (void)
 	  bb = nb;
 
 	  /* Make sure new bb is tagged for correct section (same as
-	     fall-thru source, since you cannot fall-thru across
+	     fall-thru source, since you cannot fall-throu across
 	     section boundaries).  */
-	  BB_COPY_PARTITION (src_bb, single_pred (bb));
+	  BB_COPY_PARTITION (e_fall->src, single_pred (bb));
 	  if (flag_reorder_blocks_and_partition
-	      && targetm_common.have_named_sections
+	      && targetm.have_named_sections
 	      && JUMP_P (BB_END (bb))
 	      && !any_condjump_p (BB_END (bb))
 	      && (EDGE_SUCC (bb, 0)->flags & EDGE_CROSSING))
@@ -1207,9 +1202,6 @@ duplicate_insn_chain (rtx from, rtx to)
 	      break;
 	    }
 	  copy = emit_copy_of_insn_after (insn, get_last_insn ());
-	  if (JUMP_P (insn) && JUMP_LABEL (insn) != NULL_RTX
-	      && ANY_RETURN_P (JUMP_LABEL (insn)))
-	    JUMP_LABEL (copy) = JUMP_LABEL (insn);
           maybe_copy_prologue_epilogue_insn (insn, copy);
 	  break;
 

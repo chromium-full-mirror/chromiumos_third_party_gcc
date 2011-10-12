@@ -391,7 +391,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     : _M_max_load_factor(__z), _M_growth_factor(2.f), _M_next_resize(0) { }
 
     float
-    max_load_factor() const noexcept
+    max_load_factor() const
     { return _M_max_load_factor; }
 
     // Return a bucket size no smaller than n.
@@ -427,17 +427,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   _Prime_rehash_policy::
   _M_next_bkt(std::size_t __n) const
   {
-    // Optimize lookups involving the first elements of __prime_list.
-    // (useful to speed-up, eg, constructors)
-    static const unsigned char __fast_bkt[12]
-      = { 2, 2, 2, 3, 5, 5, 7, 7, 11, 11, 11, 11 };
-
-    const unsigned long __p
-      = __n <= 11 ? __fast_bkt[__n]
-                  : *std::lower_bound(__prime_list + 5,
-				      __prime_list + _S_n_primes, __n);
-    _M_next_resize = __builtin_floor(__p * (long double)_M_max_load_factor);
-    return __p;
+    const unsigned long* __p = std::lower_bound(__prime_list, __prime_list
+						+ _S_n_primes, __n);
+    _M_next_resize =
+      static_cast<std::size_t>(__builtin_ceil(*__p * _M_max_load_factor));
+    return *__p;
   }
 
   // Return the smallest prime p such that alpha p >= n, where alpha
@@ -445,7 +439,14 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   inline std::size_t
   _Prime_rehash_policy::
   _M_bkt_for_elements(std::size_t __n) const
-  { return _M_next_bkt(__builtin_ceil(__n / (long double)_M_max_load_factor)); }
+  {
+    const float __min_bkts = __n / _M_max_load_factor;
+    const unsigned long* __p = std::lower_bound(__prime_list, __prime_list
+						+ _S_n_primes, __min_bkts);
+    _M_next_resize =
+      static_cast<std::size_t>(__builtin_ceil(*__p * _M_max_load_factor));
+    return *__p;
+  }
 
   // Finds the smallest prime p such that alpha p > __n_elt + __n_ins.
   // If p > __n_bkt, return make_pair(true, p); otherwise return
@@ -463,19 +464,22 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   {
     if (__n_elt + __n_ins > _M_next_resize)
       {
-	long double __min_bkts = ((__n_elt + __n_ins)
-				  / (long double)_M_max_load_factor);
+	float __min_bkts = ((float(__n_ins) + float(__n_elt))
+			    / _M_max_load_factor);
 	if (__min_bkts > __n_bkt)
 	  {
-	    __min_bkts = std::max(__min_bkts, (long double)_M_growth_factor
-				  * __n_bkt);
-	    return std::make_pair(true,
-				  _M_next_bkt(__builtin_ceil(__min_bkts)));
+	    __min_bkts = std::max(__min_bkts, _M_growth_factor * __n_bkt);
+	    const unsigned long* __p =
+	      std::lower_bound(__prime_list, __prime_list + _S_n_primes,
+			       __min_bkts);
+	    _M_next_resize = static_cast<std::size_t>
+	      (__builtin_ceil(*__p * _M_max_load_factor));
+	    return std::make_pair(true, *__p);
 	  }
 	else
 	  {
-	    _M_next_resize
-	      = __builtin_floor(__n_bkt * (long double)_M_max_load_factor);
+	    _M_next_resize = static_cast<std::size_t>
+	      (__builtin_ceil(__n_bkt * _M_max_load_factor));
 	    return std::make_pair(false, 0);
 	  }
       }
@@ -611,7 +615,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     struct _Rehash_base<_Prime_rehash_policy, _Hashtable>
     {
       float
-      max_load_factor() const noexcept
+      max_load_factor() const
       {
 	const _Hashtable* __this = static_cast<const _Hashtable*>(this);
 	return __this->__rehash_policy().max_load_factor();

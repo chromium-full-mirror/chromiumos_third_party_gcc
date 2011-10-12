@@ -37,6 +37,11 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #else
 #define MATHFUNC(funcname) funcname ## l
 #endif
+#if defined(GFC_REAL_16_IS_FLOAT128)
+#define BUILTINMATHFUNC(funcname) funcname ## q
+#else
+#define BUILTINMATHFUNC(funcname) funcname ## l
+#endif
 
 
 extern void norm2_r16 (gfc_array_r16 * const restrict, 
@@ -136,7 +141,7 @@ norm2_r16 (gfc_array_r16 * const restrict retarray,
       count[n] = 0;
       dstride[n] = GFC_DESCRIPTOR_STRIDE(retarray,n);
       if (extent[n] <= 0)
-	return;
+	len = 0;
     }
 
   base = array->data;

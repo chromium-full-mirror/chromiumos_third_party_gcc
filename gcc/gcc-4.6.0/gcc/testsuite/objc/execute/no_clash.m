@@ -1,11 +1,11 @@
 /* Contributed by Nicola Pero - Fri Mar  9 19:39:15 CET 2001 */
-#include "../../objc-obj-c++-shared/TestsuiteObject.m"
+#import "../../objc-obj-c++-shared/Object1.h"
 #import <objc/objc.h>
 
 /* Test that using the same name for different things makes no 
    problem */
 
-@interface TestClass : TestsuiteObject
+@interface TestClass : Object
 {
   int test;
 }
@@ -39,4 +39,4 @@ int main (void)
 
   return 0;
 }
-
+#include "../../objc-obj-c++-shared/Object1-implementation.h"

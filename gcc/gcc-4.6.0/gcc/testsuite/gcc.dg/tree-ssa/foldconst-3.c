@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O2 -fdump-tree-optimized -fno-short-enums" } */
+/* { dg-options "-O2 -fdump-tree-optimized" } */
 typedef const union tree_node *const_tree;
 typedef struct
 {

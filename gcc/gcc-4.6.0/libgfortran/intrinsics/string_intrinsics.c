@@ -51,23 +51,6 @@ memset_char4 (gfc_char4_t *b, gfc_char4_t c, size_t len)
   return b;
 }
 
-/* Compare wide character types, which are handled internally as
-   unsigned 4-byte integers.  */
-int
-memcmp_char4 (const void *a, const void *b, size_t len)
-{
-  const GFC_UINTEGER_4 *pa = a;
-  const GFC_UINTEGER_4 *pb = b;
-  while (len-- > 0)
-    {
-      if (*pa != *pb)
-	return *pa < *pb ? -1 : 1;
-      pa ++;
-      pb ++;
-    }
-  return 0;
-}
-
 
 /* All other functions are defined using a few generic macros in
    string_intrinsics_inc.c, so we avoid code duplication between the
@@ -81,8 +64,6 @@ memcmp_char4 (const void *a, const void *b, size_t len)
 #define SUFFIX(x) x
 #undef  MEMSET
 #define MEMSET memset
-#undef  MEMCMP
-#define MEMCMP memcmp
 
 #include "string_intrinsics_inc.c"
 
@@ -95,8 +76,6 @@ memcmp_char4 (const void *a, const void *b, size_t len)
 #define SUFFIX(x) x ## _char4
 #undef  MEMSET
 #define MEMSET memset_char4
-#undef  MEMCMP
-#define MEMCMP memcmp_char4
 
 #include "string_intrinsics_inc.c"
 

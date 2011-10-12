@@ -17,10 +17,10 @@
 # Yasuaki Taniguchi <yasuakit@gmail.com>, 2010, 2011
 msgid ""
 msgstr ""
-"Project-Id-Version: gcc 4.6.1\n"
+"Project-Id-Version: gcc 4.6-b20101218\n"
 "Report-Msgid-Bugs-To: http://gcc.gnu.org/bugs.html\n"
 "POT-Creation-Date: 2011-06-21 10:27+0000\n"
-"PO-Revision-Date: 2011-09-02 18:40+0900\n"
+"PO-Revision-Date: 2011-01-28 23:06+0900\n"
 "Last-Translator: Yasuaki Taniguchi <yasuakit@gmail.com>\n"
 "Language-Team: Japanese <translation-team-ja@lists.sourceforge.net>\n"
 "Language: ja\n"
@@ -5567,6 +5567,7 @@ msgstr ""
 
 #: config/mn10300/mn10300.opt:56
 #, fuzzy
+#| msgid "Allow gcc to use the repeat/erepeat instructions"
 msgid "Allow gcc to generate LIW instructions"
 msgstr "gcc が repeat/erepeat 命令を使用することを許可する"
 
@@ -6384,6 +6385,7 @@ msgstr "SSE4.1 と SSE4.2 の組み込み関数とコード生成をサポート
 
 #: config/i386/i386.opt:328
 #, fuzzy
+#| msgid "'-msse5' was removed"
 msgid "%<-msse5%> was removed"
 msgstr "'-msse5' は削除されました"
 
@@ -7542,8 +7544,9 @@ msgid "Make the linker relaxation machine assume that a program counter wrap-aro
 msgstr ""
 
 #: config/crx/crx.opt:23
+#, fuzzy
 msgid "Support multiply accumulate instructions"
-msgstr "乗算-加算浮動小数点命令を使用する"
+msgstr "乗算-加算浮動小数点命令をを使用する"
 
 #: config/crx/crx.opt:27
 msgid "Do not use push to store function arguments"
@@ -8193,6 +8196,7 @@ msgstr "TDA 領域にとって望ましい最大データサイズを設定す�
 
 #: config/v850/v850.opt:71
 #, fuzzy
+#| msgid "Enforce strict alignment"
 msgid "Do not enforce strict alignment"
 msgstr "厳密な整列を強制する"
 
@@ -8214,6 +8218,7 @@ msgstr "v850e1 プロセッサ用にコンパイルする"
 
 #: config/v850/v850.opt:94
 #, fuzzy
+#| msgid "Compile for the v850e processor"
 msgid "Compile for the v850es variant of the v850e1"
 msgstr "v850e プロセッサ用にコンパイルする"
 
@@ -8739,6 +8744,7 @@ msgstr ""
 
 #: config/microblaze/microblaze.opt:92
 #, fuzzy
+#| msgid "Use hardware floating point converstion instructions"
 msgid "Use hardware floating point conversion instructions"
 msgstr "ハードウェア浮動小数点変換命令を使用する"
 
@@ -9193,11 +9199,11 @@ msgstr "副作用完了点規則を破る可能性がある場合に警告する
 
 #: c-family/c.opt:590
 msgid "Warn about signed-unsigned comparisons"
-msgstr "符号付き/符号無しの比較に関して警告する"
+msgstr "符合付き/符合無しの比較に関して警告する"
 
 #: c-family/c.opt:594
 msgid "Warn when overload promotes from unsigned to signed"
-msgstr "オーバーロードが符号無しから符号付きに格上げとなる場合に警告する"
+msgstr "オーバーロードが符合無しから符合付きに格上げとなる場合に警告する"
 
 #: c-family/c.opt:598
 msgid "Warn about uncasted NULL used as sentinel"
@@ -9272,8 +9278,9 @@ msgid "In C++, nonzero means warn about deprecated conversion from string litera
 msgstr ""
 
 #: c-family/c.opt:674
+#, fuzzy
 msgid "Warn when a pointer differs in signedness in an assignment"
-msgstr "オーバーロードが符号無しから符号付きに格上げとなる場合に警告する"
+msgstr "オーバーロードが符合無しから符合付きに格上げとなる場合に警告する"
 
 #: c-family/c.opt:678
 msgid "A synonym for -std=c89 (for C) or -std=c++98 (for C++)"
@@ -9658,6 +9665,7 @@ msgstr "ファイルをインクルードするときにファイル名を再マ
 
 #: c-family/c.opt:1140 c-family/c.opt:1144
 #, fuzzy
+#| msgid "Conform to the ISO 1998 C++ standard with GNU extensions"
 msgid "Conform to the ISO 1998 C++ standard revised by the 2003 technical corrigendum"
 msgstr "ISO 1998 C++ 標準に GNU 拡張付きで準拠させる"
 
@@ -10118,6 +10126,7 @@ msgstr "無意味な null ポインタ検査を削除する"
 
 #: common.opt:946
 #, fuzzy
+#| msgid "Try to allow the linker to turn PIC calls into direct calls"
 msgid "Try to convert virtual calls to direct ones."
 msgstr "リンカが PIC 呼び出しを直接呼び出しに変更することを許可するように試みる"
 
@@ -11348,11 +11357,13 @@ msgstr "引数は複素数型でなければいけません"
 
 #: go/gofrontend/expressions.cc:7578
 #, fuzzy
+#| msgid "argument must have complex type"
 msgid "complex arguments must have identical types"
 msgstr "引数は複素数型でなければいけません"
 
 #: go/gofrontend/expressions.cc:7580
 #, fuzzy
+#| msgid "argument must have complex type"
 msgid "complex arguments must have floating-point type"
 msgstr "引数は複素数型でなければいけません"
 
@@ -11971,6 +11982,7 @@ msgstr "%q+D が異なる型で再定義されました"
 
 #: c-decl.c:1818
 #, fuzzy, gcc-internal-format
+#| msgid "redefinition of typedef %q+D with different type"
 msgid "redefinition of typedef %q+D with variably modified type"
 msgstr "%q+D が異なる型で再定義されました"
 
@@ -13701,11 +13713,13 @@ msgstr "不明な property 属性です"
 
 #: c-parser.c:7964 cp/parser.c:23167
 #, fuzzy, gcc-internal-format
+#| msgid "missing %<(%> after %<#pragma pack%> - ignored"
 msgid "missing %<=%> (after %<getter%> attribute)"
 msgstr "%<#pragma pack%> の後に %<(%> がありません - 無視されました"
 
 #: c-parser.c:7967 cp/parser.c:23170
 #, fuzzy, gcc-internal-format
+#| msgid "missing %<(%> after %<#pragma pack%> - ignored"
 msgid "missing %<=%> (after %<setter%> attribute)"
 msgstr "%<#pragma pack%> の後に %<(%> がありません - 無視されました"
 
@@ -15605,6 +15619,7 @@ msgstr "verify_cgraph_node に失敗しました"
 
 #: cgraphunit.c:817
 #, fuzzy, gcc-internal-format
+#| msgid "weakref attribute must appear before alias attribute"
 msgid "%<weakref%> attribute should be accompanied with an %<alias%> attribute"
 msgstr "弱い参照属性は別名属性より前に出現しなければいけません"
 
@@ -15615,11 +15630,13 @@ msgstr "%<externally_visible%> 属性は公開オブジェクトに関しての�
 
 #: cgraphunit.c:881
 #, fuzzy, gcc-internal-format
+#| msgid "%qE attribute ignored because %qT is already defined"
 msgid "%<weakref%> attribute ignored because function is defined"
 msgstr "%qE 属性は %qT が既に定義されているため無視されます"
 
 #: cgraphunit.c:919
 #, fuzzy, gcc-internal-format
+#| msgid "%qE attribute ignored because %qT is already defined"
 msgid "%<weakref%> attribute ignored because variable is initialized"
 msgstr "%qE 属性は %qT が既に定義されているため無視されます"
 
@@ -17169,6 +17186,7 @@ msgstr "-iplugindir <dir> オプションが gcc ドライバから渡されま�
 
 #: profile.c:417
 #, fuzzy, gcc-internal-format
+#| msgid "corrupted profile info: run_max * runs < sum_max"
 msgid "corrupted profile info: edge count exceeds maximal count"
 msgstr "破損したプロファイル情報: run_max * runs < sum_max です"
 
@@ -18890,6 +18908,7 @@ msgstr "一貫性がない値を持つプロファイルを修正しています
 
 #: value-prof.c:476
 #, fuzzy, gcc-internal-format, gfc-internal-format
+#| msgid "corrupted value profile: %s profiler overall count (%d) does not match BB count (%d)"
 msgid "corrupted value profile: %s profile counter (%d out of %d) inconsistent with basic-block count (%d)"
 msgstr "破損した値のプロファイルです: %s プロファイルの総合計数 (%d) は BB 数 (%d) と一致しません"
 
@@ -19188,7 +19207,7 @@ msgstr "%qT への %qT からの変換はその値が変更になるかもしれ
 #: c-family/c-common.c:2120
 #, gcc-internal-format
 msgid "large integer implicitly truncated to unsigned type"
-msgstr "大きな整数が暗黙に符号無し型に切り詰められました"
+msgstr "大きな整数が暗黙に符合無し型に切り詰められました"
 
 #: c-family/c-common.c:2126 c-family/c-common.c:2133 c-family/c-common.c:2141
 #, gcc-internal-format
@@ -19248,12 +19267,12 @@ msgstr "データ型の範囲制限によって、比較が常に true となり
 #: c-family/c-common.c:3597
 #, gcc-internal-format
 msgid "comparison of unsigned expression >= 0 is always true"
-msgstr "符号無しの式 >= 0 という比較は常に true です"
+msgstr "符合無しの式 >= 0 という比較は常に true です"
 
 #: c-family/c-common.c:3607
 #, gcc-internal-format
 msgid "comparison of unsigned expression < 0 is always false"
-msgstr "符号無しの式 < 0 という比較は常に false です"
+msgstr "符合無しの式 < 0 という比較は常に false です"
 
 #: c-family/c-common.c:3649
 #, gcc-internal-format
@@ -19528,6 +19547,7 @@ msgstr "%q+D 用の整列は最低 %d でなければいけません"
 
 #: c-family/c-common.c:6690
 #, fuzzy, gcc-internal-format
+#| msgid "inline function %q+D cannot be declared weak"
 msgid "inline function %q+D declared weak"
 msgstr "インライン関数 %q+D を弱いとして宣言できません"
 
@@ -20073,7 +20093,7 @@ msgstr "型 %qT と %qT の間での比較です"
 #: c-family/c-common.c:9361
 #, gcc-internal-format
 msgid "comparison between signed and unsigned integer expressions"
-msgstr "符号付きと符号無しの整数式の間での比較です"
+msgstr "符合付きと符合無しの整数式の間での比較です"
 
 #: c-family/c-common.c:9412
 #, gcc-internal-format
@@ -20083,12 +20103,12 @@ msgstr ""
 #: c-family/c-common.c:9415
 #, gcc-internal-format
 msgid "comparison of promoted ~unsigned with constant"
-msgstr "~で反転された格上げ符号無し型と定数との比較です"
+msgstr "~で反転された格上げ符合無し型と定数との比較です"
 
 #: c-family/c-common.c:9425
 #, gcc-internal-format
 msgid "comparison of promoted ~unsigned with unsigned"
-msgstr "~で反転された格上げ符号無し型と符号無し型との比較です"
+msgstr "~で反転された符合無し型と符合無し型との比較です"
 
 #: c-family/c-format.c:127 c-family/c-format.c:314
 #, gcc-internal-format
@@ -20351,7 +20371,7 @@ msgstr "被演算子番号が代入の抑制と共に使われています"
 #: c-family/c-format.c:2206
 #, gcc-internal-format
 msgid "operand number specified for format taking no argument"
-msgstr "被演算子番号が引数を取らない書式で指定されています"
+msgstr "被演算子番号が引数を取らない書式で指定さています"
 
 #: c-family/c-format.c:2291
 #, gcc-internal-format
@@ -21589,6 +21609,7 @@ msgstr "静的変数 %q+D が dllimport とマークされています"
 
 #: config/avr/avr.c:252
 #, fuzzy, gcc-internal-format
+#| msgid "unrecognized argument to --help= option: %q.*s"
 msgid "unrecognized argument to -mmcu= option: %qs"
 msgstr "--help= オプションへの認識できない引数です: %q.*s"
 
@@ -22326,11 +22347,13 @@ msgstr "最後の引数は 2 ビット即値でなければいけません"
 
 #: config/i386/i386.c:26380
 #, fuzzy, gcc-internal-format
+#| msgid "the fifth argument must be a 8-bit immediate"
 msgid "the fifth argument must be an 8-bit immediate"
 msgstr "第五引数は 8 ビット即値でなければいけません"
 
 #: config/i386/i386.c:26475
 #, fuzzy, gcc-internal-format
+#| msgid "the third argument must be a 8-bit immediate"
 msgid "the third argument must be an 8-bit immediate"
 msgstr "第三引数は 8 ビット即値でなければいけません"
 
@@ -24172,11 +24195,13 @@ msgstr ""
 
 #: config/spu/spu.c:549
 #, fuzzy, gcc-internal-format, gfc-internal-format
+#| msgid "bad value (%s) for -mcmodel= switch"
 msgid "bad value (%s) for -march= switch"
 msgstr "-mcmodel= スイッチ用の誤った値 %s です"
 
 #: config/spu/spu.c:560
 #, fuzzy, gcc-internal-format, gfc-internal-format
+#| msgid "bad value %qs for -mtune switch"
 msgid "bad value (%s) for -mtune= switch"
 msgstr "-mtune スイッチ用の間違った値 %qs です"
 
@@ -24711,6 +24736,7 @@ msgstr ""
 
 #: cp/call.c:5730 cp/cvt.c:1625
 #, fuzzy, gcc-internal-format
+#| msgid "offset of %q+D is not ABI-compliant and may change in a future version of GCC"
 msgid "scoped enum %qT will not promote to an integral type in a future version of GCC"
 msgstr "%q+D のオフセットは ABI に適合していないため将来のバージョンの GCC では変更になるかもしれません"
 
@@ -24852,6 +24878,7 @@ msgstr ""
 
 #: cp/call.c:8070
 #, fuzzy, gcc-internal-format
+#| msgid "could not convert %qE to %qT"
 msgid "could not convert %qE from %qT to %qT"
 msgstr "%qE から %qT へ変換できません"
 
@@ -26718,84 +26745,84 @@ msgid "conflicting specifiers in declaration of %qs"
 msgstr "`%s' の宣言が矛盾しています"
 
 #: cp/decl.c:8329 cp/decl.c:8332 cp/decl.c:8335
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "ISO C++ forbids declaration of %qs with no type"
-msgstr "ISO C++ では型の無い %qs の宣言を禁止しています"
+msgstr "ISO C はメンバのないメンバ宣言を禁じます"
 
 #: cp/decl.c:8360 cp/decl.c:8382
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "%<signed%> or %<unsigned%> invalid for %qs"
-msgstr "%<signed%> または %<unsigned%> は %qs に対しては無効です"
+msgstr "short, 符合つきまたは符合なしは `%s' にとって無効です"
 
 #: cp/decl.c:8362
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "%<signed%> and %<unsigned%> specified together for %qs"
-msgstr "%<signed%> と %<unsigned%> が %qs に対して両方指定されています"
+msgstr "符合付きと符合無しが `%s' に対して一緒に与えられています"
 
 #: cp/decl.c:8364
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "%<long long%> invalid for %qs"
-msgstr "%<long long%> は %qs に対しては無効です"
+msgstr "`%s' に対して complex は不適切です"
 
 #: cp/decl.c:8366
 #, gcc-internal-format
 msgid "%<__int128%> invalid for %qs"
-msgstr "%<__int128%> は %qs に対しては無効です"
+msgstr ""
 
 #: cp/decl.c:8368
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "%<long%> invalid for %qs"
-msgstr "%<long%> は %qs に対しては無効です"
+msgstr "`%s' に対して complex は不適切です"
 
 #: cp/decl.c:8370
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "%<short%> invalid for %qs"
-msgstr "%<short%> は %qs に対しては無効です"
+msgstr "`%s' に対して complex は不適切です"
 
 #: cp/decl.c:8372
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "%<long%> or %<short%> invalid for %qs"
-msgstr "%<long%> または %<short%> は %qs に対しては無効です"
+msgstr "`%s' に対して long, short, signed または unsigned は不適切です"
 
 #: cp/decl.c:8374
 #, gcc-internal-format
 msgid "%<long%>, %<int%>, %<short%>, or %<char%> invalid for %qs"
-msgstr "%<long%>、%<int%>、%<short%>、または %<char%> は %qs に対しては無効です"
+msgstr ""
 
 #: cp/decl.c:8376
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "%<long%> or %<short%> specified with char for %qs"
-msgstr "%<long%> または %<short%> が char と共に %qs に対して指定されています"
+msgstr "`%s' に対して char とともに long または short が指定されています"
 
 #: cp/decl.c:8378
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "%<long%> and %<short%> specified together for %qs"
-msgstr "%<long%> および %<short%> が %qs に対して両方指定されています"
+msgstr "long と short が `%s' に対して一緒に指定されています"
 
 #: cp/decl.c:8384
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "%<short%> or %<long%> invalid for %qs"
-msgstr "%<short%> または %<long%> は %qs に対しては無効です"
+msgstr "short, 符合つきまたは符合なしは `%s' にとって無効です"
 
 #: cp/decl.c:8392
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "long, short, signed or unsigned used invalidly for %qs"
-msgstr "long, short, signed または unsigned の使用は %qs に対しては無効です"
+msgstr "`%s' に対する long, short, singed や unsigned の使用は不適切です"
 
 #: cp/decl.c:8401
 #, gcc-internal-format
 msgid "%<__int128%> is not supported by this target"
-msgstr "このターゲットでは %<__int128%> はサポートされていません"
+msgstr ""
 
 #: cp/decl.c:8407
 #, gcc-internal-format
 msgid "ISO C++ does not support %<__int128%> for %qs"
-msgstr "ISO C++ は %<__int128%> を %qs に対してはサポートしていません"
+msgstr ""
 
 #: cp/decl.c:8477
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "complex invalid for %qs"
-msgstr "complex は %qs に対しては無効です"
+msgstr "`%s' に対して complex は不適切です"
 
 #: cp/decl.c:8505
 #, gcc-internal-format
@@ -26810,7 +26837,7 @@ msgstr "非メンバ `%s' を `mutable' とは宣言できません"
 #: cp/decl.c:8534
 #, gcc-internal-format
 msgid "%<%T::%D%> is not a valid declarator"
-msgstr "%<%T::%D%> は有効な宣言子ではありません"
+msgstr ""
 
 #: cp/decl.c:8543
 #, gcc-internal-format
@@ -26825,32 +26852,32 @@ msgstr "仮引数 `%s' で指定された記憶クラス"
 #: cp/decl.c:8554
 #, gcc-internal-format
 msgid "storage class specifiers invalid in parameter declarations"
-msgstr "仮引数宣言の中の記憶域クラス指定は無効です"
+msgstr "仮引数宣言の中の記憶クラス指定子は無効です"
 
 #: cp/decl.c:8560
 #, gcc-internal-format
 msgid "a parameter cannot be declared %<constexpr%>"
-msgstr "仮引数は %<constexpr%> として宣言してはいけません"
+msgstr ""
 
 #: cp/decl.c:8569
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "%<virtual%> outside class declaration"
-msgstr "%<virtual%> がクラス宣言外で使用されています"
+msgstr "クラス宣言の外側で virtual 指定しています"
 
 #: cp/decl.c:8587
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "multiple storage classes in declaration of %qs"
-msgstr "%qs の宣言内に複数の記憶域クラスがあります"
+msgstr "`%s' の宣言において複数の保存クラス"
 
 #: cp/decl.c:8610
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "storage class specified for %qs"
-msgstr "%qs に対して記憶域クラスが指定されています"
+msgstr "%s に対する記憶クラス指定子 `%s'"
 
 #: cp/decl.c:8614
-#, gcc-internal-format
+#, fuzzy, gcc-internal-format
 msgid "storage class specified for parameter %qs"
-msgstr "仮引数 %qs に対して記憶域クラスタ指定されています"
+msgstr "仮引数 `%s' で指定された記憶クラス"
 
 #: cp/decl.c:8627
 #, fuzzy, gcc-internal-format
@@ -31552,6 +31579,7 @@ msgstr ""
 
 #: cp/semantics.c:6838
 #, fuzzy, gcc-internal-format
+#| msgid "%qE is not initialized"
 msgid "%qD used in its own initializer"
 msgstr "%qE は初期化されていません"
 
@@ -31632,6 +31660,7 @@ msgstr ""
 
 #: cp/semantics.c:7621
 #, fuzzy, gcc-internal-format
+#| msgid "enumerator value for %qE is not an integer constant expression"
 msgid "use of the value of the object being constructed in a constant expression"
 msgstr "%qE の列挙値が整数定数式ではありません"
 
@@ -31652,11 +31681,13 @@ msgstr ""
 
 #: cp/semantics.c:7792
 #, fuzzy, gcc-internal-format
+#| msgid "initializer element is not a constant expression"
 msgid "division by zero is not a constant-expression"
 msgstr "初期化子の要素が定数式ではありません"
 
 #: cp/semantics.c:7897
 #, fuzzy, gcc-internal-format
+#| msgid "nonconstant array index in initializer"
 msgid "non-constant array initialization"
 msgstr "初期化子内に非定数の配列インデックスがあります"
 
@@ -38633,6 +38664,7 @@ msgstr ""
 
 #: fortran/resolve.c:2737
 #, fuzzy, gcc-internal-format, gfc-internal-format
+#| msgid "pointers are not permitted as case values"
 msgid "Coindexed argument not permitted in '%s' call at %L"
 msgstr "case の値としてポインタは許可されていません"
 
@@ -42254,6 +42286,7 @@ msgstr "インスタンス変数 `%s' は %s と宣言されています"
 
 #: objc/objc-act.c:6025
 #, fuzzy, gcc-internal-format
+#| msgid "invalid use of flexible array member"
 msgid "instance variable %qs uses flexible array member"
 msgstr "可変配列メンバの無効な使用法です"
 

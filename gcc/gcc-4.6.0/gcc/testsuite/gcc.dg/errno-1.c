@@ -6,7 +6,7 @@
 
 int main()
 {
-  void * volatile p;
+  void *p;
   errno = 0;
   p = malloc (-1);
   if (errno != 0)

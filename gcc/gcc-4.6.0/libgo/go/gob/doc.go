@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 /*
-Package gob manages streams of gobs - binary values exchanged between an
+The gob package manages streams of gobs - binary values exchanged between an
 Encoder (transmitter) and a Decoder (receiver).  A typical use is transporting
 arguments and results of remote procedure calls (RPCs) such as those provided by
 package "rpc".
@@ -29,29 +29,29 @@ receiver and transmitter will do all necessary indirection and dereferencing to
 convert between gobs and actual Go values.  For instance, a gob type that is
 schematically,
 
-	struct { A, B int }
+	struct { a, b int }
 
 can be sent from or received into any of these Go types:
 
-	struct { A, B int }	// the same
-	*struct { A, B int }	// extra indirection of the struct
-	struct { *A, **B int }	// extra indirection of the fields
-	struct { A, B int64 }	// different concrete value type; see below
+	struct { a, b int }	// the same
+	*struct { a, b int }	// extra indirection of the struct
+	struct { *a, **b int }	// extra indirection of the fields
+	struct { a, b int64 }	// different concrete value type; see below
 
 It may also be received into any of these:
 
-	struct { A, B int }	// the same
-	struct { B, A int }	// ordering doesn't matter; matching is by name
-	struct { A, B, C int }	// extra field (C) ignored
-	struct { B int }	// missing field (A) ignored; data will be dropped
-	struct { B, C int }	// missing field (A) ignored; extra field (C) ignored.
+	struct { a, b int }	// the same
+	struct { b, a int }	// ordering doesn't matter; matching is by name
+	struct { a, b, c int }	// extra field (c) ignored
+	struct { b int }	// missing field (a) ignored; data will be dropped
+	struct { b, c int }	// missing field (a) ignored; extra field (c) ignored.
 
 Attempting to receive into these types will draw a decode error:
 
-	struct { A int; B uint }	// change of signedness for B
-	struct { A int; B float }	// change of type for B
+	struct { a int; b uint }	// change of signedness for b
+	struct { a int; b float }	// change of type for b
 	struct { }			// no field names in common
-	struct { C, D int }		// no field names in common
+	struct { c, d int }		// no field names in common
 
 Integers are transmitted two ways: arbitrary precision signed integers or
 arbitrary precision unsigned integers.  There is no int8, int16 etc.
@@ -113,11 +113,6 @@ uninterpreted bytes of the value.
 All other slices and arrays are sent as an unsigned count followed by that many
 elements using the standard gob encoding for their type, recursively.
 
-Maps are sent as an unsigned count followed by that man key, element
-pairs. Empty but non-nil maps are sent, so if the sender has allocated
-a map, the receiver will allocate a map even no elements are
-transmitted.
-
 Structs are sent as a sequence of (field number, field value) pairs.  The field
 value is sent using the standard gob encoding for its type, recursively.  If a
 field has the zero value for its type, it is omitted from the transmission.  The
@@ -164,7 +159,7 @@ description, constructed from these types:
 		Elem typeId
 		Len  int
 	}
-	type CommonType struct {
+	type CommonType {
 		Name string // the name of the struct type
 		Id  int    // the id of the type, repeated so it's inside the type
 	}
@@ -221,68 +216,17 @@ In summary, a gob stream looks like
 
 where * signifies zero or more repetitions and the type id of a value must
 be predefined or be defined before the value in the stream.
-
-See "Gobs of data" for a design discussion of the gob wire format:
-http://blog.golang.org/2011/03/gobs-of-data.html
 */
 package gob
 
 /*
-Grammar:
-
-Tokens starting with a lower case letter are terminals; int(n)
-and uint(n) represent the signed/unsigned encodings of the value n.
-
-GobStream:
-	DelimitedMessage*
-DelimitedMessage:
-	uint(lengthOfMessage) Message
-Message:
-	TypeSequence TypedValue
-TypeSequence
-	(TypeDefinition DelimitedTypeDefinition*)?
-DelimitedTypeDefinition:
-	uint(lengthOfTypeDefinition) TypeDefinition
-TypedValue:
-	int(typeId) Value
-TypeDefinition:
-	int(-typeId) encodingOfWireType
-Value:
-	SingletonValue | StructValue
-SingletonValue:
-	uint(0) FieldValue
-FieldValue:
-	builtinValue | ArrayValue | MapValue | SliceValue | StructValue | InterfaceValue
-InterfaceValue:
-	NilInterfaceValue | NonNilInterfaceValue
-NilInterfaceValue:
-	uint(0)
-NonNilInterfaceValue:
-	ConcreteTypeName TypeSequence InterfaceContents
-ConcreteTypeName:
-	uint(lengthOfName) [already read=n] name
-InterfaceContents:
-	int(concreteTypeId) DelimitedValue
-DelimitedValue:
-	uint(length) Value
-ArrayValue:
-	uint(n) FieldValue*n [n elements]
-MapValue:
-	uint(n) (FieldValue FieldValue)*n  [n (key, value) pairs]
-SliceValue:
-	uint(n) FieldValue*n [n elements]
-StructValue:
-	(uint(fieldDelta) FieldValue)*
-*/
-
-/*
 For implementers and the curious, here is an encoded example.  Given
-	type Point struct {X, Y int}
+	type Point struct {x, y int}
 and the value
 	p := Point{22, 33}
 the bytes transmitted that encode p will be:
 	1f ff 81 03 01 01 05 50 6f 69 6e 74 01 ff 82 00
-	01 02 01 01 58 01 04 00 01 01 59 01 04 00 00 00
+	01 02 01 01 78 01 04 00 01 01 79 01 04 00 00 00
 	07 ff 82 01 2c 01 42 00
 They are determined as follows.
 
@@ -318,13 +262,13 @@ reserved).
 	02	// There are two fields in the type (len(structType.field))
 	01	// Start of first field structure; add 1 to get field number 0: field[0].name
 	01	// 1 byte
-	58	// structType.field[0].name = "X"
+	78	// structType.field[0].name = "x"
 	01	// Add 1 to get field number 1: field[0].id
 	04	// structType.field[0].typeId is 2 (signed int).
 	00	// End of structType.field[0]; start structType.field[1]; set field number to -1.
 	01	// Add 1 to get field number 0: field[1].name
 	01	// 1 byte
-	59	// structType.field[1].name = "Y"
+	79	// structType.field[1].name = "y"
 	01	// Add 1 to get field number 1: field[0].id
 	04	// struct.Type.field[1].typeId is 2 (signed int).
 	00	// End of structType.field[1]; end of structType.field.

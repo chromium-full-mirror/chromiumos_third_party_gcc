@@ -1,7 +1,6 @@
 ; SYSV4 options for PPC port.
 ;
-; Copyright (C) 2005, 2007, 2008, 2009, 2010, 2011
-; Free Software Foundation, Inc.
+; Copyright (C) 2005, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 ; Contributed by Aldy Hernandez <aldy@quesejoda.com>.
 ;
 ; This file is part of GCC.
@@ -21,28 +20,16 @@
 ; <http://www.gnu.org/licenses/>.
 
 mcall-
-Target RejectNegative Joined Var(rs6000_abi_name)
+Target RejectNegative Joined
 Select ABI calling convention
 
 msdata=
-Target RejectNegative Joined Var(rs6000_sdata_name)
+Target RejectNegative Joined
 Select method for sdata handling
 
 mtls-size=
-Target RejectNegative Joined Var(rs6000_tls_size) Enum(rs6000_tls_size)
+Target RejectNegative Joined
 Specify bit size of immediate TLS offsets
-
-Enum
-Name(rs6000_tls_size) Type(int)
-
-EnumValue
-Enum(rs6000_tls_size) String(16) Value(16)
-
-EnumValue
-Enum(rs6000_tls_size) String(32) Value(32)
-
-EnumValue
-Enum(rs6000_tls_size) String(64) Value(64)
 
 mbit-align
 Target Report Var(TARGET_NO_BITFIELD_TYPE) Save

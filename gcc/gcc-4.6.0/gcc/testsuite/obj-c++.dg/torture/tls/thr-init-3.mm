@@ -2,13 +2,14 @@
 /* { dg-require-effective-target tls } */
 /* { dg-add-options tls } */
 /* { dg-xfail-run-if "Needs OBJC2 ABI" { *-*-darwin* && { lp64 && { ! objc2 } } } { "-fnext-runtime" } { "" } } */
+/* { dg-additional-sources "../../../objc-obj-c++-shared/Object1.mm" } */
 
-#include "../../../objc-obj-c++-shared/TestsuiteObject.m"
+#include "../../../objc-obj-c++-shared/Object1.h"
 extern "C" {
 extern void abort ();
 }
 
-@interface tsObj: TestsuiteObject {
+@interface tsObj: Object {
   int ai ;
 }
 

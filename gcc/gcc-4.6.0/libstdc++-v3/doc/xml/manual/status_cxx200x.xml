@@ -30,8 +30,7 @@ presence of the required flag.
 </para>
 
 <para>
-This page describes the C++0x support in mainline GCC SVN, not in any
-particular release.
+This page describes the C++0x support in the GCC 4.6 release series.
 </para>
 
 <!-- Status is Yes or No, Broken/Partial-->
@@ -247,9 +246,10 @@ particular release.
       <entry/>
     </row>
     <row>
+      <?dbhtml bgcolor="#C8B0B0" ?>
       <entry>18.9.3</entry>
       <entry>Initializer list range access</entry>
-      <entry>Y</entry>
+      <entry>N</entry>
       <entry/>
     </row>
     <row>
@@ -443,10 +443,11 @@ particular release.
       <entry/>
     </row>
     <row>
+      <?dbhtml bgcolor="#B0B0B0" ?>
       <entry>20.4.2.4</entry>
       <entry>Tuple creation functions</entry>
-      <entry>Y</entry>
-      <entry/>
+      <entry>Partial</entry>
+      <entry><code>tuple_cat</code> should be a single variadic signature (DR 1385)</entry>
     </row>
     <row>
       <entry>20.4.2.5</entry>
@@ -467,9 +468,10 @@ particular release.
       <entry/>
     </row>
     <row>
+      <?dbhtml bgcolor="#C8B0B0" ?>
       <entry>20.4.2.8</entry>
       <entry>Tuple traits</entry>
-      <entry>Y</entry>
+      <entry>N</entry>
       <entry/>
     </row>
     <row>
@@ -527,11 +529,11 @@ particular release.
       <entry/>
     </row>
     <row>
-      <?dbhtml bgcolor="#B0B0B0" ?>
+      <?dbhtml bgcolor="#C8B0B0" ?>
       <entry>20.6.3</entry>
       <entry>Pointer traits</entry>
-      <entry>Partial</entry>
-      <entry>Missing rebind</entry>
+      <entry>N</entry>
+      <entry/>
     </row>
     <row>
       <?dbhtml bgcolor="#B0B0B0" ?>
@@ -560,11 +562,11 @@ particular release.
       <entry/>
     </row>
     <row>
-      <?dbhtml bgcolor="#B0B0B0" ?>
+      <?dbhtml bgcolor="#C8B0B0" ?>
       <entry>20.6.8</entry>
       <entry>Allocator traits</entry>
-      <entry>Partial</entry>
-      <entry>Missing rebind_alloc and rebind_traits</entry>
+      <entry>N</entry>
+      <entry/>
     </row>
     <row>
       <entry>20.6.9</entry>
@@ -1008,47 +1010,52 @@ particular release.
       <entry/>
     </row>
     <row>
-      <?dbhtml bgcolor="#B0B0B0" ?>
+      <?dbhtml bgcolor="#C8B0B0" ?>
       <entry>20.12</entry>
       <entry>Scoped allocator adaptor</entry>
-      <entry>Partial</entry>
+      <entry/>
       <entry/>
     </row>
     <row>
+      <?dbhtml bgcolor="#C8B0B0" ?>
       <entry>20.12.1</entry>
       <entry>Header <code>&lt;scoped_allocator&gt;</code> synopsis</entry>
       <entry/>
       <entry/>
     </row>
     <row>
+      <?dbhtml bgcolor="#C8B0B0" ?>
       <entry>20.12.2</entry>
       <entry>Scoped allocator adaptor member types</entry>
-      <entry>Y</entry>
+      <entry>N</entry>
       <entry/>
     </row>
     <row>
+      <?dbhtml bgcolor="#C8B0B0" ?>
       <entry>20.12.3</entry>
       <entry>Scoped allocator adaptor constructors</entry>
-      <entry>Y</entry>
+      <entry>N</entry>
       <entry/>
     </row>
     <row>
-      <?dbhtml bgcolor="#B0B0B0" ?>
+      <?dbhtml bgcolor="#C8B0B0" ?>
       <entry>20.12.4</entry>
       <entry>Scoped allocator adaptor members</entry>
-      <entry>Partial</entry>
+      <entry>N</entry>
       <entry/>
     </row>
     <row>
+      <?dbhtml bgcolor="#C8B0B0" ?>
       <entry>20.12.5</entry>
       <entry>Scoped allocator operators</entry>
-      <entry>Y</entry>
+      <entry>N</entry>
       <entry/>
     </row>
     <row>
+      <?dbhtml bgcolor="#C8B0B0" ?>
       <entry>20.13</entry>
       <entry>Class <code>type_index</code></entry>
-      <entry>Y</entry>
+      <entry>N</entry>
       <entry/>
     </row>
     <row>
@@ -1611,9 +1618,10 @@ particular release.
       <entry/>
     </row>
     <row>
+      <?dbhtml bgcolor="#C8B0B0" ?>
       <entry>24.6.5</entry>
       <entry>range access</entry>
-      <entry>Y</entry>
+      <entry>N</entry>
       <entry/>
     </row>
     <row>
@@ -1951,10 +1959,11 @@ particular release.
       <entry/>
     </row>
     <row>
+      <?dbhtml bgcolor="#B0B0B0" ?>
       <entry>26.6.2</entry>
       <entry>Class template <code>valarray</code></entry>
-      <entry>Y</entry>
-      <entry/>
+      <entry>Partial</entry>
+      <entry>Missing move and swap operations</entry>
     </row>
     <row>
       <entry>26.6.3</entry>
@@ -2514,14 +2523,14 @@ particular release.
       <entry>30.6.6</entry>
       <entry>Class template <code>future</code></entry>
       <entry>Partial</entry>
-      <entry>Timed waiting functions do not return future_status</entry>
+      <entry>Missing future_status and future::share()</entry>
     </row>
     <row>
       <?dbhtml bgcolor="#B0B0B0" ?>
       <entry>30.6.7</entry>
       <entry>Class template <code>shared_future</code></entry>
       <entry>Partial</entry>
-      <entry>Timed waiting functions do not return future_status</entry>
+      <entry>Missing future_status</entry>
     </row>
     <row>
       <entry>30.6.8</entry>

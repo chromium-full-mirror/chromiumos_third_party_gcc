@@ -27,6 +27,7 @@ const (
 	_M2 = _B2 - 1  // half digit mask
 )
 
+
 // ----------------------------------------------------------------------------
 // Elementary operations on words
 //
@@ -42,6 +43,7 @@ func addWW_g(x, y, c Word) (z1, z0 Word) {
 	return
 }
 
+
 // z1<<_W + z0 = x-y-c, with c == 0 or 1
 func subWW_g(x, y, c Word) (z1, z0 Word) {
 	yc := y + c
@@ -51,6 +53,7 @@ func subWW_g(x, y, c Word) (z1, z0 Word) {
 	}
 	return
 }
+
 
 // z1<<_W + z0 = x*y
 func mulWW(x, y Word) (z1, z0 Word) { return mulWW_g(x, y) }
@@ -70,6 +73,7 @@ func mulWW_g(x, y Word) (z1, z0 Word) {
 	return
 }
 
+
 // z1<<_W + z0 = x*y + c
 func mulAddWWW_g(x, y, c Word) (z1, z0 Word) {
 	z1, zz0 := mulWW(x, y)
@@ -78,6 +82,7 @@ func mulAddWWW_g(x, y, c Word) (z1, z0 Word) {
 	}
 	return
 }
+
 
 // Length of x in bits.
 func bitLen(x Word) (n int) {
@@ -90,6 +95,7 @@ func bitLen(x Word) (n int) {
 	return
 }
 
+
 // log2 computes the integer binary logarithm of x.
 // The result is the integer n for which 2^n <= x < 2^(n+1).
 // If x == 0, the result is -1.
@@ -97,10 +103,12 @@ func log2(x Word) int {
 	return bitLen(x) - 1
 }
 
+
 // Number of leading zeros in x.
 func leadingZeros(x Word) uint {
 	return uint(_W - bitLen(x))
 }
+
 
 // q = (u1<<_W + u0 - r)/y
 func divWW(x1, x0, y Word) (q, r Word) { return divWW_g(x1, x0, y) }
@@ -147,6 +155,7 @@ again2:
 	return q1*_B2 + q0, (un21*_B2 + un0 - q0*v) >> s
 }
 
+
 func addVV(z, x, y []Word) (c Word) { return addVV_g(z, x, y) }
 func addVV_g(z, x, y []Word) (c Word) {
 	for i := range z {
@@ -155,6 +164,7 @@ func addVV_g(z, x, y []Word) (c Word) {
 	return
 }
 
+
 func subVV(z, x, y []Word) (c Word) { return subVV_g(z, x, y) }
 func subVV_g(z, x, y []Word) (c Word) {
 	for i := range z {
@@ -162,6 +172,7 @@ func subVV_g(z, x, y []Word) (c Word) {
 	}
 	return
 }
+
 
 func addVW(z, x []Word, y Word) (c Word) { return addVW_g(z, x, y) }
 func addVW_g(z, x []Word, y Word) (c Word) {
@@ -172,6 +183,7 @@ func addVW_g(z, x []Word, y Word) (c Word) {
 	return
 }
 
+
 func subVW(z, x []Word, y Word) (c Word) { return subVW_g(z, x, y) }
 func subVW_g(z, x []Word, y Word) (c Word) {
 	c = y
@@ -181,8 +193,9 @@ func subVW_g(z, x []Word, y Word) (c Word) {
 	return
 }
 
-func shlVU(z, x []Word, s uint) (c Word) { return shlVU_g(z, x, s) }
-func shlVU_g(z, x []Word, s uint) (c Word) {
+
+func shlVW(z, x []Word, s Word) (c Word) { return shlVW_g(z, x, s) }
+func shlVW_g(z, x []Word, s Word) (c Word) {
 	if n := len(z); n > 0 {
 		ŝ := _W - s
 		w1 := x[n-1]
@@ -197,8 +210,9 @@ func shlVU_g(z, x []Word, s uint) (c Word) {
 	return
 }
 
-func shrVU(z, x []Word, s uint) (c Word) { return shrVU_g(z, x, s) }
-func shrVU_g(z, x []Word, s uint) (c Word) {
+
+func shrVW(z, x []Word, s Word) (c Word) { return shrVW_g(z, x, s) }
+func shrVW_g(z, x []Word, s Word) (c Word) {
 	if n := len(z); n > 0 {
 		ŝ := _W - s
 		w1 := x[0]
@@ -213,6 +227,7 @@ func shrVU_g(z, x []Word, s uint) (c Word) {
 	return
 }
 
+
 func mulAddVWW(z, x []Word, y, r Word) (c Word) { return mulAddVWW_g(z, x, y, r) }
 func mulAddVWW_g(z, x []Word, y, r Word) (c Word) {
 	c = r
@@ -221,6 +236,7 @@ func mulAddVWW_g(z, x []Word, y, r Word) (c Word) {
 	}
 	return
 }
+
 
 func addMulVVW(z, x []Word, y Word) (c Word) { return addMulVVW_g(z, x, y) }
 func addMulVVW_g(z, x []Word, y Word) (c Word) {
@@ -231,6 +247,7 @@ func addMulVVW_g(z, x []Word, y Word) (c Word) {
 	}
 	return
 }
+
 
 func divWVW(z []Word, xn Word, x []Word, y Word) (r Word) { return divWVW_g(z, xn, x, y) }
 func divWVW_g(z []Word, xn Word, x []Word, y Word) (r Word) {

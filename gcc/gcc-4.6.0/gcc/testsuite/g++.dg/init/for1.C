@@ -1,8 +1,6 @@
 // PR c++/13865
 // Bug: We were destroying 'a' before executing the loop.
 
-// { dg-do run }
-
 #include <stdio.h>
 
 int i;
@@ -15,7 +13,7 @@ public:
   ~A()
   {
     printf("A dtor\n");
-    if (i != 2)
+    if (i != 1)
       r = 1;
   }
 };

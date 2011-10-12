@@ -1,8 +1,9 @@
 /* { dg-do compile } */
 
-#import "../objc-obj-c++-shared/TestsuiteObject.h"
+#import "../objc-obj-c++-shared/Object1.h"
+#include <objc/objc-api.h>
 
-@interface obj : TestsuiteObject
+@interface obj : Object
 {
 @public
   int v1;
@@ -17,7 +18,7 @@
 - (void) setValue: (int)number;
 @end
 
-@implementation obj : TestsuiteObject
+@implementation obj : Object
 
 - (int) value { return v1; }
 - (void) setValue: (int)number { v1 = number; }
@@ -32,5 +33,5 @@ void foo (void)
   a->v2 = 1;
   a->v3 = [a value] - a->v2;	/* { dg-warning ".v3. is @protected" } */
   a->v4 = a->v3 - 1;		/* { dg-warning ".v4. is @private" } */
-  				/* { dg-warning ".v3. is @protected" "" { target *-*-* } 34 } */
+  				/* { dg-warning ".v3. is @protected" "" { target *-*-* } 35 } */
 }

@@ -19,4 +19,4 @@ foo (int *p, int *q)
   return accum;
 }
 
-/* { dg-final { scan-assembler "mla\\t" } } */
+/* { dg-final { scan-assembler "mla" } } */

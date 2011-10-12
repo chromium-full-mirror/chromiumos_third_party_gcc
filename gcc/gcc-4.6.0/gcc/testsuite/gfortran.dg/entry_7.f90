@@ -24,4 +24,4 @@ CONTAINS
 END MODULE TT
 
 
-! { dg-final { cleanup-modules "tt" } }
+! { dg-final { cleanup-modules "TT" } }

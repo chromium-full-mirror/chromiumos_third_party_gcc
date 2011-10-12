@@ -85,8 +85,11 @@ FOR fix  =][=
                         (get "hackname") )) )
          =][=
   ELSE   =]
-cat >> [= (raw-shell-str (if (exist? "files") (get "files[0]") "testing.h"))
-         =] <<_HACK_EOF_
+cat >> [=
+    IF (exist? "files") =][=
+      files[0] =][=
+    ELSE =]testing.h[=
+    ENDIF =] <<_HACK_EOF_
 
 
 #if defined( [=(. HACK)=]_CHECK )

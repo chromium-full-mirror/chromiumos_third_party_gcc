@@ -1,4 +1,5 @@
-/* { dg-do compile { target { { i?86-*-* x86_64-*-* } && ia32 } } } */
+/* { dg-do compile { target i?86-*-* x86_64-*-* } } */
+/* { dg-require-effective-target ilp32 } */
 /* { dg-options "-O2 -fprefetch-loop-arrays -march=athlon -fdump-tree-optimized -fdump-tree-aprefetch --param max-unrolled-insns=1000" } */
 
 char x[100000];

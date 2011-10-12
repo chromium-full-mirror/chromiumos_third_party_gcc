@@ -1,4 +1,5 @@
-/* { dg-do compile { target { ! { ia32 } } } } */
+/* { dg-do compile } */
+/* { dg-require-effective-target lp64 } */
 /* { dg-options "-O2 -fomit-frame-pointer -march=core2" } */
 
 #include <mmintrin.h>

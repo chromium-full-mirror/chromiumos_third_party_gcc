@@ -438,13 +438,11 @@ is called.
 
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://www.opengroup.org/austin">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.opengroup.org/austin/" class="uri">
+      </biblioid>
+      <citetitle>
 	System Interface Definitions, Issue 7 (IEEE Std. 1003.1-2008)
-	</link>
-      </title>
-
+      </citetitle>
 
     <pagenums>
       2.9.5 Thread Cancellation
@@ -459,12 +457,11 @@ is called.
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://www.boost.org/community/error_handling.html">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.boost.org/community/error_handling.html" class="uri">
+      </biblioid>
+      <citetitle>
 	Error and Exception Handling
-	</link>
-      </title>
+      </citetitle>
       
     <author><personname><firstname>David</firstname><surname>Abrahams </surname></personname></author>
     <publisher>
@@ -476,12 +473,11 @@ is called.
 
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://www.boost.org/community/exception_safety.html">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.boost.org/community/exception_safety.html" class="uri">
+      </biblioid>
+      <citetitle>
 	Exception-Safety in Generic Components
-	</link>
-      </title>
+      </citetitle>
       
     <author><personname><firstname>David</firstname><surname>Abrahams</surname></personname></author>
     <publisher>
@@ -492,13 +488,11 @@ is called.
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="www.open-std.org/jtc1/sc22/wg21/docs/papers/1997/N1077.pdf">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="www.open-std.org/jtc1/sc22/wg21/docs/papers/1997/N1077.pdf" class="uri">
+      </biblioid>
+      <citetitle>
 	Standard Library Exception Policy
-	</link>
-      </title>
-
+      </citetitle>
     <author><personname><firstname>Matt</firstname><surname>Austern</surname></personname></author>
     <publisher>
       <publishername>
@@ -508,12 +502,11 @@ is called.
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://gcc.gnu.org/ml/gcc-patches/2001-03/msg00661.html">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://gcc.gnu.org/ml/gcc-patches/2001-03/msg00661.html" class="uri">
+      </biblioid>
+      <citetitle>
 	ia64 c++ abi exception handling
-	</link>
-      </title>
+      </citetitle>
 
     <author><personname><firstname>Richard</firstname><surname>Henderson</surname></personname></author>
     <publisher>
@@ -524,12 +517,11 @@ is called.
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://www.research.att.com/~bs/3rd_safe.pdf">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://www.research.att.com/~bs/3rd_safe.pdf" class="uri">
+      </biblioid>
+      <citetitle>
 	Appendix E: Standard-Library Exception Safety
-	</link>
-      </title>
+      </citetitle>
     <author><personname><firstname>Bjarne</firstname><surname>Stroustrup</surname></personname></author>
   </biblioentry>
 
@@ -544,12 +536,11 @@ is called.
   </biblioentry>
 
   <biblioentry>
-      <title>
-	<link xmlns:xlink="http://www.w3.org/1999/xlink"
-	      xlink:href="http://gcc.gnu.org/PR25191">
+    <biblioid xmlns:xlink="http://www.w3.org/1999/xlink" xlink:href="http://gcc.gnu.org/PR25191" class="uri">
+    </biblioid>
+    <citetitle>
       GCC Bug 25191: exception_defines.h #defines try/catch
-	</link>
-      </title>
+    </citetitle>
   </biblioentry>
 
 </bibliography>

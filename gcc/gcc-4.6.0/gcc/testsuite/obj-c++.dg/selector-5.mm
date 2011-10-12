@@ -1,7 +1,7 @@
 /* { dg-options "" } */
 /* { dg-do compile } */
 
-#include <objc/objc.h>
+#include "../objc-obj-c++-shared/Object1.h"
 
 int main()
 {

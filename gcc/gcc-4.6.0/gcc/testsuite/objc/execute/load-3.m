@@ -9,10 +9,10 @@
  */
 
 #include <stdlib.h>
-#include "../../objc-obj-c++-shared/TestsuiteObject.m"
+#import "../../objc-obj-c++-shared/Object1.h"
 #include <objc/objc.h>
 
-@interface A : TestsuiteObject
+@interface A : Object
 @end
 
 @interface B : A

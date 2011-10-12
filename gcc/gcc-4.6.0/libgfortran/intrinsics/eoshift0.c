@@ -86,8 +86,11 @@ eoshift0 (gfc_array_char * ret, const gfc_array_char * array,
 
         }
 
-      /* internal_malloc_size allocates a single byte for zero size.  */
-      ret->data = internal_malloc_size (size * arraysize);
+      if (arraysize > 0)
+	ret->data = internal_malloc_size (size * arraysize);
+      else
+	ret->data = internal_malloc_size (1);
+
     }
   else if (unlikely (compile_options.bounds_check))
     {

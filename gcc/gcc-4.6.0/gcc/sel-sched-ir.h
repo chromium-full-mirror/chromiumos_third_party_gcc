@@ -1573,7 +1573,6 @@ extern void sel_init_global_and_expr (bb_vec_t);
 extern void sel_finish_global_and_expr (void);
 
 extern regset compute_live (insn_t);
-extern bool register_unavailable_p (regset, rtx);
 
 /* Dependence analysis functions.  */
 extern void sel_clear_has_dependence (void);
@@ -1603,7 +1602,7 @@ extern bool sel_bb_empty_p (basic_block);
 extern bool in_current_region_p (basic_block);
 extern basic_block fallthru_bb_of_jump (rtx);
 
-extern void sel_init_bbs (bb_vec_t);
+extern void sel_init_bbs (bb_vec_t, basic_block);
 extern void sel_finish_bbs (void);
 
 extern struct succs_info * compute_succs_info (insn_t, short);
@@ -1629,7 +1628,7 @@ extern void sel_sched_region (int);
 extern loop_p get_loop_nest_for_rgn (unsigned int);
 extern bool considered_for_pipelining_p (struct loop *);
 extern void make_region_from_loop_preheader (VEC(basic_block, heap) **);
-extern void sel_add_loop_preheaders (bb_vec_t *);
+extern void sel_add_loop_preheaders (void);
 extern bool sel_is_loop_preheader_p (basic_block);
 extern void clear_outdated_rtx_info (basic_block);
 extern void free_data_sets (basic_block);

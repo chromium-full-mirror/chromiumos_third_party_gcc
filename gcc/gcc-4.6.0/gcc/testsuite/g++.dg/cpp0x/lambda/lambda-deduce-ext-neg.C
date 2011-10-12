@@ -1,22 +1,24 @@
-// Testcase for DR 975.
+// Testcase for an extension to allow return type deduction when the lambda
+// contains more than just a single return-statement.
 
 // { dg-options -std=c++0x }
 
 bool b;
-struct A { int fn1(); const int& fn2(); };
-struct B { int fn1(); long fn2(); };
-
-template <class T> int f (T t) {
-  return [](T t){
-    if (b)
-      return t.fn1();
-    else
-      return t.fn2();		// { dg-error "inconsistent types" }
-  }(t);
+template <class T>
+T f (T t)
+{
+  return [=]
+    {
+      auto i = t+1;
+      if (b)
+	return i+1;
+      else
+	return i+2;		// { dg-error "lambda return type" }
+    }();
 }
 
 int main()
 {
-  f(A());			// { dg-bogus "" } int and const int& are compatible
-  f(B());			// { dg-message "from here" } int and long are not
+  if (f(1) != 3)
+    return 1;
 }

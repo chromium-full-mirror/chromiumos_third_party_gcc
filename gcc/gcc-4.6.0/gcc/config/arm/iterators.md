@@ -140,18 +140,7 @@
 
 ;; Modes with 8-bit, 16-bit and 32-bit elements.
 (define_mode_iterator VU [V16QI V8HI V4SI])
-
-;; Iterators used for fixed-point support.
-(define_mode_iterator FIXED [QQ HQ SQ UQQ UHQ USQ HA SA UHA USA])
-
-(define_mode_iterator ADDSUB [V4QQ V2HQ V2HA])
-
-(define_mode_iterator UQADDSUB [V4UQQ V2UHQ UQQ UHQ V2UHA UHA])
-
-(define_mode_iterator QADDSUB [V4QQ V2HQ QQ HQ V2HA HA SQ SA])
-
-(define_mode_iterator QMUL [HQ HA])
-
+ 
 ;;----------------------------------------------------------------------------
 ;; Code iterators
 ;;----------------------------------------------------------------------------
@@ -205,22 +194,24 @@
 
 ;; Mode of pair of elements for each vector mode, to define transfer
 ;; size for structure lane/dup loads and stores.
-(define_mode_attr V_two_elem [(V8QI "HI")   (V16QI "HI")
-                              (V4HI "SI")   (V8HI "SI")
+(define_mode_attr V_two_elem [(V8QI "HI") (V16QI "HI")
+                  (V4HI "SI") (V8HI "SI")
                               (V2SI "V2SI") (V4SI "V2SI")
                               (V2SF "V2SF") (V4SF "V2SF")
                               (DI "V2DI")   (V2DI "V2DI")])
 
 ;; Similar, for three elements.
-(define_mode_attr V_three_elem [(V8QI "BLK") (V16QI "BLK")
-                                (V4HI "BLK") (V8HI "BLK")
-                                (V2SI "BLK") (V4SI "BLK")
-                                (V2SF "BLK") (V4SF "BLK")
-                                (DI "EI")    (V2DI "EI")])
+;; ??? Should we define extra modes so that sizes of all three-element
+;; accesses can be accurately represented?
+(define_mode_attr V_three_elem [(V8QI "SI")   (V16QI "SI")
+                    (V4HI "V4HI") (V8HI "V4HI")
+                                (V2SI "V4SI") (V4SI "V4SI")
+                                (V2SF "V4SF") (V4SF "V4SF")
+                                (DI "EI")     (V2DI "EI")])
 
 ;; Similar, for four elements.
 (define_mode_attr V_four_elem [(V8QI "SI")   (V16QI "SI")
-                               (V4HI "V4HI") (V8HI "V4HI")
+                   (V4HI "V4HI") (V8HI "V4HI")
                                (V2SI "V4SI") (V4SI "V4SI")
                                (V2SF "V4SF") (V4SF "V4SF")
                                (DI "OI")     (V2DI "OI")])
@@ -390,20 +381,10 @@
 (define_mode_attr qhs_zextenddi_cond [(SI "") (HI "&& arm_arch6") (QI "")])
 (define_mode_attr qhs_sextenddi_cond [(SI "") (HI "&& arm_arch6")
 				      (QI "&& arm_arch6")])
-(define_mode_attr qhs_zextenddi_op [(SI "s_register_operand")
-				   (HI "nonimmediate_operand")
-				   (QI "nonimmediate_operand")])
 (define_mode_attr qhs_extenddi_op [(SI "s_register_operand")
 				   (HI "nonimmediate_operand")
-				   (QI "arm_reg_or_extendqisi_mem_op")])
-(define_mode_attr qhs_extenddi_cstr [(SI "r") (HI "rm") (QI "rUq")])
-(define_mode_attr qhs_zextenddi_cstr [(SI "r") (HI "rm") (QI "rm")])
-
-;; Mode attributes used for fixed-point support.
-(define_mode_attr qaddsub_suf [(V4UQQ "8") (V2UHQ "16") (UQQ "8") (UHQ "16")
-			       (V2UHA "16") (UHA "16")
-			       (V4QQ "8") (V2HQ "16") (QQ "8") (HQ "16")
-			       (V2HA "16") (HA "16") (SQ "") (SA "")])
+				   (QI "nonimmediate_operand")])
+(define_mode_attr qhs_extenddi_cstr [(SI "r") (HI "rm") (QI "rm")])
 
 ;;----------------------------------------------------------------------------
 ;; Code attributes

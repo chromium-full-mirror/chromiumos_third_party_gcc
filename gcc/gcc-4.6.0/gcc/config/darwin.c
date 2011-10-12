@@ -2936,9 +2936,7 @@ darwin_override_options (void)
   if (MACHO_DYNAMIC_NO_PIC_P)
     {
       if (flag_pic)
-	warning_at (UNKNOWN_LOCATION, 0,
-		 "%<-mdynamic-no-pic%> overrides %<-fpic%>, %<-fPIC%>,"
-		 " %<-fpie%> or %<-fPIE%>");
+	warning (0, "-mdynamic-no-pic overrides -fpic or -fPIC");
       flag_pic = 0;
     }
   else if (flag_pic == 1)

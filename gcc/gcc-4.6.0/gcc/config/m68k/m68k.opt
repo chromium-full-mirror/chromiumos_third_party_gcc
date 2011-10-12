@@ -1,7 +1,6 @@
 ; Options for the Motorola 68000 port of the compiler.
 
-; Copyright (C) 2005, 2006, 2007, 2008, 2009, 2011
-; Free Software Foundation, Inc.
+; Copyright (C) 2005, 2006, 2007, 2008 Free Software Foundation, Inc.
 ;
 ; This file is part of GCC.
 ;
@@ -19,43 +18,36 @@
 ; along with GCC; see the file COPYING3.  If not see
 ; <http://www.gnu.org/licenses/>.
 
-HeaderInclude
-config/m68k/m68k-opts.h
-
-; Specify the identification number of the library being built.
-Variable
-const char *m68k_library_id_string = "_current_shared_library_a5_offset_"
-
 m5200
-Target RejectNegative Alias(mcpu=, 5206)
+Target RejectNegative
 Generate code for a 520X
 
 m5206e
-Target RejectNegative Alias(mcpu=, 5206e)
+Target RejectNegative
 Generate code for a 5206e
 
 m528x
-Target RejectNegative Alias(mcpu=, 528x)
+Target RejectNegative
 Generate code for a 528x
 
 m5307
-Target RejectNegative Alias(mcpu=, 5307)
+Target RejectNegative
 Generate code for a 5307
 
 m5407
-Target RejectNegative Alias(mcpu=, 5407)
+Target RejectNegative
 Generate code for a 5407
 
 m68000
-Target RejectNegative Alias(mcpu=, 68000)
+Target RejectNegative
 Generate code for a 68000
 
 m68010
-Target RejectNegative Alias(mcpu=, 68010)
+Target RejectNegative
 Generate code for a 68010
 
 m68020
-Target RejectNegative Alias(mcpu=, 68020)
+Target RejectNegative
 Generate code for a 68020
 
 m68020-40
@@ -67,23 +59,23 @@ Target RejectNegative
 Generate code for a 68060, without any new instructions
 
 m68030
-Target RejectNegative Alias(mcpu=, 68030)
+Target RejectNegative
 Generate code for a 68030
 
 m68040
-Target RejectNegative Alias(mcpu=, 68040)
+Target RejectNegative
 Generate code for a 68040
 
 m68060
-Target RejectNegative Alias(mcpu=, 68060)
+Target RejectNegative
 Generate code for a 68060
 
 m68302
-Target RejectNegative Alias(mcpu=, 68302)
+Target RejectNegative
 Generate code for a 68302
 
 m68332
-Target RejectNegative Alias(mcpu=, 68332)
+Target RejectNegative
 Generate code for a 68332
 
 ; Has no effect on gcc
@@ -100,7 +92,7 @@ Target Report Mask(ALIGN_INT)
 Align variables on a 32-bit boundary
 
 march=
-Target RejectNegative Joined Enum(m68k_isa) Var(m68k_arch_option)
+Target RejectNegative Joined
 Specify the name of the target architecture
 
 mbitfield
@@ -108,23 +100,23 @@ Target Report Mask(BITFIELD)
 Use the bit-field instructions
 
 mc68000
-Target RejectNegative Alias(mcpu=, 68000)
+Target RejectNegative
 Generate code for a 68000
 
 mc68020
-Target RejectNegative Alias(mcpu=, 68020)
+Target RejectNegative
 Generate code for a 68020
 
 mcfv4e
-Target RejectNegative Alias(mcpu=, 547x)
+Target RejectNegative
 Generate code for a ColdFire v4e
 
 mcpu=
-Target RejectNegative Joined Enum(target_device) Var(m68k_cpu_option) Init(unk_device)
+Target RejectNegative Joined
 Specify the target CPU
 
 mcpu32
-Target RejectNegative Alias(mcpu=, 68332)
+Target RejectNegative
 Generate code for a cpu32
 
 mdiv
@@ -184,7 +176,7 @@ Target Report Mask(STRICT_ALIGNMENT)
 Do not use unaligned memory references
 
 mtune=
-Target RejectNegative Joined Enum(uarch_type) Var(m68k_tune_option) Init(unk_arch)
+Target RejectNegative Joined
 Tune for the specified target CPU or architecture
 
 mxgot

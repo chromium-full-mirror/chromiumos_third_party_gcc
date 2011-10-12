@@ -5,17 +5,13 @@ typedef struct S { int i; } NSDictionary;
 
 @interface A 
 {
-    NSDictionary * _userInfo1; /* { dg-message "previous declaration" } */
-    NSDictionary * _userInfo2; /* { dg-message "previous declaration" } */
-    NSDictionary * _userInfo3; /* { dg-message "previous declaration" } */
-    NSDictionary * _userInfo4; /* { dg-message "previous declaration" } */
+    NSDictionary * _userInfo;
 }
 @end
 
 @interface B : A
 {
-    NSDictionary * _userInfo1;	/* { dg-error "duplicate instance variable" } */
-    NSDictionary * _userInfo2;	/* { dg-error "duplicate instance variable" } */
+    NSDictionary * _userInfo;	/* { dg-error "duplicate member" } */
 }
 @end
 
@@ -24,8 +20,7 @@ typedef struct S { int i; } NSDictionary;
 
 @interface D : C
 {
-    NSDictionary * _userInfo3;  /* { dg-error "duplicate instance variable" } */
-    NSDictionary * _userInfo4;  /* { dg-error "duplicate instance variable" } */
+    NSDictionary * _userInfo;   /* { dg-error "duplicate member" } */
 }
 @end
 
