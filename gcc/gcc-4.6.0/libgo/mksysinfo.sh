@@ -29,19 +29,24 @@ cat > sysinfo.c <<EOF
 #define _LARGEFILE_SOURCE
 #define _FILE_OFFSET_BITS 64
 
-#if defined(__sun__) && defined(__svr4__)
-/* Needed by Solaris header files.  */
-#define _XOPEN_SOURCE 600
-#define __EXTENSIONS__
-#endif
-
 #include <sys/types.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+/* <netinet/tcp.h> needs u_char/u_short, but <sys/bsd_types> is only
+   included by <netinet/in.h> if _SGIAPI (i.e. _SGI_SOURCE
+   && !_XOPEN_SOURCE.
+   <sys/termios.h> only defines TIOCNOTTY if !_XOPEN_SOURCE, while
+   <sys/ttold.h> does so unconditionally.  */
+#ifdef __sgi__
+#include <sys/bsd_types.h>
+#include <sys/ttold.h>
+#endif
 #include <netinet/tcp.h>
 #include <signal.h>
+#include <sys/ioctl.h>
+#include <termios.h>
 #if defined(HAVE_SYSCALL_H)
 #include <syscall.h>
 #endif
@@ -50,6 +55,9 @@ cat > sysinfo.c <<EOF
 #endif
 #if defined(HAVE_SYS_EPOLL_H)
 #include <sys/epoll.h>
+#endif
+#if defined(HAVE_SYS_MMAN_H)
+#include <sys/mman.h>
 #endif
 #if defined(HAVE_SYS_PTRACE_H)
 #include <sys/ptrace.h>
@@ -67,12 +75,31 @@ cat > sysinfo.c <<EOF
 #if defined(HAVE_SYS_UTSNAME_H)
 #include <sys/utsname.h>
 #endif
+#if defined(HAVE_SYS_SELECT_H)
+#include <sys/select.h>
+#endif
 #include <unistd.h>
+#include <netdb.h>
+#include <pwd.h>
+#if defined(HAVE_LINUX_FILTER_H)
+#include <linux/filter.h>
+#endif
+#if defined(HAVE_LINUX_NETLINK_H)
+#include <linux/netlink.h>
+#endif
+#if defined(HAVE_LINUX_RTNETLINK_H)
+#include <linux/rtnetlink.h>
+#endif
+#if defined(HAVE_NET_IF_H)
+#include <net/if.h>
+#endif
 EOF
 
 ${CC} -fdump-go-spec=gen-sysinfo.go -std=gnu99 -S -o sysinfo.s sysinfo.c
 
 echo 'package syscall' > ${OUT}
+echo 'import "unsafe"' >> ${OUT}
+echo 'type _ unsafe.Pointer' >> ${OUT}
 
 # Get all the consts and types, skipping ones which could not be
 # represented in Go and ones which we need to rewrite.  We also skip
@@ -81,12 +108,14 @@ echo 'package syscall' > ${OUT}
 grep -v '^// ' gen-sysinfo.go | \
   grep -v '^func' | \
   grep -v '^type _timeval ' | \
+  grep -v '^type _timespec_t ' | \
   grep -v '^type _timespec ' | \
   grep -v '^type _timestruc_t ' | \
   grep -v '^type _epoll_' | \
   grep -v 'in6_addr' | \
   grep -v 'sockaddr_in6' | \
   sed -e 's/\([^a-zA-Z0-9_]\)_timeval\([^a-zA-Z0-9_]\)/\1Timeval\2/g' \
+      -e 's/\([^a-zA-Z0-9_]\)_timespec_t\([^a-zA-Z0-9_]\)/\1Timespec\2/g' \
       -e 's/\([^a-zA-Z0-9_]\)_timespec\([^a-zA-Z0-9_]\)/\1Timespec\2/g' \
       -e 's/\([^a-zA-Z0-9_]\)_timestruc_t\([^a-zA-Z0-9_]\)/\1Timestruc\2/g' \
     >> ${OUT}
@@ -96,7 +125,7 @@ grep '^const _E' gen-sysinfo.go | \
   sed -e 's/^\(const \)_\(E[^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
 
 # The O_xxx flags.
-grep '^const _\(O\|F\|FD\)_' gen-sysinfo.go | \
+egrep '^const _(O|F|FD)_' gen-sysinfo.go | \
   sed -e 's/^\(const \)_\([^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
 if ! grep '^const O_ASYNC' ${OUT} >/dev/null 2>&1; then
   echo "const O_ASYNC = 0" >> ${OUT}
@@ -122,6 +151,12 @@ grep '^const _SYS_' gen-sysinfo.go | \
 grep '^const _S_' gen-sysinfo.go | \
   sed -e 's/^\(const \)_\(S_[^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
 
+# Mmap constants.
+grep '^const _PROT_' gen-sysinfo.go | \
+  sed -e 's/^\(const \)_\(PROT_[^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
+grep '^const _MAP_' gen-sysinfo.go | \
+  sed -e 's/^\(const \)_\(MAP_[^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
+
 # Process status constants.
 grep '^const _W' gen-sysinfo.go |
   sed -e 's/^\(const \)_\(W[^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
@@ -139,7 +174,7 @@ if grep '^const ___WALL = ' gen-sysinfo.go >/dev/null 2>&1 \
 fi
 
 # Networking constants.
-grep '^const _\(AF\|SOCK\|SOL\|SO\|IPPROTO\|TCP\|IP\|IPV6\)_' gen-sysinfo.go |
+egrep '^const _(AF|SOCK|SOL|SO|IPPROTO|TCP|IP|IPV6)_' gen-sysinfo.go |
   sed -e 's/^\(const \)_\([^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
 grep '^const _SOMAXCONN' gen-sysinfo.go |
   sed -e 's/^\(const \)_\(SOMAXCONN[^= ]*\)\(.*\)$/\1\2 = _\2/' \
@@ -289,13 +324,18 @@ echo $timeval | \
   sed -e 's/type _timeval /type Timeval /' \
       -e 's/tv_sec *[a-zA-Z0-9_]*/Sec Timeval_sec_t/' \
       -e 's/tv_usec *[a-zA-Z0-9_]*/Usec Timeval_usec_t/' >> ${OUT}
-timespec=`grep '^type _timespec ' gen-sysinfo.go`
+timespec=`grep '^type _timespec ' gen-sysinfo.go || true`
+if test "$timespec" = ""; then
+  # IRIX 6.5 has __timespec instead.
+  timespec=`grep '^type ___timespec ' gen-sysinfo.go || true`
+fi
 timespec_sec=`echo $timespec | sed -n -e 's/^.*tv_sec \([^ ]*\);.*$/\1/p'`
 timespec_nsec=`echo $timespec | sed -n -e 's/^.*tv_nsec \([^ ]*\);.*$/\1/p'`
 echo "type Timespec_sec_t $timespec_sec" >> ${OUT}
 echo "type Timespec_nsec_t $timespec_nsec" >> ${OUT}
 echo $timespec | \
-  sed -e 's/^type _timespec /type Timespec /' \
+  sed -e 's/^type ___timespec /type Timespec /' \
+      -e 's/^type _timespec /type Timespec /' \
       -e 's/tv_sec *[a-zA-Z0-9_]*/Sec Timespec_sec_t/' \
       -e 's/tv_nsec *[a-zA-Z0-9_]*/Nsec Timespec_nsec_t/' >> ${OUT}
 
@@ -318,7 +358,8 @@ if test "$stat" != ""; then
   grep '^type _stat64 ' gen-sysinfo.go
 else
   grep '^type _stat ' gen-sysinfo.go
-fi | sed -e 's/type _stat\(64\)\?/type Stat_t/' \
+fi | sed -e 's/type _stat64/type Stat_t/' \
+         -e 's/type _stat/type Stat_t/' \
          -e 's/st_dev/Dev/' \
          -e 's/st_ino/Ino/g' \
          -e 's/st_nlink/Nlink/' \
@@ -333,8 +374,10 @@ fi | sed -e 's/type _stat\(64\)\?/type Stat_t/' \
          -e 's/st_mtim/Mtime/' \
          -e 's/st_ctim/Ctime/' \
          -e 's/\([^a-zA-Z0-9_]\)_timeval\([^a-zA-Z0-9_]\)/\1Timeval\2/g' \
+         -e 's/\([^a-zA-Z0-9_]\)_timespec_t\([^a-zA-Z0-9_]\)/\1Timespec\2/g' \
          -e 's/\([^a-zA-Z0-9_]\)_timespec\([^a-zA-Z0-9_]\)/\1Timespec\2/g' \
          -e 's/\([^a-zA-Z0-9_]\)_timestruc_t\([^a-zA-Z0-9_]\)/\1Timestruc\2/g' \
+         -e 's/Godump_[0-9] struct { \([^;]*;\) };/\1/g' \
        >> ${OUT}
 
 # The directory searching types.
@@ -344,7 +387,8 @@ if test "$dirent" != ""; then
   grep '^type _dirent64 ' gen-sysinfo.go
 else
   grep '^type _dirent ' gen-sysinfo.go
-fi | sed -e 's/type _dirent\(64\)\?/type Dirent/' \
+fi | sed -e 's/type _dirent64/type Dirent/' \
+         -e 's/type _dirent/type Dirent/' \
          -e 's/d_name \[0+1\]/d_name [0+256]/' \
          -e 's/d_name/Name/' \
          -e 's/]int8/]byte/' \
@@ -377,7 +421,13 @@ if test "$rusage" != ""; then
     nrusage="$nrusage $field;"
   done
   echo "type Rusage struct {$nrusage }" >> ${OUT}
+else
+  echo "type Rusage struct {}" >> ${OUT}
 fi
+
+# The RUSAGE constants.
+grep '^const _RUSAGE_' gen-sysinfo.go | \
+  sed -e 's/^\(const \)_\(RUSAGE_[^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
 
 # The utsname struct.
 grep '^type _utsname ' gen-sysinfo.go | \
@@ -415,5 +465,137 @@ echo $msghdr | \
       -e 's/msg_controllen *[a-zA-Z0-9_]*/Controllen Msghdr_controllen_t/' \
       -e 's/msg_flags/Flags/' \
     >> ${OUT}
+
+# The ip_mreq struct
+grep '^type _ip_mreq ' gen-sysinfo.go | \
+    sed -e 's/_ip_mreq/IPMreq/' \
+      -e 's/imr_multiaddr/Multiaddr/' \
+      -e 's/imr_interface/Interface/' \
+      -e 's/_in_addr/[4]byte/g' \
+    >> ${OUT}
+
+# Try to guess the type to use for fd_set.
+fd_set=`grep '^type _fd_set ' gen-sysinfo.go || true`
+fds_bits_type="_C_long"
+if test "$fd_set" != ""; then
+    fds_bits_type=`echo $fd_set | sed -e 's/.*[]]\([^;]*\); }$/\1/'`
+fi
+echo "type fds_bits_type $fds_bits_type" >> ${OUT}
+
+# The addrinfo struct.
+grep '^type _addrinfo ' gen-sysinfo.go | \
+    sed -e 's/_addrinfo/Addrinfo/g' \
+      -e 's/ ai_/ Ai_/g' \
+    >> ${OUT}
+
+# The addrinfo flags.
+grep '^const _AI_' gen-sysinfo.go | \
+  sed -e 's/^\(const \)_\(AI_[^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
+
+# The passwd struct.
+grep '^type _passwd ' gen-sysinfo.go | \
+    sed -e 's/_passwd/Passwd/' \
+      -e 's/ pw_/ Pw_/g' \
+    >> ${OUT}
+
+# The ioctl flags for the controlling TTY.
+grep '^const _TIOC' gen-sysinfo.go | \
+    sed -e 's/^\(const \)_\(TIOC[^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
+
+# ioctl constants.  Might fall back to 0 if TIOCNXCL is missing, too, but
+# needs handling in syscalls.exec.go.
+if ! grep '^const _TIOCSCTTY ' gen-sysinfo.go >/dev/null 2>&1; then
+  if grep '^const _TIOCNXCL ' gen-sysinfo.go >/dev/null 2>&1; then
+    echo "const TIOCSCTTY = TIOCNXCL" >> ${OUT}
+  fi
+fi
+
+# The nlmsghdr struct.
+grep '^type _nlmsghdr ' gen-sysinfo.go | \
+    sed -e 's/_nlmsghdr/NlMsghdr/' \
+      -e 's/nlmsg_len/Len/' \
+      -e 's/nlmsg_type/Type/' \
+      -e 's/nlmsg_flags/Flags/' \
+      -e 's/nlmsg_seq/Seq/' \
+      -e 's/nlmsg_pid/Pid/' \
+    >> ${OUT}
+
+# The nlmsg flags and operators.
+grep '^const _NLM' gen-sysinfo.go | \
+    sed -e 's/^\(const \)_\(NLM[^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
+
+# NLMSG_HDRLEN is defined as an expression using sizeof.
+if ! grep '^const NLMSG_HDRLEN' ${OUT} > /dev/null 2>&1; then
+  if grep '^type NlMsghdr ' ${OUT} > /dev/null 2>&1; then
+    echo 'var NLMSG_HDRLEN = int((unsafe.Sizeof(NlMsghdr{}) + (NLMSG_ALIGNTO-1)) &^ (NLMSG_ALIGNTO-1))' >> ${OUT}
+  fi
+fi
+
+# The rtgenmsg struct.
+grep '^type _rtgenmsg ' gen-sysinfo.go | \
+    sed -e 's/_rtgenmsg/RtGenmsg/' \
+      -e 's/rtgen_family/Family/' \
+    >> ${OUT}
+
+# The routing message flags.
+grep '^const _RTA' gen-sysinfo.go | \
+    sed -e 's/^\(const \)_\(RTA[^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
+grep '^const _RTM' gen-sysinfo.go | \
+    sed -e 's/^\(const \)_\(RTM[^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
+
+# The size of the rtgenmsg struct.
+if grep 'type RtGenmsg ' ${OUT} > /dev/null 2>&1; then
+  echo 'var SizeofRtGenmsg = int(unsafe.Sizeof(RtGenmsg{}))' >> ${OUT}
+fi
+
+# The ifinfomsg struct.
+grep '^type _ifinfomsg ' gen-sysinfo.go | \
+    sed -e 's/_ifinfomsg/IfInfomsg/' \
+      -e 's/ifi_family/Family/' \
+      -e 's/ifi_type/Type/' \
+      -e 's/ifi_index/Index/' \
+      -e 's/ifi_flags/Flags/' \
+      -e 's/ifi_change/Change/' \
+    >> ${OUT}
+
+# The interface information types and flags.
+grep '^const _IFA' gen-sysinfo.go | \
+    sed -e 's/^\(const \)_\(IFA[^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
+grep '^const _IFLA' gen-sysinfo.go | \
+    sed -e 's/^\(const \)_\(IFLA[^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
+grep '^const _IFF' gen-sysinfo.go | \
+    sed -e 's/^\(const \)_\(IFF[^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
+
+# The size of the ifinfomsg struct.
+if grep 'type IfInfomsg ' ${OUT} > /dev/null 2>&1; then
+  echo 'var SizeofIfInfomsg = int(unsafe.Sizeof(IfInfomsg{}))' >> ${OUT}
+fi
+
+# The ifaddrmsg struct.
+grep '^type _ifaddrmsg ' gen-sysinfo.go | \
+    sed -e 's/_ifaddrmsg/IfAddrmsg/' \
+      -e 's/ifa_family/Family/' \
+      -e 's/ifa_prefixlen/Prefixlen/' \
+      -e 's/ifa_flags/Flags/' \
+      -e 's/ifa_scope/Scope/' \
+      -e 's/ifa_index/Index/' \
+    >> ${OUT}
+
+# The size of the ifaddrmsg struct.
+if grep 'type IfAddrmsg ' ${OUT} > /dev/null 2>&1; then
+  echo 'var SizeofIfAddrmsg = int(unsafe.Sizeof(IfAddrmsg{}))' >> ${OUT}
+fi
+
+# The rtattr struct.
+grep '^type _rtattr ' gen-sysinfo.go | \
+    sed -e 's/_rtattr/RtAttr/' \
+      -e 's/rta_len/Len/' \
+      -e 's/rta_type/Type/' \
+    >> ${OUT}
+
+# The size of the rtattr struct.
+if grep 'type RtAttr ' ${OUT} > /dev/null 2>&1; then
+  echo 'var SizeofRtAttr = int(unsafe.Sizeof(RtAttr{}))' >> ${OUT}
+fi
 
 exit $?

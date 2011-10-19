@@ -1,6 +1,7 @@
 /* Convert RTL to assembler code and output it, for GNU compiler.
    Copyright (C) 1987, 1988, 1989, 1992, 1993, 1994, 1995, 1996, 1997,
-   1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
+   1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
+   2010, 2011
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -103,11 +104,6 @@ along with GCC; see the file COPYING3.  If not see
    So define a null default for it to save conditionalization later.  */
 #ifndef CC_STATUS_INIT
 #define CC_STATUS_INIT
-#endif
-
-/* How to start an assembler comment.  */
-#ifndef ASM_COMMENT_START
-#define ASM_COMMENT_START ";#"
 #endif
 
 /* Is the given character a logical line separator for the assembler?  */
@@ -834,7 +830,7 @@ struct rtl_opt_pass pass_compute_alignments =
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
-  TODO_dump_func | TODO_verify_rtl_sharing
+  TODO_verify_rtl_sharing
   | TODO_ggc_collect                    /* todo_flags_finish */
  }
 };
@@ -1557,11 +1553,6 @@ final_start_function (rtx first ATTRIBUTE_UNUSED, FILE *file,
   if (targetm.profile_before_prologue () && crtl->profile)
     profile_function (file);
 
-#if defined (HAVE_prologue)
-  if (dwarf2out_do_frame ())
-    dwarf2out_frame_debug (NULL_RTX, false);
-#endif
-
   /* If debugging, assign block numbers to all of the blocks in this
      function.  */
   if (write_symbols)
@@ -1693,14 +1684,14 @@ dump_basic_block_info (FILE *file, rtx insn, basic_block *start_to_bb,
       edge e;
       edge_iterator ei;
 
-      fprintf (file, "# BLOCK %d", bb->index);
+      fprintf (file, "%s BLOCK %d", ASM_COMMENT_START, bb->index);
       if (bb->frequency)
         fprintf (file, " freq:%d", bb->frequency);
       if (bb->count)
         fprintf (file, " count:" HOST_WIDEST_INT_PRINT_DEC,
                  bb->count);
       fprintf (file, " seq:%d", (*bb_seqn)++);
-      fprintf (file, "\n# PRED:");
+      fprintf (file, "\n%s PRED:", ASM_COMMENT_START);
       FOR_EACH_EDGE (e, ei, bb->preds)
         {
           dump_edge_info (file, e, 0);
@@ -1713,7 +1704,7 @@ dump_basic_block_info (FILE *file, rtx insn, basic_block *start_to_bb,
       edge e;
       edge_iterator ei;
 
-      fprintf (asm_out_file, "# SUCC:");
+      fprintf (asm_out_file, "%s SUCC:", ASM_COMMENT_START);
       FOR_EACH_EDGE (e, ei, bb->succs)
        {
          dump_edge_info (asm_out_file, e, 1);
@@ -1728,7 +1719,7 @@ dump_basic_block_info (FILE *file, rtx insn, basic_block *start_to_bb,
 void
 final (rtx first, FILE *file, int optimize_p)
 {
-  rtx insn;
+  rtx insn, next;
   int max_uid = 0;
   int seen = 0;
 
@@ -1750,7 +1741,7 @@ final (rtx first, FILE *file, int optimize_p)
       if (optimize_p && JUMP_P (insn))
 	{
 	  rtx lab = JUMP_LABEL (insn);
-	  if (lab && LABEL_NUSES (lab) == 1)
+	  if (lab && LABEL_P (lab) && LABEL_NUSES (lab) == 1)
 	    {
 	      LABEL_REFS (lab) = insn;
 	    }
@@ -1801,6 +1792,16 @@ final (rtx first, FILE *file, int optimize_p)
     {
       free (start_to_bb);
       free (end_to_bb);
+    }
+
+  /* Remove CFI notes, to avoid compare-debug failures.  */
+  for (insn = first; insn; insn = next)
+    {
+      next = NEXT_INSN (insn);
+      if (NOTE_P (insn)
+	  && (NOTE_KIND (insn) == NOTE_INSN_CFI
+	      || NOTE_KIND (insn) == NOTE_INSN_CFI_LABEL))
+	delete_insn (insn);
     }
 }
 
@@ -1972,16 +1973,17 @@ final_scan_insn (rtx insn, FILE *file, int optimize_p ATTRIBUTE_UNUSED,
 	  break;
 
 	case NOTE_INSN_EPILOGUE_BEG:
-#if defined (HAVE_epilogue)
-	  if (dwarf2out_do_frame ())
-	    dwarf2out_cfi_begin_epilogue (insn);
-#endif
 	  (*debug_hooks->begin_epilogue) (last_linenum, last_filename);
 	  targetm.asm_out.function_begin_epilogue (file);
 	  break;
 
-	case NOTE_INSN_CFA_RESTORE_STATE:
-	  dwarf2out_frame_debug_restore_state ();
+	case NOTE_INSN_CFI:
+	  dwarf2out_emit_cfi (NOTE_CFI (insn));
+	  break;
+
+	case NOTE_INSN_CFI_LABEL:
+	  ASM_OUTPUT_DEBUG_LABEL (asm_out_file, "LCFI",
+				  NOTE_LABEL_NUMBER (insn));
 	  break;
 
 	case NOTE_INSN_FUNCTION_BEG:
@@ -2084,6 +2086,7 @@ final_scan_insn (rtx insn, FILE *file, int optimize_p ATTRIBUTE_UNUSED,
 	  break;
 
 	case NOTE_INSN_VAR_LOCATION:
+	case NOTE_INSN_CALL_ARG_LOCATION:
 	  if (!DECL_IGNORED_P (current_function_decl))
 	    debug_hooks->var_location (insn);
 	  break;
@@ -2095,8 +2098,6 @@ final_scan_insn (rtx insn, FILE *file, int optimize_p ATTRIBUTE_UNUSED,
       break;
 
     case BARRIER:
-      if (dwarf2out_do_frame ())
-	dwarf2out_frame_debug (insn, false);
       break;
 
     case CODE_LABEL:
@@ -2317,11 +2318,6 @@ final_scan_insn (rtx insn, FILE *file, int optimize_p ATTRIBUTE_UNUSED,
 	    location_t loc;
 	    expanded_location expanded;
 
-	    /* Make sure we flush any queued register saves in case this
-	       clobbers affected registers.  */
-	    if (dwarf2out_do_frame ())
-	      dwarf2out_frame_debug (insn, false);
-
 	    /* There's no telling what that did to the condition codes.  */
 	    CC_STATUS_INIT;
 
@@ -2366,12 +2362,6 @@ final_scan_insn (rtx insn, FILE *file, int optimize_p ATTRIBUTE_UNUSED,
 	    int i;
 
 	    final_sequence = body;
-
-	    /* Record the delay slots' frame information before the branch.
-	       This is needed for delayed calls: see execute_cfa_program().  */
-	    if (dwarf2out_do_frame ())
-	      for (i = 1; i < XVECLEN (body, 0); i++)
-		dwarf2out_frame_debug (XVECEXP (body, 0, i), false);
 
 	    /* The first insn in this SEQUENCE might be a JUMP_INSN that will
 	       force the restoration of a comparison that was previously
@@ -2507,7 +2497,7 @@ final_scan_insn (rtx insn, FILE *file, int optimize_p ATTRIBUTE_UNUSED,
 	        delete_insn (insn);
 		break;
 	      }
-	    else if (GET_CODE (SET_SRC (body)) == RETURN)
+	    else if (ANY_RETURN_P (SET_SRC (body)))
 	      /* Replace (set (pc) (return)) with (return).  */
 	      PATTERN (insn) = body = SET_SRC (body);
 
@@ -2686,9 +2676,6 @@ final_scan_insn (rtx insn, FILE *file, int optimize_p ATTRIBUTE_UNUSED,
 
 	current_output_insn = debug_insn = insn;
 
-	if (CALL_P (insn) && dwarf2out_do_frame ())
-	  dwarf2out_frame_debug (insn, false);
-
 	/* Find the proper template for this insn.  */
 	templ = get_insn_template (insn_code_number, insn);
 
@@ -2755,46 +2742,18 @@ final_scan_insn (rtx insn, FILE *file, int optimize_p ATTRIBUTE_UNUSED,
 		if (t)
 		  assemble_external (t);
 	      }
+	    if (!DECL_IGNORED_P (current_function_decl))
+	      debug_hooks->var_location (insn);
 	  }
 
 	/* Output assembler code from the template.  */
 	output_asm_insn (templ, recog_data.operand);
-
-	/* Record point-of-call information for ICF debugging.  */
-	if (flag_enable_icf_debug && CALL_P (insn))
-	  {
-	    rtx x = call_from_call_insn (insn);
-	    x = XEXP (x, 0);
-	    if (x && MEM_P (x))
-	      {
-	        if (GET_CODE (XEXP (x, 0)) == SYMBOL_REF)
-	          {
-		    tree t;
-		    x = XEXP (x, 0);
-		    t = SYMBOL_REF_DECL (x);
-		    if (t)
-		      (*debug_hooks->direct_call) (t);
-	          }
-	        else
-	          (*debug_hooks->virtual_call) (INSN_UID (insn));
-	      }
-	  }
 
 	/* Some target machines need to postscan each insn after
 	   it is output.  */
 	if (targetm.asm_out.final_postscan_insn)
 	  targetm.asm_out.final_postscan_insn (file, insn, recog_data.operand,
 					       recog_data.n_operands);
-
-	/* If necessary, report the effect that the instruction has on
-	   the unwind info.   We've already done this for delay slots
-	   and call instructions.  */
-	if (final_sequence == 0
-#if !defined (HAVE_prologue)
-	    && !ACCUMULATE_OUTGOING_ARGS
-#endif
-	    && dwarf2out_do_frame ())
-	  dwarf2out_frame_debug (insn, true);
 
 	if (!targetm.asm_out.unwind_emit_before_insn
 	    && targetm.asm_out.unwind_emit)
@@ -3658,8 +3617,7 @@ output_addr_const (FILE *file, rtx x)
       break;
 
     case CONST_FIXED:
-      fprintf (file, HOST_WIDE_INT_PRINT_HEX,
-	       (unsigned HOST_WIDE_INT) CONST_FIXED_VALUE_LOW (x));
+      fprintf (file, HOST_WIDE_INT_PRINT_DEC, CONST_FIXED_VALUE_LOW (x));
       break;
 
     case PLUS:
@@ -4250,94 +4208,13 @@ leaf_renumber_regs_insn (rtx in_rtx)
 }
 #endif
 
-
-/* When -gused is used, emit debug info for only used symbols. But in
-   addition to the standard intercepted debug_hooks there are some direct
-   calls into this file, i.e., dbxout_symbol, dbxout_parms, and dbxout_reg_params.
-   Those routines may also be called from a higher level intercepted routine. So
-   to prevent recording data for an inner call to one of these for an intercept,
-   we maintain an intercept nesting counter (debug_nesting). We only save the
-   intercepted arguments if the nesting is 1.  */
-int debug_nesting = 0;
-
-static tree *symbol_queue;
-int symbol_queue_index = 0;
-static int symbol_queue_size = 0;
-
-/* Generate the symbols for any queued up type symbols we encountered
-   while generating the type info for some originally used symbol.
-   This might generate additional entries in the queue.  Only when
-   the nesting depth goes to 0 is this routine called.  */
-
-void
-debug_flush_symbol_queue (void)
-{
-  int i;
-
-  /* Make sure that additionally queued items are not flushed
-     prematurely.  */
-
-  ++debug_nesting;
-
-  for (i = 0; i < symbol_queue_index; ++i)
-    {
-      /* If we pushed queued symbols then such symbols must be
-         output no matter what anyone else says.  Specifically,
-         we need to make sure dbxout_symbol() thinks the symbol was
-         used and also we need to override TYPE_DECL_SUPPRESS_DEBUG
-         which may be set for outside reasons.  */
-      int saved_tree_used = TREE_USED (symbol_queue[i]);
-      int saved_suppress_debug = TYPE_DECL_SUPPRESS_DEBUG (symbol_queue[i]);
-      TREE_USED (symbol_queue[i]) = 1;
-      TYPE_DECL_SUPPRESS_DEBUG (symbol_queue[i]) = 0;
-
-#ifdef DBX_DEBUGGING_INFO
-      dbxout_symbol (symbol_queue[i], 0);
-#endif
-
-      TREE_USED (symbol_queue[i]) = saved_tree_used;
-      TYPE_DECL_SUPPRESS_DEBUG (symbol_queue[i]) = saved_suppress_debug;
-    }
-
-  symbol_queue_index = 0;
-  --debug_nesting;
-}
-
-/* Queue a type symbol needed as part of the definition of a decl
-   symbol.  These symbols are generated when debug_flush_symbol_queue()
-   is called.  */
-
-void
-debug_queue_symbol (tree decl)
-{
-  if (symbol_queue_index >= symbol_queue_size)
-    {
-      symbol_queue_size += 10;
-      symbol_queue = XRESIZEVEC (tree, symbol_queue, symbol_queue_size);
-    }
-
-  symbol_queue[symbol_queue_index++] = decl;
-}
-
-/* Free symbol queue.  */
-void
-debug_free_queue (void)
-{
-  if (symbol_queue)
-    {
-      free (symbol_queue);
-      symbol_queue = NULL;
-      symbol_queue_size = 0;
-    }
-}
-
 /* List the call graph profiled edges whise value is greater than
    PARAM_NOTE_CGRAPH_SECTION_EDGE_THRESHOLD in the
    ".note.callgraph.text" section. */
 static void
 dump_cgraph_profiles (void)
 {
-  struct cgraph_node *node = cgraph_node (current_function_decl);
+  struct cgraph_node *node = cgraph_get_node (current_function_decl);
   struct cgraph_edge *e;
   struct cgraph_node *callee;
 
@@ -4425,7 +4302,7 @@ rest_of_handle_final (void)
      profiling information. */
   if (flag_callgraph_profiles_sections
       && flag_profile_use
-      && cgraph_node (current_function_decl) != NULL)
+      && cgraph_get_node (current_function_decl) != NULL)
     {
       flags = SECTION_DEBUG;
       asprintf (&profile_fnname, ".note.callgraph.text.%s", fnname);
@@ -4481,7 +4358,7 @@ struct rtl_opt_pass pass_shorten_branches =
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
-  TODO_dump_func                        /* todo_flags_finish */
+  0                                     /* todo_flags_finish */
  }
 };
 
@@ -4537,9 +4414,9 @@ rest_of_clean_state (void)
       if (final_output
 	  && (!NOTE_P (insn) ||
 	      (NOTE_KIND (insn) != NOTE_INSN_VAR_LOCATION
+	       && NOTE_KIND (insn) != NOTE_INSN_CALL_ARG_LOCATION
 	       && NOTE_KIND (insn) != NOTE_INSN_BLOCK_BEG
-	       && NOTE_KIND (insn) != NOTE_INSN_BLOCK_END
-	       && NOTE_KIND (insn) != NOTE_INSN_CFA_RESTORE_STATE)))
+	       && NOTE_KIND (insn) != NOTE_INSN_BLOCK_END)))
 	print_rtl_single (final_output, insn);
     }
 

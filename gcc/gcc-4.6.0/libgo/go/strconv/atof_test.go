@@ -47,6 +47,9 @@ var atoftests = []atofTest{
 	{"inf", "+Inf", nil},
 	{"-Inf", "-Inf", nil},
 	{"+INF", "+Inf", nil},
+	{"-Infinity", "-Inf", nil},
+	{"+INFINITY", "+Inf", nil},
+	{"Infinity", "+Inf", nil},
 
 	// largest float64
 	{"1.7976931348623157e308", "1.7976931348623157e+308", nil},
@@ -103,6 +106,11 @@ var atoftests = []atofTest{
 	{"1e", "0", os.EINVAL},
 	{"1e-", "0", os.EINVAL},
 	{".e-1", "0", os.EINVAL},
+
+	// http://www.exploringbinary.com/java-hangs-when-converting-2-2250738585072012e-308/
+	{"2.2250738585072012e-308", "2.2250738585072014e-308", nil},
+	// http://www.exploringbinary.com/php-hangs-on-numeric-value-2-2250738585072011e-308/
+	{"2.2250738585072011e-308", "2.225073858507201e-308", nil},
 }
 
 func init() {

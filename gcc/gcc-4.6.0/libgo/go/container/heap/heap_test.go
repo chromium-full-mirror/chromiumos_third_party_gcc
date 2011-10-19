@@ -2,13 +2,13 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package heap
+package heap_test
 
 import (
 	"testing"
 	"container/vector"
+	. "container/heap"
 )
-
 
 type myHeap struct {
 	// A vector.Vector implements sort.Interface except for Less,
@@ -16,9 +16,7 @@ type myHeap struct {
 	vector.Vector
 }
 
-
 func (h *myHeap) Less(i, j int) bool { return h.At(i).(int) < h.At(j).(int) }
-
 
 func (h *myHeap) verify(t *testing.T, i int) {
 	n := h.Len()
@@ -40,7 +38,6 @@ func (h *myHeap) verify(t *testing.T, i int) {
 	}
 }
 
-
 func TestInit0(t *testing.T) {
 	h := new(myHeap)
 	for i := 20; i > 0; i-- {
@@ -58,7 +55,6 @@ func TestInit0(t *testing.T) {
 	}
 }
 
-
 func TestInit1(t *testing.T) {
 	h := new(myHeap)
 	for i := 20; i > 0; i-- {
@@ -75,7 +71,6 @@ func TestInit1(t *testing.T) {
 		}
 	}
 }
-
 
 func Test(t *testing.T) {
 	h := new(myHeap)
@@ -104,7 +99,6 @@ func Test(t *testing.T) {
 	}
 }
 
-
 func TestRemove0(t *testing.T) {
 	h := new(myHeap)
 	for i := 0; i < 10; i++ {
@@ -122,7 +116,6 @@ func TestRemove0(t *testing.T) {
 	}
 }
 
-
 func TestRemove1(t *testing.T) {
 	h := new(myHeap)
 	for i := 0; i < 10; i++ {
@@ -138,7 +131,6 @@ func TestRemove1(t *testing.T) {
 		h.verify(t, 0)
 	}
 }
-
 
 func TestRemove2(t *testing.T) {
 	N := 10

@@ -15,12 +15,6 @@ import (
 	"testing"
 )
 
-type devNull struct{}
-
-func (devNull) Write(p []byte) (int, os.Error) {
-	return len(p), nil
-}
-
 func pipeErr(err os.Error) io.Reader {
 	pr, pw := io.Pipe()
 	pw.CloseWithError(err)
@@ -28,7 +22,7 @@ func pipeErr(err os.Error) io.Reader {
 }
 
 func readDat(filename string, c chan io.Reader) {
-	f, err := os.Open("testdata/webkit/"+filename, os.O_RDONLY, 0600)
+	f, err := os.Open("testdata/webkit/" + filename)
 	if err != nil {
 		c <- pipeErr(err)
 		return
@@ -91,6 +85,10 @@ func dumpLevel(w io.Writer, n *Node, level int) os.Error {
 		fmt.Fprintf(w, "%q", EscapeString(n.Data))
 	case CommentNode:
 		return os.NewError("COMMENT")
+	case DoctypeNode:
+		fmt.Fprintf(w, "<!DOCTYPE %s>", EscapeString(n.Data))
+	case scopeMarkerNode:
+		return os.NewError("unexpected scopeMarkerNode")
 	default:
 		return os.NewError("unknown node type")
 	}
@@ -125,7 +123,7 @@ func TestParser(t *testing.T) {
 		rc := make(chan io.Reader)
 		go readDat(filename, rc)
 		// TODO(nigeltao): Process all test cases, not just a subset.
-		for i := 0; i < 22; i++ {
+		for i := 0; i < 25; i++ {
 			// Parse the #data section.
 			b, err := ioutil.ReadAll(<-rc)
 			if err != nil {
@@ -141,7 +139,7 @@ func TestParser(t *testing.T) {
 				t.Fatal(err)
 			}
 			// Skip the #error section.
-			if _, err := io.Copy(devNull{}, <-rc); err != nil {
+			if _, err := io.Copy(ioutil.Discard, <-rc); err != nil {
 				t.Fatal(err)
 			}
 			// Compare the parsed tree to the #document section.

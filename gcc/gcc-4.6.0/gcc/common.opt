@@ -37,6 +37,13 @@ int optimize_size
 Variable
 int optimize_fast
 
+; True if this is the lto front end.  This is used to disable gimple
+; generation and lowering passes that are normally run on the output
+; of a front end.  These passes must be bypassed for lto since they
+; have already been done before the gimple was written.
+Variable
+bool in_lto_p = false
+
 ; 0 means straightforward implementation of complex divide acceptable.
 ; 1 means wide ranges of inputs must work for complex divide.
 ; 2 means C99-like requirements for complex multiply and divide.
@@ -142,6 +149,10 @@ enum vect_verbosity_levels user_vect_verbosity_level = MAX_VERBOSITY_LEVEL
 ; Type of stack check.
 Variable
 enum stack_check_type flag_stack_check = NO_STACK_CHECK
+
+; True if stack usage information needs to be computed.
+Variable
+bool flag_stack_usage_info = false
 
 ; -dA causes debug commentary information to be produced in
 ; the generated assembly code (to make it more readable).  This option
@@ -540,6 +551,10 @@ Wframe-larger-than=
 Common RejectNegative Joined UInteger
 -Wframe-larger-than=<number>	Warn if a function's stack frame requires more than <number> bytes
 
+Wfree-nonheap-object
+Common Var(warn_free_nonheap_object) Init(1) Warning
+Warn when attempting to free a non-heap object
+
 Winline
 Common Var(warn_inline) Warning
 Warn when an inlined function cannot be inlined
@@ -599,6 +614,10 @@ of compatible type
 Wstack-protector
 Common Var(warn_stack_protect) Warning
 Warn when not issuing stack smashing protection for some reason
+
+Wstack-usage=
+Common Joined RejectNegative UInteger Var(warn_stack_usage) Init(-1) Warning
+Warn if stack usage might be larger than specified amount
 
 Wstrict-aliasing
 Common Warning
@@ -816,6 +835,9 @@ Driver Undocumented
 ;    function parameters used in other parameters and the return type.
 ;    First selectable in G++ 4.6.
 ;
+; 6: The version of the ABI that doesn't promote scoped enums to int.
+;    First selectable in G++ 4.7.
+;
 ; Additional positive integers will be assigned as new versions of
 ; the ABI become the default version of the ABI.
 fabi-version=
@@ -992,6 +1014,10 @@ fdebug-prefix-map=
 Common Joined RejectNegative Var(common_deferred_options) Defer
 Map one directory name to another in debug information
 
+fdebug-types-section
+Common Report Var(flag_debug_types_section) Init(1)
+Output .debug_types section when using DWARF v4 debuginfo.
+
 ; Nonzero for -fdefer-pop: don't pop args after each function call
 ; instead save them up to pop many calls' args with one insns.
 fdefer-pop
@@ -1128,10 +1154,6 @@ femit-class-debug-always
 Common Report Var(flag_emit_class_debug_always) Init(0)
 Do not suppress C++ class debug information.
 
-fenable-icf-debug
-Common Report Var(flag_enable_icf_debug)
-Generate debug information to support Identical Code Folding (ICF)
-
 fexceptions
 Common Report Var(flag_exceptions) Optimization
 Enable exception handling
@@ -1155,6 +1177,10 @@ Enum(excess_precision) String(standard) Value(EXCESS_PRECISION_STANDARD)
 
 ffast-math
 Common
+
+ffat-lto-objects
+Common Var(flag_fat_lto_objects) Init(1)
+Output lto objects containing both the intermediate language and binary output.
 
 ffinite-math-only
 Common Report Var(flag_finite_math_only) Optimization SetByCombined
@@ -1317,7 +1343,7 @@ Common Report Var(flag_inline_functions) Optimization
 Integrate simple functions into their callers
 
 finline-functions-called-once
-Common Report Var(flag_inline_functions_called_once) Init(1) Optimization
+Common Report Var(flag_inline_functions_called_once) Optimization
 Integrate functions called once into their callers
 
 finline-limit-
@@ -1369,9 +1395,8 @@ Perform matrix layout flattening and transposing based
 on profiling information.
 
 fipa-struct-reorg
-Common Report Var(flag_ipa_struct_reorg)
-Perform structure layout optimizations based
-on profiling information.
+Common Ignore
+Does nothing. Preserved for backward compatibility.
 
 fira-algorithm=
 Common Joined RejectNegative Enum(ira_algorithm) Var(flag_ira_algorithm) Init(IRA_ALGORITHM_CB)
@@ -1692,6 +1717,14 @@ Common Joined RejectNegative Var(common_deferred_options) Defer
 frecord-gcc-switches
 Common Report Var(flag_record_gcc_switches)
 Record gcc command line switches in the object file.
+
+; This option differs from frecord-gcc-switches in the way that it
+; divide the command line options into several categories. And the
+; section is not mergable so that linker can save gcc switches for
+; each module.
+frecord-gcc-switches-in-elf
+Common Report Var(flag_record_gcc_switches_in_elf)
+Record the compiler optimizations in a .gnu.switches.text section.
 
 freg-struct-return
 Common Report Var(flag_pcc_struct_return,0) Optimization
@@ -2027,6 +2060,10 @@ ftree-dominator-opts
 Common Report Var(flag_tree_dom) Optimization
 Enable dominator optimizations
 
+ftree-tail-merge
+Common Report Var(flag_tree_tail_merge) Optimization
+Enable tail merging on trees
+
 ftree-dse
 Common Report Var(flag_tree_dse) Optimization
 Enable dead store elimination
@@ -2038,6 +2075,10 @@ Enable forward propagation on trees
 ftree-fre
 Common Report Var(flag_tree_fre) Optimization
 Enable Full Redundancy Elimination (FRE) on trees
+
+foptimize-strlen
+Common Report Var(flag_optimize_strlen) Optimization
+Enable string length optimizations on trees
 
 ftree-loop-distribution
 Common Report Var(flag_tree_loop_distribution) Optimization
@@ -2288,6 +2329,14 @@ Generate debug information in default extended format
 gmlt
 Common RejectNegative
 Generate debug information at level 1 with minimal line table
+
+gno-record-gcc-switches
+Common RejectNegative Var(dwarf_record_gcc_switches,0) Init(0)
+Don't record gcc command line switches in DWARF DW_AT_producer.
+
+grecord-gcc-switches
+Common RejectNegative Var(dwarf_record_gcc_switches,1)
+Record gcc command line switches in DWARF DW_AT_producer.
 
 gstabs
 Common JoinedOrMissing Negative(gstabs+)

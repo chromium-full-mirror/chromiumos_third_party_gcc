@@ -1,27 +1,29 @@
-2011-06-27  Release Manager
+2011-09-21  Joseph Myers  <joseph@codesourcery.com>
 
-	* GCC 4.6.1 released.
+	* Makefile.am (FLAGS_TO_PASS): Define.
+	* Makefile.in: Regenerate.
 
-2011-03-28  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+2011-08-01  Jakub Jelinek  <jakub@redhat.com>
 
-	Backport from mainline:
-	2011-03-21  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+	* math/rem_pio2q.c (__quadmath_kernel_rem_pio2): Fix up fq to y
+	conversion for prec 3 and __FLT_EVAL_METHOD__ != 0.
 
-	PR bootstrap/48135
-	* configure.ac (quadmath_use_symver): Handle --disable-symvers.
-	* configure: Regenerate.
+2011-04-03  Tobias Burnus  <burnus@net-b.de>
 
-2011-03-26  Jakub Jelinek  <jakub@redhat.com>
+	PR fortran/48311
+	* libquadmath.texi (strtoflt128): Fix typo.
+	(quadmath_snprintf): Move note up, make @item.
 
-	Backport from mainline
-	2011-03-25  Jakub Jelinek  <jakub@redhat.com>
+2011-03-25  Jakub Jelinek  <jakub@redhat.com>
 
 	* printf/printf_fp.c (__quadmath_printf_fp): Use memcpy instead of
 	mempcpy.
 
-2011-03-25  Release Manager
+2011-03-21  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
 
-	* GCC 4.6.0 released.
+	PR bootstrap/48135
+	* configure.ac (quadmath_use_symver): Handle --disable-symvers.
+	* configure: Regenerate.
 
 2011-02-28  Jakub Jelinek  <jakub@redhat.com>
 

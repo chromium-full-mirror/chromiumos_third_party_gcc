@@ -45,8 +45,8 @@
 @end ifset
 
 @c Copyright (C) 1988, 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-@c 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 
-@c 2010 Free Software Foundation, Inc.
+@c 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
+@c 2010, 2011 Free Software Foundation, Inc.
 @c *** Converted to texinfo by Dean Wakerley, dean@wakerley.com
 
 @c IMPORTANT: whenever you modify this file, run `install.texi2html' to
@@ -308,10 +308,8 @@ systems' @command{tar} programs will also work, only try GNU
 Necessary when targetting Darwin, building @samp{libstdc++},
 and not using @option{--disable-symvers}.
 Necessary when targetting Solaris 2 with Sun @command{ld} and not using
-@option{--disable-symvers}.  A helper
-script needs @samp{Glob.pm}, which is missing from @command{perl} 5.005
-included in Solaris@tie{}8.  The bundled @command{perl} in Solaris@tie{}9 and up
-works.
+@option{--disable-symvers}.  The bundled @command{perl} in Solaris@tie{}8
+and up works.
 
 Necessary when regenerating @file{Makefile} dependencies in libiberty.
 Necessary when regenerating @file{libiberty/functions.texi}.
@@ -463,7 +461,7 @@ included in releases.
 
 @item @TeX{} (any working version)
 
-Necessary for running @command{texi2dvi} and @command{texi2pdf}, which 
+Necessary for running @command{texi2dvi} and @command{texi2pdf}, which
 are used when running @command{make dvi} or @command{make pdf} to create
 DVI or PDF files, respectively.
 
@@ -773,6 +771,19 @@ the installation directory for G++ header files.  The default depends
 on other configuration options, and differs between cross and native
 configurations.
 
+@item --with-specs=@var{specs}
+Specify additional command line driver SPECS.
+This can be useful if you need to turn on a non-standard feature by
+default without modifying the compiler's source code, for instance
+@option{--with-specs=%@{!fcommon:%@{!fno-common:-fno-common@}@}}.
+@ifnothtml
+@xref{Spec Files,, Specifying subprocesses and the switches to pass to them,
+gcc, Using the GNU Compiler Collection (GCC)},
+@end ifnothtml
+@ifhtml
+See ``Spec Files'' in the main manual
+@end ifhtml
+
 @end table
 
 @item --program-prefix=@var{prefix}
@@ -1029,6 +1040,12 @@ information normally used on 386 SVR4 platforms; stabs provide a
 workable alternative.  This requires gas and gdb, as the normal SVR4
 tools can not generate or interpret stabs.
 
+@item --with-tls=@var{dialect}
+Specify the default TLS dialect, for systems were there is a choice.
+For ARM targets, possible values for @var{dialect} are @code{gnu} or
+@code{gnu2}, which select between the original GNU dialect and the GNU TLS
+descriptor-based dialect.
+
 @item --disable-multilib
 Specify that multiple target
 libraries to support different target variants, calling
@@ -1038,9 +1055,6 @@ predefined set of them.
 Some targets provide finer-grained control over which multilibs are built
 (e.g., @option{--disable-softfloat}):
 @table @code
-@item arc-*-elf*
-biendian.
-
 @item arm-*-*
 fpu, 26bit, underscore, interwork, biendian, nofmult.
 
@@ -1059,8 +1073,10 @@ sysv, aix.
 @item --with-multilib-list=@var{list}
 @itemx --without-multilib-list
 Specify what multilibs to build.
-Currently only implemented for sh*-*-*.
+Currently only implemented for sh*-*-* and x86-64-*-linux*.
 
+@table @code
+@item sh*-*-*
 @var{list} is a comma separated list of CPU names.  These must be of the
 form @code{sh*} or @code{m*} (in which case they match the compiler option
 for that processor).  The list should not contain any endian options -
@@ -1091,6 +1107,16 @@ only little endian SH4AL:
 --with-cpu=sh4a --with-endian=little,big \
 --with-multilib-list=sh4al,!mb/m4al
 @end smallexample
+
+@item x86-64-*-linux*
+@var{list} is a comma separated list of @code{m32}, @code{m64} and
+@code{mx32} to enable 32-bit, 64-bit and x32 run-time libraries,
+respectively.  If @var{list} is empty, then there will be no multilibs
+and only the default run-time library will be enabled.
+
+If @option{--with-multilib-list} is not given, then only 32-bit and
+64-bit run-time libraries will be enabled.
+@end table
 
 @item --with-endian=@var{endians}
 Specify what endians to use.
@@ -1135,35 +1161,24 @@ like C++ and Java.  The possibilities for @var{lib} are:
 AIX thread support.
 @item dce
 DCE thread support.
-@item gnat
-Ada tasking support.  For non-Ada programs, this setting is equivalent
-to @samp{single}.  When used in conjunction with the Ada run time, it
-causes GCC to use the same thread primitives as Ada uses.  This option
-is necessary when using both Ada and the back end exception handling,
-which is the default for most Ada targets.
-@item mach
-Generic MACH thread support, known to work on NeXTSTEP@.  (Please note
-that the file needed to support this configuration, @file{gthr-mach.h}, is
-missing and thus this setting will cause a known bootstrap failure.)
+@item lynx
+LynxOS thread support.
+@item mipssde
+MIPS SDE thread support.
 @item no
 This is an alias for @samp{single}.
 @item posix
 Generic POSIX/Unix98 thread support.
-@item posix95
-Generic POSIX/Unix95 thread support.
 @item rtems
 RTEMS thread support.
 @item single
 Disable thread support, should work for all platforms.
-@item solaris
-Sun Solaris 2/Unix International thread support.  Only use this if you
-really need to use this legacy API instead of the default, @samp{posix}.
+@item tpf
+TPF thread support.
 @item vxworks
 VxWorks thread support.
 @item win32
 Microsoft Win32 API thread support.
-@item nks
-Novell Kernel Services thread support.
 @end table
 
 @item --enable-tls
@@ -1244,7 +1259,7 @@ On MIPS targets, make @option{-mno-llsc} the default when no
 On MIPS targets, make @option{-msynci} the default when no
 @option{-mno-synci} option is passed.
 
-@item --without-synci 
+@item --without-synci
 On MIPS targets, make @option{-mno-synci} the default when no
 @option{-msynci} option is passed.  This is the default.
 
@@ -1262,7 +1277,7 @@ destructors, but requires __cxa_atexit in libc.  This option is currently
 only available on systems with GNU libc.  When enabled, this will cause
 @option{-fuse-cxa-atexit} to be passed by default.
 
-@item --enable-indirect-function
+@item --enable-gnu-indirect-function
 Define if you want to enable the @code{ifunc} attribute.  This option is
 currently only available on systems with GNU libc on certain targets.
 
@@ -1290,6 +1305,13 @@ will try to guess whether the @code{.init_array} and
 @item --enable-build-with-cxx
 Build GCC using a C++ compiler rather than a C compiler.  This is an
 experimental option which may become the default in a later release.
+
+@item --enable-build-poststage1-with-cxx
+When bootstrapping, build stages 2 and 3 of GCC using a C++ compiler
+rather than a C compiler.  Stage 1 is still built with a C compiler.
+This is an experimental option which may become the default in a later
+release.  This is enabled by default and may be disabled using
+@option{--disable-build-poststage1-with-cxx}.
 
 @item --enable-maintainer-mode
 The build rules that regenerate the Autoconf and Automake output files as
@@ -1408,8 +1430,8 @@ useful when you want a bi-arch compiler that defaults to 32-bit, and
 you are building a bi-arch or multi-arch binutils in a combined tree.
 On mips-linux, this will build a tri-arch compiler (ABI o32/n32/64),
 defaulted to o32.
-Currently, this option only affects sparc-linux, powerpc-linux, x86-linux
-and mips-linux.
+Currently, this option only affects sparc-linux, powerpc-linux, x86-linux,
+mips-linux and s390-linux.
 
 @item --enable-secureplt
 This option enables @option{-msecure-plt} by default for powerpc-linux.
@@ -1764,7 +1786,7 @@ the directory specified with @option{--with-sysroot}.  This option is
 only useful when you are already using @option{--with-sysroot}.  You
 can use @option{--with-build-sysroot} when you are configuring with
 @option{--prefix} set to a directory that is different from the one in
-which you are installing GCC and your target libraries.  
+which you are installing GCC and your target libraries.
 
 This option affects the system root for the compiler used to build
 target libraries (which runs on the build system); it does not affect
@@ -1960,8 +1982,8 @@ Note that if --enable-java-home is used, --with-arch-directory=ARCH must also
 be specified.
 
 @item --with-arch-directory=ARCH
-Specifies the name to use for the @file{jre/lib/ARCH} directory in the SDK 
-environment created when --enable-java-home is passed. Typical names for this 
+Specifies the name to use for the @file{jre/lib/ARCH} directory in the SDK
+environment created when --enable-java-home is passed. Typical names for this
 directory include i386, amd64, ia64, etc.
 
 @item --with-os-directory=DIR
@@ -1973,7 +1995,7 @@ Specifies the JPackage origin name. This defaults to the 'gcj' in
 java-1.5.0-gcj.
 
 @item --with-arch-suffix=SUFFIX
-Specifies the suffix for the sdk directory. Defaults to the empty string. 
+Specifies the suffix for the sdk directory. Defaults to the empty string.
 Examples include '.x86_64' in 'java-1.5.0-gcj-1.5.0.0.x86_64'.
 
 @item --with-jvm-root-dir=DIR
@@ -1985,7 +2007,7 @@ Specifies where to install jars. Default is $(prefix)/lib/jvm-exports.
 @item --with-python-dir=DIR
 Specifies where to install the Python modules used for aot-compile. DIR should
 not include the prefix used in installation. For example, if the Python modules
-are to be installed in /usr/lib/python2.5/site-packages, then 
+are to be installed in /usr/lib/python2.5/site-packages, then
 --with-python-dir=/lib/python2.5/site-packages should be passed. If this is
 not specified, then the Python modules are installed in $(prefix)/share/python.
 
@@ -1994,6 +2016,10 @@ Adds aot-compile-rpm to the list of installed scripts.
 
 @item --enable-browser-plugin
 Build the gcjwebplugin web browser plugin.
+
+@item --enable-static-libjava
+Build static libraries in libjava. The default is to only build shared
+libraries.
 
 @table @code
 @item ansi
@@ -2401,7 +2427,7 @@ compilation options.  Check your target's definition of
 
 GNU Make 3.80 and above, which is necessary to build GCC, support
 building in parallel.  To activate this, you can use @samp{make -j 2}
-instead of @samp{make}.  You can also specify a bigger number, and 
+instead of @samp{make}.  You can also specify a bigger number, and
 in most cases using a value greater than the number of processors in
 your machine will result in fewer and shorter I/O latency hits, thus
 improving overall throughput; this is especially true for slow drives
@@ -2996,7 +3022,7 @@ information are.
 @item
 @uref{#alpha-dec-osf51,,alpha*-dec-osf5.1}
 @item
-@uref{#arc-x-elf,,arc-*-elf}
+@uref{#amd64-x-solaris210,,amd64-*-solaris2.10}
 @item
 @uref{#arm-x-elf,,arm-*-elf}
 @item
@@ -3039,10 +3065,6 @@ information are.
 @uref{#m32c-x-elf,,m32c-*-elf}
 @item
 @uref{#m32r-x-elf,,m32r-*-elf}
-@item
-@uref{#m6811-elf,,m6811-elf}
-@item
-@uref{#m6812-elf,,m6812-elf}
 @item
 @uref{#m68k-x-x,,m68k-*-*}
 @item
@@ -3098,9 +3120,13 @@ information are.
 @item
 @uref{#sparcv9-x-solaris2,,sparcv9-*-solaris2*}
 @item
+@uref{#c6x-x-x,,c6x-*-*}
+@item
 @uref{#x-x-vxworks,,*-*-vxworks*}
 @item
 @uref{#x86-64-x-x,,x86_64-*-*, amd64-*-*}
+@item
+@uref{#x86-64-x-solaris210,,x86_64-*-solaris2.1[0-9]*}
 @item
 @uref{#xtensa-x-elf,,xtensa*-*-elf}
 @item
@@ -3150,10 +3176,12 @@ Systems using processors that implement the DEC Alpha architecture and
 are running the DEC/Compaq/HP Unix (DEC OSF/1, Digital UNIX, or Compaq/HP
 Tru64 UNIX) operating system, for example the DEC Alpha AXP systems.
 
-As of GCC 3.2, versions before @code{alpha*-dec-osf4} are no longer
-supported.  (These are the versions which identify themselves as DEC
-OSF/1.)  As of GCC 4.6, support for Tru64 UNIX V4.0 and V5.0 has been
-removed.
+Support for Tru64 UNIX V5.1 has been obsoleted in GCC 4.7, but can still
+be enabled by configuring with @option{--enable-obsolete}.  Support will
+be removed in GCC 4.8.  As of GCC 4.6, support for Tru64 UNIX V4.0 and
+V5.0 has been removed.  As of GCC 3.2, versions before
+@code{alpha*-dec-osf4} are no longer supported.  (These are the versions
+which identify themselves as DEC OSF/1.)
 
 On Tru64 UNIX, virtual memory exhausted bootstrap failures
 may be fixed by reconfiguring Kernel Virtual Memory and Swap parameters
@@ -3166,6 +3194,10 @@ the OS version used, you need a data segment size between 512 MB and
 As of GNU binutils 2.21, neither GNU @command{as} nor GNU @command{ld}
 are supported on Tru64 UNIX, so you must not configure GCC with
 @option{--with-gnu-as} or @option{--with-gnu-ld}.
+
+Cross-compilers for the Tru64 UNIX target currently do not work because
+the auxiliary programs @command{mips-tdump} and @command{mips-tfile} can't
+be compiled on anything but Tru64 UNIX.
 
 GCC writes a @samp{.verstamp} directive to the assembler output file
 unless it is built as a cross-compiler.  It gets the version to use from
@@ -3196,9 +3228,9 @@ provide a fix shortly.
 @html
 <hr />
 @end html
-@heading @anchor{arc-x-elf}arc-*-elf
-Argonaut ARC processor.
-This configuration is intended for embedded systems.
+@heading @anchor{amd64-x-solaris210}amd64-*-solaris2.1[0-9]*
+
+This is a synonym for @samp{x86_64-*-solaris2.1[0-9]*}.
 
 @html
 <hr />
@@ -3297,35 +3329,6 @@ Pre-packaged tools can be obtained from
 @uref{ftp://ftp.axis.com/@/pub/@/axis/@/tools/@/cris/@/compiler-kit/}.  More
 information about this platform is available at
 @uref{http://developer.axis.com/}.
-
-@html
-<hr />
-@end html
-@heading @anchor{crx}CRX
-
-The CRX CompactRISC architecture is a low-power 32-bit architecture with
-fast context switching and architectural extensibility features.
-
-@ifnothtml
-@xref{CRX Options,, CRX Options, gcc, Using and Porting the GNU Compiler
-Collection (GCC)},
-@end ifnothtml
-
-@ifhtml
-See ``CRX Options'' in the main manual for a list of CRX-specific options.
-@end ifhtml
-
-Use @samp{configure --target=crx-elf --enable-languages=c,c++} to configure
-GCC@ for building a CRX cross-compiler. The option @samp{--target=crx-elf}
-is also used to build the @samp{newlib} C library for CRX.
-
-It is also possible to build libstdc++-v3 for the CRX architecture. This
-needs to be done in a separate step with the following configure settings:
-
-@smallexample
-gcc/libstdc++-v3/configure --host=crx-elf --with-newlib \
-    --enable-sjlj-exceptions --enable-cxx-flags='-fexceptions -frtti'
-@end smallexample
 
 @html
 <hr />
@@ -3612,10 +3615,10 @@ you have the patch installed, you can configure GCC with an appropriate
 @end html
 @heading @anchor{ix86-x-solaris210}i?86-*-solaris2.10
 Use this for Solaris 10 or later on x86 and x86-64 systems.  This
-configuration is supported by GCC 4.0 and later versions only.  Unlike
-@samp{sparcv9-sun-solaris2*}, there is no corresponding 64-bit
-configuration like @samp{amd64-*-solaris2*} or @samp{x86_64-*-solaris2*}.
-@c FIXME: will there ever be?
+configuration is supported by GCC 4.0 and later versions only.  Starting
+with GCC 4.7, there is also a 64-bit @samp{amd64-*-solaris2.1[0-9]*} or
+@samp{x86_64-*-solaris2.1[0-9]*} configuration that corresponds to
+@samp{sparcv9-sun-solaris2*}.
 
 It is recommended that you configure GCC to use the GNU assembler, in
 @file{/usr/sfw/bin/gas}.  The versions included in Solaris 10, from GNU
@@ -3729,6 +3732,15 @@ The native @command{as} and @command{ld} are recommended for bootstrapping
 on AIX@.  The GNU Assembler, GNU Linker, and GNU Binutils version 2.20
 is required to bootstrap on AIX 5@.  The native AIX tools do
 interoperate with GCC@.
+
+AIX 5.3 TL10, AIX 6.1 TL05 and AIX 7.1 TL00 introduced an AIX
+assembler change that sometimes produces corrupt assembly files
+causing AIX linker errors.  The bug breaks GCC bootstrap on AIX and
+can cause compilation failures with existing GCC installations.  An
+AIX iFix for AIX 5.3 is available (APAR IZ98385 for AIX 5.3 TL10, APAR
+IZ98477 for AIX 5.3 TL11 and IZ98134 for AIX 5.3 TL12).  Fixes for AIX
+6.1 (APAR IZ98732 for AIX 6.1 TL05 and APAR IZ98861 for AIX 6.1 TL06)
+and AIX 7.1 are in verification and packaging phases.
 
 Building @file{libstdc++.a} requires a fix for an AIX Assembler bug
 APAR IY26685 (AIX 4.3) or APAR IY25528 (AIX 5.1).  It also requires a
@@ -3851,20 +3863,6 @@ This configuration is intended for embedded systems.
 @html
 <hr />
 @end html
-@heading @anchor{m6811-elf}m6811-elf
-Motorola 68HC11 family micro controllers.  These are used in embedded
-applications.  There are no standard Unix configurations.
-
-@html
-<hr />
-@end html
-@heading @anchor{m6812-elf}m6812-elf
-Motorola 68HC12 family micro controllers.  These are used in embedded
-applications.  There are no standard Unix configurations.
-
-@html
-<hr />
-@end html
 @heading @anchor{m68k-x-x}m68k-*-*
 By default,
 @samp{m68k-*-elf*}, @samp{m68k-*-rtems},  @samp{m68k-*-uclinux} and
@@ -3888,6 +3886,8 @@ be a @option{-mcpu} argument or one of the following values:
 @samp{m68000}, @samp{m68010}, @samp{m68020}, @samp{m68030},
 @samp{m68040}, @samp{m68060}, @samp{m68020-40} and @samp{m68020-60}.
 
+GCC requires at least binutils version 2.17 on these targets.
+
 @html
 <hr />
 @end html
@@ -3895,9 +3895,7 @@ be a @option{-mcpu} argument or one of the following values:
 GCC 4.3 changed the uClinux configuration so that it uses the
 @samp{m68k-linux-gnu} ABI rather than the @samp{m68k-elf} ABI.
 It also added improved support for C++ and flat shared libraries,
-both of which were ABI changes.  However, you can still use the
-original ABI by configuring for @samp{m68k-uclinuxoldabi} or
-@samp{m68k-@var{vendor}-uclinuxoldabi}.
+both of which were ABI changes.
 
 
 @html
@@ -3958,12 +3956,6 @@ the use of break, use the @option{--with-divide=breaks}
 @command{configure} option when configuring GCC@.  The default is to
 use traps on systems that support them.
 
-Cross-compilers for the MIPS as target using the MIPS assembler
-currently do not work, because the auxiliary programs
-@file{mips-tdump.c} and @file{mips-tfile.c} can't be compiled on
-anything but a MIPS@.  It does work to cross compile for a MIPS
-if you use the GNU assembler and linker.
-
 The assembler from GNU binutils 2.17 and earlier has a bug in the way
 it sorts relocations for REL targets (o32, o64, EABI).  This can cause
 bad code to be generated for simple C++ programs.  Also the linker
@@ -3984,11 +3976,13 @@ Support for IRIX 5 has been removed in GCC 4.6.
 @end html
 @heading @anchor{mips-sgi-irix6}mips-sgi-irix6
 
-Support for IRIX 6 releases before 6.5 has been removed in GCC 4.6, as
-well as support for
-the O32 ABI.  It is @emph{strongly} recommended to upgrade to at least
-IRIX 6.5.18.  This release introduced full ISO C99 support, though for
-the N32 and N64 ABIs only.
+Support for IRIX 6.5 has been obsoleted in GCC 4.7, but can still be
+enabled by configuring with @option{--enable-obsolete}.  Support will be
+removed in GCC 4.8.  Support for IRIX 6 releases before 6.5 has been
+removed in GCC 4.6, as well as support for the O32 ABI.  It is
+@emph{strongly} recommended to upgrade to at least IRIX 6.5.18.  This
+release introduced full ISO C99 support, though for the N32 and N64 ABIs
+only.
 
 To build and use GCC on IRIX 6.5, you need the IRIX Development Foundation
 (IDF) and IRIX Development Libraries (IDL).  They are included with the
@@ -4198,7 +4192,9 @@ supported as cross-compilation target only.
 @c alone is too unspecific and must be avoided.
 @heading @anchor{x-x-solaris2}*-*-solaris2*
 
-Support for Solaris 7 has been removed in GCC 4.6.
+Support for Solaris 8 has been obsoleted in GCC 4.7, but can still be
+enabled by configuring with @option{--enable-obsolete}.  Support will be
+removed in GCC 4.8.  Support for Solaris 7 has been removed in GCC 4.6.
 
 Sun does not ship a C compiler with Solaris 2, though you can download
 the Sun Studio compilers for free.  Alternatively,
@@ -4446,6 +4442,13 @@ This is a synonym for @samp{sparc64-*-solaris2*}.
 @html
 <hr />
 @end html
+@heading @anchor{c6x-x-x}c6x-*-*
+
+The C6X family of processors. This port requires binutils-2.22 or newer.
+
+@html
+<hr />
+@end html
 @heading @anchor{x-x-vxworks}*-*-vxworks*
 Support for VxWorks is in flux.  At present GCC supports @emph{only} the
 very recent VxWorks 5.5 (aka Tornado 2.2) release, and only on PowerPC@.
@@ -4491,6 +4494,22 @@ both 64-bit x86-64 and 32-bit x86 code (via the @option{-m32} switch).
 @html
 <hr />
 @end html
+@heading @anchor{x86-64-x-solaris2.10}x86_64-*-solaris2.1[0-9]*
+
+GCC also supports the x86-64 architecture implemented by the AMD64
+processor (@samp{amd64-*-*} is an alias for @samp{x86_64-*-*}) on
+Solaris 10 or later.  Unlike other systems, without special options a
+bi-arch compiler is built which generates 32-bit code by default, but
+can generate 64-bit x86-64 code with the @option{-m64} switch.  Since
+GCC 4.7, there is also configuration that defaults to 64-bit code, but
+can generate 32-bit code with @option{-m32}.  To configure and build
+this way, you have to provide all support libraries like @file{libgmp}
+as 64-bit code, configure with @option{--target=x86_64-pc-solaris2.1x}
+and @samp{CC=gcc -m64}.
+
+@html
+<hr />
+@end html
 @heading @anchor{xtensa-x-elf}xtensa*-*-elf
 
 This target is intended for embedded Xtensa systems using the
@@ -4524,27 +4543,27 @@ respects, this target is the same as the
 @heading @anchor{windows}Microsoft Windows
 
 @subheading Intel 16-bit versions
-The 16-bit versions of Microsoft Windows, such as Windows 3.1, are not 
+The 16-bit versions of Microsoft Windows, such as Windows 3.1, are not
 supported.
 
-However, the 32-bit port has limited support for Microsoft 
+However, the 32-bit port has limited support for Microsoft
 Windows 3.11 in the Win32s environment, as a target only.  See below.
 
 @subheading Intel 32-bit versions
 
-The 32-bit versions of Windows, including Windows 95, Windows NT, Windows 
-XP, and Windows Vista, are supported by several different target 
-platforms.  These targets differ in which Windows subsystem they target 
+The 32-bit versions of Windows, including Windows 95, Windows NT, Windows
+XP, and Windows Vista, are supported by several different target
+platforms.  These targets differ in which Windows subsystem they target
 and which C libraries are used.
 
 @itemize
-@item Cygwin @uref{#x-x-cygwin,,*-*-cygwin}: Cygwin provides a user-space 
+@item Cygwin @uref{#x-x-cygwin,,*-*-cygwin}: Cygwin provides a user-space
 Linux API emulation layer in the Win32 subsystem.
-@item Interix @uref{#x-x-interix,,*-*-interix}: The Interix subsystem 
+@item Interix @uref{#x-x-interix,,*-*-interix}: The Interix subsystem
 provides native support for POSIX.
-@item MinGW @uref{#x-x-mingw32,,*-*-mingw32}: MinGW is a native GCC port for 
+@item MinGW @uref{#x-x-mingw32,,*-*-mingw32}: MinGW is a native GCC port for
 the Win32 subsystem that provides a subset of POSIX.
-@item MKS i386-pc-mks: NuTCracker from MKS.  See 
+@item MKS i386-pc-mks: NuTCracker from MKS.  See
 @uref{http://www.mkssoftware.com/} for more information.
 @end itemize
 
@@ -4558,19 +4577,19 @@ Presently Windows for Itanium is not supported.
 
 @subheading Windows CE
 
-Windows CE is supported as a target only on ARM (arm-wince-pe), Hitachi 
+Windows CE is supported as a target only on ARM (arm-wince-pe), Hitachi
 SuperH (sh-wince-pe), and MIPS (mips-wince-pe).
 
 @subheading Other Windows Platforms
 
 GCC no longer supports Windows NT on the Alpha or PowerPC.
 
-GCC no longer supports the Windows POSIX subsystem.  However, it does 
+GCC no longer supports the Windows POSIX subsystem.  However, it does
 support the Interix subsystem.  See above.
 
 Old target names including *-*-winnt and *-*-windowsnt are no longer used.
 
-PW32 (i386-pc-pw32) support was never completed, and the project seems to 
+PW32 (i386-pc-pw32) support was never completed, and the project seems to
 be inactive.  See @uref{http://pw32.sourceforge.net/} for more information.
 
 UWIN support has been removed due to a lack of maintenance.
@@ -4597,9 +4616,9 @@ or version 2.20 or above if building your own.
 @end html
 @heading @anchor{x-x-interix}*-*-interix
 
-The Interix target is used by OpenNT, Interix, Services For UNIX (SFU), 
-and Subsystem for UNIX-based Applications (SUA).  Applications compiled 
-with this target run in the Interix subsystem, which is separate from 
+The Interix target is used by OpenNT, Interix, Services For UNIX (SFU),
+and Subsystem for UNIX-based Applications (SUA).  Applications compiled
+with this target run in the Interix subsystem, which is separate from
 the Win32 subsystem.  This target was last known to work in GCC 3.3.
 
 @html

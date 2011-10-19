@@ -22,8 +22,12 @@ type Ticker struct {
 
 // Stop turns off a ticker.  After Stop, no more ticks will be sent.
 func (t *Ticker) Stop() {
-	// Make it non-blocking so multiple Stops don't block.
-	_ = t.shutdown <- true
+	select {
+	case t.shutdown <- true:
+		// ok
+	default:
+		// Stop in progress already
+	}
 }
 
 // Tick is a convenience wrapper for NewTicker providing access to the ticking
@@ -84,7 +88,7 @@ func wakeLoop(wakeMeAt chan int64, wakeUp chan bool) {
 
 // A single tickerLoop serves all ticks to Tickers.  It waits for two events:
 // either the creation of a new Ticker or a tick from the alarm,
-// signalling a time to wake up one or more Tickers.
+// signaling a time to wake up one or more Tickers.
 func tickerLoop() {
 	// Represents the next alarm to be delivered.
 	var alarm alarmer
@@ -106,7 +110,8 @@ func tickerLoop() {
 			// that need it and determining the next wake time.
 			// TODO(r): list should be sorted in time order.
 			for t := tickers; t != nil; t = t.next {
-				if _, ok := <-t.shutdown; ok {
+				select {
+				case <-t.shutdown:
 					// Ticker is done; remove it from list.
 					if prev == nil {
 						tickers = t.next
@@ -114,6 +119,7 @@ func tickerLoop() {
 						prev.next = t.next
 					}
 					continue
+				default:
 				}
 				if t.nextTick <= now {
 					if len(t.c) == 0 {
@@ -154,7 +160,7 @@ var onceStartTickerLoop sync.Once
 // ns must be greater than zero; if not, NewTicker will panic.
 func NewTicker(ns int64) *Ticker {
 	if ns <= 0 {
-		panic(os.ErrorString("non-positive interval for NewTicker"))
+		panic(os.NewError("non-positive interval for NewTicker"))
 	}
 	c := make(chan int64, 1) //  See comment on send in tickerLoop
 	t := &Ticker{

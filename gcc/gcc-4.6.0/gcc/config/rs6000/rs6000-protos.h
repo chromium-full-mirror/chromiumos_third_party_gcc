@@ -79,6 +79,7 @@ extern bool (*rs6000_cannot_change_mode_class_ptr) (enum machine_mode,
 						    enum machine_mode,
 						    enum reg_class);
 extern void rs6000_secondary_reload_inner (rtx, rtx, rtx, bool);
+extern void rs6000_secondary_reload_ppc64 (rtx, rtx, rtx, bool);
 extern int paired_emit_vector_cond_expr (rtx, rtx, rtx,
                                          rtx, rtx, rtx);
 extern void paired_expand_vector_move (rtx operands[]);
@@ -170,8 +171,7 @@ extern unsigned int rs6000_dbx_register_number (unsigned int);
 extern void rs6000_emit_epilogue (int);
 extern void rs6000_emit_eh_reg_restore (rtx, rtx);
 extern const char * output_isel (rtx *);
-extern bool rs6000_tls_referenced_p (rtx);
-
+extern void rs6000_call_indirect_aix (rtx, rtx, rtx);
 extern void rs6000_aix_asm_output_dwarf_table_ref (char *);
 
 /* Declare functions in rs6000-c.c */

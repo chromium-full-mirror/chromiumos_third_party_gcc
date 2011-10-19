@@ -1,6 +1,6 @@
 /* Print RTL for GCC.
    Copyright (C) 1987, 1988, 1992, 1997, 1998, 1999, 2000, 2002, 2003,
-   2004, 2005, 2007, 2008, 2009, 2010
+   2004, 2005, 2007, 2008, 2009, 2010, 2011
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -43,6 +43,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree-pretty-print.h"
 #include "cselib.h"
 #include "tree-pass.h"
+#include "dwarf2out.h"
 #endif
 
 static FILE *outfile;
@@ -302,9 +303,18 @@ print_rtx (const_rtx in_rtx)
 		}
 
 	      case NOTE_INSN_VAR_LOCATION:
+	      case NOTE_INSN_CALL_ARG_LOCATION:
 #ifndef GENERATOR_FILE
 		fputc (' ', outfile);
 		print_rtx (NOTE_VAR_LOCATION (in_rtx));
+#endif
+		break;
+
+	      case NOTE_INSN_CFI:
+#ifndef GENERATOR_FILE
+		fputc ('\n', outfile);
+		output_cfi_directive (outfile, NOTE_CFI (in_rtx));
+		fputc ('\t', outfile);
 #endif
 		break;
 
@@ -313,9 +323,16 @@ print_rtx (const_rtx in_rtx)
 	      }
 	  }
 	else if (i == 8 && JUMP_P (in_rtx) && JUMP_LABEL (in_rtx) != NULL)
-	  /* Output the JUMP_LABEL reference.  */
-	  fprintf (outfile, "\n%s%*s -> %d", print_rtx_head, indent * 2, "",
-		   INSN_UID (JUMP_LABEL (in_rtx)));
+	  {
+	    /* Output the JUMP_LABEL reference.  */
+	    fprintf (outfile, "\n%s%*s -> ", print_rtx_head, indent * 2, "");
+	    if (GET_CODE (JUMP_LABEL (in_rtx)) == RETURN)
+	      fprintf (outfile, "return");
+	    else if (GET_CODE (JUMP_LABEL (in_rtx)) == SIMPLE_RETURN)
+	      fprintf (outfile, "simple_return");
+	    else
+	      fprintf (outfile, "%d", INSN_UID (JUMP_LABEL (in_rtx)));
+	  }
 	else if (i == 0 && GET_CODE (in_rtx) == VALUE)
 	  {
 #ifndef GENERATOR_FILE
@@ -332,6 +349,14 @@ print_rtx (const_rtx in_rtx)
 	    fprintf (outfile, " D#%i",
 		     DEBUG_TEMP_UID (DEBUG_EXPR_TREE_DECL (in_rtx)));
 #endif
+	  }
+	else if (i == 0 && GET_CODE (in_rtx) == ENTRY_VALUE)
+	  {
+	    indent += 2;
+	    if (!sawclose)
+	      fprintf (outfile, " ");
+	    print_rtx (ENTRY_VALUE_EXP (in_rtx));
+	    indent -= 2;
 	  }
 	break;
 
@@ -549,6 +574,8 @@ print_rtx (const_rtx in_rtx)
 #ifndef GENERATOR_FILE
 	if (i == 0 && GET_CODE (in_rtx) == DEBUG_IMPLICIT_PTR)
 	  print_mem_expr (outfile, DEBUG_IMPLICIT_PTR_DECL (in_rtx));
+	else if (i == 0 && GET_CODE (in_rtx) == DEBUG_PARAMETER_REF)
+	  print_mem_expr (outfile, DEBUG_PARAMETER_REF_DECL (in_rtx));
 	else
 	  dump_addr (outfile, " ", XTREE (in_rtx, i));
 #endif
@@ -583,13 +610,11 @@ print_rtx (const_rtx in_rtx)
       if (MEM_EXPR (in_rtx))
 	print_mem_expr (outfile, MEM_EXPR (in_rtx));
 
-      if (MEM_OFFSET (in_rtx))
-	fprintf (outfile, "+" HOST_WIDE_INT_PRINT_DEC,
-		 INTVAL (MEM_OFFSET (in_rtx)));
+      if (MEM_OFFSET_KNOWN_P (in_rtx))
+	fprintf (outfile, "+" HOST_WIDE_INT_PRINT_DEC, MEM_OFFSET (in_rtx));
 
-      if (MEM_SIZE (in_rtx))
-	fprintf (outfile, " S" HOST_WIDE_INT_PRINT_DEC,
-		 INTVAL (MEM_SIZE (in_rtx)));
+      if (MEM_SIZE_KNOWN_P (in_rtx))
+	fprintf (outfile, " S" HOST_WIDE_INT_PRINT_DEC, MEM_SIZE (in_rtx));
 
       if (MEM_ALIGN (in_rtx) != 1)
 	fprintf (outfile, " A%u", MEM_ALIGN (in_rtx));

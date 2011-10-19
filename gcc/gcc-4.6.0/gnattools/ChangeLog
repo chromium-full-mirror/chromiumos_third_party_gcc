@@ -1,10 +1,9 @@
-2011-06-27  Release Manager
+2011-07-07  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
 
-	* GCC 4.6.1 released.
-
-2011-03-25  Release Manager
-
-	* GCC 4.6.0 released.
+	PR target/39150
+	* configure.ac (*86-*-solaris2*): Also accept
+	x86_64-*-solaris2.1[0-9]*.
+	* configure: Regenerate.
 
 2010-11-20  Ralf Wildenhues  <Ralf.Wildenhues@gmx.de>
 

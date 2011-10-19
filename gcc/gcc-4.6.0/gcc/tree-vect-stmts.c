@@ -1,5 +1,5 @@
 /* Statement Analysis and Transformation for Vectorization
-   Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
+   Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
    Free Software Foundation, Inc.
    Contributed by Dorit Naishlos <dorit@il.ibm.com>
    and Ira Rosen <irar@il.ibm.com>
@@ -42,6 +42,82 @@ along with GCC; see the file COPYING3.  If not see
 #include "langhooks.h"
 
 
+/* Return a variable of type ELEM_TYPE[NELEMS].  */
+
+static tree
+create_vector_array (tree elem_type, unsigned HOST_WIDE_INT nelems)
+{
+  return create_tmp_var (build_array_type_nelts (elem_type, nelems),
+			 "vect_array");
+}
+
+/* ARRAY is an array of vectors created by create_vector_array.
+   Return an SSA_NAME for the vector in index N.  The reference
+   is part of the vectorization of STMT and the vector is associated
+   with scalar destination SCALAR_DEST.  */
+
+static tree
+read_vector_array (gimple stmt, gimple_stmt_iterator *gsi, tree scalar_dest,
+		   tree array, unsigned HOST_WIDE_INT n)
+{
+  tree vect_type, vect, vect_name, array_ref;
+  gimple new_stmt;
+
+  gcc_assert (TREE_CODE (TREE_TYPE (array)) == ARRAY_TYPE);
+  vect_type = TREE_TYPE (TREE_TYPE (array));
+  vect = vect_create_destination_var (scalar_dest, vect_type);
+  array_ref = build4 (ARRAY_REF, vect_type, array,
+		      build_int_cst (size_type_node, n),
+		      NULL_TREE, NULL_TREE);
+
+  new_stmt = gimple_build_assign (vect, array_ref);
+  vect_name = make_ssa_name (vect, new_stmt);
+  gimple_assign_set_lhs (new_stmt, vect_name);
+  vect_finish_stmt_generation (stmt, new_stmt, gsi);
+  mark_symbols_for_renaming (new_stmt);
+
+  return vect_name;
+}
+
+/* ARRAY is an array of vectors created by create_vector_array.
+   Emit code to store SSA_NAME VECT in index N of the array.
+   The store is part of the vectorization of STMT.  */
+
+static void
+write_vector_array (gimple stmt, gimple_stmt_iterator *gsi, tree vect,
+		    tree array, unsigned HOST_WIDE_INT n)
+{
+  tree array_ref;
+  gimple new_stmt;
+
+  array_ref = build4 (ARRAY_REF, TREE_TYPE (vect), array,
+		      build_int_cst (size_type_node, n),
+		      NULL_TREE, NULL_TREE);
+
+  new_stmt = gimple_build_assign (array_ref, vect);
+  vect_finish_stmt_generation (stmt, new_stmt, gsi);
+  mark_symbols_for_renaming (new_stmt);
+}
+
+/* PTR is a pointer to an array of type TYPE.  Return a representation
+   of *PTR.  The memory reference replaces those in FIRST_DR
+   (and its group).  */
+
+static tree
+create_array_ref (tree type, tree ptr, struct data_reference *first_dr)
+{
+  struct ptr_info_def *pi;
+  tree mem_ref, alias_ptr_type;
+
+  alias_ptr_type = reference_alias_ptr_type (DR_REF (first_dr));
+  mem_ref = build2 (MEM_REF, type, ptr, build_int_cst (alias_ptr_type, 0));
+  /* Arrays have the same alignment as their type.  */
+  pi = get_ptr_info (ptr);
+  pi->align = TYPE_ALIGN_UNIT (type);
+  pi->misalign = 0;
+  return mem_ref;
+}
+
 /* Utility functions used by vect_mark_stmts_to_be_vectorized.  */
 
 /* Function vect_mark_relevant.
@@ -50,33 +126,72 @@ along with GCC; see the file COPYING3.  If not see
 
 static void
 vect_mark_relevant (VEC(gimple,heap) **worklist, gimple stmt,
-		    enum vect_relevant relevant, bool live_p)
+		    enum vect_relevant relevant, bool live_p,
+		    bool used_in_pattern)
 {
   stmt_vec_info stmt_info = vinfo_for_stmt (stmt);
   enum vect_relevant save_relevant = STMT_VINFO_RELEVANT (stmt_info);
   bool save_live_p = STMT_VINFO_LIVE_P (stmt_info);
+  gimple pattern_stmt;
 
   if (vect_print_dump_info (REPORT_DETAILS))
     fprintf (vect_dump, "mark relevant %d, live %d.", relevant, live_p);
 
+  /* If this stmt is an original stmt in a pattern, we might need to mark its
+     related pattern stmt instead of the original stmt.  However, such stmts
+     may have their own uses that are not in any pattern, in such cases the
+     stmt itself should be marked.  */
   if (STMT_VINFO_IN_PATTERN_P (stmt_info))
     {
-      gimple pattern_stmt;
+      bool found = false;
+      if (!used_in_pattern)
+        {
+          imm_use_iterator imm_iter;
+          use_operand_p use_p;
+          gimple use_stmt;
+          tree lhs;
 
-      /* This is the last stmt in a sequence that was detected as a
-         pattern that can potentially be vectorized.  Don't mark the stmt
-         as relevant/live because it's not going to be vectorized.
-         Instead mark the pattern-stmt that replaces it.  */
+          if (is_gimple_assign (stmt))
+            lhs = gimple_assign_lhs (stmt);
+          else
+            lhs = gimple_call_lhs (stmt);
 
-      pattern_stmt = STMT_VINFO_RELATED_STMT (stmt_info);
+          /* This use is out of pattern use, if LHS has other uses that are
+             pattern uses, we should mark the stmt itself, and not the pattern
+             stmt.  */
+          FOR_EACH_IMM_USE_FAST (use_p, imm_iter, lhs)
+            {
+              if (is_gimple_debug (USE_STMT (use_p)))
+                continue;
+              use_stmt = USE_STMT (use_p);
 
-      if (vect_print_dump_info (REPORT_DETAILS))
-        fprintf (vect_dump, "last stmt in pattern. don't mark relevant/live.");
-      stmt_info = vinfo_for_stmt (pattern_stmt);
-      gcc_assert (STMT_VINFO_RELATED_STMT (stmt_info) == stmt);
-      save_relevant = STMT_VINFO_RELEVANT (stmt_info);
-      save_live_p = STMT_VINFO_LIVE_P (stmt_info);
-      stmt = pattern_stmt;
+              if (vinfo_for_stmt (use_stmt)
+                  && STMT_VINFO_IN_PATTERN_P (vinfo_for_stmt (use_stmt)))
+                {
+                  found = true;
+                  break;
+                }
+            }
+        }
+
+      if (!found)
+        {
+          /* This is the last stmt in a sequence that was detected as a
+             pattern that can potentially be vectorized.  Don't mark the stmt
+             as relevant/live because it's not going to be vectorized.
+             Instead mark the pattern-stmt that replaces it.  */
+
+          pattern_stmt = STMT_VINFO_RELATED_STMT (stmt_info);
+
+          if (vect_print_dump_info (REPORT_DETAILS))
+            fprintf (vect_dump, "last stmt in pattern. don't mark"
+                                " relevant/live.");
+          stmt_info = vinfo_for_stmt (pattern_stmt);
+          gcc_assert (STMT_VINFO_RELATED_STMT (stmt_info) == stmt);
+          save_relevant = STMT_VINFO_RELEVANT (stmt_info);
+          save_live_p = STMT_VINFO_LIVE_P (stmt_info);
+          stmt = pattern_stmt;
+        }
     }
 
   STMT_VINFO_LIVE_P (stmt_info) |= live_p;
@@ -361,7 +476,8 @@ process_use (gimple stmt, tree use, loop_vec_info loop_vinfo, bool live_p,
         }
     }
 
-  vect_mark_relevant (worklist, def_stmt, relevant, live_p);
+  vect_mark_relevant (worklist, def_stmt, relevant, live_p,
+                      is_pattern_stmt_p (stmt_vinfo));
   return true;
 }
 
@@ -418,7 +534,7 @@ vect_mark_stmts_to_be_vectorized (loop_vec_info loop_vinfo)
 	    }
 
 	  if (vect_stmt_relevant_p (phi, loop_vinfo, &relevant, &live_p))
-	    vect_mark_relevant (&worklist, phi, relevant, live_p);
+	    vect_mark_relevant (&worklist, phi, relevant, live_p, false);
 	}
       for (si = gsi_start_bb (bb); !gsi_end_p (si); gsi_next (&si))
 	{
@@ -430,7 +546,7 @@ vect_mark_stmts_to_be_vectorized (loop_vec_info loop_vinfo)
 	    }
 
 	  if (vect_stmt_relevant_p (stmt, loop_vinfo, &relevant, &live_p))
-            vect_mark_relevant (&worklist, stmt, relevant, live_p);
+            vect_mark_relevant (&worklist, stmt, relevant, live_p, false);
 	}
     }
 
@@ -529,15 +645,49 @@ vect_mark_stmts_to_be_vectorized (loop_vec_info loop_vinfo)
             break;
         }
 
-      FOR_EACH_PHI_OR_STMT_USE (use_p, stmt, iter, SSA_OP_USE)
-	{
-	  tree op = USE_FROM_PTR (use_p);
-	  if (!process_use (stmt, op, loop_vinfo, live_p, relevant, &worklist))
-	    {
-	      VEC_free (gimple, heap, worklist);
-	      return false;
-	    }
-	}
+      if (is_pattern_stmt_p (vinfo_for_stmt (stmt)))
+        {
+          /* Pattern statements are not inserted into the code, so
+             FOR_EACH_PHI_OR_STMT_USE optimizes their operands out, and we
+             have to scan the RHS or function arguments instead.  */
+          if (is_gimple_assign (stmt))
+            {
+              for (i = 1; i < gimple_num_ops (stmt); i++)
+                {
+                  tree op = gimple_op (stmt, i);
+                  if (!process_use (stmt, op, loop_vinfo, live_p, relevant,
+                                    &worklist))
+                    {
+                      VEC_free (gimple, heap, worklist);
+                      return false;
+                    }
+                 }
+            }
+          else if (is_gimple_call (stmt))
+            {
+              for (i = 0; i < gimple_call_num_args (stmt); i++)
+                {
+                  tree arg = gimple_call_arg (stmt, i);
+                  if (!process_use (stmt, arg, loop_vinfo, live_p, relevant,
+                                    &worklist))
+                    {
+                      VEC_free (gimple, heap, worklist);
+                      return false;
+                    }
+                }
+            }
+        }
+      else
+        FOR_EACH_PHI_OR_STMT_USE (use_p, stmt, iter, SSA_OP_USE)
+          {
+            tree op = USE_FROM_PTR (use_p);
+            if (!process_use (stmt, op, loop_vinfo, live_p, relevant,
+                              &worklist))
+              {
+                VEC_free (gimple, heap, worklist);
+                return false;
+              }
+          }
     } /* while worklist */
 
   VEC_free (gimple, heap, worklist);
@@ -632,10 +782,10 @@ vect_model_simple_cost (stmt_vec_info stmt_info, int ncopies,
 static int
 vect_cost_strided_group_size (stmt_vec_info stmt_info)
 {
-  gimple first_stmt = DR_GROUP_FIRST_DR (stmt_info);
+  gimple first_stmt = GROUP_FIRST_ELEMENT (stmt_info);
 
   if (first_stmt == STMT_VINFO_STMT (stmt_info))
-    return DR_GROUP_SIZE (stmt_info);
+    return GROUP_SIZE (stmt_info);
 
   return 1;
 }
@@ -648,7 +798,8 @@ vect_cost_strided_group_size (stmt_vec_info stmt_info)
 
 void
 vect_model_store_cost (stmt_vec_info stmt_info, int ncopies,
-		       enum vect_def_type dt, slp_tree slp_node)
+		       bool store_lanes_p, enum vect_def_type dt,
+		       slp_tree slp_node)
 {
   int group_size;
   unsigned int inside_cost = 0, outside_cost = 0;
@@ -663,7 +814,7 @@ vect_model_store_cost (stmt_vec_info stmt_info, int ncopies,
     outside_cost = vect_get_stmt_cost (scalar_to_vec); 
 
   /* Strided access?  */
-  if (DR_GROUP_FIRST_DR (stmt_info))
+  if (STMT_VINFO_STRIDED_ACCESS (stmt_info))
     {
       if (slp_node)
         {
@@ -672,7 +823,7 @@ vect_model_store_cost (stmt_vec_info stmt_info, int ncopies,
         }
       else
         {
-          first_stmt = DR_GROUP_FIRST_DR (stmt_info);
+          first_stmt = GROUP_FIRST_ELEMENT (stmt_info);
           group_size = vect_cost_strided_group_size (stmt_info);
         }
 
@@ -685,9 +836,11 @@ vect_model_store_cost (stmt_vec_info stmt_info, int ncopies,
       first_dr = STMT_VINFO_DATA_REF (stmt_info);
     }
 
-  /* Is this an access in a group of stores, which provide strided access?
-     If so, add in the cost of the permutes.  */
-  if (group_size > 1)
+  /* We assume that the cost of a single store-lanes instruction is
+     equivalent to the cost of GROUP_SIZE separate stores.  If a strided
+     access is instead being provided by a permute-and-store operation,
+     include the cost of the permutes.  */
+  if (!store_lanes_p && group_size > 1)
     {
       /* Uses a high and low interleave operation for each needed permute.  */
       inside_cost = ncopies * exact_log2(group_size) * group_size
@@ -763,8 +916,8 @@ vect_get_store_cost (struct data_reference *dr, int ncopies,
    access scheme chosen.  */
 
 void
-vect_model_load_cost (stmt_vec_info stmt_info, int ncopies, slp_tree slp_node)
-
+vect_model_load_cost (stmt_vec_info stmt_info, int ncopies, bool load_lanes_p,
+		      slp_tree slp_node)
 {
   int group_size;
   gimple first_stmt;
@@ -776,8 +929,8 @@ vect_model_load_cost (stmt_vec_info stmt_info, int ncopies, slp_tree slp_node)
     return;
 
   /* Strided accesses?  */
-  first_stmt = DR_GROUP_FIRST_DR (stmt_info);
-  if (first_stmt && !slp_node)
+  first_stmt = GROUP_FIRST_ELEMENT (stmt_info);
+  if (STMT_VINFO_STRIDED_ACCESS (stmt_info) && first_stmt && !slp_node)
     {
       group_size = vect_cost_strided_group_size (stmt_info);
       first_dr = STMT_VINFO_DATA_REF (vinfo_for_stmt (first_stmt));
@@ -789,9 +942,11 @@ vect_model_load_cost (stmt_vec_info stmt_info, int ncopies, slp_tree slp_node)
       first_dr = dr;
     }
 
-  /* Is this an access in a group of loads providing strided access?
-     If so, add in the cost of the permutes.  */
-  if (group_size > 1)
+  /* We assume that the cost of a single load-lanes instruction is
+     equivalent to the cost of GROUP_SIZE separate loads.  If a strided
+     access is instead being provided by a load-and-permute operation,
+     include the cost of the permutes.  */
+  if (!load_lanes_p && group_size > 1)
     {
       /* Uses an even and odd extract operations for each needed permute.  */
       inside_cost = ncopies * exact_log2(group_size) * group_size
@@ -804,7 +959,8 @@ vect_model_load_cost (stmt_vec_info stmt_info, int ncopies, slp_tree slp_node)
 
   /* The loads themselves.  */
   vect_get_load_cost (first_dr, ncopies,
-         ((!DR_GROUP_FIRST_DR (stmt_info)) || group_size > 1 || slp_node),
+         ((!STMT_VINFO_STRIDED_ACCESS (stmt_info)) || group_size > 1
+          || slp_node),
          &inside_cost, &outside_cost);
 
   if (vect_print_dump_info (REPORT_COST))
@@ -1068,7 +1224,14 @@ vect_get_vec_def_for_operand (tree op, gimple stmt, tree *scalar_def)
 
         /* Get the def from the vectorized stmt.  */
         def_stmt_info = vinfo_for_stmt (def_stmt);
+
         vec_stmt = STMT_VINFO_VEC_STMT (def_stmt_info);
+        /* Get vectorized pattern statement.  */
+        if (!vec_stmt
+            && STMT_VINFO_IN_PATTERN_P (def_stmt_info)
+            && !STMT_VINFO_RELEVANT (def_stmt_info))
+          vec_stmt = STMT_VINFO_VEC_STMT (vinfo_for_stmt (
+                       STMT_VINFO_RELATED_STMT (def_stmt_info)));
         gcc_assert (vec_stmt);
 	if (gimple_code (vec_stmt) == GIMPLE_PHI)
 	  vec_oprnd = PHI_RESULT (vec_stmt);
@@ -1270,7 +1433,7 @@ vect_finish_stmt_generation (gimple stmt, gimple vec_stmt,
       print_gimple_stmt (vect_dump, vec_stmt, 0, TDF_SLIM);
     }
 
-  gimple_set_location (vec_stmt, gimple_location (gsi_stmt (*gsi)));
+  gimple_set_location (vec_stmt, gimple_location (stmt));
 }
 
 /* Checks if CALL can be vectorized in type VECTYPE.  Returns
@@ -1324,6 +1487,7 @@ vectorizable_call (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt)
   VEC(tree, heap) *vargs = NULL;
   enum { NARROW, NONE, WIDEN } modifier;
   size_t i, nargs;
+  tree lhs;
 
   /* FORNOW: unsupported in basic block SLP.  */
   gcc_assert (loop_vinfo);
@@ -1461,7 +1625,7 @@ vectorizable_call (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt)
   /** Transform.  **/
 
   if (vect_print_dump_info (REPORT_DETAILS))
-    fprintf (vect_dump, "transform operation.");
+    fprintf (vect_dump, "transform call.");
 
   /* Handle def.  */
   scalar_dest = gimple_call_lhs (stmt);
@@ -1533,7 +1697,7 @@ vectorizable_call (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt)
 		}
 	      else
 		{
-		  vec_oprnd1 = gimple_call_arg (new_stmt, 2*i);
+		  vec_oprnd1 = gimple_call_arg (new_stmt, 2*i + 1);
 		  vec_oprnd0
 		    = vect_get_vec_def_for_stmt_copy (dt[i], vec_oprnd1);
 		  vec_oprnd1
@@ -1580,8 +1744,11 @@ vectorizable_call (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt)
      rhs of the statement with something harmless.  */
 
   type = TREE_TYPE (scalar_dest);
-  new_stmt = gimple_build_assign (gimple_call_lhs (stmt),
-				  build_zero_cst (type));
+  if (is_pattern_stmt_p (stmt_info))
+    lhs = gimple_call_lhs (STMT_VINFO_RELATED_STMT (stmt_info));
+  else
+    lhs = gimple_call_lhs (stmt);
+  new_stmt = gimple_build_assign (lhs, build_zero_cst (type));
   set_vinfo_for_stmt (new_stmt, stmt_info);
   set_vinfo_for_stmt (stmt, NULL);
   STMT_VINFO_STMT (stmt_info) = new_stmt;
@@ -1747,7 +1914,7 @@ vectorizable_conversion (gimple stmt, gimple_stmt_iterator *gsi,
   /* Multiple types in SLP are handled by creating the appropriate number of
      vectorized stmts for each SLP node.  Hence, NCOPIES is always 1 in
      case of SLP.  */
-  if (slp_node)
+  if (slp_node || PURE_SLP_STMT (stmt_info))
     ncopies = 1;
 
   /* Sanity check: make sure that at least one copy of the vectorized stmt
@@ -1940,7 +2107,7 @@ vectorizable_assignment (gimple stmt, gimple_stmt_iterator *gsi,
   /* Multiple types in SLP are handled by creating the appropriate number of
      vectorized stmts for each SLP node. Hence, NCOPIES is always 1 in
      case of SLP.  */
-  if (slp_node)
+  if (slp_node || PURE_SLP_STMT (stmt_info))
     ncopies = 1;
   else
     ncopies = LOOP_VINFO_VECT_FACTOR (loop_vinfo) / nunits;
@@ -1969,6 +2136,9 @@ vectorizable_assignment (gimple stmt, gimple_stmt_iterator *gsi,
   else
     return false;
 
+  if (code == VIEW_CONVERT_EXPR)
+    op = TREE_OPERAND (op, 0);
+
   if (!vect_is_simple_use_1 (op, loop_vinfo, bb_vinfo,
 			     &def_stmt, &def, &dt[0], &vectype_in))
     {
@@ -1979,7 +2149,8 @@ vectorizable_assignment (gimple stmt, gimple_stmt_iterator *gsi,
 
   /* We can handle NOP_EXPR conversions that do not change the number
      of elements or the vector size.  */
-  if (CONVERT_EXPR_CODE_P (code)
+  if ((CONVERT_EXPR_CODE_P (code)
+       || code == VIEW_CONVERT_EXPR)
       && (!vectype_in
 	  || TYPE_VECTOR_SUBPARTS (vectype_in) != nunits
 	  || (GET_MODE_SIZE (TYPE_MODE (vectype))
@@ -2014,7 +2185,8 @@ vectorizable_assignment (gimple stmt, gimple_stmt_iterator *gsi,
       /* Arguments are ready. create the new vector stmt.  */
       FOR_EACH_VEC_ELT (tree, vec_oprnds, i, vop)
        {
-	 if (CONVERT_EXPR_CODE_P (code))
+	 if (CONVERT_EXPR_CODE_P (code)
+	     || code == VIEW_CONVERT_EXPR)
 	   vop = build1 (VIEW_CONVERT_EXPR, vectype, vop);
          new_stmt = gimple_build_assign (vec_dest, vop);
          new_temp = make_ssa_name (vec_dest, new_stmt);
@@ -2036,6 +2208,42 @@ vectorizable_assignment (gimple stmt, gimple_stmt_iterator *gsi,
     }
 
   VEC_free (tree, heap, vec_oprnds);
+  return true;
+}
+
+
+/* Return TRUE if CODE (a shift operation) is supported for SCALAR_TYPE
+   either as shift by a scalar or by a vector.  */
+
+bool
+vect_supportable_shift (enum tree_code code, tree scalar_type)
+{
+
+  enum machine_mode vec_mode;
+  optab optab;
+  int icode;
+  tree vectype;
+
+  vectype = get_vectype_for_scalar_type (scalar_type);
+  if (!vectype)
+    return false;
+
+  optab = optab_for_tree_code (code, vectype, optab_scalar);
+  if (!optab
+      || optab_handler (optab, TYPE_MODE (vectype)) == CODE_FOR_nothing)
+    {
+      optab = optab_for_tree_code (code, vectype, optab_vector);
+      if (!optab
+          || (optab_handler (optab, TYPE_MODE (vectype))
+                      == CODE_FOR_nothing))
+        return false;
+    }
+
+  vec_mode = TYPE_MODE (vectype);
+  icode = (int) optab_handler (optab, vec_mode);
+  if (icode == CODE_FOR_nothing)
+    return false;
+
   return true;
 }
 
@@ -2149,7 +2357,7 @@ vectorizable_shift (gimple stmt, gimple_stmt_iterator *gsi,
   /* Multiple types in SLP are handled by creating the appropriate number of
      vectorized stmts for each SLP node.  Hence, NCOPIES is always 1 in
      case of SLP.  */
-  if (slp_node)
+  if (slp_node || PURE_SLP_STMT (stmt_info))
     ncopies = 1;
   else
     ncopies = LOOP_VINFO_VECT_FACTOR (loop_vinfo) / nunits_in;
@@ -2497,7 +2705,7 @@ vectorizable_operation (gimple stmt, gimple_stmt_iterator *gsi,
   /* Multiple types in SLP are handled by creating the appropriate number of
      vectorized stmts for each SLP node.  Hence, NCOPIES is always 1 in
      case of SLP.  */
-  if (slp_node)
+  if (slp_node || PURE_SLP_STMT (stmt_info))
     ncopies = 1;
   else
     ncopies = LOOP_VINFO_VECT_FACTOR (loop_vinfo) / nunits_in;
@@ -2831,11 +3039,9 @@ vectorizable_type_demotion (gimple stmt, gimple_stmt_iterator *gsi,
   VEC (tree, heap) *vec_oprnds0 = NULL;
   VEC (tree, heap) *vec_dsts = NULL, *interm_types = NULL, *tmp_vec_dsts = NULL;
   tree last_oprnd, intermediate_type;
+  bb_vec_info bb_vinfo = STMT_VINFO_BB_VINFO (stmt_info);
 
-  /* FORNOW: not supported by basic block SLP vectorization.  */
-  gcc_assert (loop_vinfo);
-
-  if (!STMT_VINFO_RELEVANT_P (stmt_info))
+  if (!STMT_VINFO_RELEVANT_P (stmt_info) && !bb_vinfo)
     return false;
 
   if (STMT_VINFO_DEF_TYPE (stmt_info) != vect_internal_def)
@@ -2863,7 +3069,7 @@ vectorizable_type_demotion (gimple stmt, gimple_stmt_iterator *gsi,
 	     && SCALAR_FLOAT_TYPE_P (TREE_TYPE (op0))
 	     && CONVERT_EXPR_CODE_P (code))))
     return false;
-  if (!vect_is_simple_use_1 (op0, loop_vinfo, NULL,
+  if (!vect_is_simple_use_1 (op0, loop_vinfo, bb_vinfo,
 			     &def_stmt, &def, &dt[0], &vectype_in))
     {
       if (vect_print_dump_info (REPORT_DETAILS))
@@ -2895,7 +3101,7 @@ vectorizable_type_demotion (gimple stmt, gimple_stmt_iterator *gsi,
   /* Multiple types in SLP are handled by creating the appropriate number of
      vectorized stmts for each SLP node.  Hence, NCOPIES is always 1 in
      case of SLP.  */
-  if (slp_node)
+  if (slp_node || PURE_SLP_STMT (stmt_info))
     ncopies = 1;
   else
     ncopies = LOOP_VINFO_VECT_FACTOR (loop_vinfo) / nunits_out;
@@ -3110,11 +3316,9 @@ vectorizable_type_promotion (gimple stmt, gimple_stmt_iterator *gsi,
   int multi_step_cvt = 0;
   VEC (tree, heap) *vec_oprnds0 = NULL, *vec_oprnds1 = NULL;
   VEC (tree, heap) *vec_dsts = NULL, *interm_types = NULL, *tmp_vec_dsts = NULL;
+  bb_vec_info bb_vinfo = STMT_VINFO_BB_VINFO (stmt_info);
 
-  /* FORNOW: not supported by basic block SLP vectorization.  */
-  gcc_assert (loop_vinfo);
-
-  if (!STMT_VINFO_RELEVANT_P (stmt_info))
+  if (!STMT_VINFO_RELEVANT_P (stmt_info) && !bb_vinfo)
     return false;
 
   if (STMT_VINFO_DEF_TYPE (stmt_info) != vect_internal_def)
@@ -3143,13 +3347,40 @@ vectorizable_type_promotion (gimple stmt, gimple_stmt_iterator *gsi,
 	     && SCALAR_FLOAT_TYPE_P (TREE_TYPE (op0))
 	     && CONVERT_EXPR_CODE_P (code))))
     return false;
-  if (!vect_is_simple_use_1 (op0, loop_vinfo, NULL,
+  if (!vect_is_simple_use_1 (op0, loop_vinfo, bb_vinfo,
 			     &def_stmt, &def, &dt[0], &vectype_in))
     {
       if (vect_print_dump_info (REPORT_DETAILS))
 	fprintf (vect_dump, "use not simple.");
       return false;
     }
+
+  op_type = TREE_CODE_LENGTH (code);
+  if (op_type == binary_op)
+    {
+      bool ok;
+
+      op1 = gimple_assign_rhs2 (stmt);
+      if (code == WIDEN_MULT_EXPR)
+        {
+	  /* For WIDEN_MULT_EXPR, if OP0 is a constant, use the type of
+	     OP1.  */
+          if (CONSTANT_CLASS_P (op0))
+            ok = vect_is_simple_use_1 (op1, loop_vinfo, NULL,
+                             &def_stmt, &def, &dt[1], &vectype_in);
+          else
+            ok = vect_is_simple_use (op1, loop_vinfo, NULL, &def_stmt, &def,
+                                     &dt[1]);
+
+          if (!ok)
+            {
+	      if (vect_print_dump_info (REPORT_DETAILS))
+	        fprintf (vect_dump, "use not simple.");
+              return false;
+            }
+        }        
+    }
+
   /* If op0 is an external or constant def use a vector type with
      the same size as the output vector type.  */
   if (!vectype_in)
@@ -3175,24 +3406,12 @@ vectorizable_type_promotion (gimple stmt, gimple_stmt_iterator *gsi,
   /* Multiple types in SLP are handled by creating the appropriate number of
      vectorized stmts for each SLP node.  Hence, NCOPIES is always 1 in
      case of SLP.  */
-  if (slp_node)
+  if (slp_node || PURE_SLP_STMT (stmt_info))
     ncopies = 1;
   else
     ncopies = LOOP_VINFO_VECT_FACTOR (loop_vinfo) / nunits_in;
 
   gcc_assert (ncopies >= 1);
-
-  op_type = TREE_CODE_LENGTH (code);
-  if (op_type == binary_op)
-    {
-      op1 = gimple_assign_rhs2 (stmt);
-      if (!vect_is_simple_use (op1, loop_vinfo, NULL, &def_stmt, &def, &dt[1]))
-        {
-	  if (vect_print_dump_info (REPORT_DETAILS))
-	    fprintf (vect_dump, "use not simple.");
-          return false;
-        }
-    }
 
   /* Supportable by target?  */
   if (!supportable_widening_operation (code, stmt, vectype_out, vectype_in,
@@ -3218,6 +3437,14 @@ vectorizable_type_promotion (gimple stmt, gimple_stmt_iterator *gsi,
   if (vect_print_dump_info (REPORT_DETAILS))
     fprintf (vect_dump, "transform type promotion operation. ncopies = %d.",
                         ncopies);
+
+  if (code == WIDEN_MULT_EXPR)
+    {
+      if (CONSTANT_CLASS_P (op0))
+	op0 = fold_convert (TREE_TYPE (op1), op0);
+      else if (CONSTANT_CLASS_P (op1))
+	op1 = fold_convert (TREE_TYPE (op0), op1);
+    }
 
   /* Handle def.  */
   /* In case of multi-step promotion, we first generate promotion operations
@@ -3329,6 +3556,7 @@ vectorizable_store (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
   stmt_vec_info stmt_info = vinfo_for_stmt (stmt);
   struct data_reference *dr = STMT_VINFO_DATA_REF (stmt_info), *first_dr = NULL;
   tree vectype = STMT_VINFO_VECTYPE (stmt_info);
+  tree elem_type;
   loop_vec_info loop_vinfo = STMT_VINFO_LOOP_VINFO (stmt_info);
   struct loop *loop = NULL;
   enum machine_mode vec_mode;
@@ -3344,6 +3572,7 @@ vectorizable_store (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
   int j;
   gimple next_stmt, first_stmt = NULL;
   bool strided_store = false;
+  bool store_lanes_p = false;
   unsigned int group_size, i;
   VEC(tree,heap) *dr_chain = NULL, *oprnds = NULL, *result_chain = NULL;
   bool inv_p;
@@ -3351,6 +3580,7 @@ vectorizable_store (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
   bool slp = (slp_node != NULL);
   unsigned int vec_num;
   bb_vec_info bb_vinfo = STMT_VINFO_BB_VINFO (stmt_info);
+  tree aggr_type;
 
   if (loop_vinfo)
     loop = LOOP_VINFO_LOOP (loop_vinfo);
@@ -3358,7 +3588,7 @@ vectorizable_store (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
   /* Multiple types in SLP are handled by creating the appropriate number of
      vectorized stmts for each SLP node. Hence, NCOPIES is always 1 in
      case of SLP.  */
-  if (slp)
+  if (slp || PURE_SLP_STMT (stmt_info))
     ncopies = 1;
   else
     ncopies = LOOP_VINFO_VECT_FACTOR (loop_vinfo) / nunits;
@@ -3404,7 +3634,8 @@ vectorizable_store (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
 
   /* The scalar rhs type needs to be trivially convertible to the vector
      component type.  This should always be the case.  */
-  if (!useless_type_conversion_p (TREE_TYPE (vectype), TREE_TYPE (op)))
+  elem_type = TREE_TYPE (vectype);
+  if (!useless_type_conversion_p (elem_type, TREE_TYPE (op)))
     {
       if (vect_print_dump_info (REPORT_DETAILS))
         fprintf (vect_dump, "???  operands of different types");
@@ -3430,16 +3661,21 @@ vectorizable_store (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
   if (STMT_VINFO_STRIDED_ACCESS (stmt_info))
     {
       strided_store = true;
-      first_stmt = DR_GROUP_FIRST_DR (stmt_info);
-      if (!vect_strided_store_supported (vectype)
-	  && !PURE_SLP_STMT (stmt_info) && !slp)
-	return false;
+      first_stmt = GROUP_FIRST_ELEMENT (stmt_info);
+      if (!slp && !PURE_SLP_STMT (stmt_info))
+	{
+	  group_size = GROUP_SIZE (vinfo_for_stmt (first_stmt));
+	  if (vect_store_lanes_supported (vectype, group_size))
+	    store_lanes_p = true;
+	  else if (!vect_strided_store_supported (vectype, group_size))
+	    return false;
+	}
 
       if (first_stmt == stmt)
 	{
           /* STMT is the leader of the group. Check the operands of all the
              stmts of the group.  */
-          next_stmt = DR_GROUP_NEXT_DR (stmt_info);
+          next_stmt = GROUP_NEXT_ELEMENT (stmt_info);
           while (next_stmt)
             {
 	      gcc_assert (gimple_assign_single_p (next_stmt));
@@ -3451,7 +3687,7 @@ vectorizable_store (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
                     fprintf (vect_dump, "use not simple.");
                   return false;
                 }
-              next_stmt = DR_GROUP_NEXT_DR (vinfo_for_stmt (next_stmt));
+              next_stmt = GROUP_NEXT_ELEMENT (vinfo_for_stmt (next_stmt));
             }
         }
     }
@@ -3459,7 +3695,7 @@ vectorizable_store (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
   if (!vec_stmt) /* transformation not required.  */
     {
       STMT_VINFO_TYPE (stmt_info) = store_vec_info_type;
-      vect_model_store_cost (stmt_info, ncopies, dt, NULL);
+      vect_model_store_cost (stmt_info, ncopies, store_lanes_p, dt, NULL);
       return true;
     }
 
@@ -3468,17 +3704,17 @@ vectorizable_store (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
   if (strided_store)
     {
       first_dr = STMT_VINFO_DATA_REF (vinfo_for_stmt (first_stmt));
-      group_size = DR_GROUP_SIZE (vinfo_for_stmt (first_stmt));
+      group_size = GROUP_SIZE (vinfo_for_stmt (first_stmt));
 
-      DR_GROUP_STORE_COUNT (vinfo_for_stmt (first_stmt))++;
+      GROUP_STORE_COUNT (vinfo_for_stmt (first_stmt))++;
 
       /* FORNOW */
       gcc_assert (!loop || !nested_in_vect_loop_p (loop, stmt));
 
       /* We vectorize all the stmts of the interleaving group when we
 	 reach the last stmt in the group.  */
-      if (DR_GROUP_STORE_COUNT (vinfo_for_stmt (first_stmt))
-	  < DR_GROUP_SIZE (vinfo_for_stmt (first_stmt))
+      if (GROUP_STORE_COUNT (vinfo_for_stmt (first_stmt))
+	  < GROUP_SIZE (vinfo_for_stmt (first_stmt))
 	  && !slp)
 	{
 	  *vec_stmt = NULL;
@@ -3514,6 +3750,16 @@ vectorizable_store (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
 
   alignment_support_scheme = vect_supportable_dr_alignment (first_dr, false);
   gcc_assert (alignment_support_scheme);
+  /* Targets with store-lane instructions must not require explicit
+     realignment.  */
+  gcc_assert (!store_lanes_p
+	      || alignment_support_scheme == dr_aligned
+	      || alignment_support_scheme == dr_unaligned_supported);
+
+  if (store_lanes_p)
+    aggr_type = build_array_type_nelts (elem_type, vec_num * nunits);
+  else
+    aggr_type = vectype;
 
   /* In case the vectorization factor (VF) is bigger than the number
      of elements that we can fit in a vectype (nunits), we have to generate
@@ -3595,16 +3841,16 @@ vectorizable_store (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
 							    NULL);
 		  VEC_quick_push(tree, dr_chain, vec_oprnd);
 		  VEC_quick_push(tree, oprnds, vec_oprnd);
-		  next_stmt = DR_GROUP_NEXT_DR (vinfo_for_stmt (next_stmt));
+		  next_stmt = GROUP_NEXT_ELEMENT (vinfo_for_stmt (next_stmt));
 		}
 	    }
 
 	  /* We should have catched mismatched types earlier.  */
 	  gcc_assert (useless_type_conversion_p (vectype,
 						 TREE_TYPE (vec_oprnd)));
-	  dataref_ptr = vect_create_data_ref_ptr (first_stmt, NULL, NULL_TREE,
-						  &dummy, &ptr_incr, false,
-						  &inv_p);
+	  dataref_ptr = vect_create_data_ref_ptr (first_stmt, aggr_type, NULL,
+						  NULL_TREE, &dummy, gsi,
+						  &ptr_incr, false, &inv_p);
 	  gcc_assert (bb_vinfo || !inv_p);
 	}
       else
@@ -3625,76 +3871,101 @@ vectorizable_store (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
 	      VEC_replace(tree, dr_chain, i, vec_oprnd);
 	      VEC_replace(tree, oprnds, i, vec_oprnd);
 	    }
-	  dataref_ptr =
-		bump_vector_ptr (dataref_ptr, ptr_incr, gsi, stmt, NULL_TREE);
+	  dataref_ptr = bump_vector_ptr (dataref_ptr, ptr_incr, gsi, stmt,
+					 TYPE_SIZE_UNIT (aggr_type));
 	}
 
-      if (strided_store)
+      if (store_lanes_p)
 	{
-	  result_chain = VEC_alloc (tree, heap, group_size);
-	  /* Permute.  */
-	  if (!vect_permute_store_chain (dr_chain, group_size, stmt, gsi,
-					 &result_chain))
-	    return false;
-	}
+	  tree vec_array;
 
-      next_stmt = first_stmt;
-      for (i = 0; i < vec_num; i++)
-	{
-	  struct ptr_info_def *pi;
-
-	  if (i > 0)
-	    /* Bump the vector pointer.  */
-	    dataref_ptr = bump_vector_ptr (dataref_ptr, ptr_incr, gsi, stmt,
-					   NULL_TREE);
-
-	  if (slp)
-	    vec_oprnd = VEC_index (tree, vec_oprnds, i);
-	  else if (strided_store)
-	    /* For strided stores vectorized defs are interleaved in
-	       vect_permute_store_chain().  */
-	    vec_oprnd = VEC_index (tree, result_chain, i);
-
-	  data_ref = build2 (MEM_REF, TREE_TYPE (vec_oprnd), dataref_ptr,
-			     build_int_cst (reference_alias_ptr_type
-					    (DR_REF (first_dr)), 0));
-	  pi = get_ptr_info (dataref_ptr);
-	  pi->align = TYPE_ALIGN_UNIT (vectype);
-          if (aligned_access_p (first_dr))
-	    pi->misalign = 0;
-          else if (DR_MISALIGNMENT (first_dr) == -1)
+	  /* Combine all the vectors into an array.  */
+	  vec_array = create_vector_array (vectype, vec_num);
+	  for (i = 0; i < vec_num; i++)
 	    {
-	      TREE_TYPE (data_ref)
-		= build_aligned_type (TREE_TYPE (data_ref),
-				      TYPE_ALIGN (TREE_TYPE (vectype)));
-	      pi->align = TYPE_ALIGN_UNIT (TREE_TYPE (vectype));
-	      pi->misalign = 0;
-	    }
-	  else
-	    {
-	      TREE_TYPE (data_ref)
-		= build_aligned_type (TREE_TYPE (data_ref),
-				      TYPE_ALIGN (TREE_TYPE (vectype)));
-	      pi->misalign = DR_MISALIGNMENT (first_dr);
+	      vec_oprnd = VEC_index (tree, dr_chain, i);
+	      write_vector_array (stmt, gsi, vec_oprnd, vec_array, i);
 	    }
 
-	  /* Arguments are ready.  Create the new vector stmt.  */
-	  new_stmt = gimple_build_assign (data_ref, vec_oprnd);
+	  /* Emit:
+	       MEM_REF[...all elements...] = STORE_LANES (VEC_ARRAY).  */
+	  data_ref = create_array_ref (aggr_type, dataref_ptr, first_dr);
+	  new_stmt = gimple_build_call_internal (IFN_STORE_LANES, 1, vec_array);
+	  gimple_call_set_lhs (new_stmt, data_ref);
 	  vect_finish_stmt_generation (stmt, new_stmt, gsi);
 	  mark_symbols_for_renaming (new_stmt);
+	}
+      else
+	{
+	  new_stmt = NULL;
+	  if (strided_store)
+	    {
+	      result_chain = VEC_alloc (tree, heap, group_size);
+	      /* Permute.  */
+	      vect_permute_store_chain (dr_chain, group_size, stmt, gsi,
+					&result_chain);
+	    }
 
-          if (slp)
-            continue;
+	  next_stmt = first_stmt;
+	  for (i = 0; i < vec_num; i++)
+	    {
+	      struct ptr_info_def *pi;
 
-          if (j == 0)
-            STMT_VINFO_VEC_STMT (stmt_info) = *vec_stmt =  new_stmt;
+	      if (i > 0)
+		/* Bump the vector pointer.  */
+		dataref_ptr = bump_vector_ptr (dataref_ptr, ptr_incr, gsi,
+					       stmt, NULL_TREE);
+
+	      if (slp)
+		vec_oprnd = VEC_index (tree, vec_oprnds, i);
+	      else if (strided_store)
+		/* For strided stores vectorized defs are interleaved in
+		   vect_permute_store_chain().  */
+		vec_oprnd = VEC_index (tree, result_chain, i);
+
+	      data_ref = build2 (MEM_REF, TREE_TYPE (vec_oprnd), dataref_ptr,
+				 build_int_cst (reference_alias_ptr_type
+						(DR_REF (first_dr)), 0));
+	      pi = get_ptr_info (dataref_ptr);
+	      pi->align = TYPE_ALIGN_UNIT (vectype);
+	      if (aligned_access_p (first_dr))
+		pi->misalign = 0;
+	      else if (DR_MISALIGNMENT (first_dr) == -1)
+		{
+		  TREE_TYPE (data_ref)
+		    = build_aligned_type (TREE_TYPE (data_ref),
+					  TYPE_ALIGN (elem_type));
+		  pi->align = TYPE_ALIGN_UNIT (elem_type);
+		  pi->misalign = 0;
+		}
+	      else
+		{
+		  TREE_TYPE (data_ref)
+		    = build_aligned_type (TREE_TYPE (data_ref),
+					  TYPE_ALIGN (elem_type));
+		  pi->misalign = DR_MISALIGNMENT (first_dr);
+		}
+
+	      /* Arguments are ready.  Create the new vector stmt.  */
+	      new_stmt = gimple_build_assign (data_ref, vec_oprnd);
+	      vect_finish_stmt_generation (stmt, new_stmt, gsi);
+	      mark_symbols_for_renaming (new_stmt);
+
+	      if (slp)
+		continue;
+
+	      next_stmt = GROUP_NEXT_ELEMENT (vinfo_for_stmt (next_stmt));
+	      if (!next_stmt)
+		break;
+	    }
+	}
+      if (!slp)
+	{
+	  if (j == 0)
+	    STMT_VINFO_VEC_STMT (stmt_info) = *vec_stmt = new_stmt;
 	  else
 	    STMT_VINFO_RELATED_STMT (prev_stmt_info) = new_stmt;
-
 	  prev_stmt_info = vinfo_for_stmt (new_stmt);
-	  next_stmt = DR_GROUP_NEXT_DR (vinfo_for_stmt (next_stmt));
-	  if (!next_stmt)
-	    break;
 	}
     }
 
@@ -3805,6 +4076,7 @@ vectorizable_load (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
   bool nested_in_vect_loop = false;
   struct data_reference *dr = STMT_VINFO_DATA_REF (stmt_info), *first_dr;
   tree vectype = STMT_VINFO_VECTYPE (stmt_info);
+  tree elem_type;
   tree new_temp;
   enum machine_mode mode;
   gimple new_stmt = NULL;
@@ -3821,6 +4093,7 @@ vectorizable_load (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
   gimple phi = NULL;
   VEC(tree,heap) *dr_chain = NULL;
   bool strided_load = false;
+  bool load_lanes_p = false;
   gimple first_stmt;
   tree scalar_type;
   bool inv_p;
@@ -3833,6 +4106,7 @@ vectorizable_load (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
   enum tree_code code;
   bb_vec_info bb_vinfo = STMT_VINFO_BB_VINFO (stmt_info);
   int vf;
+  tree aggr_type;
 
   if (loop_vinfo)
     {
@@ -3846,7 +4120,7 @@ vectorizable_load (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
   /* Multiple types in SLP are handled by creating the appropriate number of
      vectorized stmts for each SLP node.  Hence, NCOPIES is always 1 in
      case of SLP.  */
-  if (slp)
+  if (slp || PURE_SLP_STMT (stmt_info))
     ncopies = 1;
   else
     ncopies = LOOP_VINFO_VECT_FACTOR (loop_vinfo) / nunits;
@@ -3881,7 +4155,8 @@ vectorizable_load (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
       && code != COMPONENT_REF
       && code != IMAGPART_EXPR
       && code != REALPART_EXPR
-      && code != MEM_REF)
+      && code != MEM_REF
+      && TREE_CODE_CLASS (code) != tcc_declaration)
     return false;
 
   if (!STMT_VINFO_DATA_REF (stmt_info))
@@ -3909,7 +4184,8 @@ vectorizable_load (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
 
   /* The vector component type needs to be trivially convertible to the
      scalar lhs.  This should always be the case.  */
-  if (!useless_type_conversion_p (TREE_TYPE (scalar_dest), TREE_TYPE (vectype)))
+  elem_type = TREE_TYPE (vectype);
+  if (!useless_type_conversion_p (TREE_TYPE (scalar_dest), elem_type))
     {
       if (vect_print_dump_info (REPORT_DETAILS))
         fprintf (vect_dump, "???  operands of different types");
@@ -3923,10 +4199,15 @@ vectorizable_load (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
       /* FORNOW */
       gcc_assert (! nested_in_vect_loop);
 
-      /* Check if interleaving is supported.  */
-      if (!vect_strided_load_supported (vectype)
-	  && !PURE_SLP_STMT (stmt_info) && !slp)
-	return false;
+      first_stmt = GROUP_FIRST_ELEMENT (stmt_info);
+      if (!slp && !PURE_SLP_STMT (stmt_info))
+	{
+	  group_size = GROUP_SIZE (vinfo_for_stmt (first_stmt));
+	  if (vect_load_lanes_supported (vectype, group_size))
+	    load_lanes_p = true;
+	  else if (!vect_strided_load_supported (vectype, group_size))
+	    return false;
+	}
     }
 
   if (negative)
@@ -3951,18 +4232,18 @@ vectorizable_load (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
   if (!vec_stmt) /* transformation not required.  */
     {
       STMT_VINFO_TYPE (stmt_info) = load_vec_info_type;
-      vect_model_load_cost (stmt_info, ncopies, NULL);
+      vect_model_load_cost (stmt_info, ncopies, load_lanes_p, NULL);
       return true;
     }
 
   if (vect_print_dump_info (REPORT_DETAILS))
-    fprintf (vect_dump, "transform load.");
+    fprintf (vect_dump, "transform load. ncopies = %d", ncopies);
 
   /** Transform.  **/
 
   if (strided_load)
     {
-      first_stmt = DR_GROUP_FIRST_DR (stmt_info);
+      first_stmt = GROUP_FIRST_ELEMENT (stmt_info);
       /* Check if the chain of loads is already vectorized.  */
       if (STMT_VINFO_VEC_STMT (vinfo_for_stmt (first_stmt)))
 	{
@@ -3970,7 +4251,7 @@ vectorizable_load (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
 	  return true;
 	}
       first_dr = STMT_VINFO_DATA_REF (vinfo_for_stmt (first_stmt));
-      group_size = DR_GROUP_SIZE (vinfo_for_stmt (first_stmt));
+      group_size = GROUP_SIZE (vinfo_for_stmt (first_stmt));
 
       /* VEC_NUM is the number of vect stmts to be created for this group.  */
       if (slp)
@@ -3982,8 +4263,6 @@ vectorizable_load (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
     	}
       else
 	vec_num = group_size;
-
-      dr_chain = VEC_alloc (tree, heap, vec_num);
     }
   else
     {
@@ -3994,6 +4273,11 @@ vectorizable_load (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
 
   alignment_support_scheme = vect_supportable_dr_alignment (first_dr, false);
   gcc_assert (alignment_support_scheme);
+  /* Targets with load-lane instructions must not require explicit
+     realignment.  */
+  gcc_assert (!load_lanes_p
+	      || alignment_support_scheme == dr_aligned
+	      || alignment_support_scheme == dr_unaligned_supported);
 
   /* In case the vectorization factor (VF) is bigger than the number
      of elements that we can fit in a vectype (nunits), we have to generate
@@ -4125,208 +4409,229 @@ vectorizable_load (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
   if (negative)
     offset = size_int (-TYPE_VECTOR_SUBPARTS (vectype) + 1);
 
+  if (load_lanes_p)
+    aggr_type = build_array_type_nelts (elem_type, vec_num * nunits);
+  else
+    aggr_type = vectype;
+
   prev_stmt_info = NULL;
   for (j = 0; j < ncopies; j++)
     {
-      /* 1. Create the vector pointer update chain.  */
+      /* 1. Create the vector or array pointer update chain.  */
       if (j == 0)
-        dataref_ptr = vect_create_data_ref_ptr (first_stmt,
-					        at_loop, offset,
-						&dummy, &ptr_incr, false,
-						&inv_p);
+        dataref_ptr = vect_create_data_ref_ptr (first_stmt, aggr_type, at_loop,
+						offset, &dummy, gsi,
+						&ptr_incr, false, &inv_p);
       else
-        dataref_ptr =
-		bump_vector_ptr (dataref_ptr, ptr_incr, gsi, stmt, NULL_TREE);
+        dataref_ptr = bump_vector_ptr (dataref_ptr, ptr_incr, gsi, stmt,
+				       TYPE_SIZE_UNIT (aggr_type));
 
-      for (i = 0; i < vec_num; i++)
+      if (strided_load || slp_perm)
+	dr_chain = VEC_alloc (tree, heap, vec_num);
+
+      if (load_lanes_p)
 	{
-	  if (i > 0)
-	    dataref_ptr = bump_vector_ptr (dataref_ptr, ptr_incr, gsi, stmt,
-					   NULL_TREE);
+	  tree vec_array;
 
-	  /* 2. Create the vector-load in the loop.  */
-	  switch (alignment_support_scheme)
-	    {
-	    case dr_aligned:
-	    case dr_unaligned_supported:
-	      {
-		struct ptr_info_def *pi;
-		data_ref
-		  = build2 (MEM_REF, vectype, dataref_ptr,
-			    build_int_cst (reference_alias_ptr_type
-					   (DR_REF (first_dr)), 0));
-		pi = get_ptr_info (dataref_ptr);
-		pi->align = TYPE_ALIGN_UNIT (vectype);
-		if (alignment_support_scheme == dr_aligned)
-		  {
-		    gcc_assert (aligned_access_p (first_dr));
-		    pi->misalign = 0;
-		  }
-		else if (DR_MISALIGNMENT (first_dr) == -1)
-		  {
-		    TREE_TYPE (data_ref)
-		      = build_aligned_type (TREE_TYPE (data_ref),
-					    TYPE_ALIGN (TREE_TYPE (vectype)));
-		    pi->align = TYPE_ALIGN_UNIT (TREE_TYPE (vectype));
-		    pi->misalign = 0;
-		  }
-		else
-		  {
-		    TREE_TYPE (data_ref)
-		      = build_aligned_type (TREE_TYPE (data_ref),
-					    TYPE_ALIGN (TREE_TYPE (vectype)));
-		    pi->misalign = DR_MISALIGNMENT (first_dr);
-		  }
-		break;
-	      }
-	    case dr_explicit_realign:
-	      {
-		tree ptr, bump;
-		tree vs_minus_1 = size_int (TYPE_VECTOR_SUBPARTS (vectype) - 1);
+	  vec_array = create_vector_array (vectype, vec_num);
 
-		if (compute_in_loop)
-		  msq = vect_setup_realignment (first_stmt, gsi,
-						&realignment_token,
-						dr_explicit_realign,
-						dataref_ptr, NULL);
-
-		new_stmt = gimple_build_assign_with_ops
-			     (BIT_AND_EXPR, NULL_TREE, dataref_ptr,
-			      build_int_cst
-			        (TREE_TYPE (dataref_ptr),
-				 -(HOST_WIDE_INT)TYPE_ALIGN_UNIT (vectype)));
-		ptr = make_ssa_name (SSA_NAME_VAR (dataref_ptr), new_stmt);
-		gimple_assign_set_lhs (new_stmt, ptr);
-		vect_finish_stmt_generation (stmt, new_stmt, gsi);
-		data_ref
-		  = build2 (MEM_REF, vectype, ptr,
-			    build_int_cst (reference_alias_ptr_type
-					     (DR_REF (first_dr)), 0));
-		vec_dest = vect_create_destination_var (scalar_dest, vectype);
-		new_stmt = gimple_build_assign (vec_dest, data_ref);
-		new_temp = make_ssa_name (vec_dest, new_stmt);
-		gimple_assign_set_lhs (new_stmt, new_temp);
-		gimple_set_vdef (new_stmt, gimple_vdef (stmt));
-		gimple_set_vuse (new_stmt, gimple_vuse (stmt));
-		vect_finish_stmt_generation (stmt, new_stmt, gsi);
-		msq = new_temp;
-
-		bump = size_binop (MULT_EXPR, vs_minus_1,
-				   TYPE_SIZE_UNIT (scalar_type));
-		ptr = bump_vector_ptr (dataref_ptr, NULL, gsi, stmt, bump);
-		new_stmt = gimple_build_assign_with_ops
-			     (BIT_AND_EXPR, NULL_TREE, ptr,
-			      build_int_cst
-			        (TREE_TYPE (ptr),
-				 -(HOST_WIDE_INT)TYPE_ALIGN_UNIT (vectype)));
-		ptr = make_ssa_name (SSA_NAME_VAR (dataref_ptr), new_stmt);
-		gimple_assign_set_lhs (new_stmt, ptr);
-		vect_finish_stmt_generation (stmt, new_stmt, gsi);
-		data_ref
-		  = build2 (MEM_REF, vectype, ptr,
-			    build_int_cst (reference_alias_ptr_type
-					     (DR_REF (first_dr)), 0));
-	        break;
-	      }
-	    case dr_explicit_realign_optimized:
-	      new_stmt = gimple_build_assign_with_ops
-			   (BIT_AND_EXPR, NULL_TREE, dataref_ptr,
-			    build_int_cst
-			      (TREE_TYPE (dataref_ptr),
-			       -(HOST_WIDE_INT)TYPE_ALIGN_UNIT (vectype)));
-	      new_temp = make_ssa_name (SSA_NAME_VAR (dataref_ptr), new_stmt);
-	      gimple_assign_set_lhs (new_stmt, new_temp);
-	      vect_finish_stmt_generation (stmt, new_stmt, gsi);
-	      data_ref
-		= build2 (MEM_REF, vectype, new_temp,
-			  build_int_cst (reference_alias_ptr_type
-					   (DR_REF (first_dr)), 0));
-	      break;
-	    default:
-	      gcc_unreachable ();
-	    }
-	  vec_dest = vect_create_destination_var (scalar_dest, vectype);
-	  new_stmt = gimple_build_assign (vec_dest, data_ref);
-	  new_temp = make_ssa_name (vec_dest, new_stmt);
-	  gimple_assign_set_lhs (new_stmt, new_temp);
+	  /* Emit:
+	       VEC_ARRAY = LOAD_LANES (MEM_REF[...all elements...]).  */
+	  data_ref = create_array_ref (aggr_type, dataref_ptr, first_dr);
+	  new_stmt = gimple_build_call_internal (IFN_LOAD_LANES, 1, data_ref);
+	  gimple_call_set_lhs (new_stmt, vec_array);
 	  vect_finish_stmt_generation (stmt, new_stmt, gsi);
 	  mark_symbols_for_renaming (new_stmt);
 
-	  /* 3. Handle explicit realignment if necessary/supported.  Create in
-		loop: vec_dest = realign_load (msq, lsq, realignment_token)  */
-	  if (alignment_support_scheme == dr_explicit_realign_optimized
-	      || alignment_support_scheme == dr_explicit_realign)
+	  /* Extract each vector into an SSA_NAME.  */
+	  for (i = 0; i < vec_num; i++)
 	    {
-	      tree tmp;
+	      new_temp = read_vector_array (stmt, gsi, scalar_dest,
+					    vec_array, i);
+	      VEC_quick_push (tree, dr_chain, new_temp);
+	    }
 
-	      lsq = gimple_assign_lhs (new_stmt);
-	      if (!realignment_token)
-		realignment_token = dataref_ptr;
+	  /* Record the mapping between SSA_NAMEs and statements.  */
+	  vect_record_strided_load_vectors (stmt, dr_chain);
+	}
+      else
+	{
+	  for (i = 0; i < vec_num; i++)
+	    {
+	      if (i > 0)
+		dataref_ptr = bump_vector_ptr (dataref_ptr, ptr_incr, gsi,
+					       stmt, NULL_TREE);
+
+	      /* 2. Create the vector-load in the loop.  */
+	      switch (alignment_support_scheme)
+		{
+		case dr_aligned:
+		case dr_unaligned_supported:
+		  {
+		    struct ptr_info_def *pi;
+		    data_ref
+		      = build2 (MEM_REF, vectype, dataref_ptr,
+				build_int_cst (reference_alias_ptr_type
+					       (DR_REF (first_dr)), 0));
+		    pi = get_ptr_info (dataref_ptr);
+		    pi->align = TYPE_ALIGN_UNIT (vectype);
+		    if (alignment_support_scheme == dr_aligned)
+		      {
+			gcc_assert (aligned_access_p (first_dr));
+			pi->misalign = 0;
+		      }
+		    else if (DR_MISALIGNMENT (first_dr) == -1)
+		      {
+			TREE_TYPE (data_ref)
+			  = build_aligned_type (TREE_TYPE (data_ref),
+						TYPE_ALIGN (elem_type));
+			pi->align = TYPE_ALIGN_UNIT (elem_type);
+			pi->misalign = 0;
+		      }
+		    else
+		      {
+			TREE_TYPE (data_ref)
+			  = build_aligned_type (TREE_TYPE (data_ref),
+						TYPE_ALIGN (elem_type));
+			pi->misalign = DR_MISALIGNMENT (first_dr);
+		      }
+		    break;
+		  }
+		case dr_explicit_realign:
+		  {
+		    tree ptr, bump;
+		    tree vs_minus_1;
+
+		    vs_minus_1 = size_int (TYPE_VECTOR_SUBPARTS (vectype) - 1);
+
+		    if (compute_in_loop)
+		      msq = vect_setup_realignment (first_stmt, gsi,
+						    &realignment_token,
+						    dr_explicit_realign,
+						    dataref_ptr, NULL);
+
+		    new_stmt = gimple_build_assign_with_ops
+				 (BIT_AND_EXPR, NULL_TREE, dataref_ptr,
+				  build_int_cst
+				  (TREE_TYPE (dataref_ptr),
+				   -(HOST_WIDE_INT)TYPE_ALIGN_UNIT (vectype)));
+		    ptr = make_ssa_name (SSA_NAME_VAR (dataref_ptr), new_stmt);
+		    gimple_assign_set_lhs (new_stmt, ptr);
+		    vect_finish_stmt_generation (stmt, new_stmt, gsi);
+		    data_ref
+		      = build2 (MEM_REF, vectype, ptr,
+				build_int_cst (reference_alias_ptr_type
+						 (DR_REF (first_dr)), 0));
+		    vec_dest = vect_create_destination_var (scalar_dest,
+							    vectype);
+		    new_stmt = gimple_build_assign (vec_dest, data_ref);
+		    new_temp = make_ssa_name (vec_dest, new_stmt);
+		    gimple_assign_set_lhs (new_stmt, new_temp);
+		    gimple_set_vdef (new_stmt, gimple_vdef (stmt));
+		    gimple_set_vuse (new_stmt, gimple_vuse (stmt));
+		    vect_finish_stmt_generation (stmt, new_stmt, gsi);
+		    msq = new_temp;
+
+		    bump = size_binop (MULT_EXPR, vs_minus_1,
+				       TYPE_SIZE_UNIT (scalar_type));
+		    ptr = bump_vector_ptr (dataref_ptr, NULL, gsi, stmt, bump);
+		    new_stmt = gimple_build_assign_with_ops
+				 (BIT_AND_EXPR, NULL_TREE, ptr,
+				  build_int_cst
+				  (TREE_TYPE (ptr),
+				   -(HOST_WIDE_INT)TYPE_ALIGN_UNIT (vectype)));
+		    ptr = make_ssa_name (SSA_NAME_VAR (dataref_ptr), new_stmt);
+		    gimple_assign_set_lhs (new_stmt, ptr);
+		    vect_finish_stmt_generation (stmt, new_stmt, gsi);
+		    data_ref
+		      = build2 (MEM_REF, vectype, ptr,
+				build_int_cst (reference_alias_ptr_type
+						 (DR_REF (first_dr)), 0));
+		    break;
+		  }
+		case dr_explicit_realign_optimized:
+		  new_stmt = gimple_build_assign_with_ops
+			       (BIT_AND_EXPR, NULL_TREE, dataref_ptr,
+				build_int_cst
+				  (TREE_TYPE (dataref_ptr),
+				   -(HOST_WIDE_INT)TYPE_ALIGN_UNIT (vectype)));
+		  new_temp = make_ssa_name (SSA_NAME_VAR (dataref_ptr),
+					    new_stmt);
+		  gimple_assign_set_lhs (new_stmt, new_temp);
+		  vect_finish_stmt_generation (stmt, new_stmt, gsi);
+		  data_ref
+		    = build2 (MEM_REF, vectype, new_temp,
+			      build_int_cst (reference_alias_ptr_type
+					       (DR_REF (first_dr)), 0));
+		  break;
+		default:
+		  gcc_unreachable ();
+		}
 	      vec_dest = vect_create_destination_var (scalar_dest, vectype);
-	      tmp = build3 (REALIGN_LOAD_EXPR, vectype, msq, lsq,
-			    realignment_token);
-	      new_stmt = gimple_build_assign (vec_dest, tmp);
+	      new_stmt = gimple_build_assign (vec_dest, data_ref);
 	      new_temp = make_ssa_name (vec_dest, new_stmt);
 	      gimple_assign_set_lhs (new_stmt, new_temp);
 	      vect_finish_stmt_generation (stmt, new_stmt, gsi);
+	      mark_symbols_for_renaming (new_stmt);
 
-	      if (alignment_support_scheme == dr_explicit_realign_optimized)
+	      /* 3. Handle explicit realignment if necessary/supported.
+		 Create in loop:
+		   vec_dest = realign_load (msq, lsq, realignment_token)  */
+	      if (alignment_support_scheme == dr_explicit_realign_optimized
+		  || alignment_support_scheme == dr_explicit_realign)
 		{
-		  gcc_assert (phi);
-		  if (i == vec_num - 1 && j == ncopies - 1)
-		    add_phi_arg (phi, lsq, loop_latch_edge (containing_loop),
-				 UNKNOWN_LOCATION);
-		  msq = lsq;
-		}
-	    }
-
-	  /* 4. Handle invariant-load.  */
-	  if (inv_p && !bb_vinfo)
-	    {
-	      gcc_assert (!strided_load);
-	      gcc_assert (nested_in_vect_loop_p (loop, stmt));
-	      if (j == 0)
-		{
-		  int k;
-		  tree t = NULL_TREE;
-		  tree vec_inv, bitpos, bitsize = TYPE_SIZE (scalar_type);
-
-		  /* CHECKME: bitpos depends on endianess?  */
-		  bitpos = bitsize_zero_node;
-		  vec_inv = build3 (BIT_FIELD_REF, scalar_type, new_temp,
-				    bitsize, bitpos);
-		  vec_dest =
-			vect_create_destination_var (scalar_dest, NULL_TREE);
-		  new_stmt = gimple_build_assign (vec_dest, vec_inv);
-                  new_temp = make_ssa_name (vec_dest, new_stmt);
+		  lsq = gimple_assign_lhs (new_stmt);
+		  if (!realignment_token)
+		    realignment_token = dataref_ptr;
+		  vec_dest = vect_create_destination_var (scalar_dest, vectype);
+		  new_stmt
+		    = gimple_build_assign_with_ops3 (REALIGN_LOAD_EXPR,
+						     vec_dest, msq, lsq,
+						     realignment_token);
+		  new_temp = make_ssa_name (vec_dest, new_stmt);
 		  gimple_assign_set_lhs (new_stmt, new_temp);
 		  vect_finish_stmt_generation (stmt, new_stmt, gsi);
 
-		  for (k = nunits - 1; k >= 0; --k)
-		    t = tree_cons (NULL_TREE, new_temp, t);
-		  /* FIXME: use build_constructor directly.  */
-		  vec_inv = build_constructor_from_list (vectype, t);
-		  new_temp = vect_init_vector (stmt, vec_inv, vectype, gsi);
+		  if (alignment_support_scheme == dr_explicit_realign_optimized)
+		    {
+		      gcc_assert (phi);
+		      if (i == vec_num - 1 && j == ncopies - 1)
+			add_phi_arg (phi, lsq,
+				     loop_latch_edge (containing_loop),
+				     UNKNOWN_LOCATION);
+		      msq = lsq;
+		    }
+		}
+
+	      /* 4. Handle invariant-load.  */
+	      if (inv_p && !bb_vinfo)
+		{
+		  tree vec_inv;
+		  gimple_stmt_iterator gsi2 = *gsi;
+		  gcc_assert (!strided_load);
+		  gsi_next (&gsi2);
+		  vec_inv = build_vector_from_val (vectype, scalar_dest);
+		  new_temp = vect_init_vector (stmt, vec_inv,
+					       vectype, &gsi2);
 		  new_stmt = SSA_NAME_DEF_STMT (new_temp);
 		}
-	      else
-		gcc_unreachable (); /* FORNOW. */
+
+	      if (negative)
+		{
+		  new_temp = reverse_vec_elements (new_temp, stmt, gsi);
+		  new_stmt = SSA_NAME_DEF_STMT (new_temp);
+		}
+
+	      /* Collect vector loads and later create their permutation in
+		 vect_transform_strided_load ().  */
+	      if (strided_load || slp_perm)
+		VEC_quick_push (tree, dr_chain, new_temp);
+
+	      /* Store vector loads in the corresponding SLP_NODE.  */
+	      if (slp && !slp_perm)
+		VEC_quick_push (gimple, SLP_TREE_VEC_STMTS (slp_node),
+				new_stmt);
 	    }
-
-	  if (negative)
-	    {
-	      new_temp = reverse_vec_elements (new_temp, stmt, gsi);
-	      new_stmt = SSA_NAME_DEF_STMT (new_temp);
-	    }
-
-	  /* Collect vector loads and later create their permutation in
-	     vect_transform_strided_load ().  */
-          if (strided_load || slp_perm)
-            VEC_quick_push (tree, dr_chain, new_temp);
-
-         /* Store vector loads in the corresponding SLP_NODE.  */
-	  if (slp && !slp_perm)
-	    VEC_quick_push (gimple, SLP_TREE_VEC_STMTS (slp_node), new_stmt);
 	}
 
       if (slp && !slp_perm)
@@ -4345,12 +4650,9 @@ vectorizable_load (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
         {
           if (strided_load)
   	    {
-	      if (!vect_transform_strided_load (stmt, dr_chain, group_size, gsi))
-	        return false;
-
+	      if (!load_lanes_p)
+		vect_transform_strided_load (stmt, dr_chain, group_size, gsi);
 	      *vec_stmt = STMT_VINFO_VEC_STMT (stmt_info);
-              VEC_free (tree, heap, dr_chain);
-	      dr_chain = VEC_alloc (tree, heap, group_size);
 	    }
           else
 	    {
@@ -4361,10 +4663,9 @@ vectorizable_load (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
 	      prev_stmt_info = vinfo_for_stmt (new_stmt);
 	    }
         }
+      if (dr_chain)
+	VEC_free (tree, heap, dr_chain);
     }
-
-  if (dr_chain)
-    VEC_free (tree, heap, dr_chain);
 
   return true;
 }
@@ -4375,15 +4676,19 @@ vectorizable_load (gimple stmt, gimple_stmt_iterator *gsi, gimple *vec_stmt,
    LOOP - the loop that is being vectorized.
    COND - Condition that is checked for simple use.
 
+   Output:
+   *COMP_VECTYPE - the vector type for the comparison.
+
    Returns whether a COND can be vectorized.  Checks whether
    condition operands are supportable using vec_is_simple_use.  */
 
 static bool
-vect_is_simple_cond (tree cond, loop_vec_info loop_vinfo)
+vect_is_simple_cond (tree cond, loop_vec_info loop_vinfo, tree *comp_vectype)
 {
   tree lhs, rhs;
   tree def;
   enum vect_def_type dt;
+  tree vectype1 = NULL_TREE, vectype2 = NULL_TREE;
 
   if (!COMPARISON_CLASS_P (cond))
     return false;
@@ -4394,8 +4699,8 @@ vect_is_simple_cond (tree cond, loop_vec_info loop_vinfo)
   if (TREE_CODE (lhs) == SSA_NAME)
     {
       gimple lhs_def_stmt = SSA_NAME_DEF_STMT (lhs);
-      if (!vect_is_simple_use (lhs, loop_vinfo, NULL, &lhs_def_stmt, &def,
-                               &dt))
+      if (!vect_is_simple_use_1 (lhs, loop_vinfo, NULL, &lhs_def_stmt, &def,
+				 &dt, &vectype1))
 	return false;
     }
   else if (TREE_CODE (lhs) != INTEGER_CST && TREE_CODE (lhs) != REAL_CST
@@ -4405,14 +4710,15 @@ vect_is_simple_cond (tree cond, loop_vec_info loop_vinfo)
   if (TREE_CODE (rhs) == SSA_NAME)
     {
       gimple rhs_def_stmt = SSA_NAME_DEF_STMT (rhs);
-      if (!vect_is_simple_use (rhs, loop_vinfo, NULL, &rhs_def_stmt, &def,
-                               &dt))
+      if (!vect_is_simple_use_1 (rhs, loop_vinfo, NULL, &rhs_def_stmt, &def,
+				 &dt, &vectype2))
 	return false;
     }
   else if (TREE_CODE (rhs) != INTEGER_CST  && TREE_CODE (rhs) != REAL_CST
 	   && TREE_CODE (rhs) != FIXED_CST)
     return false;
 
+  *comp_vectype = vectype1 ? vectype1 : vectype2;
   return true;
 }
 
@@ -4435,16 +4741,15 @@ vectorizable_condition (gimple stmt, gimple_stmt_iterator *gsi,
 {
   tree scalar_dest = NULL_TREE;
   tree vec_dest = NULL_TREE;
-  tree op = NULL_TREE;
   tree cond_expr, then_clause, else_clause;
   stmt_vec_info stmt_info = vinfo_for_stmt (stmt);
   tree vectype = STMT_VINFO_VECTYPE (stmt_info);
+  tree comp_vectype;
   tree vec_cond_lhs = NULL_TREE, vec_cond_rhs = NULL_TREE;
   tree vec_then_clause = NULL_TREE, vec_else_clause = NULL_TREE;
   tree vec_compare, vec_cond_expr;
   tree new_temp;
   loop_vec_info loop_vinfo = STMT_VINFO_LOOP_VINFO (stmt_info);
-  enum machine_mode vec_mode;
   tree def;
   enum vect_def_type dt, dts[4];
   int nunits = TYPE_VECTOR_SUBPARTS (vectype);
@@ -4456,6 +4761,10 @@ vectorizable_condition (gimple stmt, gimple_stmt_iterator *gsi,
   /* FORNOW: unsupported in basic block SLP.  */
   gcc_assert (loop_vinfo);
 
+  /* FORNOW: SLP not supported.  */
+  if (STMT_SLP_TYPE (stmt_info))
+    return false;
+
   gcc_assert (ncopies >= 1);
   if (reduc_index && ncopies > 1)
     return false; /* FORNOW */
@@ -4466,10 +4775,6 @@ vectorizable_condition (gimple stmt, gimple_stmt_iterator *gsi,
   if (STMT_VINFO_DEF_TYPE (stmt_info) != vect_internal_def
       && !(STMT_VINFO_DEF_TYPE (stmt_info) == vect_nested_cycle
            && reduc_def))
-    return false;
-
-  /* FORNOW: SLP not supported.  */
-  if (STMT_SLP_TYPE (stmt_info))
     return false;
 
   /* FORNOW: not yet supported.  */
@@ -4489,19 +4794,12 @@ vectorizable_condition (gimple stmt, gimple_stmt_iterator *gsi,
   if (code != COND_EXPR)
     return false;
 
-  gcc_assert (gimple_assign_single_p (stmt));
-  op = gimple_assign_rhs1 (stmt);
-  cond_expr = TREE_OPERAND (op, 0);
-  then_clause = TREE_OPERAND (op, 1);
-  else_clause = TREE_OPERAND (op, 2);
+  cond_expr = gimple_assign_rhs1 (stmt);
+  then_clause = gimple_assign_rhs2 (stmt);
+  else_clause = gimple_assign_rhs3 (stmt);
 
-  if (!vect_is_simple_cond (cond_expr, loop_vinfo))
-    return false;
-
-  /* We do not handle two different vector types for the condition
-     and the values.  */
-  if (!types_compatible_p (TREE_TYPE (TREE_OPERAND (cond_expr, 0)),
-			   TREE_TYPE (vectype)))
+  if (!vect_is_simple_cond (cond_expr, loop_vinfo, &comp_vectype)
+      || !comp_vectype)
     return false;
 
   if (TREE_CODE (then_clause) == SSA_NAME)
@@ -4528,13 +4826,10 @@ vectorizable_condition (gimple stmt, gimple_stmt_iterator *gsi,
 	   && TREE_CODE (else_clause) != FIXED_CST)
     return false;
 
-
-  vec_mode = TYPE_MODE (vectype);
-
   if (!vec_stmt)
     {
       STMT_VINFO_TYPE (stmt_info) = condition_vec_info_type;
-      return expand_vec_cond_expr_p (TREE_TYPE (op), vec_mode);
+      return expand_vec_cond_expr_p (vectype, comp_vectype);
     }
 
   /* Transform */
@@ -4621,6 +4916,7 @@ vect_analyze_stmt (gimple stmt, bool *need_to_vectorize, slp_tree node)
   enum vect_relevant relevance = STMT_VINFO_RELEVANT (stmt_info);
   bool ok;
   tree scalar_type, vectype;
+  gimple pattern_stmt, pattern_def_stmt;
 
   if (vect_print_dump_info (REPORT_DETAILS))
     {
@@ -4642,16 +4938,70 @@ vect_analyze_stmt (gimple stmt, bool *need_to_vectorize, slp_tree node)
      - any LABEL_EXPRs in the loop
      - computations that are used only for array indexing or loop control.
      In basic blocks we only analyze statements that are a part of some SLP
-     instance, therefore, all the statements are relevant.  */
+     instance, therefore, all the statements are relevant.
 
+     Pattern statement need to be analyzed instead of the original statement
+     if the original statement is not relevant.  Otherwise, we analyze both
+     statements.  */
+
+  pattern_stmt = STMT_VINFO_RELATED_STMT (stmt_info);
   if (!STMT_VINFO_RELEVANT_P (stmt_info)
       && !STMT_VINFO_LIVE_P (stmt_info))
     {
-      if (vect_print_dump_info (REPORT_DETAILS))
-        fprintf (vect_dump, "irrelevant.");
+      if (STMT_VINFO_IN_PATTERN_P (stmt_info)
+          && pattern_stmt
+          && (STMT_VINFO_RELEVANT_P (vinfo_for_stmt (pattern_stmt))
+              || STMT_VINFO_LIVE_P (vinfo_for_stmt (pattern_stmt))))
+        {
+          /* Analyze PATTERN_STMT instead of the original stmt.  */
+          stmt = pattern_stmt;
+          stmt_info = vinfo_for_stmt (pattern_stmt);
+          if (vect_print_dump_info (REPORT_DETAILS))
+            {
+              fprintf (vect_dump, "==> examining pattern statement: ");
+              print_gimple_stmt (vect_dump, stmt, 0, TDF_SLIM);
+            }
+        }
+      else
+        {
+          if (vect_print_dump_info (REPORT_DETAILS))
+            fprintf (vect_dump, "irrelevant.");
 
-      return true;
+          return true;
+        }
     }
+  else if (STMT_VINFO_IN_PATTERN_P (stmt_info)
+           && pattern_stmt
+           && (STMT_VINFO_RELEVANT_P (vinfo_for_stmt (pattern_stmt))
+               || STMT_VINFO_LIVE_P (vinfo_for_stmt (pattern_stmt))))
+    {
+      /* Analyze PATTERN_STMT too.  */
+      if (vect_print_dump_info (REPORT_DETAILS))
+        {
+          fprintf (vect_dump, "==> examining pattern statement: ");
+          print_gimple_stmt (vect_dump, stmt, 0, TDF_SLIM);
+        }
+
+      if (!vect_analyze_stmt (pattern_stmt, need_to_vectorize, node))
+        return false;
+   }
+
+  if (is_pattern_stmt_p (stmt_info)
+      && (pattern_def_stmt = STMT_VINFO_PATTERN_DEF_STMT (stmt_info))
+      && (STMT_VINFO_RELEVANT_P (vinfo_for_stmt (pattern_def_stmt))
+          || STMT_VINFO_LIVE_P (vinfo_for_stmt (pattern_def_stmt))))
+    {
+      /* Analyze def stmt of STMT if it's a pattern stmt.  */
+      if (vect_print_dump_info (REPORT_DETAILS))
+        {
+          fprintf (vect_dump, "==> examining pattern def statement: ");
+          print_gimple_stmt (vect_dump, pattern_def_stmt, 0, TDF_SLIM);
+        }
+
+      if (!vect_analyze_stmt (pattern_def_stmt, need_to_vectorize, node))
+        return false;
+   }
+
 
   switch (STMT_VINFO_DEF_TYPE (stmt_info))
     {
@@ -4729,7 +5079,9 @@ vect_analyze_stmt (gimple stmt, bool *need_to_vectorize, slp_tree node)
     else
       {
         if (bb_vinfo)
-          ok = (vectorizable_shift (stmt, NULL, NULL, node)
+          ok = (vectorizable_type_promotion (stmt, NULL, NULL, node)
+                || vectorizable_type_demotion (stmt, NULL, NULL, node)
+               || vectorizable_shift (stmt, NULL, NULL, node)
                 || vectorizable_operation (stmt, NULL, NULL, node)
                 || vectorizable_assignment (stmt, NULL, NULL, node)
                 || vectorizable_load (stmt, NULL, NULL, node, NULL)
@@ -4769,27 +5121,6 @@ vect_analyze_stmt (gimple stmt, bool *need_to_vectorize, slp_tree node)
        return false;
     }
 
-  if (!PURE_SLP_STMT (stmt_info))
-    {
-      /* Groups of strided accesses whose size is not a power of 2 are not
-         vectorizable yet using loop-vectorization.  Therefore, if this stmt
-	 feeds non-SLP-able stmts (i.e., this stmt has to be both SLPed and
-	 loop-based vectorized), the loop cannot be vectorized.  */
-      if (STMT_VINFO_STRIDED_ACCESS (stmt_info)
-          && exact_log2 (DR_GROUP_SIZE (vinfo_for_stmt (
-                                        DR_GROUP_FIRST_DR (stmt_info)))) == -1)
-        {
-          if (vect_print_dump_info (REPORT_DETAILS))
-            {
-              fprintf (vect_dump, "not vectorized: the size of group "
-                                  "of strided accesses is not a power of 2");
-              print_gimple_stmt (vect_dump, stmt, 0, TDF_SLIM);
-            }
-
-          return false;
-        }
-    }
-
   return true;
 }
 
@@ -4806,7 +5137,6 @@ vect_transform_stmt (gimple stmt, gimple_stmt_iterator *gsi,
   bool is_store = false;
   gimple vec_stmt = NULL;
   stmt_vec_info stmt_info = vinfo_for_stmt (stmt);
-  gimple orig_stmt_in_pattern, orig_scalar_stmt = stmt;
   bool done;
 
   switch (STMT_VINFO_TYPE (stmt_info))
@@ -4945,25 +5275,7 @@ vect_transform_stmt (gimple stmt, gimple_stmt_iterator *gsi,
     }
 
   if (vec_stmt)
-    {
-      STMT_VINFO_VEC_STMT (stmt_info) = vec_stmt;
-      orig_stmt_in_pattern = STMT_VINFO_RELATED_STMT (stmt_info);
-      if (orig_stmt_in_pattern)
-	{
-	  stmt_vec_info stmt_vinfo = vinfo_for_stmt (orig_stmt_in_pattern);
-	  /* STMT was inserted by the vectorizer to replace a computation idiom.
-	     ORIG_STMT_IN_PATTERN is a stmt in the original sequence that
-	     computed this idiom.  We need to record a pointer to VEC_STMT in
-	     the stmt_info of ORIG_STMT_IN_PATTERN.  See more details in the
-	     documentation of vect_pattern_recog.  */
-	  if (STMT_VINFO_IN_PATTERN_P (stmt_vinfo))
-	    {
-	      gcc_assert (STMT_VINFO_RELATED_STMT (stmt_vinfo)
-                           == orig_scalar_stmt);
-	      STMT_VINFO_VEC_STMT (stmt_vinfo) = vec_stmt;
-	    }
-	}
-    }
+    STMT_VINFO_VEC_STMT (stmt_info) = vec_stmt;
 
   return is_store;
 }
@@ -4984,7 +5296,7 @@ vect_remove_stores (gimple first_stmt)
       /* Free the attached stmt_vec_info and remove the stmt.  */
       next_si = gsi_for_stmt (next);
       gsi_remove (&next_si, true);
-      tmp = DR_GROUP_NEXT_DR (vinfo_for_stmt (next));
+      tmp = GROUP_NEXT_ELEMENT (vinfo_for_stmt (next));
       free_stmt_vec_info (next);
       next = tmp;
     }
@@ -5013,6 +5325,7 @@ new_stmt_vec_info (gimple stmt, loop_vec_info loop_vinfo,
   STMT_VINFO_VECTORIZABLE (res) = true;
   STMT_VINFO_IN_PATTERN_P (res) = false;
   STMT_VINFO_RELATED_STMT (res) = NULL;
+  STMT_VINFO_PATTERN_DEF_STMT (res) = NULL;
   STMT_VINFO_DATA_REF (res) = NULL;
 
   STMT_VINFO_DR_BASE_ADDRESS (res) = NULL;
@@ -5031,13 +5344,13 @@ new_stmt_vec_info (gimple stmt, loop_vec_info loop_vinfo,
   STMT_VINFO_INSIDE_OF_LOOP_COST (res) = 0;
   STMT_VINFO_OUTSIDE_OF_LOOP_COST (res) = 0;
   STMT_SLP_TYPE (res) = loop_vect;
-  DR_GROUP_FIRST_DR (res) = NULL;
-  DR_GROUP_NEXT_DR (res) = NULL;
-  DR_GROUP_SIZE (res) = 0;
-  DR_GROUP_STORE_COUNT (res) = 0;
-  DR_GROUP_GAP (res) = 0;
-  DR_GROUP_SAME_DR_STMT (res) = NULL;
-  DR_GROUP_READ_WRITE_DEPENDENCE (res) = false;
+  GROUP_FIRST_ELEMENT (res) = NULL;
+  GROUP_NEXT_ELEMENT (res) = NULL;
+  GROUP_SIZE (res) = 0;
+  GROUP_STORE_COUNT (res) = 0;
+  GROUP_GAP (res) = 0;
+  GROUP_SAME_DR_STMT (res) = NULL;
+  GROUP_READ_WRITE_DEPENDENCE (res) = false;
 
   return res;
 }
@@ -5112,6 +5425,15 @@ get_vectype_for_scalar_type_and_size (tree scalar_type, unsigned size)
   if (GET_MODE_CLASS (inner_mode) != MODE_INT
       && GET_MODE_CLASS (inner_mode) != MODE_FLOAT)
     return NULL_TREE;
+
+  /* We shouldn't end up building VECTOR_TYPEs of non-scalar components.
+     When the component mode passes the above test simply use a type
+     corresponding to that mode.  The theory is that any use that
+     would cause problems with this will disable vectorization anyway.  */
+  if (!SCALAR_FLOAT_TYPE_P (scalar_type)
+      && !INTEGRAL_TYPE_P (scalar_type)
+      && !POINTER_TYPE_P (scalar_type))
+    scalar_type = lang_hooks.types.type_for_mode (inner_mode, 1);
 
   /* If no size was supplied use the mode the target prefers.   Otherwise
      lookup a vector mode of the specified size.  */
@@ -5341,8 +5663,12 @@ vect_is_simple_use_1 (tree operand, loop_vec_info loop_vinfo,
       || *dt == vect_nested_cycle)
     {
       stmt_vec_info stmt_info = vinfo_for_stmt (*def_stmt);
-      if (STMT_VINFO_IN_PATTERN_P (stmt_info))
+
+      if (STMT_VINFO_IN_PATTERN_P (stmt_info)
+          && !STMT_VINFO_RELEVANT (stmt_info)
+          && !STMT_VINFO_LIVE_P (stmt_info))
 	stmt_info = vinfo_for_stmt (STMT_VINFO_RELATED_STMT (stmt_info));
+
       *vectype = STMT_VINFO_VECTYPE (stmt_info);
       gcc_assert (*vectype != NULL_TREE);
     }
@@ -5391,7 +5717,7 @@ supportable_widening_operation (enum tree_code code, gimple stmt,
 {
   stmt_vec_info stmt_info = vinfo_for_stmt (stmt);
   loop_vec_info loop_info = STMT_VINFO_LOOP_VINFO (stmt_info);
-  struct loop *vect_loop = LOOP_VINFO_LOOP (loop_info);
+  struct loop *vect_loop = NULL;
   bool ordered_p;
   enum machine_mode vec_mode;
   enum insn_code icode1, icode2;
@@ -5399,6 +5725,9 @@ supportable_widening_operation (enum tree_code code, gimple stmt,
   tree vectype = vectype_in;
   tree wide_vectype = vectype_out;
   enum tree_code c1, c2;
+
+  if (loop_info)
+    vect_loop = LOOP_VINFO_LOOP (loop_info);
 
   /* The result of a vectorized widening operation usually requires two vectors
      (because the widened results do not fit int one vector). The generated
@@ -5420,7 +5749,8 @@ supportable_widening_operation (enum tree_code code, gimple stmt,
      iterations in parallel).  We therefore don't allow to change the order
      of the computation in the inner-loop during outer-loop vectorization.  */
 
-   if (STMT_VINFO_RELEVANT (stmt_info) == vect_used_by_reduction
+   if (vect_loop
+       && STMT_VINFO_RELEVANT (stmt_info) == vect_used_by_reduction
        && !nested_in_vect_loop_p (vect_loop, stmt))
      ordered_p = false;
    else

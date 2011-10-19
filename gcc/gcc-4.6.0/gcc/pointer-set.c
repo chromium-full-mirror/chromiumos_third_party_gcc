@@ -192,16 +192,19 @@ int
 pointer_set_delete (struct pointer_set_t *pset, const void *p)
 {
   size_t n = hash1 (p, pset->n_slots, pset->log_slots);
-  size_t n2;
-  const void* ptr;
 
-  /* Find location of p. */
   while (true)
     {
       if (pset->slots[n] == p)
-        break;
+        {
+          pset->slots[n] = 0;
+          --pset->n_elements;
+          return 1;
+        }
       else if (pset->slots[n] == 0)
-        return 0;
+        {
+          return 0;
+        }
       else
         {
           ++n;
@@ -209,31 +212,6 @@ pointer_set_delete (struct pointer_set_t *pset, const void *p)
             n = 0;
         }
     }
-
-  /* Remove p from set. */
-  pset->slots[n] = 0;
-
-  /* Now we need to scan foward and re-hash every value that we encounter,
-     until we find an empty slot.
-   */
-  while (true)
-    {
-      ++n;
-      if (n >= pset->n_slots)
-        n = 0;
-      ptr = pset->slots[n];
-
-      if (ptr == 0) break;
-
-      /* Remove ptr from set. */
-      pset->slots[n] = 0;
-      n2 = insert_aux(ptr, pset->slots, pset->n_slots, pset->log_slots);
-      /* Put ptr back in set. */
-      pset->slots[n2] = ptr;
-    }
-
-  --pset->n_elements;
-  return 1;
 }
 
 /* Pass each pointer in PSET to the function in FN, together with the fixed

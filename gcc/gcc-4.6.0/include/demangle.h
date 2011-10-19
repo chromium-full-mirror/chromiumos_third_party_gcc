@@ -45,7 +45,13 @@ extern "C" {
 #define DMGL_VERBOSE	 (1 << 3)	/* Include implementation details.  */
 #define DMGL_TYPES	 (1 << 4)	/* Also try to demangle type encodings.  */
 #define DMGL_RET_POSTFIX (1 << 5)       /* Print function return types (when
-                                           present) after function signature */
+					   present) after function signature.
+					   It applies only to the toplevel
+					   function type.  */
+#define DMGL_RET_DROP	 (1 << 6)       /* Suppress printing function return
+					   types, even if present.  It applies
+					   only to the toplevel function type.
+					   */
 
 #define DMGL_AUTO	 (1 << 8)
 #define DMGL_GNU	 (1 << 9)
@@ -396,7 +402,9 @@ enum demangle_component_type
   /* An unnamed type.  */
   DEMANGLE_COMPONENT_UNNAMED_TYPE,
   /* A pack expansion.  */
-  DEMANGLE_COMPONENT_PACK_EXPANSION
+  DEMANGLE_COMPONENT_PACK_EXPANSION,
+  /* A cloned function.  */
+  DEMANGLE_COMPONENT_CLONE
 };
 
 /* Types which are only used internally.  */

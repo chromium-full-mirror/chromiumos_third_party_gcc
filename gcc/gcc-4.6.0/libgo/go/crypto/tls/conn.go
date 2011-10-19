@@ -34,8 +34,12 @@ type Conn struct {
 	cipherSuite       uint16
 	ocspResponse      []byte // stapled OCSP response
 	peerCertificates  []*x509.Certificate
+	// verifiedChains contains the certificate chains that we built, as
+	// opposed to the ones presented by the server.
+	verifiedChains [][]*x509.Certificate
 
-	clientProtocol string
+	clientProtocol         string
+	clientProtocolFallback bool
 
 	// first permanent error
 	errMutex sync.Mutex
@@ -233,7 +237,7 @@ func (hc *halfConn) decrypt(b *block) (bool, alert) {
 			// "Password Interception in a SSL/TLS Channel", Brice
 			// Canvel et al.
 			//
-			// However, our behaviour matches OpenSSL, so we leak
+			// However, our behavior matches OpenSSL, so we leak
 			// only as much as they do.
 		default:
 			panic("unknown cipher type")
@@ -406,7 +410,7 @@ func (hc *halfConn) freeBlock(b *block) {
 
 // splitBlock splits a block after the first n bytes,
 // returning a block with those n bytes and a
-// block with the remaindec.  the latter may be nil.
+// block with the remainder.  the latter may be nil.
 func (hc *halfConn) splitBlock(b *block, n int) (*block, *block) {
 	if len(b.data) <= n {
 		return b, nil
@@ -761,7 +765,10 @@ func (c *Conn) ConnectionState() ConnectionState {
 	state.HandshakeComplete = c.handshakeComplete
 	if c.handshakeComplete {
 		state.NegotiatedProtocol = c.clientProtocol
+		state.NegotiatedProtocolIsMutual = !c.clientProtocolFallback
 		state.CipherSuite = c.cipherSuite
+		state.PeerCertificates = c.peerCertificates
+		state.VerifiedChains = c.verifiedChains
 	}
 
 	return state
@@ -776,15 +783,6 @@ func (c *Conn) OCSPResponse() []byte {
 	return c.ocspResponse
 }
 
-// PeerCertificates returns the certificate chain that was presented by the
-// other side.
-func (c *Conn) PeerCertificates() []*x509.Certificate {
-	c.handshakeMutex.Lock()
-	defer c.handshakeMutex.Unlock()
-
-	return c.peerCertificates
-}
-
 // VerifyHostname checks that the peer certificate chain is valid for
 // connecting to host.  If so, it returns nil; if not, it returns an os.Error
 // describing the problem.
@@ -792,10 +790,10 @@ func (c *Conn) VerifyHostname(host string) os.Error {
 	c.handshakeMutex.Lock()
 	defer c.handshakeMutex.Unlock()
 	if !c.isClient {
-		return os.ErrorString("VerifyHostname called on TLS server connection")
+		return os.NewError("VerifyHostname called on TLS server connection")
 	}
 	if !c.handshakeComplete {
-		return os.ErrorString("TLS handshake has not yet been performed")
+		return os.NewError("TLS handshake has not yet been performed")
 	}
 	return c.peerCertificates[0].VerifyHostname(host)
 }

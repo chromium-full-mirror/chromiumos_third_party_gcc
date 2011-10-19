@@ -1,9 +1,165 @@
+2011-10-17  Dehao Chen  <dehao@google.com>
 
-2011-07-11   DeLesley Hutchins  <delesley@google.com>
-      * cp/gc.class (cp_get_virtual_function_decl.c handle_call_gs): 
-      Changes function to return null if the method cannot be found.
+	Add a flag (-frecord-gcc-switches-in-elf) to record compiler
+	command line options to .gnu.switches.text sections of
+	the object file.
+	* coverage.c (write_opts_to_asm): Write the options to
+	.gnu.switches.text sections.
+	* common.opt: Ditto.
+	* opts.h: Ditto.
+
+2011-10-04   Diego Novillo  <dnovillo@google.com>
+
+	Merge from google/integration rev 179485.
+
+2011-09-22   Diego Novillo  <dnovillo@google.com>
+
+	Merge from google/integration rev 179052.
+
+2011-09-20   Diego Novillo  <dnovillo@google.com>
+
+	Merge from google/integration rev 178863.
+
+2011-09-15  Easwaran Raman  <eraman@google.com>
+
+	* Makefile.in (PLUGIN_HEADERS): Add l-ipo.h.
+
+2011-09-07  Sriraman Tallam  <tmsriram@google.com>
+
+	* mversn-dispatch.c (specialize_call): Rebuild cgraph edges after
+	specialization.
+	(clone_and_dispatch_function): Rebuild cgraph edges to compute
+	inline parameters.
+	(do_convert_builtin_dispatch): Ditto.
+	(convert_builtin_dispatch): Remove call to mark_syms_for_renaming
+	for phi nodes.
+	* passes.c (init_optimization_passes): Remove pass to rebuild
+	cgraph edges after converting __builtin_dispatch.
+
+2011-08-11  David Li  <davidxl@google.com>
+
+	* l-ipo.c (process_module_scope_static_var): Handle aliases.
+	(process_module_scope_static_func): New function.
+
+2011-08-02   David Li  <davidxl@google.com>
+
+	Port 53689-p2 and 53705-p2 to v15
+	* libgcov.c (__gcov_merge_dc): Relax over assertion in
+	dc merging.
+
+2011-07-28  David Li  <davidxl@google.com>
+
+	* coverage.c (coverage_init): Remove checking of profile-use
+	flags.
+
+2011-07-26  David Li  <davidxl@google.com>
+
+	* value-prof.c (gimple_value_profile_transformations): Remove redundant code.
+	* cgraphunit.c (cgraph_mark_functions_to_output): Fix assertion in lipo mode.
+	* ipa-inline.c (early_inliner): Check fake edge.
+	* l-ipo.c (pop_module_scope): Process alias node.
+	(cgraph_unify_type_alias_sets): Skip empty function.
+
+2011-07-25  Diego Novillo  <dnovillo@google.com>
+
+	* tree-threadsafe-analyze.c (gate_threadsafe_analyze): Always
+	return false.
+
+2011-07-21   Rong Xu  <xur@google.com>
+
+        * ipa.c (function_and_variable_visibility): In LIPO mode, call 
+        varpool_externally_visible_p() to set the externally visible 
+        attribute even for varpool nodes that not marked as needed.
+        * l-ipo.c (varpool_do_link): Merge the externally visible 
+        attribute for varpool nodes.
+
+2011-07-21  Diego Novillo  <dnovillo@google.com>
+
+	Merge from google/integration rev. 176385.
+
+2011-07-21  David Li  <davidxl@google.com>
+
+	* cgraphunit.c (cgraph_mark_functions_to_output): Fix test for
+        DECL_EXTERNAL.
+
+2011-07-21   Diego Novillo  <dnovillo@google.com>
+
+	* Makefile.in (COLLECT2_OBJS): Add vec.o and ggc-none.o.
+	(GCOV_OBJS): Likewise.
+	(GCOV_DUMP_OBJS): Likewise.
+	(LTO_WRAPPER_OBJS): New.
+	(lto-wrapper$(exeext)): Use.
+	(mversn-dispatch.o): Add dependency on ipa-inline.h.
+	(value-prof.o): Likewise.
+
+2011-07-21   Diego Novillo  <dnovillo@google.com>
+
+	* ipa-inline.c (ipa_inline): Remove extra fprintf argument.
+
+2011-07-21   Diego Novillo  <dnovillo@google.com>
+
+	* coverage.c (check_pmu_profile_options): Move ...
+	* opts.c (check_pmu_profile_options): ... here.  Make static.
+	* coverage.h (check_pmu_profile_options): Remove declaration.
+
+2011-07-21   Diego Novillo  <dnovillo@google.com>
+
+	* tree-inline.c (tree_can_inline_p): Remove unused function.
+
+2011-07-21   Diego Novillo  <dnovillo@google.com>
+
+	* c-decl.c (c_save_built_in_decl_post_parsing): Call
+	cgraph_get_create_node instead of cgraph_node.
+	* final.c (leaf_renumber_regs_insn): Likewise.
+	(dump_cgraph_profiles): Likewise.
+	(rest_of_handle_final): Likewise.
+	* l-ipo.c (cgraph_lipo_get_resolved_node_1): Likewise.
+	(cgraph_lipo_get_resolved_node): Likewise.
+	(promote_static_var_func): Likewise.
+	* mversn-dispatch.c (make_constructor_function): Likewise.
+	(clone_function): Likewise.
+	(specialize_call): Likewise.
+	(clone_and_dispatch_function): Likewise.
+	(do_convert_builtin_dispatch): Likewise.
+	* tree-profile.c (gimple_gen_ic_profiler): Likewise.
+	(gimple_gen_ic_func_profiler): Likewise.
+	(gimple_gen_dc_profiler): Likewise.
+	(gimple_gen_dc_func_profiler): Likewise.
+	* value-prof.c (gimple_value_profile_transformations): Likewise.
+
+2011-07-21   David Li  <davidxl@google.com>
+
+	* ipa-inline.c (better_inline_comdat_function_p): Call inline_summary.
+	(recursive_inlining): Add local PROBABILITY.
+
+2011-07-21   Diego Novillo  <dnovillo@google.com>
+
+	* Makefile.in (ipa-inline-transform.o): Add dependency on l-ipo.h.
+	* ipa-inline-transform.c: Include l-ipo.h.
+
+2011-07-21   Diego Novillo  <dnovillo@google.com>
+
+        * coverage.c (get_da_file_name): Use base_file_name instead of
+        filename.
+
+2011-07-21   Diego Novillo  <dnovillo@google.com>
+
+	* cgraphbuild.c (add_fake_indirect_call_edges): Call
+	cgraph_get_create_node instead of cgraph_node.
+	(rebuild_cgraph_edges): Likewise.
+
+2011-07-21  David Li  <davidxl@google.com>
+
+	* cgraphunit.c (cgraph_mark_functions_to_output): Fix test for
+        DECL_EXTERNAL.
+
+2011-07-20  Diego Novillo  <dnovillo@google.com>
+
+	tree.h (enum operand_equal_flag): Add values
+	OEP_ALLOW_NULL, OEP_ALLOW_NO_TYPE.
 
 2011-06-30   DeLesley Hutchins  <delesley@google.com>
+
        * tree-threadsafe-analyze.c (handle_call_gs): Fixes case where
        the virtual method callee has unknown type.
 

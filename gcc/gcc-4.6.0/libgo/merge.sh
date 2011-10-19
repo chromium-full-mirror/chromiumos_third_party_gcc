@@ -32,15 +32,15 @@ fi
 
 repository=$1
 
-merge_rev=`sed 1q MERGE`
+old_rev=`sed 1q MERGE`
 
 rm -rf ${OLDDIR}
-hg clone -r ${merge_rev} ${repository} ${OLDDIR}
+hg clone -r ${old_rev} ${repository} ${OLDDIR}
 
 rm -rf ${NEWDIR}
-hg clone ${repository} ${NEWDIR}
+hg clone -u release ${repository} ${NEWDIR}
 
-new_rev=`cd ${NEWDIR} && hg log | sed 1q | sed -e 's/.*://'`
+new_rev=`cd ${NEWDIR} && hg log -r release | sed 1q | sed -e 's/.*://'`
 
 merge() {
   name=$1
@@ -146,7 +146,7 @@ done
   done
 done
 
-runtime="goc2c.c mcache.c mcentral.c mfinal.c mfixalloc.c mgc0.c mheap.c mheapmap32.c mheapmap64.c msize.c malloc.h mheapmap32.h mheapmap64.h malloc.goc mprof.goc"
+runtime="goc2c.c mcache.c mcentral.c mfinal.c mfixalloc.c mgc0.c mheap.c msize.c malloc.h malloc.goc mprof.goc"
 for f in $runtime; do
   oldfile=${OLDDIR}/src/pkg/runtime/$f
   newfile=${NEWDIR}/src/pkg/runtime/$f

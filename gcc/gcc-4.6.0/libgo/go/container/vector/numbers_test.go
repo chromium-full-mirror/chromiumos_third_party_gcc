@@ -11,9 +11,7 @@ import (
 	"testing"
 )
 
-
 const memTestN = 1000000
-
 
 func s(n uint64) string {
 	str := fmt.Sprintf("%d", n)
@@ -31,8 +29,10 @@ func s(n uint64) string {
 	return strings.Join(a, " ")
 }
 
-
 func TestVectorNums(t *testing.T) {
+	if testing.Short() {
+		return
+	}
 	var v Vector
 	c := int(0)
 	runtime.GC()
@@ -49,8 +49,10 @@ func TestVectorNums(t *testing.T) {
 	t.Logf("%T.Push(%#v), n = %s: Alloc/n = %.2f\n", v, c, s(memTestN), float64(n)/memTestN)
 }
 
-
 func TestIntVectorNums(t *testing.T) {
+	if testing.Short() {
+		return
+	}
 	var v IntVector
 	c := int(0)
 	runtime.GC()
@@ -67,8 +69,10 @@ func TestIntVectorNums(t *testing.T) {
 	t.Logf("%T.Push(%#v), n = %s: Alloc/n = %.2f\n", v, c, s(memTestN), float64(n)/memTestN)
 }
 
-
 func TestStringVectorNums(t *testing.T) {
+	if testing.Short() {
+		return
+	}
 	var v StringVector
 	c := ""
 	runtime.GC()
@@ -85,7 +89,6 @@ func TestStringVectorNums(t *testing.T) {
 	t.Logf("%T.Push(%#v), n = %s: Alloc/n = %.2f\n", v, c, s(memTestN), float64(n)/memTestN)
 }
 
-
 func BenchmarkVectorNums(b *testing.B) {
 	c := int(0)
 	var v Vector
@@ -97,7 +100,6 @@ func BenchmarkVectorNums(b *testing.B) {
 	}
 }
 
-
 func BenchmarkIntVectorNums(b *testing.B) {
 	c := int(0)
 	var v IntVector
@@ -108,7 +110,6 @@ func BenchmarkIntVectorNums(b *testing.B) {
 		v.Push(c)
 	}
 }
-
 
 func BenchmarkStringVectorNums(b *testing.B) {
 	c := ""

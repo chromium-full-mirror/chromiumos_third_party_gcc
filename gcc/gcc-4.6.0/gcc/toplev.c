@@ -62,6 +62,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "integrate.h"
 #include "debug.h"
 #include "target.h"
+#include "common/common-target.h"
 #include "langhooks.h"
 #include "cfglayout.h"
 #include "cfgloop.h"
@@ -125,13 +126,6 @@ unsigned int save_decoded_options_count;
 
 const struct gcc_debug_hooks *debug_hooks;
 
-/* True if this is the lto front end.  This is used to disable
-   gimple generation and lowering passes that are normally run on the
-   output of a front end.  These passes must be bypassed for lto since
-   they have already been done before the gimple was written.  */
-
-bool in_lto_p = false;
-
 /* The FUNCTION_DECL for the function currently being compiled,
    or 0 if between functions.  */
 tree current_function_decl;
@@ -147,6 +141,9 @@ static const char *flag_random_seed;
    zero if the system cannot provide a time.  It will be -1u, if the
    user has specified a particular random seed.  */
 unsigned local_tick;
+
+/* Random number for this compilation */
+HOST_WIDE_INT random_seed;
 
 /* -f flags.  */
 
@@ -183,24 +180,8 @@ struct target_flag_state *this_target_flag_state = &default_target_flag_state;
 #define this_target_flag_state (&default_target_flag_state)
 #endif
 
-typedef struct
-{
-  const char *const string;
-  int *const variable;
-  const int on_value;
-}
-lang_independent_options;
-
 /* The user symbol prefix after having resolved same.  */
 const char *user_label_prefix;
-
-static const param_info lang_independent_params[] = {
-#define DEFPARAM(ENUM, OPTION, HELP, DEFAULT, MIN, MAX) \
-  { OPTION, DEFAULT, MIN, MAX, HELP },
-#include "params.def"
-#undef DEFPARAM
-  { NULL, 0, 0, 0, NULL }
-};
 
 /* Output files for assembler code (real compiler output)
    and debugging dumps.  */
@@ -283,7 +264,7 @@ announce_function (tree decl)
     }
 }
 
-/* Initialize local_tick with the time of day, or -1 if
+/* Initialize local_tick with a random number or -1 if
    flag_random_seed is set.  */
 
 static void
@@ -291,7 +272,17 @@ init_local_tick (void)
 {
   if (!flag_random_seed)
     {
-      /* Get some more or less random data.  */
+      /* Try urandom first. Time of day is too likely to collide. 
+	 In case of any error we just use the local tick. */
+
+      int fd = open ("/dev/urandom", O_RDONLY);
+      if (fd >= 0)
+        {
+          read (fd, &random_seed, sizeof (random_seed));
+          close (fd);
+        }
+
+      /* Now get the tick anyways  */
 #ifdef HAVE_GETTIMEOFDAY
       {
 	struct timeval tv;
@@ -318,24 +309,28 @@ init_local_tick (void)
 static void
 init_random_seed (void)
 {
-  unsigned HOST_WIDE_INT value;
-  static char random_seed[HOST_BITS_PER_WIDE_INT / 4 + 3];
+  if (flag_random_seed)
+    {
+      char *endp;
 
-  value = local_tick ^ getpid ();
-
-  sprintf (random_seed, HOST_WIDE_INT_PRINT_HEX, value);
-  flag_random_seed = random_seed;
+      /* When the driver passed in a hex number don't crc it again */
+      random_seed = strtoul (flag_random_seed, &endp, 0);
+      if (!(endp > flag_random_seed && *endp == 0))
+        random_seed = crc32_string (0, flag_random_seed);
+    }
+  else if (!random_seed)
+    random_seed = local_tick ^ getpid ();  /* Old racey fallback method */
 }
 
-/* Obtain the random_seed string.  Unless NOINIT, initialize it if
+/* Obtain the random_seed.  Unless NOINIT, initialize it if
    it's not provided in the command line.  */
 
-const char *
+HOST_WIDE_INT
 get_random_seed (bool noinit)
 {
   if (!flag_random_seed && !noinit)
     init_random_seed ();
-  return flag_random_seed;
+  return random_seed;
 }
 
 /* Modify the random_seed string to VAL.  Return its previous
@@ -609,40 +604,45 @@ compile_file (void)
   if (flag_dyn_ipa)
     coverage_finish ();
 
-  varpool_assemble_pending_decls ();
-  finish_aliases_2 ();
+  /* Compilation unit is finalized.  When producing non-fat LTO object, we are
+     basically finished.  */
+  if (in_lto_p || !flag_lto || flag_fat_lto_objects)
+    {
+      varpool_assemble_pending_decls ();
+      finish_aliases_2 ();
 
-  /* Likewise for mudflap static object registrations.  */
-  if (flag_mudflap)
-    mudflap_finish_file ();
+      /* Likewise for mudflap static object registrations.  */
+      if (flag_mudflap)
+	mudflap_finish_file ();
 
-  output_shared_constant_pool ();
-  output_object_blocks ();
+      output_shared_constant_pool ();
+      output_object_blocks ();
 
-  /* Write out any pending weak symbol declarations.  */
-  weak_finish ();
+      /* Write out any pending weak symbol declarations.  */
+      weak_finish ();
 
-  /* This must be at the end before unwind and debug info.
-     Some target ports emit PIC setup thunks here.  */
-  targetm.asm_out.code_end ();
+      /* This must be at the end before unwind and debug info.
+	 Some target ports emit PIC setup thunks here.  */
+      targetm.asm_out.code_end ();
 
-  /* Do dbx symbols.  */
-  timevar_push (TV_SYMOUT);
+      /* Do dbx symbols.  */
+      timevar_push (TV_SYMOUT);
 
-#if defined DWARF2_DEBUGGING_INFO || defined DWARF2_UNWIND_INFO
-  if (dwarf2out_do_frame ())
-    dwarf2out_frame_finish ();
-#endif
+    #if defined DWARF2_DEBUGGING_INFO || defined DWARF2_UNWIND_INFO
+      if (dwarf2out_do_frame ())
+	dwarf2out_frame_finish ();
+    #endif
 
-  (*debug_hooks->finish) (main_input_filename);
-  timevar_pop (TV_SYMOUT);
+      (*debug_hooks->finish) (main_input_filename);
+      timevar_pop (TV_SYMOUT);
 
-  /* Output some stuff at end of file if nec.  */
+      /* Output some stuff at end of file if nec.  */
 
-  dw2_output_indirect_constants ();
+      dw2_output_indirect_constants ();
 
-  /* Flush any pending external directives.  */
-  process_pending_assemble_externals ();
+      /* Flush any pending external directives.  */
+      process_pending_assemble_externals ();
+   }
 
   /* Emit LTO marker if LTO info has been previously emitted.  This is
      used by collect2 to determine whether an object file contains IL.
@@ -663,6 +663,23 @@ compile_file (void)
 			 (unsigned HOST_WIDE_INT) 1,
 			 (unsigned HOST_WIDE_INT) 1);
 #endif
+      /* Let linker plugin know that this is a slim object and must be LTOed
+         even when user did not ask for it.  */
+      if (!flag_fat_lto_objects)
+        {
+#if defined ASM_OUTPUT_ALIGNED_DECL_COMMON
+	  ASM_OUTPUT_ALIGNED_DECL_COMMON (asm_out_file, NULL_TREE,
+					  "__gnu_slim_lto",
+					  (unsigned HOST_WIDE_INT) 1, 8);
+#elif defined ASM_OUTPUT_ALIGNED_COMMON
+	  ASM_OUTPUT_ALIGNED_COMMON (asm_out_file, "__gnu_slim_lto",
+				     (unsigned HOST_WIDE_INT) 1, 8);
+#else
+	  ASM_OUTPUT_COMMON (asm_out_file, "__gnu_slim_lto",
+			     (unsigned HOST_WIDE_INT) 1,
+			     (unsigned HOST_WIDE_INT) 1);
+#endif
+        }
     }
 
   /* Attach a special .ident directive to the end of the file to identify
@@ -690,12 +707,6 @@ compile_file (void)
 
   timevar_stop (TV_PHASE_GENERATE);
 }
-
-/* Indexed by enum debug_info_type.  */
-const char *const debug_type_names[] =
-{
-  "none", "stabs", "coff", "dwarf-2", "xcoff", "vms"
-};
 
 /* Print version information to FILE.
    Each line begins with INDENT (for the case where FILE is the
@@ -768,7 +779,6 @@ print_version (FILE *file, const char *indent)
   print_plugins_versions (file, indent);
 }
 
-#ifdef ASM_COMMENT_START
 static int
 print_to_asm_out_file (print_switch_type type, const char * text)
 {
@@ -801,7 +811,6 @@ print_to_asm_out_file (print_switch_type type, const char * text)
       return -1;
     }
 }
-#endif
 
 static int
 print_to_stderr (print_switch_type type, const char * text)
@@ -909,7 +918,7 @@ print_switch_values (print_switch_fn_type print_fn)
 			     SWITCH_TYPE_DESCRIPTIVE, _("options enabled: "));
 
   for (j = 0; j < cl_options_count; j++)
-    if ((cl_options[j].flags & CL_REPORT)
+    if (cl_options[j].cl_report
 	&& option_enabled (j, &global_options) > 0)
       pos = print_single_switch (print_fn, pos,
 				 SWITCH_TYPE_ENABLED, cl_options[j].opt_text);
@@ -967,7 +976,6 @@ init_asm_output (const char *name)
 	    inform (input_location, "-frecord-gcc-switches is not supported by the current target");
 	}
 
-#ifdef ASM_COMMENT_START
       if (flag_verbose_asm)
 	{
 	  /* Print the list of switches in effect
@@ -976,7 +984,6 @@ init_asm_output (const char *name)
 	  print_switch_values (print_to_asm_out_file);
 	  putc ('\n', asm_out_file);
 	}
-#endif
     }
 }
 
@@ -1066,14 +1073,12 @@ output_stack_usage (void)
   };
   HOST_WIDE_INT stack_usage = current_function_static_stack_size;
   enum stack_usage_kind_type stack_usage_kind;
-  expanded_location loc;
-  const char *raw_id, *id;
 
   if (stack_usage < 0)
     {
       if (!warning_issued)
 	{
-	  warning (0, "-fstack-usage not supported for this target");
+	  warning (0, "stack usage computation not supported for this target");
 	  warning_issued = true;
 	}
       return;
@@ -1100,24 +1105,44 @@ output_stack_usage (void)
       stack_usage += current_function_dynamic_stack_size;
     }
 
-  loc = expand_location (DECL_SOURCE_LOCATION (current_function_decl));
+  if (flag_stack_usage)
+    {
+      expanded_location loc
+	= expand_location (DECL_SOURCE_LOCATION (current_function_decl));
+      const char *raw_id, *id;
 
-  /* Strip the scope prefix if any.  */
-  raw_id = lang_hooks.decl_printable_name (current_function_decl, 2);
-  id = strrchr (raw_id, '.');
-  if (id)
-    id++;
-  else
-    id = raw_id;
+      /* Strip the scope prefix if any.  */
+      raw_id = lang_hooks.decl_printable_name (current_function_decl, 2);
+      id = strrchr (raw_id, '.');
+      if (id)
+	id++;
+      else
+	id = raw_id;
 
-  fprintf (stack_usage_file,
-	   "%s:%d:%d:%s\t"HOST_WIDE_INT_PRINT_DEC"\t%s\n",
-	   lbasename (loc.file),
-	   loc.line,
-	   loc.column,
-	   id,
-	   stack_usage,
-	   stack_usage_kind_str[stack_usage_kind]);
+      fprintf (stack_usage_file,
+	       "%s:%d:%d:%s\t"HOST_WIDE_INT_PRINT_DEC"\t%s\n",
+	       lbasename (loc.file),
+	       loc.line,
+	       loc.column,
+	       id,
+	       stack_usage,
+	       stack_usage_kind_str[stack_usage_kind]);
+    }
+
+  if (warn_stack_usage >= 0)
+    {
+      if (stack_usage_kind == DYNAMIC)
+	warning (OPT_Wstack_usage_, "stack usage might be unbounded");
+      else if (stack_usage > warn_stack_usage)
+	{
+	  if (stack_usage_kind == DYNAMIC_BOUNDED)
+	    warning (OPT_Wstack_usage_, "stack usage might be %wd bytes",
+		     stack_usage);
+	  else
+	    warning (OPT_Wstack_usage_, "stack usage is %wd bytes",
+		     stack_usage);
+	}
+    }
 }
 
 /* Open an auxiliary output file.  */
@@ -1212,10 +1237,10 @@ general_init (const char *argv0)
   init_reg_sets ();
 
   /* Register the language-independent parameters.  */
-  add_params (lang_independent_params, LAST_PARAM);
-  targetm.target_option.default_params ();
+  global_init_params ();
 
-  /* This must be done after add_params but before argument processing.  */
+  /* This must be done after global_init_params but before argument
+     processing.  */
   init_ggc_heuristics();
   init_optimization_passes ();
   statistics_early_init ();
@@ -1270,29 +1295,6 @@ process_options (void)
   debug_hooks = &do_nothing_debug_hooks;
 
   maximum_field_alignment = initial_max_fld_align * BITS_PER_UNIT;
-
-  /* This replaces set_Wunused.  */
-  if (warn_unused_function == -1)
-    warn_unused_function = warn_unused;
-  if (warn_unused_label == -1)
-    warn_unused_label = warn_unused;
-  /* Wunused-parameter is enabled if both -Wunused -Wextra are enabled.  */
-  if (warn_unused_parameter == -1)
-    warn_unused_parameter = (warn_unused && extra_warnings);
-  if (warn_unused_variable == -1)
-    warn_unused_variable = warn_unused;
-  /* Wunused-but-set-parameter is enabled if both -Wunused -Wextra are
-     enabled.  */
-  if (warn_unused_but_set_parameter == -1)
-    warn_unused_but_set_parameter = (warn_unused && extra_warnings);
-  if (warn_unused_but_set_variable == -1)
-    warn_unused_but_set_variable = warn_unused;
-  if (warn_unused_value == -1)
-    warn_unused_value = warn_unused;
-
-  /* This replaces set_Wextra.  */
-  if (warn_uninitialized == -1)
-    warn_uninitialized = extra_warnings;
 
   /* Allow the front end to perform consistency checks and do further
      initialization based on the command line options.  This hook also
@@ -1535,7 +1537,7 @@ process_options (void)
 	fatal_error ("can%'t open %s: %m", aux_info_file_name);
     }
 
-  if (! targetm.have_named_sections)
+  if (!targetm_common.have_named_sections)
     {
       if (flag_function_sections)
 	{
@@ -1770,11 +1772,14 @@ lang_dependent_init (const char *name)
     return 0;
   input_location = save_loc;
 
-  init_asm_output (name);
+  if (!flag_wpa)
+    {
+      init_asm_output (name);
 
-  /* If stack usage information is desired, open the output file.  */
-  if (flag_stack_usage)
-    stack_usage_file = open_auxiliary_file ("su");
+      /* If stack usage information is desired, open the output file.  */
+      if (flag_stack_usage)
+	stack_usage_file = open_auxiliary_file ("su");
+    }
 
   /* This creates various _DECL nodes, so needs to be called after the
      front end is initialized.  */
@@ -1783,20 +1788,18 @@ lang_dependent_init (const char *name)
   /* Do the target-specific parts of the initialization.  */
   lang_dependent_init_target ();
 
-  /* If dbx symbol table desired, initialize writing it and output the
-     predefined types.  */
-  timevar_push (TV_SYMOUT);
+  if (!flag_wpa)
+    {
+      /* If dbx symbol table desired, initialize writing it and output the
+	 predefined types.  */
+      timevar_push (TV_SYMOUT);
 
-#if defined DWARF2_DEBUGGING_INFO || defined DWARF2_UNWIND_INFO
-  if (dwarf2out_do_frame ())
-    dwarf2out_frame_init ();
-#endif
+      /* Now we have the correct original filename, we can initialize
+	 debug output.  */
+      (*debug_hooks->init) (name);
 
-  /* Now we have the correct original filename, we can initialize
-     debug output.  */
-  (*debug_hooks->init) (name);
-
-  timevar_pop (TV_SYMOUT);
+      timevar_pop (TV_SYMOUT);
+    }
 
   return 1;
 }
@@ -1875,8 +1878,6 @@ finalize (bool no_backend)
 	fatal_error ("error writing to %s: %m", asm_file_name);
       if (fclose (asm_out_file) != 0)
 	fatal_error ("error closing %s: %m", asm_file_name);
-      if (flag_wpa)
-	unlink_if_ordinary (asm_file_name);
     }
 
   if (stack_usage_file)
@@ -1967,6 +1968,10 @@ do_compile (void)
 int
 toplev_main (int argc, char **argv)
 {
+  /* Parsing and gimplification sometimes need quite large stack.
+     Increase stack size limits if possible.  */
+  stack_limit_increase (64 * 1024 * 1024);
+
   expandargv (&argc, &argv);
 
   /* Initialization of GCC's environment, and diagnostics.  */

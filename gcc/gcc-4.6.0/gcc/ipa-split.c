@@ -92,6 +92,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "fibheap.h"
 #include "params.h"
 #include "gimple-pretty-print.h"
+#include "ipa-inline.h"
 
 /* Per basic block info.  */
 
@@ -169,8 +170,9 @@ static void
 dump_split_point (FILE * file, struct split_point *current)
 {
   fprintf (file,
-	   "Split point at BB %i header time:%i header size: %i"
-	   " split time: %i split size: %i\n  bbs: ",
+	   "Split point at BB %i\n"
+	   "  header time: %i header size: %i\n"
+	   "  split time: %i split size: %i\n  bbs: ",
 	   current->entry_bb->index, current->header_time,
 	   current->header_size, current->split_time, current->split_size);
   dump_bitmap (file, current->split_bbs);
@@ -943,10 +945,10 @@ static void
 split_function (struct split_point *split_point)
 {
   VEC (tree, heap) *args_to_pass = NULL;
-  bitmap args_to_skip = BITMAP_ALLOC (NULL);
+  bitmap args_to_skip;
   tree parm;
   int num = 0;
-  struct cgraph_node *node;
+  struct cgraph_node *node, *cur_node = cgraph_get_node (current_function_decl);
   basic_block return_bb = find_return_bb ();
   basic_block call_bb;
   gimple_stmt_iterator gsi;
@@ -966,17 +968,38 @@ split_function (struct split_point *split_point)
       dump_split_point (dump_file, split_point);
     }
 
+  if (cur_node->local.can_change_signature)
+    args_to_skip = BITMAP_ALLOC (NULL);
+  else
+    args_to_skip = NULL;
+
   /* Collect the parameters of new function and args_to_skip bitmap.  */
   for (parm = DECL_ARGUMENTS (current_function_decl);
        parm; parm = DECL_CHAIN (parm), num++)
-    if (!is_gimple_reg (parm)
-	|| !gimple_default_def (cfun, parm)
-	|| !bitmap_bit_p (split_point->ssa_names_to_pass,
-			  SSA_NAME_VERSION (gimple_default_def (cfun, parm))))
+    if (args_to_skip
+	&& (!is_gimple_reg (parm)
+	    || !gimple_default_def (cfun, parm)
+	    || !bitmap_bit_p (split_point->ssa_names_to_pass,
+			      SSA_NAME_VERSION (gimple_default_def (cfun,
+								    parm)))))
       bitmap_set_bit (args_to_skip, num);
     else
       {
-	arg = gimple_default_def (cfun, parm);
+	/* This parm might not have been used up to now, but is going to be
+	   used, hence register it.  */
+	add_referenced_var (parm);
+	if (is_gimple_reg (parm))
+	  {
+	    arg = gimple_default_def (cfun, parm);
+	    if (!arg)
+	      {
+		arg = make_ssa_name (parm, gimple_build_nop ());
+		set_default_def (parm, arg);
+	      }
+	  }
+	else
+	  arg = parm;
+
 	if (TYPE_MAIN_VARIANT (DECL_ARG_TYPE (parm))
 	    != TYPE_MAIN_VARIANT (TREE_TYPE (arg)))
 	  {
@@ -1036,12 +1059,13 @@ split_function (struct split_point *split_point)
 
   /* If RETURN_BB has virtual operand PHIs, they must be removed and the
      virtual operand marked for renaming as we change the CFG in a way that
-     tree-inline is not able to compensate for. 
+     tree-inline is not able to compensate for.
 
      Note this can happen whether or not we have a return value.  If we have
      a return value, then RETURN_BB may have PHIs for real operands too.  */
   if (return_bb != EXIT_BLOCK_PTR)
     {
+      bool phi_p = false;
       for (gsi = gsi_start_phis (return_bb); !gsi_end_p (gsi);)
 	{
 	  gimple stmt = gsi_stmt (gsi);
@@ -1052,14 +1076,33 @@ split_function (struct split_point *split_point)
 	    }
 	  mark_virtual_phi_result_for_renaming (stmt);
 	  remove_phi_node (&gsi, true);
+	  phi_p = true;
 	}
+      /* In reality we have to rename the reaching definition of the
+	 virtual operand at return_bb as we will eventually release it
+	 when we remove the code region we outlined.
+	 So we have to rename all immediate virtual uses of that region
+	 if we didn't see a PHI definition yet.  */
+      /* ???  In real reality we want to set the reaching vdef of the
+         entry of the SESE region as the vuse of the call and the reaching
+	 vdef of the exit of the SESE region as the vdef of the call.  */
+      if (!phi_p)
+	for (gsi = gsi_start_bb (return_bb); !gsi_end_p (gsi); gsi_next (&gsi))
+	  {
+	    gimple stmt = gsi_stmt (gsi);
+	    if (gimple_vuse (stmt))
+	      {
+		gimple_set_vuse (stmt, NULL_TREE);
+		update_stmt (stmt);
+	      }
+	    if (gimple_vdef (stmt))
+	      break;
+	  }
     }
 
   /* Now create the actual clone.  */
   rebuild_cgraph_edges ();
-  node = cgraph_function_versioning (cgraph_node (current_function_decl),
-				     NULL, NULL,
-				     args_to_skip,
+  node = cgraph_function_versioning (cur_node, NULL, NULL, args_to_skip,
 				     split_point->split_bbs,
 				     split_point->entry_bb, "part");
   /* For usual cloning it is enough to clear builtin only when signature
@@ -1070,7 +1113,7 @@ split_function (struct split_point *split_point)
       DECL_BUILT_IN_CLASS (node->decl) = NOT_BUILT_IN;
       DECL_FUNCTION_CODE (node->decl) = (enum built_in_function) 0;
     }
-  cgraph_node_remove_callees (cgraph_node (current_function_decl));
+  cgraph_node_remove_callees (cur_node);
   if (!split_part_return_p)
     TREE_THIS_VOLATILE (node->decl) = 1;
   if (dump_file)
@@ -1172,11 +1215,31 @@ split_function (struct split_point *split_point)
 		    }
 		}
 	      if (DECL_BY_REFERENCE (DECL_RESULT (current_function_decl)))
-	        gimple_call_set_lhs (call, build_simple_mem_ref (retval));
+		{
+		  gimple_call_set_lhs (call, build_simple_mem_ref (retval));
+		  gsi_insert_after (&gsi, call, GSI_NEW_STMT);
+		}
 	      else
-	        gimple_call_set_lhs (call, retval);
+		{
+		  tree restype;
+		  restype = TREE_TYPE (DECL_RESULT (current_function_decl));
+		  gsi_insert_after (&gsi, call, GSI_NEW_STMT);
+		  if (!useless_type_conversion_p (TREE_TYPE (retval), restype))
+		    {
+		      gimple cpy;
+		      tree tem = create_tmp_reg (restype, NULL);
+		      tem = make_ssa_name (tem, call);
+		      cpy = gimple_build_assign_with_ops (NOP_EXPR, retval,
+							  tem, NULL_TREE);
+		      gsi_insert_after (&gsi, cpy, GSI_NEW_STMT);
+		      retval = tem;
+		    }
+		  gimple_call_set_lhs (call, retval);
+		  update_stmt (call);
+		}
 	    }
-          gsi_insert_after (&gsi, call, GSI_NEW_STMT);
+	  else
+	    gsi_insert_after (&gsi, call, GSI_NEW_STMT);
 	}
       /* We don't use return block (there is either no return in function or
 	 multiple of them).  So create new basic block with return statement.
@@ -1230,7 +1293,7 @@ split_function (struct split_point *split_point)
     }
   free_dominance_info (CDI_DOMINATORS);
   free_dominance_info (CDI_POST_DOMINATORS);
-  compute_inline_parameters (node);
+  compute_inline_parameters (node, true);
 }
 
 /* Execute function splitting pass.  */
@@ -1242,7 +1305,7 @@ execute_split_functions (void)
   basic_block bb;
   int overall_time = 0, overall_size = 0;
   int todo = 0;
-  struct cgraph_node *node = cgraph_node (current_function_decl);
+  struct cgraph_node *node = cgraph_get_node (current_function_decl);
 
   if (flags_from_decl_or_type (current_function_decl) & ECF_NORETURN)
     {
@@ -1258,13 +1321,13 @@ execute_split_functions (void)
     }
   /* This can be relaxed; function might become inlinable after splitting
      away the uninlinable part.  */
-  if (!node->local.inlinable)
+  if (!inline_summary (node)->inlinable)
     {
       if (dump_file)
 	fprintf (dump_file, "Not splitting: not inlinable.\n");
       return 0;
     }
-  if (node->local.disregard_inline_limits)
+  if (DECL_DISREGARD_INLINE_LIMITS (node->decl))
     {
       if (dump_file)
 	fprintf (dump_file, "Not splitting: disregarding inline limits.\n");
@@ -1388,7 +1451,7 @@ struct gimple_opt_pass pass_split_functions =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func			/* todo_flags_finish */
+  0             			/* todo_flags_finish */
  }
 };
 
@@ -1429,6 +1492,6 @@ struct gimple_opt_pass pass_feedback_split_functions =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func			/* todo_flags_finish */
+  0             			/* todo_flags_finish */
  }
 };

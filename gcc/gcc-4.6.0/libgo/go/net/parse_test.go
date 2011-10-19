@@ -12,13 +12,13 @@ import (
 )
 
 func TestReadLine(t *testing.T) {
-	// /etc/services file does not exist on windows.
-	if runtime.GOOS == "windows" {
+	// /etc/services file does not exist on windows and Plan 9.
+	if runtime.GOOS == "windows" || runtime.GOOS == "plan9" {
 		return
 	}
 	filename := "/etc/services" // a nice big file
 
-	fd, err := os.Open(filename, os.O_RDONLY, 0)
+	fd, err := os.Open(filename)
 	if err != nil {
 		t.Fatalf("open %s: %v", filename, err)
 	}

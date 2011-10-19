@@ -132,9 +132,9 @@ Keywords::keyword_to_code(const char* keyword, size_t len) const
 const char*
 Keywords::keyword_to_string(Keyword code) const
 {
-  gcc_assert(code > KEYWORD_INVALID && code < this->count_);
+  go_assert(code > KEYWORD_INVALID && code < this->count_);
   const Mapping* map = &this->mapping_[code];
-  gcc_assert(map->keycode == code);
+  go_assert(map->keycode == code);
   return map->keystring;
 }
 
@@ -198,7 +198,7 @@ Token::Token(const Token& tok)
       mpfr_init_set(this->u_.float_value, tok.u_.float_value, GMP_RNDN);
       break;
     default:
-      gcc_unreachable();
+      go_unreachable();
     }
 }
 
@@ -237,7 +237,7 @@ Token::operator=(const Token& tok)
       mpfr_init_set(this->u_.float_value, tok.u_.float_value, GMP_RNDN);
       break;
     default:
-      gcc_unreachable();
+      go_unreachable();
     }
   return *this;
 }
@@ -422,11 +422,11 @@ Token::print(FILE* file) const
 	  fprintf(file, "]");
 	  break;
 	default:
-	  gcc_unreachable();
+	  go_unreachable();
 	}
       break;
     default:
-      gcc_unreachable();
+      go_unreachable();
     }
 }
 
@@ -518,9 +518,7 @@ Lex::require_line()
 source_location
 Lex::location() const
 {
-  source_location location;
-  LINEMAP_POSITION_FOR_COLUMN(location, line_table, this->lineoff_ + 1);
-  return location;
+  return linemap_position_for_column (line_table, this->lineoff_ + 1);
 }
 
 // Get a location slightly before the current one.  This is used for
@@ -529,9 +527,7 @@ Lex::location() const
 source_location
 Lex::earlier_location(int chars) const
 {
-  source_location location;
-  LINEMAP_POSITION_FOR_COLUMN(location, line_table, this->lineoff_ + 1 - chars);
-  return location;
+  return linemap_position_for_column (line_table, this->lineoff_ + 1 - chars);
 }
 
 // Get the next token.
@@ -1005,7 +1001,7 @@ Lex::gather_number()
 	  std::string s(pnum, p - pnum);
 	  mpz_t val;
 	  int r = mpz_init_set_str(val, s.c_str(), base);
-	  gcc_assert(r == 0);
+	  go_assert(r == 0);
 
 	  if (neg)
 	    mpz_neg(val, val);
@@ -1029,7 +1025,7 @@ Lex::gather_number()
       std::string s(pnum, p - pnum);
       mpz_t val;
       int r = mpz_init_set_str(val, s.c_str(), 10);
-      gcc_assert(r == 0);
+      go_assert(r == 0);
 
       if (neg)
 	mpz_neg(val, val);
@@ -1076,7 +1072,7 @@ Lex::gather_number()
   std::string s(pnum, p - pnum);
   mpfr_t val;
   int r = mpfr_init_set_str(val, s.c_str(), 10, GMP_RNDN);
-  gcc_assert(r == 0);
+  go_assert(r == 0);
 
   if (neg)
     mpfr_neg(val, val, GMP_RNDN);

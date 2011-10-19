@@ -83,6 +83,7 @@ enum tree_dump_index
 #define TDF_ALIAS	(1 << 21)	/* display alias information  */
 #define TDF_ENUMERATE_LOCALS (1 << 22)	/* Enumerate locals by uid.  */
 #define TDF_CSELIB	(1 << 23)	/* Dump cselib details.  */
+#define TDF_SCEV	(1 << 24)	/* Dump SCEV details.  */
 
 
 /* In tree-dump.c */
@@ -401,6 +402,7 @@ extern struct gimple_opt_pass pass_call_cdce;
 extern struct gimple_opt_pass pass_merge_phi;
 extern struct gimple_opt_pass pass_split_crit_edges;
 extern struct gimple_opt_pass pass_pre;
+extern unsigned int tail_merge_optimize (unsigned int);
 extern struct gimple_opt_pass pass_profile;
 extern struct gimple_opt_pass pass_strip_predict_hints;
 extern struct gimple_opt_pass pass_lower_complex_O0;
@@ -412,6 +414,7 @@ extern struct gimple_opt_pass pass_diagnose_omp_blocks;
 extern struct gimple_opt_pass pass_expand_omp;
 extern struct gimple_opt_pass pass_expand_omp_ssa;
 extern struct gimple_opt_pass pass_object_sizes;
+extern struct gimple_opt_pass pass_strlen;
 extern struct gimple_opt_pass pass_fold_builtins;
 extern struct gimple_opt_pass pass_stdarg;
 extern struct gimple_opt_pass pass_early_warn_uninitialized;
@@ -466,9 +469,7 @@ extern struct simple_ipa_opt_pass pass_ipa_free_lang_data;
 extern struct ipa_opt_pass_d pass_ipa_cp;
 extern struct ipa_opt_pass_d pass_ipa_reference;
 extern struct ipa_opt_pass_d pass_ipa_pure_const;
-extern struct simple_ipa_opt_pass pass_ipa_type_escape;
 extern struct simple_ipa_opt_pass pass_ipa_pta;
-extern struct simple_ipa_opt_pass pass_ipa_struct_reorg;
 extern struct ipa_opt_pass_d pass_ipa_lto_wpa_fixup;
 extern struct ipa_opt_pass_d pass_ipa_lto_finish_out;
 extern struct ipa_opt_pass_d pass_ipa_profile;
@@ -573,6 +574,7 @@ extern struct rtl_opt_pass pass_split_before_regstack;
 extern struct rtl_opt_pass pass_convert_to_eh_region_ranges;
 extern struct rtl_opt_pass pass_shorten_branches;
 extern struct rtl_opt_pass pass_set_nothrow_function_flags;
+extern struct rtl_opt_pass pass_dwarf2_frame;
 extern struct rtl_opt_pass pass_final;
 extern struct rtl_opt_pass pass_rtl_seqabstr;
 extern struct gimple_opt_pass pass_release_ssa_names;
@@ -584,7 +586,7 @@ extern struct gimple_opt_pass pass_convert_switch;
 
 /* The root of the compilation pass tree, once constructed.  */
 extern struct opt_pass *all_passes, *all_small_ipa_passes, *all_lowering_passes,
-                       *all_regular_ipa_passes, *all_lto_gen_passes;
+                       *all_regular_ipa_passes, *all_lto_gen_passes, *all_late_ipa_passes;
 
 /* Define a list of pass lists so that both passes.c and plugins can easily
    find all the pass lists.  */

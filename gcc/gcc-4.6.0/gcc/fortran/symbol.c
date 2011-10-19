@@ -373,7 +373,7 @@ check_conflict (symbol_attribute *attr, const char *name, locus *where)
     *volatile_ = "VOLATILE", *is_protected = "PROTECTED",
     *is_bind_c = "BIND(C)", *procedure = "PROCEDURE",
     *asynchronous = "ASYNCHRONOUS", *codimension = "CODIMENSION",
-    *contiguous = "CONTIGUOUS";
+    *contiguous = "CONTIGUOUS", *generic = "GENERIC";
   static const char *threadprivate = "THREADPRIVATE";
 
   const char *a1, *a2;
@@ -490,8 +490,6 @@ check_conflict (symbol_attribute *attr, const char *name, locus *where)
   conf (in_common, codimension);
   conf (in_common, result);
 
-  conf (dummy, result);
-
   conf (in_equivalence, use_assoc);
   conf (in_equivalence, codimension);
   conf (in_equivalence, dummy);
@@ -503,7 +501,9 @@ check_conflict (symbol_attribute *attr, const char *name, locus *where)
   conf (in_equivalence, allocatable);
   conf (in_equivalence, threadprivate);
 
+  conf (dummy, result);
   conf (entry, result);
+  conf (generic, result);
 
   conf (function, subroutine);
 
@@ -673,7 +673,8 @@ check_conflict (symbol_attribute *attr, const char *name, locus *where)
 	  conf2 (codimension);
 	  conf2 (dimension);
 	  conf2 (function);
-	  conf2 (threadprivate);
+	  if (!attr->proc_pointer)
+	    conf2 (threadprivate);
 	}
 
       if (!attr->proc_pointer)
@@ -683,6 +684,7 @@ check_conflict (symbol_attribute *attr, const char *name, locus *where)
 	{
 	case PROC_ST_FUNCTION:
 	  conf2 (dummy);
+	  conf2 (target);
 	  break;
 
 	case PROC_MODULE:
@@ -1672,7 +1674,12 @@ gfc_add_type (gfc_symbol *sym, gfc_typespec *ts, locus *where)
 
   if (type != BT_UNKNOWN && !(sym->attr.function && sym->attr.implicit_type))
     {
-      gfc_error ("Symbol '%s' at %L already has basic type of %s", sym->name,
+      if (sym->attr.use_assoc)
+	gfc_error ("Symbol '%s' at %L conflicts with symbol from module '%s', "
+		   "use-associated at %L", sym->name, where, sym->module,
+		   &sym->declared_at);
+      else
+	gfc_error ("Symbol '%s' at %L already has basic type of %s", sym->name,
 		 where, gfc_basic_typename (type));
       return FAILURE;
     }
@@ -1939,6 +1946,9 @@ gfc_use_derived (gfc_symbol *sym)
   gfc_symtree *st;
   int i;
 
+  if (!sym)
+    return NULL;
+
   if (sym->components != NULL || sym->attr.zero_comp)
     return sym;               /* Already defined.  */
 
@@ -2060,7 +2070,7 @@ free_components (gfc_component *p)
       gfc_free_formal_arglist (p->formal);
       gfc_free_namespace (p->formal_ns);
 
-      gfc_free (p);
+      free (p);
     }
 }
 
@@ -2096,7 +2106,7 @@ gfc_free_st_label (gfc_st_label *label)
   if (label->format != NULL)
     gfc_free_expr (label->format);
 
-  gfc_free (label);
+  free (label);
 }
 
 
@@ -2114,7 +2124,7 @@ free_st_labels (gfc_st_label *label)
   
   if (label->format != NULL)
     gfc_free_expr (label->format);
-  gfc_free (label);
+  free (label);
 }
 
 
@@ -2127,11 +2137,16 @@ gfc_get_st_label (int labelno)
   gfc_st_label *lp;
   gfc_namespace *ns;
 
-  /* Find the namespace of the scoping unit:
-     If we're in a BLOCK construct, jump to the parent namespace.  */
-  ns = gfc_current_ns;
-  while (ns->proc_name && ns->proc_name->attr.flavor == FL_LABEL)
-    ns = ns->parent;
+  if (gfc_current_state () == COMP_DERIVED)
+    ns = gfc_current_block ()->f2k_derived;
+  else
+    {
+      /* Find the namespace of the scoping unit:
+	 If we're in a BLOCK construct, jump to the parent namespace.  */
+      ns = gfc_current_ns;
+      while (ns->proc_name && ns->proc_name->attr.flavor == FL_LABEL)
+	ns = ns->parent;
+    }
 
   /* First see if the label is already in this namespace.  */
   lp = ns->st_labels;
@@ -2375,7 +2390,7 @@ gfc_delete_symtree (gfc_symtree **root, const char *name)
   st.name = gfc_get_string (name);
   gfc_delete_bbt (root, &st, compare_symtree);
 
-  gfc_free (st0);
+  free (st0);
 }
 
 
@@ -2481,7 +2496,7 @@ gfc_free_symbol (gfc_symbol *sym)
 
   gfc_free_namespace (sym->f2k_derived);
 
-  gfc_free (sym);
+  free (sym);
 }
 
 
@@ -2918,7 +2933,7 @@ gfc_undo_symbols (void)
 	  p->formal = old->formal;
 	}
 
-      gfc_free (p->old_symbol);
+      free (p->old_symbol);
       p->old_symbol = NULL;
       p->tlink = NULL;
     }
@@ -2929,7 +2944,7 @@ gfc_undo_symbols (void)
     {
       tbq = tbp->next;
       /* Procedure is already marked `error' by default.  */
-      gfc_free (tbp);
+      free (tbp);
     }
   tentative_tbp_list = NULL;
 }
@@ -2957,7 +2972,7 @@ free_old_symbol (gfc_symbol *sym)
   if (sym->old_symbol->formal != sym->formal)
     gfc_free_formal_arglist (sym->old_symbol->formal);
 
-  gfc_free (sym->old_symbol);
+  free (sym->old_symbol);
   sym->old_symbol = NULL;
 }
 
@@ -2985,7 +3000,7 @@ gfc_commit_symbols (void)
     {
       tbq = tbp->next;
       tbp->proc->error = 0;
-      gfc_free (tbp);
+      free (tbp);
     }
   tentative_tbp_list = NULL;
 }
@@ -3033,7 +3048,7 @@ free_tb_tree (gfc_symtree *t)
   /* TODO: Free type-bound procedure structs themselves; probably needs some
      sort of ref-counting mechanism.  */
 
-  gfc_free (t);
+  free (t);
 }
 
 
@@ -3049,7 +3064,7 @@ free_common_tree (gfc_symtree * common_tree)
   free_common_tree (common_tree->left);
   free_common_tree (common_tree->right);
 
-  gfc_free (common_tree);
+  free (common_tree);
 }  
 
 
@@ -3066,8 +3081,8 @@ free_uop_tree (gfc_symtree *uop_tree)
   free_uop_tree (uop_tree->right);
 
   gfc_free_interface (uop_tree->n.uop->op);
-  gfc_free (uop_tree->n.uop);
-  gfc_free (uop_tree);
+  free (uop_tree->n.uop);
+  free (uop_tree);
 }
 
 
@@ -3084,7 +3099,7 @@ free_sym_tree (gfc_symtree *sym_tree)
   free_sym_tree (sym_tree->right);
 
   gfc_release_symbol (sym_tree->n.sym);
-  gfc_free (sym_tree);
+  free (sym_tree);
 }
 
 
@@ -3098,7 +3113,7 @@ gfc_free_dt_list (void)
   for (dt = gfc_derived_types; dt; dt = n)
     {
       n = dt->next;
-      gfc_free (dt);
+      free (dt);
     }
 
   gfc_derived_types = NULL;
@@ -3113,7 +3128,7 @@ gfc_free_equiv_infos (gfc_equiv_info *s)
   if (s == NULL)
     return;
   gfc_free_equiv_infos (s->next);
-  gfc_free (s);
+  free (s);
 }
 
 
@@ -3126,7 +3141,7 @@ gfc_free_equiv_lists (gfc_equiv_list *l)
     return;
   gfc_free_equiv_lists (l->next);
   gfc_free_equiv_infos (l->equiv);
-  gfc_free (l);
+  free (l);
 }
 
 
@@ -3138,7 +3153,7 @@ gfc_free_finalizer (gfc_finalizer* el)
   if (el)
     {
       gfc_release_symbol (el->proc_sym);
-      gfc_free (el);
+      free (el);
     }
 }
 
@@ -3204,7 +3219,7 @@ void gfc_free_charlen (gfc_charlen *cl, gfc_charlen *end)
 
       cl2 = cl->next;
       gfc_free_expr (cl->length);
-      gfc_free (cl);
+      free (cl);
     }
 }
 
@@ -3220,7 +3235,7 @@ free_entry_list (gfc_entry_list *el)
     return;
 
   next = el->next;
-  gfc_free (el);
+  free (el);
   free_entry_list (next);
 }
 
@@ -3264,7 +3279,7 @@ gfc_free_namespace (gfc_namespace *ns)
 
   gfc_free_data (ns->data);
   p = ns->contained;
-  gfc_free (ns);
+  free (ns);
 
   /* Recursively free any contained namespaces.  */
   while (p != NULL)

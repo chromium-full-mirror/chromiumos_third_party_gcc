@@ -118,6 +118,25 @@ init_recog (void)
 }
 
 
+/* Return true if labels in asm operands BODY are LABEL_REFs.  */
+
+static bool
+asm_labels_ok (rtx body)
+{
+  rtx asmop;
+  int i;
+
+  asmop = extract_asm_operands (body);
+  if (asmop == NULL_RTX)
+    return true;
+
+  for (i = 0; i < ASM_OPERANDS_LABEL_LENGTH (asmop); i++)
+    if (GET_CODE (ASM_OPERANDS_LABEL (asmop, i)) != LABEL_REF)
+      return false;
+
+  return true;
+}
+
 /* Check that X is an insn-body for an `asm' with operands
    and that the operands mentioned in it are legitimate.  */
 
@@ -128,6 +147,9 @@ check_asm_operands (rtx x)
   rtx *operands;
   const char **constraints;
   int i;
+
+  if (!asm_labels_ok (x))
+    return 0;
 
   /* Post-reload, be more strict with things.  */
   if (reload_completed)
@@ -277,8 +299,8 @@ canonicalize_change_group (rtx insn, rtx x)
       /* Oops, the caller has made X no longer canonical.
 	 Let's redo the changes in the correct order.  */
       rtx tem = XEXP (x, 0);
-      validate_change (insn, &XEXP (x, 0), XEXP (x, 1), 1);
-      validate_change (insn, &XEXP (x, 1), tem, 1);
+      validate_unshare_change (insn, &XEXP (x, 0), XEXP (x, 1), 1);
+      validate_unshare_change (insn, &XEXP (x, 1), tem, 1);
       return true;
     }
   else
@@ -638,6 +660,8 @@ simplify_while_replacing (rtx *loc, rtx to, rtx object,
 		  (GET_MODE_SIZE (is_mode) - GET_MODE_SIZE (wanted_mode) -
 		   offset);
 
+	      gcc_assert (GET_MODE_PRECISION (wanted_mode)
+			  == GET_MODE_BITSIZE (wanted_mode));
 	      pos %= GET_MODE_BITSIZE (wanted_mode);
 
 	      newmem = adjust_address_nv (XEXP (x, 0), wanted_mode, offset);
@@ -930,7 +954,9 @@ general_operand (rtx op, enum machine_mode mode)
     return ((GET_MODE (op) == VOIDmode || GET_MODE (op) == mode
 	     || mode == VOIDmode)
 	    && (! flag_pic || LEGITIMATE_PIC_OPERAND_P (op))
-	    && LEGITIMATE_CONSTANT_P (op));
+	    && targetm.legitimate_constant_p (mode == VOIDmode
+					      ? GET_MODE (op)
+					      : mode, op));
 
   /* Except for certain constants with VOIDmode, already checked for,
      OP's mode must match MODE if MODE specifies a mode.  */
@@ -1107,7 +1133,9 @@ immediate_operand (rtx op, enum machine_mode mode)
 	  && (GET_MODE (op) == mode || mode == VOIDmode
 	      || GET_MODE (op) == VOIDmode)
 	  && (! flag_pic || LEGITIMATE_PIC_OPERAND_P (op))
-	  && LEGITIMATE_CONSTANT_P (op));
+	  && targetm.legitimate_constant_p (mode == VOIDmode
+					    ? GET_MODE (op)
+					    : mode, op));
 }
 
 /* Returns 1 if OP is an operand that is a CONST_INT.  */
@@ -3140,16 +3168,17 @@ static rtx
 peep2_attempt (basic_block bb, rtx insn, int match_len, rtx attempt)
 {
   int i;
-  rtx last, note, before_try, x;
+  rtx last, eh_note, as_note, before_try, x;
   rtx old_insn, new_insn;
   bool was_call = false;
 
-  /* If we are splittind an RTX_FRAME_RELATED_P insn, do not allow it to
+  /* If we are splitting an RTX_FRAME_RELATED_P insn, do not allow it to
      match more than one insn, or to be split into more than one insn.  */
   old_insn = peep2_insn_data[peep2_current].insn;
   if (RTX_FRAME_RELATED_P (old_insn))
     {
       bool any_note = false;
+      rtx note;
 
       if (match_len != 0)
 	return NULL;
@@ -3230,6 +3259,7 @@ peep2_attempt (basic_block bb, rtx insn, int match_len, rtx attempt)
   for (i = 0; i <= match_len; ++i)
     {
       int j;
+      rtx note;
 
       j = peep2_buf_position (peep2_current + i);
       old_insn = peep2_insn_data[j].insn;
@@ -3275,9 +3305,21 @@ peep2_attempt (basic_block bb, rtx insn, int match_len, rtx attempt)
       break;
     }
 
-  i = peep2_buf_position (peep2_current + match_len);
+  /* If we matched any instruction that had a REG_ARGS_SIZE, then
+     move those notes over to the new sequence.  */
+  as_note = NULL;
+  for (i = match_len; i >= 0; --i)
+    {
+      int j = peep2_buf_position (peep2_current + i);
+      old_insn = peep2_insn_data[j].insn;
 
-  note = find_reg_note (peep2_insn_data[i].insn, REG_EH_REGION, NULL_RTX);
+      as_note = find_reg_note (old_insn, REG_ARGS_SIZE, NULL);
+      if (as_note)
+	break;
+    }
+
+  i = peep2_buf_position (peep2_current + match_len);
+  eh_note = find_reg_note (peep2_insn_data[i].insn, REG_EH_REGION, NULL_RTX);
 
   /* Replace the old sequence with the new.  */
   last = emit_insn_after_setloc (attempt,
@@ -3287,7 +3329,7 @@ peep2_attempt (basic_block bb, rtx insn, int match_len, rtx attempt)
   delete_insn_chain (insn, peep2_insn_data[i].insn, false);
 
   /* Re-insert the EH_REGION notes.  */
-  if (note || (was_call && nonlocal_goto_handler_labels))
+  if (eh_note || (was_call && nonlocal_goto_handler_labels))
     {
       edge eh_edge;
       edge_iterator ei;
@@ -3296,8 +3338,8 @@ peep2_attempt (basic_block bb, rtx insn, int match_len, rtx attempt)
 	if (eh_edge->flags & (EDGE_EH | EDGE_ABNORMAL_CALL))
 	  break;
 
-      if (note)
-	copy_reg_eh_region_note_backward (note, last, before_try);
+      if (eh_note)
+	copy_reg_eh_region_note_backward (eh_note, last, before_try);
 
       if (eh_edge)
 	for (x = last; x != before_try; x = PREV_INSN (x))
@@ -3329,6 +3371,10 @@ peep2_attempt (basic_block bb, rtx insn, int match_len, rtx attempt)
 	 possible.  Zap dummy outgoing edges.  */
       peep2_do_cleanup_cfg |= purge_dead_edges (bb);
     }
+
+  /* Re-insert the ARGS_SIZE notes.  */
+  if (as_note)
+    fixup_args_size_notes (before_try, last, INTVAL (XEXP (as_note, 0)));
 
   /* If we generated a jump instruction, it won't have
      JUMP_LABEL set.  Recompute after we're done.  */
@@ -3690,7 +3736,7 @@ struct rtl_opt_pass pass_peephole2 =
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
   TODO_df_finish | TODO_verify_rtl_sharing |
-  TODO_dump_func                       /* todo_flags_finish */
+  0                                    /* todo_flags_finish */
  }
 };
 
@@ -3716,7 +3762,7 @@ struct rtl_opt_pass pass_split_all_insns =
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
-  TODO_dump_func                        /* todo_flags_finish */
+  0                                     /* todo_flags_finish */
  }
 };
 
@@ -3746,7 +3792,7 @@ struct rtl_opt_pass pass_split_after_reload =
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
-  TODO_dump_func                        /* todo_flags_finish */
+  0                                     /* todo_flags_finish */
  }
 };
 
@@ -3790,7 +3836,7 @@ struct rtl_opt_pass pass_split_before_regstack =
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
-  TODO_dump_func                        /* todo_flags_finish */
+  0                                     /* todo_flags_finish */
  }
 };
 
@@ -3828,8 +3874,7 @@ struct rtl_opt_pass pass_split_before_sched2 =
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
-  TODO_verify_flow |
-  TODO_dump_func                        /* todo_flags_finish */
+  TODO_verify_flow                      /* todo_flags_finish */
  }
 };
 
@@ -3860,6 +3905,6 @@ struct rtl_opt_pass pass_split_for_shorten_branches =
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
-  TODO_dump_func | TODO_verify_rtl_sharing /* todo_flags_finish */
+  TODO_verify_rtl_sharing               /* todo_flags_finish */
  }
 };

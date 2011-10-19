@@ -59,7 +59,7 @@
 
 (define_predicate "reg_or_0_operand"
   (ior (and (match_operand 0 "const_0_operand")
-	    (match_test "!TARGET_MIPS16"))
+	    (not (match_test "TARGET_MIPS16")))
        (match_operand 0 "register_operand")))
 
 (define_predicate "const_1_operand"
@@ -100,7 +100,7 @@
 
 (define_predicate "and_reg_operand"
   (ior (match_operand 0 "register_operand")
-       (and (match_test "!TARGET_MIPS16")
+       (and (not (match_test "TARGET_MIPS16"))
 	    (match_operand 0 "const_uns_arith_operand"))
        (match_operand 0 "low_bitmask_operand")
        (match_operand 0 "si_mask_operand")))
@@ -173,7 +173,7 @@
 (define_predicate "splittable_const_int_operand"
   (match_code "const_int")
 {
-  /* When generating mips16 code, LEGITIMATE_CONSTANT_P rejects
+  /* When generating mips16 code, TARGET_LEGITIMATE_CONSTANT_P rejects
      CONST_INTs that can't be loaded using simple insns.  */
   if (TARGET_MIPS16)
     return false;
@@ -335,7 +335,7 @@
 
 (define_predicate "mips_cstore_operator"
   (ior (match_code "eq,gt,gtu,ge,geu,lt,ltu,le,leu")
-       (and (match_code "ne") (match_test "!TARGET_MIPS16"))))
+       (and (match_code "ne") (not (match_test "TARGET_MIPS16")))))
 
 (define_predicate "small_data_pattern"
   (and (match_code "set,parallel,unspec,unspec_volatile,prefetch")

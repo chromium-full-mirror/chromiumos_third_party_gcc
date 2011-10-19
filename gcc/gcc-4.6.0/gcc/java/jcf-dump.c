@@ -52,6 +52,7 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include "system.h"
 #include "coretypes.h"
 #include "intl.h"
+#include "diagnostic.h"
 
 #include "jcf.h"
 #include "tree.h"
@@ -789,7 +790,7 @@ print_constant (FILE *out, JCF *jcf, int index, int verbosity)
 	      /* Normal; add the implicit bit.  */
 	      mantissa |= ((uint32)1 << 23);
 	    
-	    f = frexp (mantissa, &dummy);
+	    f = frexp ((float) mantissa, &dummy);
 	    f = ldexp (f, exponent + 1);
 	    fprintf (out, "%.10g", f);
 	  }
@@ -832,7 +833,7 @@ print_constant (FILE *out, JCF *jcf, int index, int verbosity)
 	      /* Normal; add the implicit bit.  */
 	      mantissa |= ((uint64)1 << 52);
 
-	    d = frexp (mantissa, &dummy);
+	    d = frexp ((double) mantissa, &dummy);
 	    d = ldexp (d, exponent + 1);
 	    fprintf (out, "%.20g", d);
 	  }
@@ -1172,11 +1173,21 @@ main (int argc, char** argv)
 {
   JCF jcf[1];
   int argi, opt;
+  const char *p;
+
+  p = argv[0] + strlen (argv[0]);
+  while (p != argv[0] && !IS_DIR_SEPARATOR (p[-1]))
+    --p;
+  progname = p;
+
+  xmalloc_set_program_name (progname);
 
   /* Unlock the stdio streams.  */
   unlock_std_streams ();
 
   gcc_init_libintl ();
+
+  diagnostic_initialize (global_dc, 0);
 
   if (argc <= 1)
     {

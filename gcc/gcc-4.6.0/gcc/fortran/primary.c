@@ -1015,9 +1015,6 @@ got_delim:
     goto no_match;
 
   e = gfc_get_character_expr (kind, &start_locus, NULL, length);
-  e->ref = NULL;
-  e->ts.is_c_interop = 0;
-  e->ts.is_iso_c = 0;
 
   gfc_current_locus = start_locus;
 
@@ -1121,8 +1118,6 @@ match_logical_constant (gfc_expr **result)
     }
 
   e = gfc_get_logical_expr (kind, &gfc_current_locus, i);
-  e->ts.is_c_interop = 0;
-  e->ts.is_iso_c = 0;
 
   *result = e;
   return MATCH_YES;
@@ -1304,10 +1299,9 @@ match_complex_constant (gfc_expr **result)
       else
 	kind = gfc_default_real_kind;
     }
+  gfc_clear_ts (&target);
   target.type = BT_REAL;
   target.kind = kind;
-  target.is_c_interop = 0;
-  target.is_iso_c = 0;
 
   if (real->ts.type != BT_REAL || kind != real->ts.kind)
     gfc_convert_type (real, &target, 2);
@@ -2220,9 +2214,9 @@ gfc_structure_ctor_component;
 static void
 gfc_free_structure_ctor_component (gfc_structure_ctor_component *comp)
 {
-  gfc_free (comp->name);
+  free (comp->name);
   gfc_free_expr (comp->val);
-  gfc_free (comp);
+  free (comp);
 }
 
 
@@ -2424,7 +2418,10 @@ gfc_match_structure_constructor (gfc_symbol *sym, gfc_expr **result,
 	    }
 
 	  /* Match the current initializer expression.  */
+	  if (this_comp->attr.proc_pointer)
+	    gfc_matching_procptr_assignment = 1;
 	  m = gfc_match_expr (&comp_tail->val);
+	  gfc_matching_procptr_assignment = 0;
 	  if (m == MATCH_NO)
 	    goto syntax;
 	  if (m == MATCH_ERROR)

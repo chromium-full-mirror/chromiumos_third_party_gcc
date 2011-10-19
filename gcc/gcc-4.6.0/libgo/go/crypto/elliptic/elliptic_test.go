@@ -297,6 +297,9 @@ func TestBaseMult(t *testing.T) {
 		if fmt.Sprintf("%x", x) != e.x || fmt.Sprintf("%x", y) != e.y {
 			t.Errorf("%d: bad output for k=%s: got (%x, %s), want (%s, %s)", i, e.k, x, y, e.x, e.y)
 		}
+		if testing.Short() && i > 5 {
+			break
+		}
 	}
 }
 
@@ -318,8 +321,8 @@ func TestMarshal(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	serialised := p224.Marshal(x, y)
-	xx, yy := p224.Unmarshal(serialised)
+	serialized := p224.Marshal(x, y)
+	xx, yy := p224.Unmarshal(serialized)
 	if xx == nil {
 		t.Error("failed to unmarshal")
 		return

@@ -6,6 +6,8 @@
 
 package main
 
+import "unsafe"
+
 func sum(args ...int) int { return 0 }
 
 var (
@@ -13,7 +15,7 @@ var (
 	_ = sum()
 	_ = sum(1.0, 2.0)
 	_ = sum(1.5)      // ERROR "integer"
-	_ = sum("hello")  // ERROR "convert|incompatible"
+	_ = sum("hello")  // ERROR "string.*as type int|incompatible"
 	_ = sum([]int{1}) // ERROR "slice literal.*as type int|incompatible"
 )
 
@@ -26,3 +28,22 @@ var (
 	_ = funny(nil, nil)
 	_ = funny([]T{}) // ok because []T{} is a T; passes []T{[]T{}}
 )
+
+func bad(args ...int) {
+	print(1, 2, args...)	// ERROR "[.][.][.]"
+	println(args...)	// ERROR "[.][.][.]"
+	ch := make(chan int)
+	close(ch...)	// ERROR "[.][.][.]"
+	_ = len(args...)	// ERROR "[.][.][.]"
+	_ = new(int...)	// ERROR "[.][.][.]"
+	n := 10
+	_ = make([]byte, n...)	// ERROR "[.][.][.]"
+	// TODO(rsc): enable after gofmt bug is fixed
+	//	_ = make([]byte, 10 ...)	// error "[.][.][.]"
+	var x int
+	_ = unsafe.Pointer(&x...)	// ERROR "[.][.][.]"
+	_ = unsafe.Sizeof(x...)	// ERROR "[.][.][.]"
+	_ = [...]byte("foo") // ERROR "[.][.][.]"
+	_ = [...][...]int{{1,2,3},{4,5,6}}	// ERROR "[.][.][.]"
+}
+

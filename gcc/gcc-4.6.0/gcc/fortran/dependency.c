@@ -118,13 +118,23 @@ identical_array_ref (gfc_array_ref *a1, gfc_array_ref *a2)
 /* Return true for identical variables, checking for references if
    necessary.  Calls identical_array_ref for checking array sections.  */
 
-bool
-gfc_are_identical_variables (gfc_expr *e1, gfc_expr *e2)
+static bool
+are_identical_variables (gfc_expr *e1, gfc_expr *e2)
 {
   gfc_ref *r1, *r2;
 
-  if (e1->symtree->n.sym != e2->symtree->n.sym)
-    return false;
+  if (e1->symtree->n.sym->attr.dummy && e2->symtree->n.sym->attr.dummy)
+    {
+      /* Dummy arguments: Only check for equal names.  */
+      if (e1->symtree->n.sym->name != e2->symtree->n.sym->name)
+	return false;
+    }
+  else
+    {
+      /* Check for equal symbols.  */
+      if (e1->symtree->n.sym != e2->symtree->n.sym)
+	return false;
+    }
 
   /* Volatile variables should never compare equal to themselves.  */
 
@@ -169,7 +179,7 @@ gfc_are_identical_variables (gfc_expr *e1, gfc_expr *e2)
 	  break;
 
 	default:
-	  gfc_internal_error ("gfc_are_identical_variables: Bad type");
+	  gfc_internal_error ("are_identical_variables: Bad type");
 	}
       r1 = r1->next;
       r2 = r2->next;
@@ -177,8 +187,55 @@ gfc_are_identical_variables (gfc_expr *e1, gfc_expr *e2)
   return true;
 }
 
-/* Compare two values.  Returns 0 if e1 == e2, -1 if e1 < e2, +1 if e1 > e2,
-   and -2 if the relationship could not be determined.  */
+/* Compare two functions for equality.  Returns 0 if e1==e2, -2 otherwise.  If
+   impure_ok is false, only return 0 for pure functions.  */
+
+int
+gfc_dep_compare_functions (gfc_expr *e1, gfc_expr *e2, bool impure_ok)
+{
+
+  gfc_actual_arglist *args1;
+  gfc_actual_arglist *args2;
+  
+  if (e1->expr_type != EXPR_FUNCTION || e2->expr_type != EXPR_FUNCTION)
+    return -2;
+
+  if ((e1->value.function.esym && e2->value.function.esym
+       && e1->value.function.esym == e2->value.function.esym
+       && (e1->value.function.esym->result->attr.pure || impure_ok))
+       || (e1->value.function.isym && e2->value.function.isym
+	   && e1->value.function.isym == e2->value.function.isym
+	   && (e1->value.function.isym->pure || impure_ok)))
+    {
+      args1 = e1->value.function.actual;
+      args2 = e2->value.function.actual;
+
+      /* Compare the argument lists for equality.  */
+      while (args1 && args2)
+	{
+	  /*  Bitwise xor, since C has no non-bitwise xor operator.  */
+	  if ((args1->expr == NULL) ^ (args2->expr == NULL))
+	    return -2;
+	  
+	  if (args1->expr != NULL && args2->expr != NULL
+	      && gfc_dep_compare_expr (args1->expr, args2->expr) != 0)
+	    return -2;
+	  
+	  args1 = args1->next;
+	  args2 = args2->next;
+	}
+      return (args1 || args2) ? -2 : 0;
+    }
+      else
+	return -2;      
+}
+
+/* Compare two expressions.  Return values:
+   * +1 if e1 > e2
+   * 0 if e1 == e2
+   * -1 if e1 < e2
+   * -2 if the relationship could not be determined
+   * -3 if e1 /= e2, but we cannot tell which one is larger.  */
 
 int
 gfc_dep_compare_expr (gfc_expr *e1, gfc_expr *e2)
@@ -251,9 +308,9 @@ gfc_dep_compare_expr (gfc_expr *e1, gfc_expr *e2)
 	  r = gfc_dep_compare_expr (e1->value.op.op2, e2->value.op.op2);
 	  if (l == 0 && r == 0)
 	    return 0;
-	  if (l == 0 && r != -2)
+	  if (l == 0 && r > -2)
 	    return r;
-	  if (l != -2 && r == 0)
+	  if (l > -2 && r == 0)
 	    return l;
 	  if (l == 1 && r == 1)
 	    return 1;
@@ -264,9 +321,9 @@ gfc_dep_compare_expr (gfc_expr *e1, gfc_expr *e2)
 	  r = gfc_dep_compare_expr (e1->value.op.op2, e2->value.op.op1);
 	  if (l == 0 && r == 0)
 	    return 0;
-	  if (l == 0 && r != -2)
+	  if (l == 0 && r > -2)
 	    return r;
-	  if (l != -2 && r == 0)
+	  if (l > -2 && r == 0)
 	    return l;
 	  if (l == 1 && r == 1)
 	    return 1;
@@ -301,9 +358,9 @@ gfc_dep_compare_expr (gfc_expr *e1, gfc_expr *e2)
 	  r = gfc_dep_compare_expr (e1->value.op.op2, e2->value.op.op2);
 	  if (l == 0 && r == 0)
 	    return 0;
-	  if (l != -2 && r == 0)
+	  if (l > -2 && r == 0)
 	    return l;
-	  if (l == 0 && r != -2)
+	  if (l == 0 && r > -2)
 	    return -r;
 	  if (l == 1 && r == -1)
 	    return 1;
@@ -322,8 +379,8 @@ gfc_dep_compare_expr (gfc_expr *e1, gfc_expr *e2)
       l = gfc_dep_compare_expr (e1->value.op.op1, e2->value.op.op1);
       r = gfc_dep_compare_expr (e1->value.op.op2, e2->value.op.op2);
 
-      if (l == -2)
-	return -2;
+      if (l <= -2)
+	return l;
 
       if (l == 0)
 	{
@@ -334,7 +391,7 @@ gfc_dep_compare_expr (gfc_expr *e1, gfc_expr *e2)
 	  if (e1_left->expr_type == EXPR_CONSTANT
 	      && e2_left->expr_type == EXPR_CONSTANT
 	      && e1_left->value.character.length
-	        != e2_left->value.character.length)
+		 != e2_left->value.character.length)
 	    return -2;
 	  else
 	    return r;
@@ -358,7 +415,7 @@ gfc_dep_compare_expr (gfc_expr *e1, gfc_expr *e2)
     }
 
   if (e1->expr_type != e2->expr_type)
-    return -2;
+    return -3;
 
   switch (e1->expr_type)
     {
@@ -378,10 +435,10 @@ gfc_dep_compare_expr (gfc_expr *e1, gfc_expr *e2)
       return 1;
 
     case EXPR_VARIABLE:
-      if (gfc_are_identical_variables (e1, e2))
+      if (are_identical_variables (e1, e2))
 	return 0;
       else
-	return -2;
+	return -3;
 
     case EXPR_OP:
       /* Intrinsic operators are the same if their operands are the same.  */
@@ -395,40 +452,16 @@ gfc_dep_compare_expr (gfc_expr *e1, gfc_expr *e2)
       if (gfc_dep_compare_expr (e1->value.op.op1, e2->value.op.op1) == 0
 	  && gfc_dep_compare_expr (e1->value.op.op2, e2->value.op.op2) == 0)
 	return 0;
-      /* TODO Handle commutative binary operators here?  */
+      else if (e1->value.op.op == INTRINSIC_TIMES
+	       && gfc_dep_compare_expr (e1->value.op.op1, e2->value.op.op2) == 0
+	       && gfc_dep_compare_expr (e1->value.op.op2, e2->value.op.op1) == 0)
+	/* Commutativity of multiplication.  */
+	return 0;
+
       return -2;
 
     case EXPR_FUNCTION:
-
-      /* PURE functions can be compared for argument equality.  */
-      if ((e1->value.function.esym && e2->value.function.esym
-	   && e1->value.function.esym == e2->value.function.esym
-	   && e1->value.function.esym->result->attr.pure)
-	  || (e1->value.function.isym && e2->value.function.isym
-	      && e1->value.function.isym == e2->value.function.isym
-	      && e1->value.function.isym->pure))
-	{
-	  args1 = e1->value.function.actual;
-	  args2 = e2->value.function.actual;
-
-	  /* Compare the argument lists for equality.  */
-	  while (args1 && args2)
-	    {
-	      /*  Bitwise xor, since C has no non-bitwise xor operator.  */
-	      if ((args1->expr == NULL) ^ (args2->expr == NULL))
-		return -2;
-
-	      if (args1->expr != NULL && args2->expr != NULL
-		  && gfc_dep_compare_expr (args1->expr, args2->expr) != 0)
-		return -2;
-
-	      args1 = args1->next;
-	      args2 = args2->next;
-	    }
-	  return (args1 || args2) ? -2 : 0;
-	}
-      else
-	return -2;
+      return gfc_dep_compare_functions (e1, e2, false);
       break;
 
     default:
@@ -437,11 +470,11 @@ gfc_dep_compare_expr (gfc_expr *e1, gfc_expr *e2)
 }
 
 
-/* Returns 1 if the two ranges are the same, 0 if they are not, and def
-   if the results are indeterminate.  N is the dimension to compare.  */
+/* Returns 1 if the two ranges are the same and 0 if they are not (or if the
+   results are indeterminate). 'n' is the dimension to compare.  */
 
-int
-gfc_is_same_range (gfc_array_ref *ar1, gfc_array_ref *ar2, int n, int def)
+static int
+is_same_range (gfc_array_ref *ar1, gfc_array_ref *ar2, int n)
 {
   gfc_expr *e1;
   gfc_expr *e2;
@@ -458,25 +491,19 @@ gfc_is_same_range (gfc_array_ref *ar1, gfc_array_ref *ar2, int n, int def)
   if (e1 && !e2)
     {
       i = gfc_expr_is_one (e1, -1);
-      if (i == -1)
-	return def;
-      else if (i == 0)
+      if (i == -1 || i == 0)
 	return 0;
     }
   else if (e2 && !e1)
     {
       i = gfc_expr_is_one (e2, -1);
-      if (i == -1)
-	return def;
-      else if (i == 0)
+      if (i == -1 || i == 0)
 	return 0;
     }
   else if (e1 && e2)
     {
       i = gfc_dep_compare_expr (e1, e2);
-      if (i == -2)
-	return def;
-      else if (i != 0)
+      if (i != 0)
 	return 0;
     }
   /* The strides match.  */
@@ -495,12 +522,10 @@ gfc_is_same_range (gfc_array_ref *ar1, gfc_array_ref *ar2, int n, int def)
 
       /* Check we have values for both.  */
       if (!(e1 && e2))
-	return def;
+	return 0;
 
       i = gfc_dep_compare_expr (e1, e2);
-      if (i == -2)
-	return def;
-      else if (i != 0)
+      if (i != 0)
 	return 0;
     }
 
@@ -518,12 +543,10 @@ gfc_is_same_range (gfc_array_ref *ar1, gfc_array_ref *ar2, int n, int def)
 
       /* Check we have values for both.  */
       if (!(e1 && e2))
-	return def;
+	return 0;
 
       i = gfc_dep_compare_expr (e1, e2);
-      if (i == -2)
-	return def;
-      else if (i != 0)
+      if (i != 0)
 	return 0;
     }
 
@@ -1077,7 +1100,7 @@ check_section_vs_section (gfc_array_ref *l_ar, gfc_array_ref *r_ar, int n)
   int start_comparison;
 
   /* If they are the same range, return without more ado.  */
-  if (gfc_is_same_range (l_ar, r_ar, n, 0))
+  if (is_same_range (l_ar, r_ar, n))
     return GFC_DEP_EQUAL;
 
   l_start = l_ar->start[n];
@@ -1145,7 +1168,7 @@ check_section_vs_section (gfc_array_ref *l_ar, gfc_array_ref *r_ar, int n)
   else
     start_comparison = -2;
       
-  gfc_free (one_expr);
+  free (one_expr);
 
   /* Determine LHS upper and lower bounds.  */
   if (l_dir == 1)
@@ -1387,7 +1410,7 @@ gfc_check_element_vs_section( gfc_ref *lref, gfc_ref *rref, int n)
       if (!start || !end)
 	return GFC_DEP_OVERLAP;
       s = gfc_dep_compare_expr (start, end);
-      if (s == -2)
+      if (s <= -2)
 	return GFC_DEP_OVERLAP;
       /* Assume positive stride.  */
       if (s == -1)
@@ -1534,7 +1557,7 @@ gfc_check_element_vs_element (gfc_ref *lref, gfc_ref *rref, int n)
   if (contains_forall_index_p (r_start) || contains_forall_index_p (l_start))
     return GFC_DEP_OVERLAP;
 
-  if (i != -2)
+  if (i > -2)
     return GFC_DEP_NODEP;
   return GFC_DEP_EQUAL;
 }

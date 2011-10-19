@@ -64,7 +64,7 @@ struct hashable_expr
     struct { enum tree_code op;  tree opnd; } unary;
     struct { enum tree_code op;  tree opnd0, opnd1; } binary;
     struct { enum tree_code op;  tree opnd0, opnd1, opnd2; } ternary;
-    struct { tree fn; bool pure; size_t nargs; tree *args; } call;
+    struct { gimple fn_from; bool pure; size_t nargs; tree *args; } call;
   } ops;
 };
 
@@ -257,7 +257,7 @@ initialize_hash_element (gimple stmt, tree lhs,
 
       expr->type = TREE_TYPE (gimple_call_lhs (stmt));
       expr->kind = EXPR_CALL;
-      expr->ops.call.fn = gimple_call_fn (stmt);
+      expr->ops.call.fn_from = stmt;
 
       if (gimple_call_flags (stmt) & (ECF_CONST | ECF_PURE))
         expr->ops.call.pure = true;
@@ -421,8 +421,8 @@ hashable_expr_equal_p (const struct hashable_expr *expr0,
 
         /* If the calls are to different functions, then they
            clearly cannot be equal.  */
-        if (! operand_equal_p (expr0->ops.call.fn,
-                               expr1->ops.call.fn, 0))
+        if (!gimple_call_same_target_p (expr0->ops.call.fn_from,
+                                        expr1->ops.call.fn_from))
           return false;
 
         if (! expr0->ops.call.pure)
@@ -502,9 +502,15 @@ iterative_hash_hashable_expr (const struct hashable_expr *expr, hashval_t val)
       {
         size_t i;
         enum tree_code code = CALL_EXPR;
+        gimple fn_from;
 
         val = iterative_hash_object (code, val);
-        val = iterative_hash_expr (expr->ops.call.fn, val);
+        fn_from = expr->ops.call.fn_from;
+        if (gimple_call_internal_p (fn_from))
+          val = iterative_hash_hashval_t
+            ((hashval_t) gimple_call_internal_fn (fn_from), val);
+        else
+          val = iterative_hash_expr (gimple_call_fn (fn_from), val);
         for (i = 0; i < expr->ops.call.nargs; i++)
           val = iterative_hash_expr (expr->ops.call.args[i], val);
       }
@@ -564,8 +570,14 @@ print_expr_hash_elt (FILE * stream, const struct expr_hash_elt *element)
         {
           size_t i;
           size_t nargs = element->expr.ops.call.nargs;
+          gimple fn_from;
 
-          print_generic_expr (stream, element->expr.ops.call.fn, 0);
+          fn_from = element->expr.ops.call.fn_from;
+          if (gimple_call_internal_p (fn_from))
+            fputs (internal_fn_name (gimple_call_internal_fn (fn_from)),
+                   stream);
+          else
+            print_generic_expr (stream, gimple_call_fn (fn_from), 0);
           fprintf (stream, " (");
           for (i = 0; i < nargs; i++)
             {
@@ -700,7 +712,8 @@ tree_ssa_dominator_optimize (void)
     gimple_stmt_iterator gsi;
     basic_block bb;
     FOR_EACH_BB (bb)
-      {for (gsi = gsi_start_bb (bb); !gsi_end_p (gsi); gsi_next (&gsi))
+      {
+	for (gsi = gsi_start_bb (bb); !gsi_end_p (gsi); gsi_next (&gsi))
 	  update_stmt_if_modified (gsi_stmt (gsi));
       }
   }
@@ -733,7 +746,8 @@ tree_ssa_dominator_optimize (void)
       EXECUTE_IF_SET_IN_BITMAP (need_eh_cleanup, 0, i, bi)
 	{
 	  basic_block bb = BASIC_BLOCK (i);
-	  if (single_succ_p (bb) == 1
+	  if (bb
+	      && single_succ_p (bb)
 	      && (single_succ_edge (bb)->flags & EDGE_EH) == 0)
 	    {
 	      bitmap_clear_bit (need_eh_cleanup, i);
@@ -801,8 +815,7 @@ struct gimple_opt_pass pass_dominator =
   TODO_cleanup_cfg
     | TODO_update_ssa
     | TODO_verify_ssa
-    | TODO_verify_flow
-    | TODO_dump_func			/* todo_flags_finish */
+    | TODO_verify_flow			/* todo_flags_finish */
  }
 };
 
@@ -1396,9 +1409,10 @@ record_equality (tree x, tree y)
    i_1 = phi (..., i_2)
    i_2 = i_1 +/- ...  */
 
-static bool
+bool
 simple_iv_increment_p (gimple stmt)
 {
+  enum tree_code code;
   tree lhs, preinc;
   gimple phi;
   size_t i;
@@ -1410,12 +1424,13 @@ simple_iv_increment_p (gimple stmt)
   if (TREE_CODE (lhs) != SSA_NAME)
     return false;
 
-  if (gimple_assign_rhs_code (stmt) != PLUS_EXPR
-      && gimple_assign_rhs_code (stmt) != MINUS_EXPR)
+  code = gimple_assign_rhs_code (stmt);
+  if (code != PLUS_EXPR
+      && code != MINUS_EXPR
+      && code != POINTER_PLUS_EXPR)
     return false;
 
   preinc = gimple_assign_rhs1 (stmt);
-
   if (TREE_CODE (preinc) != SSA_NAME)
     return false;
 
@@ -2641,7 +2656,10 @@ propagate_rhs_into_lhs (gimple stmt, tree lhs, tree rhs, bitmap interesting_name
              GIMPLE_ASSIGN, and there is no way to effect such a
              transformation in-place.  We might want to consider
              using the more general fold_stmt here.  */
-	  fold_stmt_inplace (use_stmt);
+	    {
+	      gimple_stmt_iterator gsi = gsi_for_stmt (use_stmt);
+	      fold_stmt_inplace (&gsi);
+	    }
 
 	  /* Sometimes propagation can expose new operands to the
 	     renamer.  */
@@ -2954,7 +2972,6 @@ struct gimple_opt_pass pass_phi_only_cprop =
   0,		                        /* properties_destroyed */
   0,                                    /* todo_flags_start */
   TODO_cleanup_cfg
-    | TODO_dump_func
     | TODO_ggc_collect
     | TODO_verify_ssa
     | TODO_verify_stmts

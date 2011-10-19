@@ -2,33 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// The time package provides functionality for measuring and
-// displaying time.
+// Package time provides functionality for measuring and displaying time.
 package time
-
-import (
-	"os"
-)
-
-// Seconds reports the number of seconds since the Unix epoch,
-// January 1, 1970 00:00:00 UTC.
-func Seconds() int64 {
-	sec, _, err := os.Time()
-	if err != nil {
-		panic(err)
-	}
-	return sec
-}
-
-// Nanoseconds reports the number of nanoseconds since the Unix epoch,
-// January 1, 1970 00:00:00 UTC.
-func Nanoseconds() int64 {
-	sec, nsec, err := os.Time()
-	if err != nil {
-		panic(err)
-	}
-	return sec*1e9 + nsec
-}
 
 // Days of the week.
 const (
@@ -46,8 +21,9 @@ type Time struct {
 	Year                 int64  // 2006 is 2006
 	Month, Day           int    // Jan-2 is 1, 2
 	Hour, Minute, Second int    // 15:04:05 is 15, 4, 5.
+	Nanosecond           int    // Fractional second.
 	Weekday              int    // Sunday, Monday, ...
-	ZoneOffset           int    // seconds east of UTC, e.g. -7*60 for -0700
+	ZoneOffset           int    // seconds east of UTC, e.g. -7*60*60 for -0700
 	Zone                 string // e.g., "MST"
 }
 
@@ -153,8 +129,19 @@ func SecondsToUTC(sec int64) *Time {
 	return t
 }
 
+// NanosecondsToUTC converts nsec, in number of nanoseconds since the Unix epoch,
+// into a parsed Time value in the UTC time zone.
+func NanosecondsToUTC(nsec int64) *Time {
+	// This one calls SecondsToUTC rather than the other way around because
+	// that admits a much larger span of time; NanosecondsToUTC is limited
+	// to a few hundred years only.
+	t := SecondsToUTC(nsec / 1e9)
+	t.Nanosecond = int(nsec % 1e9)
+	return t
+}
+
 // UTC returns the current time as a parsed Time value in the UTC time zone.
-func UTC() *Time { return SecondsToUTC(Seconds()) }
+func UTC() *Time { return NanosecondsToUTC(Nanoseconds()) }
 
 // SecondsToLocalTime converts sec, in number of seconds since the Unix epoch,
 // into a parsed Time value in the local time zone.
@@ -166,8 +153,16 @@ func SecondsToLocalTime(sec int64) *Time {
 	return t
 }
 
+// NanosecondsToLocalTime converts nsec, in number of nanoseconds since the Unix epoch,
+// into a parsed Time value in the local time zone.
+func NanosecondsToLocalTime(nsec int64) *Time {
+	t := SecondsToLocalTime(nsec / 1e9)
+	t.Nanosecond = int(nsec % 1e9)
+	return t
+}
+
 // LocalTime returns the current time as a parsed Time value in the local time zone.
-func LocalTime() *Time { return SecondsToLocalTime(Seconds()) }
+func LocalTime() *Time { return NanosecondsToLocalTime(Nanoseconds()) }
 
 // Seconds returns the number of seconds since January 1, 1970 represented by the
 // parsed Time value.
@@ -226,4 +221,10 @@ func (t *Time) Seconds() int64 {
 	// Account for local time zone.
 	sec -= int64(t.ZoneOffset)
 	return sec
+}
+
+// Nanoseconds returns the number of nanoseconds since January 1, 1970 represented by the
+// parsed Time value.
+func (t *Time) Nanoseconds() int64 {
+	return t.Seconds()*1e9 + int64(t.Nanosecond)
 }

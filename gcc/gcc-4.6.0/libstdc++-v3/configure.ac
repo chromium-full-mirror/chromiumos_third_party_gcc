@@ -11,10 +11,6 @@ AC_CONFIG_HEADER(config.h)
 # exported.  Only used at the end of this file.
 ### am handles this now?  ORIGINAL_LD_FOR_MULTILIBS=$LD
 
-# For libtool versioning info, format is CURRENT:REVISION:AGE
-libtool_VERSION=6:16:0
-AC_SUBST(libtool_VERSION)
-
 # Find the rest of the source tree framework.
 AM_ENABLE_MULTILIB(, ..)
 
@@ -114,6 +110,7 @@ GLIBCXX_ENABLE_PCH($is_hosted)
 GLIBCXX_ENABLE_THREADS
 GLIBCXX_ENABLE_ATOMIC_BUILTINS
 GLIBCXX_ENABLE_DECIMAL_FLOAT
+GLIBCXX_ENABLE_INT128_FLOAT128
 
 # Checks for compiler support that doesn't require linking.
 GLIBCXX_CHECK_COMPILER_FEATURES
@@ -135,6 +132,8 @@ GLIBCXX_ENABLE_FULLY_DYNAMIC_STRING([no])
 GLIBCXX_ENABLE_EXTERN_TEMPLATE([yes])
 
 # Checks for operating systems support that doesn't require linking.
+GLIBCXX_CHECK_MATH_PROTO
+GLIBCXX_CHECK_STDLIB_PROTO
 GLIBCXX_CHECK_SYSTEM_ERROR
 
 # For the streamoff typedef.
@@ -169,6 +168,12 @@ GLIBCXX_ENABLE_LIBSTDCXX_TIME([no])
 GLIBCXX_CHECK_GTHREADS
 
 AC_LC_MESSAGES
+
+# For hardware_concurrency
+AC_CHECK_HEADERS(sys/sysinfo.h)
+GLIBCXX_CHECK_GET_NPROCS
+AC_CHECK_HEADERS(unistd.h)
+GLIBCXX_CHECK_SC_NPROCESSORS_ONLN
 
 # Check for available headers.
 AC_CHECK_HEADERS([endian.h execinfo.h float.h fp.h ieeefp.h inttypes.h \
@@ -296,19 +301,18 @@ fi
 # Check for _Unwind_GetIPInfo.
 GCC_CHECK_UNWIND_GETIPINFO
 
-
 GCC_LINUX_FUTEX([AC_DEFINE(HAVE_LINUX_FUTEX, 1, [Define if futex syscall is available.])])
 
 GCC_HEADER_STDINT(include/gstdint.h)
 
-# This depends on GLIBCXX CHECK_LINKER_FEATURES, but without it assumes no.
 GLIBCXX_ENABLE_SYMVERS([yes])
+AC_SUBST(libtool_VERSION)
+
 GLIBCXX_ENABLE_VISIBILITY([yes])
 
 ac_ldbl_compat=no
 case "$target" in
   powerpc*-*-linux* | \
-  powerpc*-*-gnu* | \
   sparc*-*-linux* | \
   s390*-*-linux* | \
   alpha*-*-linux*)

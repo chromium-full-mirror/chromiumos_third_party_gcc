@@ -119,7 +119,7 @@ free_variable (gfc_data_variable *p)
       gfc_free_expr (p->expr);
       gfc_free_iterator (&p->iter, 0);
       free_variable (p->list);
-      gfc_free (p);
+      free (p);
     }
 }
 
@@ -136,7 +136,7 @@ free_value (gfc_data_value *p)
       q = p->next;
       mpz_clear (p->repeat);
       gfc_free_expr (p->expr);
-      gfc_free (p);
+      free (p);
     }
 }
 
@@ -153,7 +153,7 @@ gfc_free_data (gfc_data *p)
       q = p->next;
       free_variable (p->var);
       free_value (p->value);
-      gfc_free (p);
+      free (p);
     }
 }
 
@@ -168,7 +168,7 @@ gfc_free_data_all (gfc_namespace *ns)
   for (;ns->data;)
     {
       d = ns->data->next;
-      gfc_free (ns->data);
+      free (ns->data);
       ns->data = d;
     }
 }
@@ -491,14 +491,14 @@ match_old_style_init (const char *name)
   m = top_val_list (newdata);
   if (m != MATCH_YES)
     {
-      gfc_free (newdata);
+      free (newdata);
       return m;
     }
 
   if (gfc_pure (NULL))
     {
       gfc_error ("Initialization at %C is not allowed in a PURE procedure");
-      gfc_free (newdata);
+      free (newdata);
       return MATCH_ERROR;
     }
 
@@ -508,7 +508,7 @@ match_old_style_init (const char *name)
   /* Mark the variable as having appeared in a data statement.  */
   if (gfc_add_data (&sym->attr, sym->name, &sym->declared_at) == FAILURE)
     {
-      gfc_free (newdata);
+      free (newdata);
       return MATCH_ERROR;
     }
 
@@ -1060,14 +1060,22 @@ verify_c_interop_param (gfc_symbol *sym)
 	      retval = FAILURE;
 	    }
 
-	  if (sym->attr.optional == 1)
+	  if (sym->attr.optional == 1 && sym->attr.value)
 	    {
-	      gfc_error ("Variable '%s' at %L cannot have the "
-			 "OPTIONAL attribute because procedure '%s'"
-			 " is BIND(C)", sym->name, &(sym->declared_at),
+	      gfc_error ("Variable '%s' at %L cannot have both the OPTIONAL "
+			 "and the VALUE attribute because procedure '%s' "
+			 "is BIND(C)", sym->name, &(sym->declared_at),
 			 sym->ns->proc_name->name);
 	      retval = FAILURE;
 	    }
+	  else if (sym->attr.optional == 1
+		   && gfc_notify_std (GFC_STD_F2008_TR, "TR29113: Variable '%s' "
+				      "at %L with OPTIONAL attribute in "
+				      "procedure '%s' which is BIND(C)",
+				      sym->name, &(sym->declared_at),
+				      sym->ns->proc_name->name)
+		      == FAILURE)
+	    retval = FAILURE;
 
           /* Make sure that if it has the dimension attribute, that it is
 	     either assumed size or explicit shape.  */
@@ -1220,7 +1228,7 @@ gfc_set_constant_character_len (int len, gfc_expr *expr, int check_len)
 			&expr->where, slen, check_len);
 
       s[len] = '\0';
-      gfc_free (expr->value.character.string);
+      free (expr->value.character.string);
       expr->value.character.string = s;
       expr->value.character.length = len;
     }
@@ -1275,7 +1283,7 @@ gfc_free_enum_history (void)
   while (current != NULL)
     {
       next = current->next;
-      gfc_free (current);
+      free (current);
       current = next;
     }
   max_enum = NULL;
@@ -1721,6 +1729,30 @@ match_pointer_init (gfc_expr **init, int procptr)
 }
 
 
+static gfc_try
+check_function_name (char *name)
+{
+  /* In functions that have a RESULT variable defined, the function name always
+     refers to function calls.  Therefore, the name is not allowed to appear in
+     specification statements. When checking this, be careful about
+     'hidden' procedure pointer results ('ppr@').  */
+
+  if (gfc_current_state () == COMP_FUNCTION)
+    {
+      gfc_symbol *block = gfc_current_block ();
+      if (block && block->result && block->result != block
+	  && strcmp (block->result->name, "ppr@") != 0
+	  && strcmp (block->name, name) == 0)
+	{
+	  gfc_error ("Function name '%s' not allowed at %C", name);
+	  return FAILURE;
+	}
+    }
+
+  return SUCCESS;
+}
+
+
 /* Match a variable name with an optional initializer.  When this
    subroutine is called, a variable is expected to be parsed next.
    Depending on what is happening at the moment, updates either the
@@ -1755,15 +1787,16 @@ variable_decl (int elem)
 
   /* Now we could see the optional array spec. or character length.  */
   m = gfc_match_array_spec (&as, true, true);
-  if (gfc_option.flag_cray_pointer && m == MATCH_YES)
-    cp_as = gfc_copy_array_spec (as);
-  else if (m == MATCH_ERROR)
+  if (m == MATCH_ERROR)
     goto cleanup;
 
   if (m == MATCH_NO)
     as = gfc_copy_array_spec (current_as);
   else if (current_as)
     merge_array_spec (current_as, as, true);
+
+  if (gfc_option.flag_cray_pointer)
+    cp_as = gfc_copy_array_spec (as);
 
   /* At this point, we know for sure if the symbol is PARAMETER and can thus
      determine (and check) whether it can be implied-shape.  If it
@@ -1926,17 +1959,9 @@ variable_decl (int elem)
 	    goto cleanup;
 	}
     }
-
-  /* In functions that have a RESULT variable defined, the function
-     name always refers to function calls.  Therefore, the name is
-     not allowed to appear in specification statements.  */
-  if (gfc_current_state () == COMP_FUNCTION
-      && gfc_current_block () != NULL
-      && gfc_current_block ()->result != NULL
-      && gfc_current_block ()->result != gfc_current_block ()
-      && strcmp (gfc_current_block ()->name, name) == 0)
+    
+  if (check_function_name (name) == FAILURE)
     {
-      gfc_error ("Function name '%s' not allowed at %C", name);
       m = MATCH_ERROR;
       goto cleanup;
     }
@@ -2985,6 +3010,7 @@ gfc_match_import (void)
 
   for(;;)
     {
+      sym = NULL;
       m = gfc_match (" %n", name);
       switch (m)
 	{
@@ -2995,7 +3021,7 @@ gfc_match_import (void)
 	       gfc_error ("Type name '%s' at %C is ambiguous", name);
 	       return MATCH_ERROR;
 	    }
-	  else if (gfc_current_ns->proc_name->ns->parent !=  NULL
+	  else if (!sym && gfc_current_ns->proc_name->ns->parent !=  NULL
 		   && gfc_find_symbol (name,
 				       gfc_current_ns->proc_name->ns->parent,
 				       1, &sym))
@@ -3335,7 +3361,7 @@ match_attr_spec (void)
 	  else if (m == MATCH_YES)
 	    {
 	      merge_array_spec (as, current_as, false);
-	      gfc_free (as);
+	      free (as);
 	    }
 
 	  if (m == MATCH_NO)
@@ -4737,8 +4763,9 @@ match_procedure_decl (void)
 	    return MATCH_ERROR;
 	  sym->ts.interface = gfc_new_symbol ("", gfc_current_ns);
 	  sym->ts.interface->ts = current_ts;
+	  sym->ts.interface->attr.flavor = FL_PROCEDURE;
 	  sym->ts.interface->attr.function = 1;
-	  sym->attr.function = sym->ts.interface->attr.function;
+	  sym->attr.function = 1;
 	  sym->attr.if_source = IFSRC_UNKNOWN;
 	}
 
@@ -4871,8 +4898,9 @@ match_ppc_decl (void)
 	  c->ts = ts;
 	  c->ts.interface = gfc_new_symbol ("", gfc_current_ns);
 	  c->ts.interface->ts = ts;
+	  c->ts.interface->attr.flavor = FL_PROCEDURE;
 	  c->ts.interface->attr.function = 1;
-	  c->attr.function = c->ts.interface->attr.function;
+	  c->attr.function = 1;
 	  c->attr.if_source = IFSRC_UNKNOWN;
 	}
 
@@ -4958,6 +4986,7 @@ gfc_match_procedure (void)
     case COMP_MODULE:
     case COMP_SUBROUTINE:
     case COMP_FUNCTION:
+    case COMP_BLOCK:
       m = match_procedure_decl ();
       break;
     case COMP_INTERFACE:
@@ -5219,6 +5248,7 @@ gfc_match_entry (void)
 		       "an IF-THEN block");
 	    break;
 	  case COMP_DO:
+	  case COMP_DO_CONCURRENT:
 	    gfc_error ("ENTRY statement at %C cannot appear within "
 		       "a DO block");
 	    break;
@@ -5744,7 +5774,7 @@ gfc_match_end (gfc_statement *st)
     {
     case COMP_ASSOCIATE:
     case COMP_BLOCK:
-      if (!strcmp (block_name, "block@"))
+      if (!strncmp (block_name, "block@", strlen("block@")))
 	block_name = NULL;
       break;
 
@@ -5824,6 +5854,7 @@ gfc_match_end (gfc_statement *st)
       break;
 
     case COMP_DO:
+    case COMP_DO_CONCURRENT:
       *st = ST_ENDDO;
       target = " do";
       eos_ok = 0;
@@ -5982,6 +6013,12 @@ attr_decl1 (void)
   if (find_special (name, &sym, false))
     return MATCH_ERROR;
 
+  if (check_function_name (name) == FAILURE)
+    {
+      m = MATCH_ERROR;
+      goto cleanup;
+    }
+  
   var_locus = gfc_current_locus;
 
   /* Deal with possible array specification for certain attributes.  */
@@ -7104,7 +7141,7 @@ syntax:
   while (interface != old_interface_head)
   {
     gfc_interface *i = interface->next;
-    gfc_free (interface);
+    free (interface);
     interface = i;
   }
 

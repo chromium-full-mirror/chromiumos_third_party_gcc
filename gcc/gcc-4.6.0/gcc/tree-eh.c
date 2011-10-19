@@ -1336,12 +1336,13 @@ lower_try_finally_switch (struct leh_state *state, struct leh_tf_state *tf)
   if (tf->may_fallthru)
     {
       x = gimple_build_assign (finally_tmp,
-			       build_int_cst (NULL, fallthru_index));
+			       build_int_cst (integer_type_node,
+					      fallthru_index));
       gimple_seq_add_stmt (&tf->top_p_seq, x);
 
-      last_case = build3 (CASE_LABEL_EXPR, void_type_node,
-			  build_int_cst (NULL, fallthru_index),
-			  NULL, create_artificial_label (tf_loc));
+      tmp = build_int_cst (integer_type_node, fallthru_index);
+      last_case = build_case_label (tmp, NULL,
+				    create_artificial_label (tf_loc));
       VEC_quick_push (tree, case_label_vec, last_case);
       last_case_index++;
 
@@ -1358,15 +1359,15 @@ lower_try_finally_switch (struct leh_state *state, struct leh_tf_state *tf)
       emit_post_landing_pad (&eh_seq, tf->region);
 
       x = gimple_build_assign (finally_tmp,
-			       build_int_cst (NULL, eh_index));
+			       build_int_cst (integer_type_node, eh_index));
       gimple_seq_add_stmt (&eh_seq, x);
 
       x = gimple_build_goto (finally_label);
       gimple_seq_add_stmt (&eh_seq, x);
 
-      last_case = build3 (CASE_LABEL_EXPR, void_type_node,
-			  build_int_cst (NULL, eh_index),
-			  NULL, create_artificial_label (tf_loc));
+      tmp = build_int_cst (integer_type_node, eh_index);
+      last_case = build_case_label (tmp, NULL,
+				    create_artificial_label (tf_loc));
       VEC_quick_push (tree, case_label_vec, last_case);
       last_case_index++;
 
@@ -1397,7 +1398,8 @@ lower_try_finally_switch (struct leh_state *state, struct leh_tf_state *tf)
       if (q->index < 0)
 	{
 	  x = gimple_build_assign (finally_tmp,
-				   build_int_cst (NULL, return_index));
+				   build_int_cst (integer_type_node,
+						  return_index));
 	  gimple_seq_add_stmt (&mod, x);
 	  do_return_redirection (q, finally_label, mod, &return_val);
 	  switch_id = return_index;
@@ -1405,7 +1407,7 @@ lower_try_finally_switch (struct leh_state *state, struct leh_tf_state *tf)
       else
 	{
 	  x = gimple_build_assign (finally_tmp,
-				   build_int_cst (NULL, q->index));
+				   build_int_cst (integer_type_node, q->index));
 	  gimple_seq_add_stmt (&mod, x);
 	  do_goto_redirection (q, finally_label, mod, tf);
 	  switch_id = q->index;
@@ -1417,13 +1419,11 @@ lower_try_finally_switch (struct leh_state *state, struct leh_tf_state *tf)
         {
           tree case_lab;
           void **slot;
-          case_lab = build3 (CASE_LABEL_EXPR, void_type_node,
-                             build_int_cst (NULL, switch_id),
-			     NULL, NULL);
+	  tmp = build_int_cst (integer_type_node, switch_id);
+          case_lab = build_case_label (tmp, NULL,
+				       create_artificial_label (tf_loc));
           /* We store the cont_stmt in the pointer map, so that we can recover
-             it in the loop below.  We don't create the new label while
-             walking the goto_queue because pointers don't offer a stable
-             order.  */
+             it in the loop below.  */
           if (!cont_map)
             cont_map = pointer_map_create ();
           slot = pointer_map_insert (cont_map, case_lab);
@@ -1433,7 +1433,6 @@ lower_try_finally_switch (struct leh_state *state, struct leh_tf_state *tf)
     }
   for (j = last_case_index; j < last_case_index + nlabels; j++)
     {
-      tree label;
       gimple cont_stmt;
       void **slot;
 
@@ -1443,15 +1442,10 @@ lower_try_finally_switch (struct leh_state *state, struct leh_tf_state *tf)
       gcc_assert (cont_map);
 
       slot = pointer_map_contains (cont_map, last_case);
-      /* As the comment above suggests, CASE_LABEL (last_case) was just a
-         placeholder, it does not store an actual label, yet. */
       gcc_assert (slot);
       cont_stmt = *(gimple *) slot;
 
-      label = create_artificial_label (tf_loc);
-      CASE_LABEL (last_case) = label;
-
-      x = gimple_build_label (label);
+      x = gimple_build_label (CASE_LABEL (last_case));
       gimple_seq_add_stmt (&switch_body, x);
       gimple_seq_add_stmt (&switch_body, cont_stmt);
       maybe_record_in_goto_queue (state, cont_stmt);
@@ -1619,8 +1613,7 @@ lower_try_finally (struct leh_state *state, gimple tp)
     }
 
   VEC_free (tree, heap, this_tf.dest_array);
-  if (this_tf.goto_queue)
-    free (this_tf.goto_queue);
+  free (this_tf.goto_queue);
   if (this_tf.goto_queue_map)
     pointer_map_destroy (this_tf.goto_queue_map);
 
@@ -1872,7 +1865,8 @@ lower_eh_constructs_2 (struct leh_state *state, gimple_stmt_iterator *gsi)
 		 this zero argument with the current catch region number.  */
 	      if (state->ehp_region)
 		{
-		  tree nr = build_int_cst (NULL, state->ehp_region->index);
+		  tree nr = build_int_cst (integer_type_node,
+					   state->ehp_region->index);
 		  gimple_call_set_arg (stmt, 0, nr);
 		}
 	      else
@@ -2058,7 +2052,7 @@ struct gimple_opt_pass pass_lower_eh =
   PROP_gimple_leh,			/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func			/* todo_flags_finish */
+  0             			/* todo_flags_finish */
  }
 };
 
@@ -2455,15 +2449,42 @@ tree_could_trap_p (tree expr)
     case CALL_EXPR:
       t = get_callee_fndecl (expr);
       /* Assume that calls to weak functions may trap.  */
-      if (!t || !DECL_P (t) || DECL_WEAK (t))
+      if (!t || !DECL_P (t))
 	return true;
+      if (DECL_WEAK (t))
+	return tree_could_trap_p (t);
+      return false;
+
+    case FUNCTION_DECL:
+      /* Assume that accesses to weak functions may trap, unless we know
+	 they are certainly defined in current TU or in some other
+	 LTO partition.  */
+      if (DECL_WEAK (expr))
+	{
+	  struct cgraph_node *node;
+	  if (!DECL_EXTERNAL (expr))
+	    return false;
+	  node = cgraph_function_node (cgraph_get_node (expr), NULL);
+	  if (node && node->in_other_partition)
+	    return false;
+	  return true;
+	}
       return false;
 
     case VAR_DECL:
-    case FUNCTION_DECL:
-      /* Assume that accesses to weak vars or functions may trap.  */
+      /* Assume that accesses to weak vars may trap, unless we know
+	 they are certainly defined in current TU or in some other
+	 LTO partition.  */
       if (DECL_WEAK (expr))
-        return true;
+	{
+	  struct varpool_node *node;
+	  if (!DECL_EXTERNAL (expr))
+	    return false;
+	  node = varpool_variable_node (varpool_get_node (expr), NULL);
+	  if (node && node->in_other_partition)
+	    return false;
+	  return true;
+	}
       return false;
 
     default:
@@ -2752,7 +2773,7 @@ same_handler_p (gimple_seq oneh, gimple_seq twoh)
       || gimple_call_lhs (twos)
       || gimple_call_chain (ones)
       || gimple_call_chain (twos)
-      || !operand_equal_p (gimple_call_fn (ones), gimple_call_fn (twos), 0)
+      || !gimple_call_same_target_p (ones, twos)
       || gimple_call_num_args (ones) != gimple_call_num_args (twos))
     return false;
 
@@ -2878,7 +2899,7 @@ struct gimple_opt_pass pass_refactor_eh =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func			/* todo_flags_finish */
+  0             			/* todo_flags_finish */
  }
 };
 
@@ -2968,10 +2989,10 @@ lower_resx (basic_block bb, gimple stmt, struct pointer_map_t *mnt_map)
       else
 	{
 	  edge_iterator ei;
-	  tree dst_nr = build_int_cst (NULL, dst_r->index);
+	  tree dst_nr = build_int_cst (integer_type_node, dst_r->index);
 
 	  fn = implicit_built_in_decls[BUILT_IN_EH_COPY_VALUES];
-	  src_nr = build_int_cst (NULL, src_r->index);
+	  src_nr = build_int_cst (integer_type_node, src_r->index);
 	  x = gimple_build_call (fn, 2, dst_nr, src_nr);
 	  gsi_insert_before (&gsi, x, GSI_SAME_STMT);
 
@@ -3012,7 +3033,7 @@ lower_resx (basic_block bb, gimple stmt, struct pointer_map_t *mnt_map)
       else
 	{
 	  fn = implicit_built_in_decls[BUILT_IN_EH_POINTER];
-	  src_nr = build_int_cst (NULL, src_r->index);
+	  src_nr = build_int_cst (integer_type_node, src_r->index);
 	  x = gimple_build_call (fn, 1, src_nr);
 	  var = create_tmp_var (ptr_type_node, NULL);
 	  var = make_ssa_name (var, x);
@@ -3084,7 +3105,7 @@ struct gimple_opt_pass pass_lower_resx =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func | TODO_verify_flow	/* todo_flags_finish */
+  TODO_verify_flow	                /* todo_flags_finish */
  }
 };
 
@@ -3145,8 +3166,8 @@ lower_eh_dispatch (basic_block src, gimple stmt)
 		   blocks at the end of this pass.  */
 		if (! pointer_set_contains (seen_values, TREE_VALUE (flt_node)))
 		  {
-		    tree t = build3 (CASE_LABEL_EXPR, void_type_node,
-				     TREE_VALUE (flt_node), NULL, lab);
+		    tree t = build_case_label (TREE_VALUE (flt_node),
+					       NULL, lab);
 		    VEC_safe_push (tree, heap, labels, t);
 		    pointer_set_insert (seen_values, TREE_VALUE (flt_node));
 		    have_label = true;
@@ -3186,15 +3207,15 @@ lower_eh_dispatch (basic_block src, gimple stmt)
 	else
 	  {
 	    fn = implicit_built_in_decls[BUILT_IN_EH_FILTER];
-	    x = gimple_build_call (fn, 1, build_int_cst (NULL, region_nr));
+	    x = gimple_build_call (fn, 1, build_int_cst (integer_type_node,
+							 region_nr));
 	    filter = create_tmp_var (TREE_TYPE (TREE_TYPE (fn)), NULL);
 	    filter = make_ssa_name (filter, x);
 	    gimple_call_set_lhs (x, filter);
 	    gsi_insert_before (&gsi, x, GSI_SAME_STMT);
 
 	    /* Turn the default label into a default case.  */
-	    default_label = build3 (CASE_LABEL_EXPR, void_type_node,
-				    NULL, NULL, default_label);
+	    default_label = build_case_label (NULL, NULL, default_label);
 	    sort_case_labels (labels);
 
 	    x = gimple_build_switch_vec (filter, default_label, labels);
@@ -3212,7 +3233,8 @@ lower_eh_dispatch (basic_block src, gimple stmt)
 	edge f_e = FALLTHRU_EDGE (src);
 
 	fn = implicit_built_in_decls[BUILT_IN_EH_FILTER];
-	x = gimple_build_call (fn, 1, build_int_cst (NULL, region_nr));
+	x = gimple_build_call (fn, 1, build_int_cst (integer_type_node,
+						     region_nr));
 	filter = create_tmp_var (TREE_TYPE (TREE_TYPE (fn)), NULL);
 	filter = make_ssa_name (filter, x);
 	gimple_call_set_lhs (x, filter);
@@ -3284,7 +3306,7 @@ struct gimple_opt_pass pass_lower_eh_dispatch =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func | TODO_verify_flow	/* todo_flags_finish */
+  TODO_verify_flow	                /* todo_flags_finish */
  }
 };
 
@@ -3841,8 +3863,15 @@ cleanup_empty_eh (eh_landing_pad lp)
       return cleanup_empty_eh_unsplit (bb, e_out, lp);
     }
 
-  /* The block should consist only of a single RESX statement.  */
+  /* The block should consist only of a single RESX statement, modulo a
+     preceding call to __builtin_stack_restore if there is no outgoing
+     edge, since the call can be eliminated in this case.  */
   resx = gsi_stmt (gsi);
+  if (!e_out && gimple_call_builtin_p (resx, BUILT_IN_STACK_RESTORE))
+    {
+      gsi_next (&gsi);
+      resx = gsi_stmt (gsi);
+    }
   if (!is_gimple_resx (resx))
     return false;
   gcc_assert (gsi_one_before_end_p (gsi));
@@ -4027,7 +4056,7 @@ struct gimple_opt_pass pass_cleanup_eh = {
    0,				/* properties_provided */
    0,				/* properties_destroyed */
    0,				/* todo_flags_start */
-   TODO_dump_func		/* todo_flags_finish */
+   0             		/* todo_flags_finish */
    }
 };
 

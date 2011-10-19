@@ -1,6 +1,6 @@
 /* Definitions of target machine for GNU compiler, for ARM.
    Copyright (C) 1991, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
-   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
+   2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
    Free Software Foundation, Inc.
    Contributed by Pieter `Tiggr' Schoenmakers (rcpieter@win.tue.nl)
    and Martin Simmons (@harleqn.co.uk).
@@ -47,6 +47,8 @@ extern char arm_arch_name[];
     {							\
 	if (TARGET_DSP_MULTIPLY)			\
 	   builtin_define ("__ARM_FEATURE_DSP");	\
+	if (unaligned_access)				\
+	  builtin_define ("__ARM_FEATURE_UNALIGNED");	\
 	/* Define __arm__ even when in thumb mode, for	\
 	   consistency with armcc.  */			\
 	builtin_define ("__arm__");			\
@@ -103,18 +105,11 @@ extern char arm_arch_name[];
 	      builtin_define ("__ARM_PCS");		\
 	    builtin_define ("__ARM_EABI__");		\
 	  }						\
+	if (TARGET_IDIV)				\
+	  builtin_define ("__ARM_ARCH_EXT_IDIV__");	\
     } while (0)
 
-/* The various ARM cores.  */
-enum processor_type
-{
-#define ARM_CORE(NAME, IDENT, ARCH, FLAGS, COSTS) \
-  IDENT,
-#include "arm-cores.def"
-#undef ARM_CORE
-  /* Used to indicate that no processor has been specified.  */
-  arm_none
-};
+#include "config/arm/arm-opts.h"
 
 enum target_cpus
 {
@@ -176,8 +171,8 @@ extern void (*arm_lang_output_object_attributes_hook)(void);
 
 #undef  CPP_SPEC
 #define CPP_SPEC "%(subtarget_cpp_spec)					\
-%{msoft-float:%{mhard-float:						\
-	%e-msoft-float and -mhard_float may not be used together}}	\
+%{mfloat-abi=soft:%{mfloat-abi=hard:					\
+	%e-mfloat-abi=soft and -mfloat-abi=hard may not be used together}} \
 %{mbig-endian:%{mlittle-endian:						\
 	%e-mbig-endian and -mlittle-endian may not be used together}}"
 
@@ -196,6 +191,7 @@ extern void (*arm_lang_output_object_attributes_hook)(void);
    Do not define this macro if it does not need to do anything.  */
 #define EXTRA_SPECS						\
   { "subtarget_cpp_spec",	SUBTARGET_CPP_SPEC },           \
+  { "asm_cpu_spec",		ASM_CPU_SPEC },			\
   SUBTARGET_EXTRA_SPECS
 
 #ifndef SUBTARGET_EXTRA_SPECS
@@ -207,10 +203,6 @@ extern void (*arm_lang_output_object_attributes_hook)(void);
 #endif
 
 /* Run-time Target Specification.  */
-#ifndef TARGET_VERSION
-#define TARGET_VERSION fputs (" (ARM/generic)", stderr);
-#endif
-
 #define TARGET_SOFT_FLOAT		(arm_float_abi == ARM_FLOAT_ABI_SOFT)
 /* Use hardware floating point instructions. */
 #define TARGET_HARD_FLOAT		(arm_float_abi != ARM_FLOAT_ABI_SOFT)
@@ -233,6 +225,7 @@ extern void (*arm_lang_output_object_attributes_hook)(void);
 
 #define TARGET_HARD_TP			(target_thread_pointer == TP_CP15)
 #define TARGET_SOFT_TP			(target_thread_pointer == TP_SOFT)
+#define TARGET_GNU2_TLS			(target_tls_dialect == TLS_GNU2)
 
 /* Only 16-bit thumb code.  */
 #define TARGET_THUMB1			(TARGET_THUMB && !arm_arch_thumb2)
@@ -284,7 +277,8 @@ extern void (*arm_lang_output_object_attributes_hook)(void);
   (TARGET_32BIT && arm_arch6 && (arm_arch_notm || arm_arch7em))
 
 /* Should MOVW/MOVT be used in preference to a constant pool.  */
-#define TARGET_USE_MOVT (arm_arch_thumb2 && !optimize_size)
+#define TARGET_USE_MOVT \
+  (arm_arch_thumb2 && !optimize_size && !current_tune->prefer_constant_pool)
 
 /* We could use unified syntax for arm mode, but for now we just use it
    for Thumb-2.  */
@@ -305,6 +299,10 @@ extern void (*arm_lang_output_object_attributes_hook)(void);
 /* Nonzero if this chip supports ldrex{bhd} and strex{bhd}.  */
 #define TARGET_HAVE_LDREXBHD	((arm_arch6k && TARGET_ARM) || arm_arch7)
 
+/* Nonzero if integer division instructions supported.  */
+#define TARGET_IDIV		((TARGET_ARM && arm_arch_arm_hwdiv) \
+				 || (TARGET_THUMB2 && arm_arch_thumb_hwdiv))
+
 /* True iff the full BPABI is being used.  If TARGET_BPABI is true,
    then TARGET_AAPCS_BASED must be true -- but the converse does not
    hold.  TARGET_BPABI implies the use of the BPABI runtime library,
@@ -319,19 +317,19 @@ extern void (*arm_lang_output_object_attributes_hook)(void);
     by --with-arch.
    --with-tune is ignored if -mtune or -mcpu are specified (but not affected
      by -march).
-   --with-float is ignored if -mhard-float, -msoft-float or -mfloat-abi are
-   specified.
+   --with-float is ignored if -mfloat-abi is specified.
    --with-fpu is ignored if -mfpu is specified.
-   --with-abi is ignored is -mabi is specified.  */
+   --with-abi is ignored if -mabi is specified.
+   --with-tls is ignored if -mtls-dialect is specified. */
 #define OPTION_DEFAULT_SPECS \
   {"arch", "%{!march=*:%{!mcpu=*:-march=%(VALUE)}}" }, \
   {"cpu", "%{!march=*:%{!mcpu=*:-mcpu=%(VALUE)}}" }, \
   {"tune", "%{!mcpu=*:%{!mtune=*:-mtune=%(VALUE)}}" }, \
-  {"float", \
-    "%{!msoft-float:%{!mhard-float:%{!mfloat-abi=*:-mfloat-abi=%(VALUE)}}}" }, \
+  {"float", "%{!mfloat-abi=*:-mfloat-abi=%(VALUE)}" }, \
   {"fpu", "%{!mfpu=*:-mfpu=%(VALUE)}"}, \
   {"abi", "%{!mabi=*:-mabi=%(VALUE)}"}, \
-  {"mode", "%{!marm:%{!mthumb:-m%(VALUE)}}"},
+  {"mode", "%{!marm:%{!mthumb:-m%(VALUE)}}"}, \
+  {"tls", "%{!mtls-dialect=*:-mtls-dialect=%(VALUE)}"},
 
 /* Which floating point model to use.  */
 enum arm_fp_model
@@ -366,58 +364,16 @@ extern const struct arm_fpu_desc
 /* Which floating point hardware to schedule for.  */
 extern int arm_fpu_attr;
 
-enum float_abi_type
-{
-  ARM_FLOAT_ABI_SOFT,
-  ARM_FLOAT_ABI_SOFTFP,
-  ARM_FLOAT_ABI_HARD
-};
-
-extern enum float_abi_type arm_float_abi;
-
 #ifndef TARGET_DEFAULT_FLOAT_ABI
 #define TARGET_DEFAULT_FLOAT_ABI ARM_FLOAT_ABI_SOFT
 #endif
 
-/* Which __fp16 format to use.
-   The enumeration values correspond to the numbering for the
-   Tag_ABI_FP_16bit_format attribute.
- */
-enum arm_fp16_format_type
-{
-  ARM_FP16_FORMAT_NONE = 0,
-  ARM_FP16_FORMAT_IEEE = 1,
-  ARM_FP16_FORMAT_ALTERNATIVE = 2
-};
-
-extern enum arm_fp16_format_type arm_fp16_format;
 #define LARGEST_EXPONENT_IS_NORMAL(bits) \
     ((bits) == 16 && arm_fp16_format == ARM_FP16_FORMAT_ALTERNATIVE)
-
-/* Which ABI to use.  */
-enum arm_abi_type
-{
-  ARM_ABI_APCS,
-  ARM_ABI_ATPCS,
-  ARM_ABI_AAPCS,
-  ARM_ABI_IWMMXT,
-  ARM_ABI_AAPCS_LINUX
-};
-
-extern enum arm_abi_type arm_abi;
 
 #ifndef ARM_DEFAULT_ABI
 #define ARM_DEFAULT_ABI ARM_ABI_APCS
 #endif
-
-/* Which thread pointer access sequence to use.  */
-enum arm_tp_type {
-  TP_AUTO,
-  TP_SOFT,
-  TP_CP15
-};
-
-extern enum arm_tp_type target_thread_pointer;
 
 /* Nonzero if this chip supports the ARM Architecture 3M extensions.  */
 extern int arm_arch3m;
@@ -489,8 +445,11 @@ extern int arm_cpp_interwork;
 /* Nonzero if chip supports Thumb 2.  */
 extern int arm_arch_thumb2;
 
-/* Nonzero if chip supports integer division instruction.  */
-extern int arm_arch_hwdiv;
+/* Nonzero if chip supports integer division instruction in ARM mode.  */
+extern int arm_arch_arm_hwdiv;
+
+/* Nonzero if chip supports integer division instruction in Thumb mode.  */
+extern int arm_arch_thumb_hwdiv;
 
 #ifndef TARGET_DEFAULT
 #define TARGET_DEFAULT  (MASK_APCS_FRAME)
@@ -631,7 +590,6 @@ extern int arm_arch_hwdiv;
    0020D) page 2-20 says "Structures are aligned on word boundaries".
    The AAPCS specifies a value of 8.  */
 #define STRUCTURE_SIZE_BOUNDARY arm_structure_size_boundary
-extern int arm_structure_size_boundary;
 
 /* This is the value used to initialize arm_structure_size_boundary.  If a
    particular arm target wants to change the default value it should change
@@ -651,6 +609,20 @@ extern int arm_structure_size_boundary;
 
 #define WCHAR_TYPE_SIZE BITS_PER_WORD
 #endif
+
+/* Sized for fixed-point types.  */
+
+#define SHORT_FRACT_TYPE_SIZE 8
+#define FRACT_TYPE_SIZE 16
+#define LONG_FRACT_TYPE_SIZE 32
+#define LONG_LONG_FRACT_TYPE_SIZE 64
+
+#define SHORT_ACCUM_TYPE_SIZE 16
+#define ACCUM_TYPE_SIZE 32
+#define LONG_ACCUM_TYPE_SIZE 64
+#define LONG_LONG_ACCUM_TYPE_SIZE 64
+
+#define MAX_FIXED_MODE_SIZE 64
 
 #ifndef SIZE_TYPE
 #define SIZE_TYPE (TARGET_AAPCS_BASED ? "unsigned int" : "long unsigned int")
@@ -855,6 +827,16 @@ extern int arm_structure_size_boundary;
 #define ARM_EH_STACKADJ_REGNUM	2
 #define EH_RETURN_STACKADJ_RTX	gen_rtx_REG (SImode, ARM_EH_STACKADJ_REGNUM)
 
+#ifndef ARM_TARGET2_DWARF_FORMAT
+#define ARM_TARGET2_DWARF_FORMAT DW_EH_PE_pcrel
+
+/* ttype entries (the only interesting data references used)
+   use TARGET2 relocations.  */
+#define ASM_PREFERRED_EH_DATA_FORMAT(code, data) \
+  (((code) == 0 && (data) == 1 && ARM_UNWIND_INFO) ? ARM_TARGET2_DWARF_FORMAT \
+			       : DW_EH_PE_absptr)
+#endif
+
 /* The native (Norcroft) Pascal compiler for the ARM passes the static chain
    as an invisible last argument (possible since varargs don't exist in
    Pascal), so the following is not true.  */
@@ -993,12 +975,7 @@ extern int arm_structure_size_boundary;
 #define HARD_REGNO_MODE_OK(REGNO, MODE)					\
   arm_hard_regno_mode_ok ((REGNO), (MODE))
 
-/* Value is 1 if it is a good idea to tie two pseudo registers
-   when one has mode MODE1 and one has mode MODE2.
-   If HARD_REGNO_MODE_OK could produce different values for MODE1 and MODE2,
-   for any hard reg, then this must be 0 for correct output.  */
-#define MODES_TIEABLE_P(MODE1, MODE2)  \
-  (GET_MODE_CLASS (MODE1) == GET_MODE_CLASS (MODE2))
+#define MODES_TIEABLE_P(MODE1, MODE2) arm_modes_tieable_p (MODE1, MODE2)
 
 #define VALID_IWMMXT_REG_MODE(MODE) \
  (arm_vector_mode_supported_p (MODE) || (MODE) == DImode)
@@ -1156,27 +1133,13 @@ enum reg_class
    or could index an array.  */
 #define REGNO_REG_CLASS(REGNO)  arm_regno_class (REGNO)
 
-/* The following macro defines cover classes for Integrated Register
-   Allocator.  Cover classes is a set of non-intersected register
-   classes covering all hard registers used for register allocation
-   purpose.  Any move between two registers of a cover class should be
-   cheaper than load or store of the registers.  The macro value is
-   array of register classes with LIM_REG_CLASSES used as the end
-   marker.  */
-
-#define IRA_COVER_CLASSES						     \
-{									     \
-  GENERAL_REGS, FPA_REGS, CIRRUS_REGS, VFP_REGS, IWMMXT_GR_REGS, IWMMXT_REGS,\
-  LIM_REG_CLASSES							     \
-}
-
 /* FPA registers can't do subreg as all values are reformatted to internal
-   precision.  VFP registers may only be accessed in the mode they
-   were set.  */
-#define CANNOT_CHANGE_MODE_CLASS(FROM, TO, CLASS)	\
-  (GET_MODE_SIZE (FROM) != GET_MODE_SIZE (TO)		\
-   ? reg_classes_intersect_p (FPA_REGS, (CLASS))	\
-     || reg_classes_intersect_p (VFP_REGS, (CLASS))	\
+   precision.  In VFPv1, VFP registers could only be accessed in the mode
+   they were set, so subregs would be invalid there too.  However, we don't
+   support VFPv1 at the moment, and the restriction was lifted in VFPv2.  */
+#define CANNOT_CHANGE_MODE_CLASS(FROM, TO, CLASS)		\
+  (GET_MODE_SIZE (FROM) != GET_MODE_SIZE (TO)			\
+   ? reg_classes_intersect_p (FPA_REGS, (CLASS))		\
    : 0)
 
 /* The class value for index registers, and the one for base regs.  */
@@ -1187,7 +1150,7 @@ enum reg_class
    when addressing quantities in QI or HI mode; if we don't know the
    mode, then we must be conservative.  */
 #define MODE_BASE_REG_CLASS(MODE)					\
-    (TARGET_32BIT ? CORE_REGS :					\
+    (TARGET_ARM || (TARGET_THUMB2 && !optimize_size) ? CORE_REGS :      \
      (((MODE) == SImode) ? BASE_REGS : LO_REGS))
 
 /* For Thumb we can not support SP+reg addressing, so we return LO_REGS
@@ -1777,27 +1740,6 @@ typedef struct
 #define TARGET_DEFAULT_WORD_RELOCATIONS 0
 #endif
 
-/* Nonzero if the constant value X is a legitimate general operand.
-   It is given that X satisfies CONSTANT_P or is a CONST_DOUBLE.
-
-   On the ARM, allow any integer (invalid ones are removed later by insn
-   patterns), nice doubles and symbol_refs which refer to the function's
-   constant pool XXX.
-
-   When generating pic allow anything.  */
-#define ARM_LEGITIMATE_CONSTANT_P(X)	(flag_pic || ! label_mentioned_p (X))
-
-#define THUMB_LEGITIMATE_CONSTANT_P(X)	\
- (   GET_CODE (X) == CONST_INT		\
-  || GET_CODE (X) == CONST_DOUBLE	\
-  || CONSTANT_ADDRESS_P (X)		\
-  || flag_pic)
-
-#define LEGITIMATE_CONSTANT_P(X)			\
-  (!arm_cannot_force_const_mem (X)			\
-   && (TARGET_32BIT ? ARM_LEGITIMATE_CONSTANT_P (X)	\
-		    : THUMB_LEGITIMATE_CONSTANT_P (X)))
-
 #ifndef SUBTARGET_NAME_ENCODING_LENGTHS
 #define SUBTARGET_NAME_ENCODING_LENGTHS
 #endif
@@ -1972,7 +1914,7 @@ typedef struct
       : min >= -4096 && max < 4096					\
       ? (ADDR_DIFF_VEC_FLAGS (body).offset_unsigned = 0, HImode)	\
       : SImode)								\
-   : ((min < 0 || max >= 0x2000 || !TARGET_THUMB2) ? SImode		\
+   : ((min < 0 || max >= 0x20000 || !TARGET_THUMB2) ? SImode		\
       : (max >= 0x200) ? HImode						\
       : QImode))
 
@@ -2041,7 +1983,8 @@ typedef struct
 /* Try to generate sequences that don't involve branches, we can then use
    conditional instructions */
 #define BRANCH_COST(speed_p, predictable_p) \
-  (TARGET_32BIT ? 4 : (optimize > 0 ? 2 : 0))
+  (current_tune->branch_cost (speed_p, predictable_p))
+
 
 /* Position Independent Code.  */
 /* We decide which register to use based on the compilation options and
@@ -2279,178 +2222,6 @@ extern int making_const_table;
    : arm_gen_return_addr_mask ())
 
 
-/* Neon defines builtins from ARM_BUILTIN_MAX upwards, though they don't have
-   symbolic names defined here (which would require too much duplication).
-   FIXME?  */
-enum arm_builtins
-{
-  ARM_BUILTIN_GETWCX,
-  ARM_BUILTIN_SETWCX,
-
-  ARM_BUILTIN_WZERO,
-
-  ARM_BUILTIN_WAVG2BR,
-  ARM_BUILTIN_WAVG2HR,
-  ARM_BUILTIN_WAVG2B,
-  ARM_BUILTIN_WAVG2H,
-
-  ARM_BUILTIN_WACCB,
-  ARM_BUILTIN_WACCH,
-  ARM_BUILTIN_WACCW,
-
-  ARM_BUILTIN_WMACS,
-  ARM_BUILTIN_WMACSZ,
-  ARM_BUILTIN_WMACU,
-  ARM_BUILTIN_WMACUZ,
-
-  ARM_BUILTIN_WSADB,
-  ARM_BUILTIN_WSADBZ,
-  ARM_BUILTIN_WSADH,
-  ARM_BUILTIN_WSADHZ,
-
-  ARM_BUILTIN_WALIGN,
-
-  ARM_BUILTIN_TMIA,
-  ARM_BUILTIN_TMIAPH,
-  ARM_BUILTIN_TMIABB,
-  ARM_BUILTIN_TMIABT,
-  ARM_BUILTIN_TMIATB,
-  ARM_BUILTIN_TMIATT,
-
-  ARM_BUILTIN_TMOVMSKB,
-  ARM_BUILTIN_TMOVMSKH,
-  ARM_BUILTIN_TMOVMSKW,
-
-  ARM_BUILTIN_TBCSTB,
-  ARM_BUILTIN_TBCSTH,
-  ARM_BUILTIN_TBCSTW,
-
-  ARM_BUILTIN_WMADDS,
-  ARM_BUILTIN_WMADDU,
-
-  ARM_BUILTIN_WPACKHSS,
-  ARM_BUILTIN_WPACKWSS,
-  ARM_BUILTIN_WPACKDSS,
-  ARM_BUILTIN_WPACKHUS,
-  ARM_BUILTIN_WPACKWUS,
-  ARM_BUILTIN_WPACKDUS,
-
-  ARM_BUILTIN_WADDB,
-  ARM_BUILTIN_WADDH,
-  ARM_BUILTIN_WADDW,
-  ARM_BUILTIN_WADDSSB,
-  ARM_BUILTIN_WADDSSH,
-  ARM_BUILTIN_WADDSSW,
-  ARM_BUILTIN_WADDUSB,
-  ARM_BUILTIN_WADDUSH,
-  ARM_BUILTIN_WADDUSW,
-  ARM_BUILTIN_WSUBB,
-  ARM_BUILTIN_WSUBH,
-  ARM_BUILTIN_WSUBW,
-  ARM_BUILTIN_WSUBSSB,
-  ARM_BUILTIN_WSUBSSH,
-  ARM_BUILTIN_WSUBSSW,
-  ARM_BUILTIN_WSUBUSB,
-  ARM_BUILTIN_WSUBUSH,
-  ARM_BUILTIN_WSUBUSW,
-
-  ARM_BUILTIN_WAND,
-  ARM_BUILTIN_WANDN,
-  ARM_BUILTIN_WOR,
-  ARM_BUILTIN_WXOR,
-
-  ARM_BUILTIN_WCMPEQB,
-  ARM_BUILTIN_WCMPEQH,
-  ARM_BUILTIN_WCMPEQW,
-  ARM_BUILTIN_WCMPGTUB,
-  ARM_BUILTIN_WCMPGTUH,
-  ARM_BUILTIN_WCMPGTUW,
-  ARM_BUILTIN_WCMPGTSB,
-  ARM_BUILTIN_WCMPGTSH,
-  ARM_BUILTIN_WCMPGTSW,
-
-  ARM_BUILTIN_TEXTRMSB,
-  ARM_BUILTIN_TEXTRMSH,
-  ARM_BUILTIN_TEXTRMSW,
-  ARM_BUILTIN_TEXTRMUB,
-  ARM_BUILTIN_TEXTRMUH,
-  ARM_BUILTIN_TEXTRMUW,
-  ARM_BUILTIN_TINSRB,
-  ARM_BUILTIN_TINSRH,
-  ARM_BUILTIN_TINSRW,
-
-  ARM_BUILTIN_WMAXSW,
-  ARM_BUILTIN_WMAXSH,
-  ARM_BUILTIN_WMAXSB,
-  ARM_BUILTIN_WMAXUW,
-  ARM_BUILTIN_WMAXUH,
-  ARM_BUILTIN_WMAXUB,
-  ARM_BUILTIN_WMINSW,
-  ARM_BUILTIN_WMINSH,
-  ARM_BUILTIN_WMINSB,
-  ARM_BUILTIN_WMINUW,
-  ARM_BUILTIN_WMINUH,
-  ARM_BUILTIN_WMINUB,
-
-  ARM_BUILTIN_WMULUM,
-  ARM_BUILTIN_WMULSM,
-  ARM_BUILTIN_WMULUL,
-
-  ARM_BUILTIN_PSADBH,
-  ARM_BUILTIN_WSHUFH,
-
-  ARM_BUILTIN_WSLLH,
-  ARM_BUILTIN_WSLLW,
-  ARM_BUILTIN_WSLLD,
-  ARM_BUILTIN_WSRAH,
-  ARM_BUILTIN_WSRAW,
-  ARM_BUILTIN_WSRAD,
-  ARM_BUILTIN_WSRLH,
-  ARM_BUILTIN_WSRLW,
-  ARM_BUILTIN_WSRLD,
-  ARM_BUILTIN_WRORH,
-  ARM_BUILTIN_WRORW,
-  ARM_BUILTIN_WRORD,
-  ARM_BUILTIN_WSLLHI,
-  ARM_BUILTIN_WSLLWI,
-  ARM_BUILTIN_WSLLDI,
-  ARM_BUILTIN_WSRAHI,
-  ARM_BUILTIN_WSRAWI,
-  ARM_BUILTIN_WSRADI,
-  ARM_BUILTIN_WSRLHI,
-  ARM_BUILTIN_WSRLWI,
-  ARM_BUILTIN_WSRLDI,
-  ARM_BUILTIN_WRORHI,
-  ARM_BUILTIN_WRORWI,
-  ARM_BUILTIN_WRORDI,
-
-  ARM_BUILTIN_WUNPCKIHB,
-  ARM_BUILTIN_WUNPCKIHH,
-  ARM_BUILTIN_WUNPCKIHW,
-  ARM_BUILTIN_WUNPCKILB,
-  ARM_BUILTIN_WUNPCKILH,
-  ARM_BUILTIN_WUNPCKILW,
-
-  ARM_BUILTIN_WUNPCKEHSB,
-  ARM_BUILTIN_WUNPCKEHSH,
-  ARM_BUILTIN_WUNPCKEHSW,
-  ARM_BUILTIN_WUNPCKEHUB,
-  ARM_BUILTIN_WUNPCKEHUH,
-  ARM_BUILTIN_WUNPCKEHUW,
-  ARM_BUILTIN_WUNPCKELSB,
-  ARM_BUILTIN_WUNPCKELSH,
-  ARM_BUILTIN_WUNPCKELSW,
-  ARM_BUILTIN_WUNPCKELUB,
-  ARM_BUILTIN_WUNPCKELUH,
-  ARM_BUILTIN_WUNPCKELUW,
-
-  ARM_BUILTIN_THREAD_POINTER,
-
-  ARM_BUILTIN_NEON_BASE,
-
-  ARM_BUILTIN_MAX = ARM_BUILTIN_NEON_BASE  /* FIXME: Wrong!  */
-};
-
 /* Do not emit .note.GNU-stack by default.  */
 #ifndef NEED_INDICATE_EXEC_STACK
 #define NEED_INDICATE_EXEC_STACK	0
@@ -2459,5 +2230,9 @@ enum arm_builtins
 /* The maximum number of parallel loads or stores we support in an ldm/stm
    instruction.  */
 #define MAX_LDM_STM_OPS 4
+
+#define ASM_CPU_SPEC \
+   " %{mcpu=generic-*:-march=%*;"				\
+   "   :%{mcpu=*:-mcpu=%*} %{march=*:-march=%*}}"
 
 #endif /* ! GCC_ARM_H */

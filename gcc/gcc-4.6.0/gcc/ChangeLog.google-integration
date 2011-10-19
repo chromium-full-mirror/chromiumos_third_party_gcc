@@ -1,3 +1,38 @@
+2011-10-03   Diego Novillo  <dnovillo@google.com>
+
+	Mainline merge rev 179430.
+
+2011-09-21   Diego Novillo  <dnovillo@google.com>
+
+	Mainline merge rev 178998.
+
+2011-09-14   Diego Novillo  <dnovillo@google.com>
+
+	Mainline merge rev 178783.
+	Cherry pick mainline rev 178833.
+
+2011-08-24  Simon Baldwin  <simonb@google.com>
+
+	Mainline cherry pick rev 178031.
+
+	* gengtype-state.c (write_state): Remove timestamped header line.
+
+2011-08-17   Diego Novillo  <dnovillo@google.com>
+
+	Mainline merge rev 177757.
+
+	* common.opt: Add empty placeholder for -gmlt.
+	* opts.c (common_handle_option): Likewise.
+
+2011-07-16  Diego Novillo  <dnovillo@google.com>
+
+	Mainline merge rev 175879.
+
+2011-07-15   Diego Novillo  <dnovillo@google.com>
+
+	* Makefile.in (site.exp): Fix redirection in definition
+	of TEST_ALWAYS_FLAGS.
+
 2011-06-17  Chris Demetriou  <cgd@google.com>
 
 	* config/arm/linux-grtev2.h: New file.

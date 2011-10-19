@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// INCOMPLETE PACKAGE.
+// DEPRECATED PACKAGE - SEE go/types INSTEAD.
 // This package implements typechecking of a Go AST.
 // The result of the typecheck is an augmented AST
 // with object and type information for each identifier.
@@ -17,18 +17,15 @@ import (
 	"os"
 )
 
-
 // TODO(gri) don't report errors for objects/types that are marked as bad.
 
 
 const debug = true // set for debugging output
 
-
 // An importer takes an import path and returns the data describing the
 // respective package's exported interface. The data format is TBD.
 //
 type Importer func(path string) ([]byte, os.Error)
-
 
 // CheckPackage typechecks a package and augments the AST by setting
 // *ast.Object, *ast.Type, and *ast.Scope fields accordingly. If an
@@ -46,17 +43,15 @@ func CheckPackage(fset *token.FileSet, pkg *ast.Package, importer Importer) os.E
 	return tc.GetError(scanner.Sorted)
 }
 
-
 // CheckFile typechecks a single file, but otherwise behaves like
 // CheckPackage. If the complete package consists of more than just
 // one file, the file may not typecheck without errors.
 //
 func CheckFile(fset *token.FileSet, file *ast.File, importer Importer) os.Error {
 	// create a single-file dummy package
-	pkg := &ast.Package{file.Name.Name, nil, map[string]*ast.File{fset.Position(file.Name.NamePos).Filename: file}}
+	pkg := &ast.Package{file.Name.Name, nil, nil, map[string]*ast.File{fset.Position(file.Name.NamePos).Filename: file}}
 	return CheckPackage(fset, pkg, importer)
 }
-
 
 // ----------------------------------------------------------------------------
 // Typechecker state
@@ -65,23 +60,21 @@ type typechecker struct {
 	fset *token.FileSet
 	scanner.ErrorVector
 	importer Importer
+	globals  []*ast.Object        // list of global objects
 	topScope *ast.Scope           // current top-most scope
 	cyclemap map[*ast.Object]bool // for cycle detection
 	iota     int                  // current value of iota
 }
 
-
 func (tc *typechecker) Errorf(pos token.Pos, format string, args ...interface{}) {
 	tc.Error(tc.fset.Position(pos), fmt.Sprintf(format, args...))
 }
-
 
 func assert(pred bool) {
 	if !pred {
 		panic("internal error")
 	}
 }
-
 
 /*
 Typechecking is done in several phases:
@@ -94,7 +87,7 @@ phase 1: declare all global objects; also collect all function and method declar
 	- report global double declarations
 
 phase 2: bind methods to their receiver base types
-	- received base types must be declared in the package, thus for
+	- receiver base types must be declared in the package, thus for
 	  each method a corresponding (unresolved) type must exist
 	- report method double declarations and errors with base types
 
@@ -142,21 +135,20 @@ func (tc *typechecker) checkPackage(pkg *ast.Package) {
 	}
 
 	// phase 3: resolve all global objects
-	// (note that objects with _ name are also in the scope)
 	tc.cyclemap = make(map[*ast.Object]bool)
-	for _, obj := range tc.topScope.Objects {
+	for _, obj := range tc.globals {
 		tc.resolve(obj)
 	}
 	assert(len(tc.cyclemap) == 0)
 
 	// 4: sequentially typecheck function and method bodies
 	for _, f := range funcs {
-		tc.checkBlock(f.Body.List, f.Name.Obj.Type)
+		ftype, _ := f.Name.Obj.Type.(*Type)
+		tc.checkBlock(f.Body.List, ftype)
 	}
 
 	pkg.Scope = tc.topScope
 }
-
 
 func (tc *typechecker) declGlobal(global ast.Decl) {
 	switch d := global.(type) {
@@ -183,11 +175,11 @@ func (tc *typechecker) declGlobal(global ast.Decl) {
 						}
 					}
 					for _, name := range s.Names {
-						tc.decl(ast.Con, name, s, iota)
+						tc.globals = append(tc.globals, tc.decl(ast.Con, name, s, iota))
 					}
 				case token.VAR:
 					for _, name := range s.Names {
-						tc.decl(ast.Var, name, s, 0)
+						tc.globals = append(tc.globals, tc.decl(ast.Var, name, s, 0))
 					}
 				default:
 					panic("unreachable")
@@ -196,9 +188,10 @@ func (tc *typechecker) declGlobal(global ast.Decl) {
 				iota++
 			case *ast.TypeSpec:
 				obj := tc.decl(ast.Typ, s.Name, s, 0)
+				tc.globals = append(tc.globals, obj)
 				// give all type objects an unresolved type so
 				// that we can collect methods in the type scope
-				typ := ast.NewType(ast.Unresolved)
+				typ := NewType(Unresolved)
 				obj.Type = typ
 				typ.Obj = obj
 			default:
@@ -208,14 +201,13 @@ func (tc *typechecker) declGlobal(global ast.Decl) {
 
 	case *ast.FuncDecl:
 		if d.Recv == nil {
-			tc.decl(ast.Fun, d.Name, d, 0)
+			tc.globals = append(tc.globals, tc.decl(ast.Fun, d.Name, d, 0))
 		}
 
 	default:
 		panic("unreachable")
 	}
 }
-
 
 // If x is of the form *T, deref returns T, otherwise it returns x.
 func deref(x ast.Expr) ast.Expr {
@@ -224,7 +216,6 @@ func deref(x ast.Expr) ast.Expr {
 	}
 	return x
 }
-
 
 func (tc *typechecker) bindMethod(method *ast.FuncDecl) {
 	// a method is declared in the receiver base type's scope
@@ -239,8 +230,8 @@ func (tc *typechecker) bindMethod(method *ast.FuncDecl) {
 		} else if obj.Kind != ast.Typ {
 			tc.Errorf(name.Pos(), "invalid receiver: %s is not a type", name.Name)
 		} else {
-			typ := obj.Type
-			assert(typ.Form == ast.Unresolved)
+			typ := obj.Type.(*Type)
+			assert(typ.Form == Unresolved)
 			scope = typ.Scope
 		}
 	}
@@ -257,11 +248,10 @@ func (tc *typechecker) bindMethod(method *ast.FuncDecl) {
 	tc.declInScope(scope, ast.Fun, method.Name, method, 0)
 }
 
-
 func (tc *typechecker) resolve(obj *ast.Object) {
 	// check for declaration cycles
 	if tc.cyclemap[obj] {
-		tc.Errorf(objPos(obj), "illegal cycle in declaration of %s", obj.Name)
+		tc.Errorf(obj.Pos(), "illegal cycle in declaration of %s", obj.Name)
 		obj.Kind = ast.Bad
 		return
 	}
@@ -271,7 +261,7 @@ func (tc *typechecker) resolve(obj *ast.Object) {
 	}()
 
 	// resolve non-type objects
-	typ := obj.Type
+	typ, _ := obj.Type.(*Type)
 	if typ == nil {
 		switch obj.Kind {
 		case ast.Bad:
@@ -282,12 +272,12 @@ func (tc *typechecker) resolve(obj *ast.Object) {
 
 		case ast.Var:
 			tc.declVar(obj)
-			//obj.Type = tc.typeFor(nil, obj.Decl.(*ast.ValueSpec).Type, false)
+			obj.Type = tc.typeFor(nil, obj.Decl.(*ast.ValueSpec).Type, false)
 
 		case ast.Fun:
-			obj.Type = ast.NewType(ast.Function)
+			obj.Type = NewType(Function)
 			t := obj.Decl.(*ast.FuncDecl).Type
-			tc.declSignature(obj.Type, nil, t.Params, t.Results)
+			tc.declSignature(obj.Type.(*Type), nil, t.Params, t.Results)
 
 		default:
 			// type objects have non-nil types when resolve is called
@@ -300,32 +290,33 @@ func (tc *typechecker) resolve(obj *ast.Object) {
 	}
 
 	// resolve type objects
-	if typ.Form == ast.Unresolved {
+	if typ.Form == Unresolved {
 		tc.typeFor(typ, typ.Obj.Decl.(*ast.TypeSpec).Type, false)
 
 		// provide types for all methods
 		for _, obj := range typ.Scope.Objects {
 			if obj.Kind == ast.Fun {
 				assert(obj.Type == nil)
-				obj.Type = ast.NewType(ast.Method)
+				obj.Type = NewType(Method)
 				f := obj.Decl.(*ast.FuncDecl)
 				t := f.Type
-				tc.declSignature(obj.Type, f.Recv, t.Params, t.Results)
+				tc.declSignature(obj.Type.(*Type), f.Recv, t.Params, t.Results)
 			}
 		}
 	}
 }
 
-
-func (tc *typechecker) checkBlock(body []ast.Stmt, ftype *ast.Type) {
+func (tc *typechecker) checkBlock(body []ast.Stmt, ftype *Type) {
 	tc.openScope()
 	defer tc.closeScope()
 
 	// inject function/method parameters into block scope, if any
 	if ftype != nil {
 		for _, par := range ftype.Params.Objects {
-			obj := tc.topScope.Insert(par)
-			assert(obj == par) // ftype has no double declarations
+			if par.Name != "_" {
+				alt := tc.topScope.Insert(par)
+				assert(alt == nil) // ftype has no double declarations
+			}
 		}
 	}
 
@@ -333,7 +324,6 @@ func (tc *typechecker) checkBlock(body []ast.Stmt, ftype *ast.Type) {
 		tc.checkStmt(stmt)
 	}
 }
-
 
 // ----------------------------------------------------------------------------
 // Types
@@ -345,7 +335,6 @@ func unparen(x ast.Expr) ast.Expr {
 	}
 	return x
 }
-
 
 func (tc *typechecker) declFields(scope *ast.Scope, fields *ast.FieldList, ref bool) (n uint) {
 	if fields != nil {
@@ -361,17 +350,15 @@ func (tc *typechecker) declFields(scope *ast.Scope, fields *ast.FieldList, ref b
 	return n
 }
 
-
-func (tc *typechecker) declSignature(typ *ast.Type, recv, params, results *ast.FieldList) {
-	assert((typ.Form == ast.Method) == (recv != nil))
+func (tc *typechecker) declSignature(typ *Type, recv, params, results *ast.FieldList) {
+	assert((typ.Form == Method) == (recv != nil))
 	typ.Params = ast.NewScope(nil)
 	tc.declFields(typ.Params, recv, true)
 	tc.declFields(typ.Params, params, true)
 	typ.N = tc.declFields(typ.Params, results, true)
 }
 
-
-func (tc *typechecker) typeFor(def *ast.Type, x ast.Expr, ref bool) (typ *ast.Type) {
+func (tc *typechecker) typeFor(def *Type, x ast.Expr, ref bool) (typ *Type) {
 	x = unparen(x)
 
 	// type name
@@ -381,10 +368,10 @@ func (tc *typechecker) typeFor(def *ast.Type, x ast.Expr, ref bool) (typ *ast.Ty
 		if obj.Kind != ast.Typ {
 			tc.Errorf(t.Pos(), "%s is not a type", t.Name)
 			if def == nil {
-				typ = ast.NewType(ast.BadType)
+				typ = NewType(BadType)
 			} else {
 				typ = def
-				typ.Form = ast.BadType
+				typ.Form = BadType
 			}
 			typ.Expr = x
 			return
@@ -393,7 +380,7 @@ func (tc *typechecker) typeFor(def *ast.Type, x ast.Expr, ref bool) (typ *ast.Ty
 		if !ref {
 			tc.resolve(obj) // check for cycles even if type resolved
 		}
-		typ = obj.Type
+		typ = obj.Type.(*Type)
 
 		if def != nil {
 			// new type declaration: copy type structure
@@ -410,7 +397,7 @@ func (tc *typechecker) typeFor(def *ast.Type, x ast.Expr, ref bool) (typ *ast.Ty
 	// type literal
 	typ = def
 	if typ == nil {
-		typ = ast.NewType(ast.BadType)
+		typ = NewType(BadType)
 	}
 	typ.Expr = x
 
@@ -419,42 +406,42 @@ func (tc *typechecker) typeFor(def *ast.Type, x ast.Expr, ref bool) (typ *ast.Ty
 		if debug {
 			fmt.Println("qualified identifier unimplemented")
 		}
-		typ.Form = ast.BadType
+		typ.Form = BadType
 
 	case *ast.StarExpr:
-		typ.Form = ast.Pointer
+		typ.Form = Pointer
 		typ.Elt = tc.typeFor(nil, t.X, true)
 
 	case *ast.ArrayType:
 		if t.Len != nil {
-			typ.Form = ast.Array
+			typ.Form = Array
 			// TODO(gri) compute the real length
 			// (this may call resolve recursively)
 			(*typ).N = 42
 		} else {
-			typ.Form = ast.Slice
+			typ.Form = Slice
 		}
 		typ.Elt = tc.typeFor(nil, t.Elt, t.Len == nil)
 
 	case *ast.StructType:
-		typ.Form = ast.Struct
+		typ.Form = Struct
 		tc.declFields(typ.Scope, t.Fields, false)
 
 	case *ast.FuncType:
-		typ.Form = ast.Function
+		typ.Form = Function
 		tc.declSignature(typ, nil, t.Params, t.Results)
 
 	case *ast.InterfaceType:
-		typ.Form = ast.Interface
+		typ.Form = Interface
 		tc.declFields(typ.Scope, t.Methods, true)
 
 	case *ast.MapType:
-		typ.Form = ast.Map
+		typ.Form = Map
 		typ.Key = tc.typeFor(nil, t.Key, true)
 		typ.Elt = tc.typeFor(nil, t.Value, true)
 
 	case *ast.ChanType:
-		typ.Form = ast.Channel
+		typ.Form = Channel
 		typ.N = uint(t.Dir)
 		typ.Elt = tc.typeFor(nil, t.Value, true)
 
@@ -468,17 +455,14 @@ func (tc *typechecker) typeFor(def *ast.Type, x ast.Expr, ref bool) (typ *ast.Ty
 	return
 }
 
-
 // ----------------------------------------------------------------------------
 // TODO(gri) implement these place holders
 
 func (tc *typechecker) declConst(*ast.Object) {
 }
 
-
 func (tc *typechecker) declVar(*ast.Object) {
 }
-
 
 func (tc *typechecker) checkStmt(ast.Stmt) {
 }

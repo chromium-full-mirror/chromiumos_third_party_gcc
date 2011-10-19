@@ -55,6 +55,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "diagnostic-core.h"
 #include "intl.h"
 #include "l-ipo.h"
+#include "filenames.h"
+#include "dwarf2asm.h"
 
 #include "gcov-io.h"
 #include "gcov-io.c"
@@ -808,7 +810,7 @@ tree_coverage_counter_ref (unsigned counter, unsigned no)
 
   /* "no" here is an array index, scaled to bytes later.  */
   return build4 (ARRAY_REF, gcov_type_node, tree_ctr_tables[counter],
-		 build_int_cst (NULL_TREE, no), NULL, NULL);
+		 build_int_cst (integer_type_node, no), NULL, NULL);
 }
 
 /* Generate a tree to access the address of COUNTER NO.  */
@@ -826,7 +828,7 @@ tree_coverage_counter_addr (unsigned counter, unsigned no)
   /* "no" here is an array index, scaled to bytes later.  */
   return build_fold_addr_expr (build4 (ARRAY_REF, gcov_type_node,
 				       tree_ctr_tables[counter],
-				       build_int_cst (NULL_TREE, no),
+				       build_int_cst (integer_type_node, no),
 				       NULL, NULL));
 }
 
@@ -1623,8 +1625,7 @@ build_gcov_info (void)
   da_file_name_len = strlen (da_file_name);
   filename_string = build_string (da_file_name_len + 1, da_file_name);
   TREE_TYPE (filename_string) = build_array_type
-    (char_type_node, build_index_type
-     (build_int_cst (NULL_TREE, da_file_name_len)));
+    (char_type_node, build_index_type (size_int (da_file_name_len)));
   CONSTRUCTOR_APPEND_ELT (v1, field,
 			  build1 (ADDR_EXPR, string_type, filename_string));
 
@@ -1647,7 +1648,7 @@ build_gcov_info (void)
     {
       tree array_type;
 
-      array_type = build_index_type (build_int_cst (NULL_TREE, n_fns - 1));
+      array_type = build_index_type (size_int (n_fns - 1));
       array_type = build_array_type (fn_info_type, array_type);
 
       fn_info_value = build_constructor (array_type, v2);
@@ -1682,8 +1683,7 @@ build_gcov_info (void)
 
   /* counters */
   ctr_info_type = build_ctr_info_type ();
-  ctr_info_ary_type = build_index_type (build_int_cst (NULL_TREE,
-						       n_ctr_types));
+  ctr_info_ary_type = build_index_type (size_int (n_ctr_types));
   ctr_info_ary_type = build_array_type (ctr_info_type, ctr_info_ary_type);
   v2 = NULL;
   for (ix = 0; ix != GCOV_COUNTERS; ix++)
@@ -1761,8 +1761,11 @@ get_da_file_name (const char *base_file_name)
   /* + 1 for extra '/', in case prefix doesn't end with /.  */
   int prefix_len;
 
-  if (prefix == 0 && base_file_name[0] != '/')
-    prefix = getpwd ();
+  if (profile_data_prefix == 0 && !IS_ABSOLUTE_PATH(&base_file_name[0]))
+    {
+      profile_data_prefix = getpwd ();
+      prefix = profile_data_prefix;
+    }
 
   prefix_len = (prefix) ? strlen (prefix) + 1 : 0;
 
@@ -1924,7 +1927,7 @@ coverage_init (const char *filename, const char* source_name)
       strcat (main_input_file_name, source_name);
     }
 
-  if (flag_profile_use)
+  if (flag_branch_probabilities)
     read_counts_file (da_file_name, 0);
 
   /* Rebuild counts_hash and read the auxiliary GCDA files.  */
@@ -2131,19 +2134,69 @@ coverage_has_asm_stmt (void)
   has_asm_statement = flag_ripa_disallow_asm_modules;
 }
 
-/* Check the command line OPTIONS passed to
-   -fpmu-profile-generate. Return 0 if the options are valid, non-zero
-   otherwise.  */
+/* Write command line options to the .note section.  */
 
-int
-check_pmu_profile_options (const char *options)
+void
+write_opts_to_asm (void)
 {
-  if (strcmp(options, "load-latency") &&
-      strcmp(options, "load-latency-verbose") &&
-      strcmp(options, "branch-mispredict") &&
-      strcmp(options, "branch-mispredict-verbose"))
-    return 1;
-  return 0;
-}
+  size_t i;
+  cpp_dir *quote_paths, *bracket_paths, *pdir;
+  struct str_list *pdef, *pinc;
+  int num_quote_paths = 0;
+  int num_bracket_paths = 0;
 
+  get_include_chains (&quote_paths, &bracket_paths);
+
+  /* Write quote_paths to ASM section.  */
+  switch_to_section (get_section (".gnu.switches.text.quote_paths",
+				  SECTION_DEBUG, NULL));
+  for (pdir = quote_paths; pdir; pdir = pdir->next)
+    {
+      if (pdir == bracket_paths)
+	break;
+      num_quote_paths++;
+    }
+  dw2_asm_output_nstring (in_fnames[0], (size_t)-1, NULL);
+  dw2_asm_output_data_uleb128 (num_quote_paths, NULL);
+  for (pdir = quote_paths; pdir; pdir = pdir->next)
+    {
+      if (pdir == bracket_paths)
+	break;
+      dw2_asm_output_nstring (pdir->name, (size_t)-1, NULL);
+    }
+
+  /* Write bracket_paths to ASM section.  */
+  switch_to_section (get_section (".gnu.switches.text.bracket_paths",
+				  SECTION_DEBUG, NULL));
+  for (pdir = bracket_paths; pdir; pdir = pdir->next)
+    num_bracket_paths++;
+  dw2_asm_output_nstring (in_fnames[0], (size_t)-1, NULL);
+  dw2_asm_output_data_uleb128 (num_bracket_paths, NULL);
+  for (pdir = bracket_paths; pdir; pdir = pdir->next)
+    dw2_asm_output_nstring (pdir->name, (size_t)-1, NULL);
+
+  /* Write cpp_defines to ASM section.  */
+  switch_to_section (get_section (".gnu.switches.text.cpp_defines",
+				  SECTION_DEBUG, NULL));
+  dw2_asm_output_nstring (in_fnames[0], (size_t)-1, NULL);
+  dw2_asm_output_data_uleb128 (num_cpp_defines, NULL);
+  for (pdef = cpp_defines_head; pdef; pdef = pdef->next)
+    dw2_asm_output_nstring (pdef->str, (size_t)-1, NULL);
+
+  /* Write cpp_includes to ASM section.  */
+  switch_to_section (get_section (".gnu.switches.text.cpp_includes",
+				  SECTION_DEBUG, NULL));
+  dw2_asm_output_nstring (in_fnames[0], (size_t)-1, NULL);
+  dw2_asm_output_data_uleb128 (num_cpp_includes, NULL);
+  for (pinc = cpp_includes_head; pinc; pinc = pinc->next)
+    dw2_asm_output_nstring (pinc->str, (size_t)-1, NULL);
+
+  /* Write cl_args to ASM section.  */
+  switch_to_section (get_section (".gnu.switches.text.cl_args",
+				  SECTION_DEBUG, NULL));
+  dw2_asm_output_nstring (in_fnames[0], (size_t)-1, NULL);
+  dw2_asm_output_data_uleb128 (num_lipo_cl_args, NULL);
+  for (i = 0; i < num_lipo_cl_args; i++)
+    dw2_asm_output_nstring (lipo_cl_args[i], (size_t)-1, NULL);
+}
 #include "gt-coverage.h"

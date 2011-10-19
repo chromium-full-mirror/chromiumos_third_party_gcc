@@ -36,6 +36,9 @@ along with GCC; see the file COPYING3.  If not see
 #include "graphite-poly.h"
 #include "graphite-scop-detection.h"
 
+/* Forward declarations.  */
+static void make_close_phi_nodes_unique (basic_block);
+
 /* The type of the analyzed basic block.  */
 
 typedef enum gbb_type {
@@ -378,17 +381,17 @@ harmful_stmt_in_bb (basic_block scop_entry, loop_p outer_loop, basic_block bb)
 static bool
 graphite_can_represent_loop (basic_block scop_entry, loop_p loop)
 {
-  tree niter = number_of_latch_executions (loop);
+  tree niter;
+  struct tree_niter_desc niter_desc;
 
-  /* Number of iterations unknown.  */
-  if (chrec_contains_undetermined (niter))
-    return false;
+  /* FIXME: For the moment, graphite cannot be used on loops that
+     iterate using induction variables that wrap.  */
 
-  /* Number of iterations not affine.  */
-  if (!graphite_can_represent_expr (scop_entry, loop, niter))
-    return false;
-
-  return true;
+  return number_of_iterations_exit (loop, single_exit (loop), &niter_desc, false)
+    && niter_desc.control.no_overflow
+    && (niter = number_of_latch_executions (loop))
+    && !chrec_contains_undetermined (niter)
+    && graphite_can_represent_expr (scop_entry, loop, niter);
 }
 
 /* Store information needed by scopdet_* functions.  */
@@ -1231,6 +1234,13 @@ remove_duplicate_close_phi (gimple phi, gimple_stmt_iterator *gsi)
 	SET_USE (use_p, res);
 
       update_stmt (use_stmt);
+      
+      /* It is possible that we just created a duplicate close-phi
+	 for an already-processed containing loop.  Check for this
+	 case and clean it up.  */
+      if (gimple_code (use_stmt) == GIMPLE_PHI
+	  && gimple_phi_num_args (use_stmt) == 1)
+	make_close_phi_nodes_unique (gimple_bb (use_stmt));
     }
 
   remove_phi_node (gsi, true);

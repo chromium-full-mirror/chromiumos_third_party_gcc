@@ -80,7 +80,7 @@ along with GCC; see the file COPYING3.  If not see
 
 /* Don't put any single quote (') in MOD_VERSION, 
    if yout want it to be recognized.  */
-#define MOD_VERSION "6"
+#define MOD_VERSION "7"
 
 
 /* Structure that describes a position within a module file.  */
@@ -229,7 +229,7 @@ free_pi_tree (pointer_info *p)
   free_pi_tree (p->left);
   free_pi_tree (p->right);
 
-  gfc_free (p);
+  free (p);
 }
 
 
@@ -424,7 +424,7 @@ resolve_fixups (fixup_t *f, void *gp)
     {
       next = f->next;
       *(f->pointer) = gp;
-      gfc_free (f);
+      free (f);
     }
 }
 
@@ -496,7 +496,7 @@ free_rename (void)
   for (; gfc_rename_list; gfc_rename_list = next)
     {
       next = gfc_rename_list->next;
-      gfc_free (gfc_rename_list);
+      free (gfc_rename_list);
     }
 }
 
@@ -891,7 +891,7 @@ free_true_name (true_name *t)
   free_true_name (t->left);
   free_true_name (t->right);
 
-  gfc_free (t);
+  free (t);
 }
 
 
@@ -1225,7 +1225,7 @@ peek_atom (void)
 
   a = parse_atom ();
   if (a == ATOM_STRING)
-    gfc_free (atom_string);
+    free (atom_string);
 
   set_module_locus (&m);
   return a;
@@ -1609,7 +1609,7 @@ mio_allocated_wide_string (const gfc_char_t *s, const size_t length)
     {
       char *quoted = quote_string (s, length);
       write_atom (ATOM_STRING, quoted);
-      gfc_free (quoted);
+      free (quoted);
       return s;
     }
   else
@@ -1618,7 +1618,7 @@ mio_allocated_wide_string (const gfc_char_t *s, const size_t length)
 
       require_atom (ATOM_STRING);
       unquoted = unquote_string (atom_string);
-      gfc_free (atom_string);
+      free (atom_string);
       return unquoted;
     }
 }
@@ -1644,7 +1644,7 @@ mio_pool_string (const char **stringp)
     {
       require_atom (ATOM_STRING);
       *stringp = atom_string[0] == '\0' ? NULL : gfc_get_string (atom_string);
-      gfc_free (atom_string);
+      free (atom_string);
     }
 }
 
@@ -1661,7 +1661,7 @@ mio_internal_string (char *string)
     {
       require_atom (ATOM_STRING);
       strcpy (string, atom_string);
-      gfc_free (atom_string);
+      free (atom_string);
     }
 }
 
@@ -1673,7 +1673,7 @@ typedef enum
   AB_ELEMENTAL, AB_PURE, AB_RECURSIVE, AB_GENERIC, AB_ALWAYS_EXPLICIT,
   AB_CRAY_POINTER, AB_CRAY_POINTEE, AB_THREADPRIVATE,
   AB_ALLOC_COMP, AB_POINTER_COMP, AB_PROC_POINTER_COMP, AB_PRIVATE_COMP,
-  AB_VALUE, AB_VOLATILE, AB_PROTECTED,
+  AB_VALUE, AB_VOLATILE, AB_PROTECTED, AB_LOCK_COMP,
   AB_IS_BIND_C, AB_IS_C_INTEROP, AB_IS_ISO_C, AB_ABSTRACT, AB_ZERO_COMP,
   AB_IS_CLASS, AB_PROCEDURE, AB_PROC_POINTER, AB_ASYNCHRONOUS, AB_CODIMENSION,
   AB_COARRAY_COMP, AB_VTYPE, AB_VTAB, AB_CONTIGUOUS, AB_CLASS_POINTER,
@@ -1716,6 +1716,7 @@ static const mstring attr_bits[] =
     minit ("VALUE", AB_VALUE),
     minit ("ALLOC_COMP", AB_ALLOC_COMP),
     minit ("COARRAY_COMP", AB_COARRAY_COMP),
+    minit ("LOCK_COMP", AB_LOCK_COMP),
     minit ("POINTER_COMP", AB_POINTER_COMP),
     minit ("PROC_POINTER_COMP", AB_PROC_POINTER_COMP),
     minit ("PRIVATE_COMP", AB_PRIVATE_COMP),
@@ -1889,6 +1890,8 @@ mio_symbol_attribute (symbol_attribute *attr)
 	MIO_NAME (ab_attribute) (AB_PRIVATE_COMP, attr_bits);
       if (attr->coarray_comp)
 	MIO_NAME (ab_attribute) (AB_COARRAY_COMP, attr_bits);
+      if (attr->lock_comp)
+	MIO_NAME (ab_attribute) (AB_LOCK_COMP, attr_bits);
       if (attr->zero_comp)
 	MIO_NAME (ab_attribute) (AB_ZERO_COMP, attr_bits);
       if (attr->is_class)
@@ -2028,6 +2031,9 @@ mio_symbol_attribute (symbol_attribute *attr)
 	    case AB_COARRAY_COMP:
 	      attr->coarray_comp = 1;
 	      break;
+	    case AB_LOCK_COMP:
+	      attr->lock_comp = 1;
+	      break;
 	    case AB_POINTER_COMP:
 	      attr->pointer_comp = 1;
 	      break;
@@ -2124,6 +2130,8 @@ mio_typespec (gfc_typespec *ts)
   else
     mio_symbol_ref (&ts->u.derived);
 
+  mio_symbol_ref (&ts->interface);
+
   /* Add info for C interop and is_iso_c.  */
   mio_integer (&ts->is_c_interop);
   mio_integer (&ts->is_iso_c);
@@ -2200,6 +2208,9 @@ mio_array_spec (gfc_array_spec **asp)
   mio_integer (&as->rank);
   mio_integer (&as->corank);
   as->type = MIO_NAME (array_type) (as->type, array_spec_types);
+
+  if (iomode == IO_INPUT && as->corank)
+    as->cotype = (as->type == AS_DEFERRED) ? AS_DEFERRED : AS_EXPLICIT;
 
   for (i = 0; i < as->rank + as->corank; i++)
     {
@@ -2809,13 +2820,13 @@ mio_gmp_integer (mpz_t *integer)
       if (mpz_set_str (*integer, atom_string, 10))
 	bad_module ("Error converting integer");
 
-      gfc_free (atom_string);
+      free (atom_string);
     }
   else
     {
       p = mpz_get_str (NULL, 10, *integer);
       write_atom (ATOM_STRING, p);
-      gfc_free (p);
+      free (p);
     }
 }
 
@@ -2833,7 +2844,7 @@ mio_gmp_real (mpfr_t *real)
 
       mpfr_init (*real);
       mpfr_set_str (*real, atom_string, 16, GFC_RND_MODE);
-      gfc_free (atom_string);
+      free (atom_string);
     }
   else
     {
@@ -2842,7 +2853,7 @@ mio_gmp_real (mpfr_t *real)
       if (mpfr_nan_p (*real) || mpfr_inf_p (*real))
 	{
 	  write_atom (ATOM_STRING, p);
-	  gfc_free (p);
+	  free (p);
 	  return;
 	}
 
@@ -2860,8 +2871,8 @@ mio_gmp_real (mpfr_t *real)
 
       write_atom (ATOM_STRING, atom_string);
 
-      gfc_free (atom_string);
-      gfc_free (p);
+      free (atom_string);
+      free (p);
     }
 }
 
@@ -3125,7 +3136,7 @@ mio_expr (gfc_expr **ep)
 	{
 	  require_atom (ATOM_STRING);
 	  e->value.function.name = gfc_get_string (atom_string);
-	  gfc_free (atom_string);
+	  free (atom_string);
 
 	  mio_integer (&flag);
 	  if (flag)
@@ -3134,7 +3145,7 @@ mio_expr (gfc_expr **ep)
 	    {
 	      require_atom (ATOM_STRING);
 	      e->value.function.isym = gfc_find_function (atom_string);
-	      gfc_free (atom_string);
+	      free (atom_string);
 	    }
 	}
 
@@ -3416,7 +3427,7 @@ mio_typebound_proc (gfc_typebound_proc** proc)
 	      require_atom (ATOM_STRING);
 	      sym_root = &current_f2k_derived->tb_sym_root;
 	      g->specific_st = gfc_get_tbp_symtree (sym_root, atom_string);
-	      gfc_free (atom_string);
+	      free (atom_string);
 
 	      g->next = (*proc)->u.generic;
 	      (*proc)->u.generic = g;
@@ -3467,7 +3478,7 @@ mio_full_typebound_tree (gfc_symtree** root)
 
 	  require_atom (ATOM_STRING);
 	  st = gfc_get_tbp_symtree (root, atom_string);
-	  gfc_free (atom_string);
+	  free (atom_string);
 
 	  mio_typebound_symtree (st);
 	}
@@ -3750,7 +3761,7 @@ skip_list (void)
 	  break;
 
 	case ATOM_STRING:
-	  gfc_free (atom_string);
+	  free (atom_string);
 	  break;
 
 	case ATOM_NAME:
@@ -4058,7 +4069,7 @@ load_equiv (void)
 	  {
 	    head = eq->eq;
 	    gfc_free_expr (eq->expr);
-	    gfc_free (eq);
+	    free (eq);
 	  }
       }
 
@@ -4266,6 +4277,13 @@ check_for_ambiguous (gfc_symbol *st_sym, pointer_info *info)
   gfc_symbol *rsym;
   module_locus locus;
   symbol_attribute attr;
+
+  if (st_sym->ns->proc_name && st_sym->name == st_sym->ns->proc_name->name)
+    {
+      gfc_error ("'%s' of module '%s', imported at %C, is also the name of the "
+		 "current program unit", st_sym->name, module_name);
+      return true;
+    }
 
   rsym = info->u.rsym.sym;
   if (st_sym == rsym)
@@ -4660,7 +4678,7 @@ free_written_common (struct written_common *w)
   if (w->right)
     free_written_common (w->right);
 
-  gfc_free (w);
+  free (w);
 }
 
 /* Write a common block to the module -- recursive helper function.  */
@@ -4809,6 +4827,9 @@ static void
 write_dt_extensions (gfc_symtree *st)
 {
   if (!gfc_check_symbol_access (st->n.sym))
+    return;
+  if (!(st->n.sym->ns && st->n.sym->ns->proc_name
+	&& st->n.sym->ns->proc_name->attr.flavor == FL_MODULE))
     return;
 
   mio_lparen ();
@@ -5455,6 +5476,37 @@ create_int_parameter_array (const char *name, int size, gfc_expr *value,
 }
 
 
+/* Add an derived type for a given module.  */
+
+static void
+create_derived_type (const char *name, const char *modname,
+		      intmod_id module, int id)
+{
+  gfc_symtree *tmp_symtree;
+  gfc_symbol *sym;
+
+  tmp_symtree = gfc_find_symtree (gfc_current_ns->sym_root, name);
+  if (tmp_symtree != NULL)
+    {
+      if (strcmp (modname, tmp_symtree->n.sym->module) == 0)
+	return;
+      else
+	gfc_error ("Symbol '%s' already declared", name);
+    }
+
+  gfc_get_sym_tree (name, gfc_current_ns, &tmp_symtree, false);
+  sym = tmp_symtree->n.sym;
+
+  sym->module = gfc_get_string (modname);
+  sym->from_intmod = module;
+  sym->intmod_sym_id = id;
+  sym->attr.flavor = FL_DERIVED;
+  sym->attr.private_comp = 1;
+  sym->attr.zero_comp = 1;
+  sym->attr.use_assoc = 1;
+}
+
+
 
 /* USE the ISO_FORTRAN_ENV intrinsic module.  */
 
@@ -5475,6 +5527,9 @@ use_iso_fortran_env_module (void)
 #define NAMED_KINDARRAY(a,b,c,d) { a, b, 0, d },
 #include "iso-fortran-env.def"
 #undef NAMED_KINDARRAY
+#define NAMED_DERIVED_TYPE(a,b,c,d) { a, b, 0, d },
+#include "iso-fortran-env.def"
+#undef NAMED_DERIVED_TYPE
 #define NAMED_FUNCTION(a,b,c,d) { a, b, c, d },
 #include "iso-fortran-env.def"
 #undef NAMED_FUNCTION
@@ -5516,7 +5571,7 @@ use_iso_fortran_env_module (void)
 	      u->found = 1;
 
 	      if (gfc_notify_std (symbol[i].standard, "The symbol '%s', "
-				  "referrenced at %C, is not in the selected "
+				  "referenced at %C, is not in the selected "
 				  "standard", symbol[i].name) == FAILURE)
 	        continue;
 
@@ -5558,6 +5613,16 @@ use_iso_fortran_env_module (void)
 		  break;
 #include "iso-fortran-env.def"
 #undef NAMED_KINDARRAY
+
+#define NAMED_DERIVED_TYPE(a,b,TYPE,STD) \
+		case a:
+#include "iso-fortran-env.def"
+                  create_derived_type (u->local_name[0] ? u->local_name
+							: u->use_name,
+				       mod, INTMOD_ISO_FORTRAN_ENV,
+				       symbol[i].id);
+		  break;
+#undef NAMED_DERIVED_TYPE
 
 #define NAMED_FUNCTION(a,b,c,d) \
 		case a:
@@ -5612,6 +5677,14 @@ use_iso_fortran_env_module (void)
 #include "iso-fortran-env.def"
 #undef NAMED_KINDARRAY
 
+#define NAMED_DERIVED_TYPE(a,b,TYPE,STD) \
+	  case a:
+#include "iso-fortran-env.def"
+	    create_derived_type (symbol[i].name, mod, INTMOD_ISO_FORTRAN_ENV,
+				 symbol[i].id);
+	    break;
+#undef NAMED_DERIVED_TYPE
+
 #define NAMED_FUNCTION(a,b,c,d) \
 		case a:
 #include "iso-fortran-env.def"
@@ -5648,6 +5721,9 @@ gfc_use_module (void)
   int c, line, start;
   gfc_symtree *mod_symtree;
   gfc_use_list *use_stmt;
+  locus old_locus = gfc_current_locus;
+
+  gfc_current_locus = use_locus;
 
   filename = (char *) alloca (strlen (module_name) + strlen (MODULE_EXTENSION)
 			      + 1);
@@ -5669,6 +5745,7 @@ gfc_use_module (void)
 			     "intrinsic module at %C") != FAILURE)
        {
 	 use_iso_fortran_env_module ();
+	 gfc_current_locus = old_locus;
 	 return;
        }
 
@@ -5677,6 +5754,7 @@ gfc_use_module (void)
 			     "ISO_C_BINDING module at %C") != FAILURE)
 	{
 	  import_iso_c_binding_module();
+	  gfc_current_locus = old_locus;
 	  return;
 	}
 
@@ -5733,7 +5811,7 @@ gfc_use_module (void)
 			       MOD_VERSION, filename);
 	    }
 
-	  gfc_free (atom_string);
+	  free (atom_string);
 	}
 
       if (c == '\n')
@@ -5766,6 +5844,8 @@ gfc_use_module (void)
   gfc_rename_list = NULL;
   use_stmt->next = gfc_current_ns->use_stmts;
   gfc_current_ns->use_stmts = use_stmt;
+
+  gfc_current_locus = old_locus;
 }
 
 
@@ -5780,10 +5860,10 @@ gfc_free_use_stmts (gfc_use_list *use_stmts)
       for (; use_stmts->rename; use_stmts->rename = next_rename)
 	{
 	  next_rename = use_stmts->rename->next;
-	  gfc_free (use_stmts->rename);
+	  free (use_stmts->rename);
 	}
       next = use_stmts->next;
-      gfc_free (use_stmts);
+      free (use_stmts);
     }
 }
 

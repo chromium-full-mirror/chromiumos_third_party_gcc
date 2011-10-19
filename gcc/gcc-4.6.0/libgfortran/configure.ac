@@ -157,7 +157,7 @@ FOO_1.0 {
   global: *foo*; bar; local: *;
 };
 EOF
-  AC_TRY_LINK([int foo;],[],[gfortran_use_symver=gnu],[gfortran_use_symver=no])
+  AC_LINK_IFELSE([AC_LANG_PROGRAM([[int foo;]],[[]])],[gfortran_use_symver=gnu],[gfortran_use_symver=no])
   if test x$gfortran_use_symver = xno; then
     case "$target_os" in
       solaris2*)
@@ -169,7 +169,7 @@ FOO_1.0 {
   global: foo; local: *;
 };
 EOF
-        AC_TRY_LINK([int foo;],[],[gfortran_use_symver=sun],[gfortran_use_symver=no])
+        AC_LINK_IFELSE([AC_LANG_PROGRAM([[int foo;]],[[]])],[gfortran_use_symver=sun],[gfortran_use_symver=no])
         ;;
     esac
   fi
@@ -188,7 +188,7 @@ ac_save_CFLAGS="$CFLAGS"
 # Check for -ffunction-sections -fdata-sections
 AC_MSG_CHECKING([for gcc that supports -ffunction-sections -fdata-sections])
 CFLAGS='-Werror -ffunction-sections -fdata-sections'
-AC_TRY_COMPILE(, [int foo;], [ac_fdsections=yes], [ac_fdsections=no])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[int foo;]])], [ac_fdsections=yes], [ac_fdsections=no])
 if test "$ac_test_CFLAGS" = set; then
   CFLAGS="$ac_save_CFLAGS"
 else
@@ -236,7 +236,12 @@ AC_SUBST(extra_ldflags_libgfortran)
 LIBGFOR_WORKING_GFORTRAN
 
 AC_SYS_LARGEFILE
+
+# Types
 AC_TYPE_OFF_T
+AC_TYPE_INTPTR_T
+AC_TYPE_UINTPTR_T
+AC_CHECK_TYPES([ptrdiff_t])
 
 # check header files
 AC_STDC_HEADERS
@@ -259,14 +264,10 @@ AC_CHECK_FUNCS(sleep time ttyname signal alarm clock access fork execl)
 AC_CHECK_FUNCS(wait setmode execvp pipe dup2 close fdopen strcasestr getrlimit)
 AC_CHECK_FUNCS(gettimeofday stat fstat lstat getpwuid vsnprintf dup getcwd)
 AC_CHECK_FUNCS(localtime_r gmtime_r strerror_r getpwuid_r ttyname_r)
-AC_CHECK_FUNCS(clock_gettime strftime)
+AC_CHECK_FUNCS(clock_gettime strftime readlink)
 
 # Check for glibc backtrace functions
-AC_CHECK_FUNCS(backtrace backtrace_symbols)
-
-# Check for types
-AC_CHECK_TYPES([intptr_t])
-AC_CHECK_TYPES([uintptr_t])
+AC_CHECK_FUNCS(backtrace backtrace_symbols_fd)
 
 # Check libc for getgid, getpid, getuid
 AC_CHECK_LIB([c],[getgid],[AC_DEFINE([HAVE_GETGID],[1],[libc includes getgid])])

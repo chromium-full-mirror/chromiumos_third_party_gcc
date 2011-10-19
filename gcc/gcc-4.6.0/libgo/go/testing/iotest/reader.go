@@ -2,8 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// The iotest package implements Readers and Writers
-// useful only for testing.
+// Package iotest implements Readers and Writers useful only for testing.
 package iotest
 
 import (
@@ -38,7 +37,6 @@ func (r *halfReader) Read(p []byte) (int, os.Error) {
 	return r.r.Read(p[0 : (len(p)+1)/2])
 }
 
-
 // DataErrReader returns a Reader that returns the final
 // error with the last data read, instead of by itself with
 // zero bytes of data.
@@ -59,11 +57,30 @@ func (r *dataErrReader) Read(p []byte) (n int, err os.Error) {
 			r.unread = r.data[0:n1]
 			err = err1
 		}
-		if n > 0 {
+		if n > 0 || err != nil {
 			break
 		}
 		n = copy(p, r.unread)
 		r.unread = r.unread[n:]
 	}
 	return
+}
+
+var ErrTimeout = os.NewError("timeout")
+
+// TimeoutReader returns ErrTimeout on the second read
+// with no data.  Subsequent calls to read succeed.
+func TimeoutReader(r io.Reader) io.Reader { return &timeoutReader{r, 0} }
+
+type timeoutReader struct {
+	r     io.Reader
+	count int
+}
+
+func (r *timeoutReader) Read(p []byte) (int, os.Error) {
+	r.count++
+	if r.count == 2 {
+		return 0, ErrTimeout
+	}
+	return r.r.Read(p)
 }

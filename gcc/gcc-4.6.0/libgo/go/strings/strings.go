@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// A package of simple functions to manipulate strings.
+// Package strings implements simple functions to manipulate strings.
 package strings
 
 import (
@@ -119,9 +119,19 @@ func LastIndex(s, sep string) int {
 // IndexRune returns the index of the first instance of the Unicode code point
 // rune, or -1 if rune is not present in s.
 func IndexRune(s string, rune int) int {
-	for i, c := range s {
-		if c == rune {
-			return i
+	switch {
+	case rune < 0x80:
+		b := byte(rune)
+		for i := 0; i < len(s); i++ {
+			if s[i] == b {
+				return i
+			}
+		}
+	default:
+		for i, c := range s {
+			if c == rune {
+				return i
+			}
 		}
 	}
 	return -1
@@ -188,24 +198,38 @@ func genSplit(s, sep string, sepSave, n int) []string {
 	return a[0 : na+1]
 }
 
-// Split slices s into substrings separated by sep and returns a slice of
+// SplitN slices s into substrings separated by sep and returns a slice of
+// the substrings between those separators.
+// If sep is empty, SplitN splits after each UTF-8 sequence.
+// The count determines the number of substrings to return:
+//   n > 0: at most n substrings; the last substring will be the unsplit remainder.
+//   n == 0: the result is nil (zero substrings)
+//   n < 0: all substrings
+func SplitN(s, sep string, n int) []string { return genSplit(s, sep, 0, n) }
+
+// SplitAfterN slices s into substrings after each instance of sep and
+// returns a slice of those substrings.
+// If sep is empty, SplitAfterN splits after each UTF-8 sequence.
+// The count determines the number of substrings to return:
+//   n > 0: at most n substrings; the last substring will be the unsplit remainder.
+//   n == 0: the result is nil (zero substrings)
+//   n < 0: all substrings
+func SplitAfterN(s, sep string, n int) []string {
+	return genSplit(s, sep, len(sep), n)
+}
+
+// Split slices s into all substrings separated by sep and returns a slice of
 // the substrings between those separators.
 // If sep is empty, Split splits after each UTF-8 sequence.
-// The count determines the number of substrings to return:
-//   n > 0: at most n substrings; the last substring will be the unsplit remainder.
-//   n == 0: the result is nil (zero substrings)
-//   n < 0: all substrings
-func Split(s, sep string, n int) []string { return genSplit(s, sep, 0, n) }
+// It is equivalent to SplitN with a count of -1.
+func Split(s, sep string) []string { return genSplit(s, sep, 0, -1) }
 
-// SplitAfter slices s into substrings after each instance of sep and
+// SplitAfter slices s into all substrings after each instance of sep and
 // returns a slice of those substrings.
-// If sep is empty, Split splits after each UTF-8 sequence.
-// The count determines the number of substrings to return:
-//   n > 0: at most n substrings; the last substring will be the unsplit remainder.
-//   n == 0: the result is nil (zero substrings)
-//   n < 0: all substrings
-func SplitAfter(s, sep string, n int) []string {
-	return genSplit(s, sep, len(sep), n)
+// If sep is empty, SplitAfter splits after each UTF-8 sequence.
+// It is equivalent to SplitAfterN with a count of -1.
+func SplitAfter(s, sep string) []string {
+	return genSplit(s, sep, len(sep), -1)
 }
 
 // Fields splits the string s around each instance of one or more consecutive white space
@@ -265,20 +289,10 @@ func Join(a []string, sep string) string {
 	}
 
 	b := make([]byte, n)
-	bp := 0
-	for i := 0; i < len(a); i++ {
-		s := a[i]
-		for j := 0; j < len(s); j++ {
-			b[bp] = s[j]
-			bp++
-		}
-		if i+1 < len(a) {
-			s = sep
-			for j := 0; j < len(s); j++ {
-				b[bp] = s[j]
-				bp++
-			}
-		}
+	bp := copy(b, a[0])
+	for _, s := range a[1:] {
+		bp += copy(b[bp:], sep)
+		bp += copy(b[bp:], s)
 	}
 	return string(b)
 }
@@ -302,9 +316,19 @@ func Map(mapping func(rune int) int, s string) string {
 	// fine.  It could also shrink but that falls out naturally.
 	maxbytes := len(s) // length of b
 	nbytes := 0        // number of bytes encoded in b
-	b := make([]byte, maxbytes)
-	for _, c := range s {
+	// The output buffer b is initialized on demand, the first
+	// time a character differs.
+	var b []byte
+
+	for i, c := range s {
 		rune := mapping(c)
+		if b == nil {
+			if rune == c {
+				continue
+			}
+			b = make([]byte, maxbytes)
+			nbytes = copy(b, s[:i])
+		}
 		if rune >= 0 {
 			wid := 1
 			if rune >= utf8.RuneSelf {
@@ -319,6 +343,9 @@ func Map(mapping func(rune int) int, s string) string {
 			}
 			nbytes += utf8.EncodeRune(b[nbytes:maxbytes], rune)
 		}
+	}
+	if b == nil {
+		return s
 	}
 	return string(b[0:nbytes])
 }
@@ -335,7 +362,6 @@ func Repeat(s string, count int) string {
 	}
 	return string(b)
 }
-
 
 // ToUpper returns a copy of the string s with all Unicode letters mapped to their upper case.
 func ToUpper(s string) string { return Map(unicode.ToUpper, s) }
