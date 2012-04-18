@@ -1,9 +1,547 @@
-2012-02-10   Wei Guozhi  <carrot@google.com>
-	Backported r183933 from mainline
-	2012-02-06  Jakub Jelinek  <jakub@redhat.com>
+2012-04-11  Teresa Johnson  <tejohnson@google.com>
 
-	* calls.c (mem_overlaps_already_clobbered_arg_p): If val is
-	CONST_INT_P, subtract resp. add crtl->args.pretend_args_size to it.
+	Revert r182255 since it is subsumed by r186333.
+
+2012-04-11   Teresa Johnson  <tejohnson@google.com>
+
+	Backport r186176 from trunk.
+
+	2012-04-05  Teresa Johnson  <tejohnson@google.com>
+		    H.J. Lu  <hongjiu.lu@intel.com>
+
+	* config/i386/i386.h (ix86_tune_indices): Add
+	X86_TUNE_LCP_STALL.
+	* config/i386/i386.md (move immediate to memory peephole2):
+	Add cases for HImode move when LCP stall avoidance is needed.
+	* config/i386/i386.c (initial_ix86_tune_features): Initialize
+	X86_TUNE_LCP_STALL entry.
+
+2012-04-04   Ahmad Sharif  <asharif@google.com>
+
+	Backport from mainline r179661, r179662.
+
+	2011-10-07  Andrew Stubbs  <ams@codesourcery.com>
+
+	gcc/
+	* config/arm/predicates.md (shift_amount_operand): Remove constant
+	range check.
+	(shift_operator): Check range of constants for all shift operators.
+
+	gcc/testsuite/
+	* gcc.dg/pr50193-1.c: New file.
+	* gcc.target/arm/shiftable.c: New file.
+
+2012-04-04  Dehao Chen  <dehao@google.com>
+	* predict.c (predict_iv_comparison): Revert r185948, which causes
+	regression to major applications.
+
+2012-03-29  Dehao Chen  <dehao@google.com>
+
+	* predict.c (predict_iv_comparison): Add the comparison of induction
+	variable against its initial value.
+
+2012-03-23   Cary Coutant  <ccoutant@google.com>
+
+	* dwarf2out.c (resolve_addr): Remove address table entry for symbol
+	when removing location list entry.
+
+2012-03-21  Sriraman Tallam  <tmsriram@google.com>
+
+	* params.def (PARAM_MAX_FUNCTION_SIZE_FOR_AUTO_CLONING): Bump
+	default value to 5000.
+
+2012-03-21  Sriraman Tallam  <tmsriram@google.com>
+
+	* gcc/common.opt (fcallgraph-profiles-sections): Restore deleted
+	option fcallgraph-profiles-sections.
+	* gcc/final.c (rest_of_handle_final): Restore
+	check for option fcallgraph-profiles-sections.
+	* gcc/cgraphbuild.c (cgraph_callee_edges_final_cleanup): Restore
+	check for option fcallgraph-profiles-sections.
+	* testsuite/lib/target-supports-dg.exp
+	(dg-require-linker-function-reordering-plugin): New proc.
+	* testsuite/lib/target-supports.exp
+	(check_linker_function_reordering_plugin_supported): New proc.
+	* testsuite/g++.dg/tree-prof/callgraph-profiles.C: Check if
+	linker supports plugins. Check if the final binary has the
+	functions ordered as expected.
+
+2012-03-21   Harshit Chopra  <harshit@google.com>
+	Backport from google/main r183548, r183888.
+
+	2012-01-25   Harshit Chopra  <harshit@google.com>
+
+	Introduce a new option -mpatch-functions-for-instrumentation to
+	generate Nops at function prologue and epilogue for dynamic
+	instrumentation.
+	* gcc/config/i386/i386-protos.h: Added function and macro definitions
+	for function patch sections used globally.
+	* gcc/config/i386/i386.c (check_should_patch_current_function): Check
+	if the current function should be patched with Nops.
+	(ix86_output_function_prologue): Output Nops for function prologue.
+	(ix86_output_function_nops_prologue_epilogue): Helper function which
+	outputs Nops for function prologue and epilogue.
+	(ix86_elf_asm_named_section): Generate the name of the function patch
+	section.
+	(ix86_output_call_insn): Generate nops for sibling calls.
+	* gcc/config/i386/i386.md: Generate nops for returns.
+	* gcc/config/i386/i386.opt: Commandline options to control nops
+	generation for function patching.
+	* gcc/params.def (DEFPARAM): Define parameter to control generation
+	of nops based on number of instructions in a function
+	* gcc/testsuite/gcc.target/i386/patch-functions-1.c: New testcase
+	* gcc/testsuite/gcc.target/i386/patch-functions-2.c: New testcase
+	* gcc/testsuite/gcc.target/i386/patch-functions-3.c: New testcase
+	* gcc/testsuite/gcc.target/i386/patch-functions-4.c: New testcase
+	* gcc/testsuite/gcc.target/i386/patch-functions-5.c: New testcase
+	* gcc/testsuite/gcc.target/i386/patch-functions-6.c: New testcase
+	* gcc/testsuite/gcc.target/i386/patch-functions-7.c: New testcase
+
+	2012-02-03   Harshit Chopra  <harshit@google.com>
+  
+	Restricting the tests to run for 64-bit target since function patching
+	is only supported for 64-bit targets.
+	
+	* gcc.target/i386/patch-functions-1.c: Restrict to 64-bit targets.
+	* gcc.target/i386/patch-functions-2.c: Likewise
+	* gcc.target/i386/patch-functions-3.c: Likewise
+	* gcc.target/i386/patch-functions-4.c: Likewise
+	* gcc.target/i386/patch-functions-5.c: Likewise
+	* gcc.target/i386/patch-functions-6.c: Likewise
+	* gcc.target/i386/patch-functions-7.c: Likewise
+
+2012-03-20   Cary Coutant  <ccoutant@google.com>
+
+	* dwarf2out.c (size_of_loc_descr): Use val_index instead of
+	v.val_unsigned.
+	(output_loc_operands): Likewise.
+
+2012-03-19  Sterling Augustine  <saugustine@google.com>
+	    Cary Coutant  <ccoutant@google.com>
+
+	* dwarf2out.c (dwarf_stack_op_name): Add DW_OP_GNU_addr_index.
+	(new_loc_descr): Initialize val_index.
+	(size_of_loc_descr): Add DW_OP_GNU_addr_index.
+	(output_loc_operands): Likewise.
+	(output_loc_operands_raw): Likewise.
+	(build_cfa_loc): Initialize val_index.
+	(new_addr_loc_descr): New function.
+	(add_AT_flag): Initialize val_index.
+	(add_AT_int): Likewise.
+	(add_AT_unsigned): Likewise.
+	(add_AT_double): Likewise.
+	(add_AT_vec): Likewise.
+	(add_AT_data8): Likewise.
+	(add_AT_string): Likewise.
+	(add_AT_die_ref): Likewise.
+	(add_AT_fde_ref): Likewise.
+	(add_AT_loc): Likewise.
+	(add_AT_loc_list): Likewise.
+	(add_addr_table_entry): Change if to assert.
+	(remove_addr_table_entry): New function.
+	(add_AT_addr): Add force_direct parameter; adjust all callers.
+	Initialize val_index.
+	(add_AT_file): Initialize val_index.
+	(add_AT_vms_delta): Likewise.
+	(add_AT_lbl_id): Add force_direct parameter; adjust all callers.
+	Initialize val_index.
+	(add_AT_lineptr): Initialize val_index.
+	(add_AT_macptr): Likewise.
+	(add_AT_offset): Likewise.
+	(add_AT_range_list): Add force_direct parameter; adjust all callers.
+	Initialize val_index.
+	(size_of_die): Check for AT_index.
+	(value_format): Likewise.
+	(output_attr_index_or_value): Likewise.
+	(output_die): Fix format warning.
+	(add_top_level_skeleton_die_attrs): Don't add DW_AT_stmt_list here.
+	(get_skeleton_type_unit): New function.
+	(output_skeleton_debug_sections): Add comp_unit parameter; adjust
+	caller; don't generate debug_skeleton_info_section_label or
+	debug_skeleton_abbrev_section_label here; call get_skeleton_type_unit.
+	(output_comdat_type_unit): Remove assert; call get_skeleton_type_unit.
+	(add_ranges_by_labels): Add force_direct parameter; adjust callers.
+	(address_of_int_loc_descriptor): Initialize val_index.
+	(mem_loc_descriptor): Initialize val_index; call new_addr_loc_descr.
+	(implicit_ptr_descriptor): Don't generate DW_OP_GNU_implicit_pointer
+	when splitting debug info.  Initialize val_index.
+	(loc_descriptor): Initialize val_index; call new_addr_loc_descr.
+	(loc_list_from_tree): Likewise.
+	(add_const_value_attribute): Likewise.
+	(dwarf2out_init): Generate debug_skeleton_info_section_label and
+	debug_skeleton_abbrev_section_label here.
+	(output_indirect_string): Check for DW_FORM_strp instead of label
+	and refcount.
+	(output_addr_table): Check for removed entries, handle
+	dw_val_class_loc.
+	(resolve_addr_in_expr): Handle DW_OP_GNU_addr_index.
+	(resolve_addr): Remove entry from addr_table if necessary.
+	(hash_loc_operands): Add DW_OP_GNU_addr_index.
+	(compare_loc_operands): Likewise.
+	(dwarf2out_finish): Put DW_AT_low_pc, DW_AT_high_pc, DW_AT_ranges,
+	DW_AT_stmt_list, DW_AT_macptr in skeleton comp_unit DIE; write
+	skeleton debug sections if regular debug section emitted.
+
+2012-03-18  Sriraman Tallam  <tmsriram@google.com>
+
+	* cgraphbuild.c (remove_cgraph_callee_edges): Replace
+	flag_callgraph_profiles_sections with flag_reorder_functions.
+	* final.c (rest_of_handle_final): Ditto.
+	* configure: Regenerate.
+	* config.in: undef FRPLUGINSONAME.
+	* congifure.ac: Define FRPLUGINSONAME.
+	* config.host: Set host_function_reordering_plugin_soname.
+	* gcc.c: Invoke function_reordering linker plugin with
+	-freorder-functions=* option.
+	(set_func_reorder_linker_plugin_spec): New function.
+	(main): Call set_func_reorder_linker_plugin_spec when
+	-freorder-functions=* option is seen.
+	* common.opt (fcallgraph-profiles-sections):  Remove.
+	(freorder-functions=): New option.
+	* testsuite/g++.dg/tree-prof/callgraph-profiles.C: Replace
+	-fcallgraph-profiles-sections with -freorder-functions=callgraph.
+	* opts.c (finish_options): Turn on -ffunction-sections when
+	-freorder-functions= is used.
+	* doc/invoke.texi (freorder-functions=): Document option
+	-freorder-functions=.
+
+2012-03-18   Rong Xu  <xur@google.com>
+
+        This patch implements LIPO profile-use compilation that
+        leverages LTO's IR streaming support. It supports C/C++
+        and Fortran. It is currently disabled by default and can
+        be turned on by -fripa=streaming option.
+
+	* doc/invoke.texi: Document new flags.
+        * lto-symtab.c (Entry_BB_profile_count): New function.
+        (coverage.h): New include.
+        (lto_symtab_register_decl): Support for streamed lipo.
+        (lto_symtab_resolve_symbols): Ditto.
+        (lto_symtab_merge_decls_1): Ditto.
+        * cgraph.c (cgraph_can_remove_if_no_direct_calls_and_refs_p): Ditto.
+        * gcc.c (RIPA_AUX_MOD_SPEC): New Define for streaming LIPO.
+        (ripa_aux_mod_spec): Ditto.
+        (ripa_lto_spec): Ditto.
+        (ripa_asm_options): Ditto.
+        (ripa_invoke_as): Ditto.
+        (ripa_pri_mod_invoke_as) Ditto.:
+        (processing_spec_function_ripa_aux_mode): Ditto.
+        (ripa_ir_files): Ditto.
+        (primary_module_id): Ditto.
+        (ripa_gen_lto_cmd_func): Ditto.
+        (ripa_build_aux_mod_func): Ditto.
+        (spec_list static_specs): Support for streaming LIPO.
+        (static_spec_functions): Ditto.
+        (execute): Ditto.
+        (create_at_file): Ditto.
+        (give_switch): Ditto.
+        (ripa_dump_cmd_line): New function.
+        * toplev.c (l-ipo.h): New include.
+        (lto_done_symtab_merge): New Define for streaming LIPO.
+        (primary_module_exported): Ditto.
+        (compile_file): Support for streaming LIPO.
+        (do_compile): Ditto.
+        (toplev_main): Ditto.
+        * cgraphunit.c: (cgraph_expand_function): Ditto.
+        (ipa_passes): Ditto.
+        (cgraph_optimize): Ditto.
+        * cp/lang-specs.h: Ditto.
+        * fortran/lang-specs.h: Ditto.
+        * lto-cgraph.c (lto_output_node): Ditto.
+        (lto_output_varpool_node): Ditto.
+        (input_node): Ditto.
+        (input_varpool_node): Ditto.
+        * lto-streamer-out.c (l-ipo.h): New include.
+        (lto_write_ripa_info): New function.
+        (output_function): Support for streaming LIPO.
+        (produce_asm_for_decls): Ditto.
+        * opts.c: (common_handle_option): Ditto.
+        * lto-streamer-in.c (input_function): Ditto.
+        (lto_register_var_decl_in_symtab): Ditto.
+        (lto_read_tree): Ditto.
+        (check_and_set_ripa_module_info): New function.
+        (input_ripa_info): Ditto.
+        * lto-section-in.c (lto_section_name): Support for streaming LIPO.
+        * lto/lto.c (read_cgraph_and_symbols): Ditto.
+        * lto-streamer.c (lto_get_section_name): Ditto.
+        * lto-streamer.h (lto_section_type): Ditto.
+        (lto_file_decl_data): Ditto.
+        (l-ipo.h): New include.
+        * ipa.c (cgraph_can_have_cross_module_ref_in_lipo_p): New function.
+        (varpool_can_have_cross_module_ref_in_lipo_p): Ditto.
+        (cgraph_externally_visible_p): Support for streaming LIPO.
+        (varpool_externally_visible_p): Ditto.
+        * coverage.c (get_da_file_name): Ditto.
+        (read_counts_file): Ditto.
+        (coverage_init): Ditto.
+        (create_mgf_file): New function.
+        (write_mgf_file): Ditto.
+        * tree-sra.c (ipa_early_sra_gate): Support for streaming LIPO.
+        (modify_function): Ditto.
+        * value-prof.c (gimple_value_profile_transformations): Ditto.
+        (init_node_map): Ditto.
+        (del_node_map): Ditto.
+        (cgraph_init_gid_map): Ditto.
+        (gimple_indirect_call_to_profile): Ditto.
+        * l-ipo.c (cgraph_is_aux_decl_external): Ditto.
+        (promote_static_var_func)): Ditto.
+        (process_module_scope_static_var): Ditto.
+        (cgraph_process_module_scope_statics): Ditto.
+        (tree-pretty-print.h): New include.
+        * l-ipo.h (L_IPO_COMP_MODE): Support for streaming LIPO.
+        (primary_module_exported): New Decls.
+        (L_IPO_STREAM_COMP_MODE): New macro.
+        (L_IPO_STREAM_FE_COMP_MODE_AUX): New macro.
+        (L_IPO_STREAM_FE_COMP_MODE_PRIM): New macro.
+        (L_IPO_STREAM_FE_COMP_MODE): New macro.
+        (L_IPO_STREAM_IN_LTO_P): New macro.
+        * common.opt: New flags.
+
+2012-03-12  Sterling Augustine  <saugustine@google.com>
+	    Cary Coutant  <ccoutant@google.com>
+
+	* gcc.c (ASM_FINAL_SPEC): For -gfission, call objcopy.
+	(static_spec_functions): Add replace-extension.
+	(replace_extension_spec_func): New function.
+	* dwarf2out.c (debug_skeleton_info_section)
+	(debug_skeleton_abbrev_section, debug_ref_section, debug_addr_section)
+	(debug_skeleton_line_section, debug_str_offsets_section): New
+	variables.
+	(struct indirect_string_node): Add index field.
+	(DEBUG_DWO_INFO_SECTION, DEBUG_DWO_ABBREV_SECTION, DEBUG_REF_SECTION)
+	(DEBUG_ADDR_SECTION, DEBUG_DWO_LINE_SECTION)
+	(DEBUG_NORM_STR_OFFSETS_SECTION, DEBUG_DWO_STR_OFFSETS_SECTION)
+	(DEBUG_STR_OFFSETS_SECTION, DEBUG_DWO_STR_SECTION)
+	(DEBUG_NORM_STR_SECTION): New debug section macros.
+	(DEBUG_STR_SECTION): Change definition for -gfission.
+	(DEBUG_STR_SECTION_FLAGS): Don't set SECTION_MERGE for -gfission.
+	(DEBUG_SKELETON_LINE_SECTION_LABEL, DEBUG_SKELETON_INFO_SECTION_LABEL)
+	(DEBUG_SKELETON_ABBREV_SECTION_LABEL, DEBUG_REF_SECTION_LABEL)
+	(DEBUG_ADDR_SECTION_LABEL): New section label macros.
+	(SKELETON_COMP_DIE_ABBREV, SKELETON_TYPE_DIE_ABBREV): New macros.
+	(debug_skeleton_info_section_label, debug_skeleton_abbrev_section_label)
+	(debug_ref_section_label, debug_addr_section_label)
+	(debug_skeleton_line_section_label): New section label variables.
+	(dwarf_attr_name): Add new attribute names.
+	(dwarf_form_name): Add new form names.
+	(AT_index): New function.
+	(set_AT_index): New function.
+	(index_string_table): New variable.
+	(AT_string_form): Use DW_FORM_GNU_str_index for -gfission.
+	(add_addr_table_entry): New function.
+	(add_AT_addr): Record index for indirect references with -gfission.
+	(add_AT_lbl_id): Likewise.
+	(add_ref_table_entry): New function.
+	(add_AT_range_list): Use indirect reference for -gfission.
+	(break_out_comdat_types): Don't add DW_AT_GNU_pubnames/pubtypes
+	attributes here.
+	(size_of_die): Account for indirect forms with -gfission.
+	(value_format): Use indirect forms for -gfission.
+	(output_die_abbrevs): New function.
+	(output_abbrev_section): Refactor code into output_die_abbrevs.
+	(output_range_list_offset): New function.
+	(output_loc_list_offset): New function.
+	(output_attr_index_or_value): New function.
+	(output_die): Call output_attr_index_or_value to output possibly
+	indirect forms.  Output indirect strings for -gfission.
+	(add_AT_pubnames): New function.
+	(add_top_level_skeleton_die_attrs): New function.
+	(skeleton_type_unit): New variable.
+	(output_skeleton_debug_sections): New function.
+	(output_comdat_type_unit): Write to .debug_types.dwo for -gfission.
+	(output_pubnames): Add assembly label to beginning of section; use
+	label for skeleton info section with -gfission.
+	(output_aranges): Use label for skeleton info section with -gfission.
+	(output_line_info ): Add prologue_only parameter.
+	(dwarf2out_init): Create new sections for -gfission.
+	(output_index_strings): New function.
+	(output_ref_table): New function.
+	(output_addr_table): New function.
+	(index_location_lists): New function.
+	(dwarf2out_finish): For -gfission, write skeleton debug sections,
+	write pubnames tables unconditionally, and write indirect sections.
+	* opts.c (common_handle_option): Add OPT_gfission.
+	* common.opt: Add -gfission option.
+
+2012-03-09   Rong Xu  <xur@google.com>
+
+	Backport from rev 185150.
+
+	2012-03-09   Rong Xu  <xur@google.com>
+
+		* opts-global.c (lipo_save_cl_args): save -std option.
+		Google ref b/6117980.
+
+2012-03-08   Rong Xu  <xur@google.com>
+
+	* gcc/tree-inline.c (copy_cfg_body): fix the bug in r184378.
+	  Google ref b/6105259.
+
+2012-03-01   Jing Yu  <jingyu@google.com>
+
+	Revert r184493 (init/fini backport patch set) because of
+	intermittent unit test failure.
+
+2012-02-21   Jing Yu  <jingyu@google.com>
+
+	Google Ref 47894
+	Backport from mainline r177933, r175181, r177963, r178116, r183299.
+
+	2011-08-20  H.J. Lu  <hongjiu.lu@intel.com>
+	PR other/46770
+	* config.gcc (tm_file): Add initfini-array.h if
+	.init_arrary/.fini_array are supported.
+	* crtstuff.c: Don't generate .ctors nor .dtors sections if
+	USE_INITFINI_ARRAY is defined.
+	* output.h (default_elf_init_array_asm_out_constructor): New.
+	(default_elf_fini_array_asm_out_destructor): Likewise.
+	* varasm.c (elf_init_array_section): Likewise.
+	(elf_fini_array_section): Likewise.
+	(get_elf_initfini_array_priority_section): Likewise.
+	(default_elf_init_array_asm_out_constructor): Likewise.
+	(default_elf_fini_array_asm_out_destructor): Likewise.
+	* config/initfini-array.h: New.
+
+	2011-06-18  H.J. Lu  <hongjiu.lu@intel.com>
+	PR other/49325
+	* acinclude.m4 (gcc_AC_INITFINI_ARRAY): Properly check if
+	.init_array can be used with .ctors on targets.
+	* configure: Regenerated.
+
+	2011-08-22  H.J. Lu  <hongjiu.lu@intel.com>
+	* acinclude.m4 (gcc_AC_INITFINI_ARRAY): Error if __ELF__ isn't
+	defined.
+	* configure: Regenerated.
+
+	2011-08-26  Rainer Orth  <ro@CeBiTec.Uni-Bielefeld.DE>
+	PR target/50166
+	* acinclude.m4 (gcc_AC_INITFINI_ARRAY): Check count in main.
+	* configure: Regenerate.
+
+	2012-01-19  Jakub Jelinek  <jakub@redhat.com>
+	PR bootstrap/50237
+	* config/initfini-array.h: Guard content of the header
+	with #ifdef HAVE_INITFINI_ARRAY.
+	* configure.ac: Move gcc_AC_INITFINI_ARRAY much later into the
+	file.
+	Add initfini-array.h to tm_file here.
+	* acinclude.m4 (gcc_AC_INITFINI_ARRAY): For non-ia64 do a
+	linker test.
+	* config.gcc: Don't add initfini-array.h to tm_file here.
+	* configure: Regenerated.
+
+2012-02-21   Jing Yu  <jingyu@google.com>
+
+	Revert r184369 and r184386
+	* config.gcc (tm_file): Remove initfini-array.h
+	* crtstuff.c: Restore generation of .ctors and .dtors
+	* output.h (default_elf_init_array_asm_out_constructor): Delete
+	(default_elf_fini_array_asm_out_destructor): Likewise.
+	* varasm.c (elf_init_array_section): Likewise.
+	(elf_fini_array_section): Likewise.
+	(get_elf_initfini_array_priority_section): Likewise.
+	(default_elf_init_array_asm_out_constructor): Likewise.
+	(default_elf_fini_array_asm_out_destructor): Likewise.
+	* config/initfini-array.h: Delete
+
+2012-02-20   Rong Xu  <xur@google.com>
+
+	* tree-inline.c (copy_cfg_body): fix unused variable warning.
+	* testsuite/gcc.dg/tree-prof/scaling_overflow.c: New test.
+
+2012-02-19  Ollie Wild  <aaw@google.com>
+
+	* initfini-array.h: Moved to config/initfini-array.h.
+	* config/initfini-array.h: New.
+
+2012-02-18   Rong Xu  <xur@google.com>
+
+	* gcc/tree-inline.c (copy_cfg_body): (1) Avoiding overflow when
+        converting double to long long. (2) only including the count
+        for those basic blocks that will be copied.
+
+2012-02-17   Jing Yu  <jingyu@google.com>
+
+	Google Ref 47894
+	2011-12-07  H.J. Lu  <hongjiu.lu@intel.com>
+	Backport from mainline r177933.
+	2011-08-20  H.J. Lu  <hongjiu.lu@intel.com>
+
+	PR other/46770
+	* config.gcc (tm_file): Add initfini-array.h if
+	.init_arrary/.fini_array are supported.
+	* crtstuff.c: Don't generate .ctors nor .dtors sections if
+	USE_INITFINI_ARRAY is defined.
+	* output.h (default_elf_init_array_asm_out_constructor): New.
+	(default_elf_fini_array_asm_out_destructor): Likewise.
+	* varasm.c (elf_init_array_section): Likewise.
+	(elf_fini_array_section): Likewise.
+	(get_elf_initfini_array_priority_section): Likewise.
+	(default_elf_init_array_asm_out_constructor): Likewise.
+	(default_elf_fini_array_asm_out_destructor): Likewise.
+	* config/initfini-array.h: New.
+
+2012-02-14  Jing Yu  <jingyu@google.com>
+
+	Google ref 42402-p2
+	* config/arm/arm.h: Emit GNU-stack note for all arm targets by
+	default.
+
+2012-02-13   Xinliang David Li  <davidxl@google.com>
+
+	* Backport r184175 from google/main: Implement
+	new option fripa-inc-path-sub=
+
+2012-02-13   Xinliang David Li  <davidxl@google.com>
+
+	* tree-optimize.c (execute_fixup_cfg): Using double type in
+	scaling to avoid count overflow during out-of-line copy
+	fixup.
+
+2012-02-02   Rong Xu  <xur@google.com>
+
+	* tree-inline.c (copy_cfg_body): Curb the scaling factor to
+        avoid counter overflow.
+
+2012-02-02  Dmitry Vyukov  <dvyukov@google.com>
+
+	Backport ThreadSanitizer (tsan) instrumentation pass from google/main.
+
+        * tree-tsan.c: New file.
+        * tree-tsan.h: New file.
+        * tree-pass.h: Add tsan pass.
+        * passes.c: Add tsan pass.
+        * toplev.c (compile_file): Call tsan_finish_file.
+        * common.opt: Add -ftsan, -ftsan-ignore flags.
+        * doc/invoke.texi: Document the new flags.
+        * Makefile.in: Add tree-tsan.c.
+        * testsuite/gcc.dg/tsan.h: New file.
+        * testsuite/gcc.dg/tsan-mop.c: New file.
+        * testsuite/gcc.dg/tsan-stack.c: New file.
+        * testsuite/gcc.dg/tsan-ignore.c: New file.
+        * testsuite/gcc.dg/tsan-ignore.h: New file.
+        * testsuite/gcc.dg/tsan-ignore.ignore: New file.
+
+2012-02-01  Easwaran Raman  <eraman@google.com>
+
+	* expr.c (do_tablejump): Add default_probability as the
+	sixth parameter and use it to generate REG_BR_PROB note.
+	(try_tablejump): Add default_probability as a parameter.
+	* cfgbuild.c (non_zero_profile_counts): New function.
+	(compute_outgoing_frequencies): If edges have profile counts
+	set, don't replace them with guessed values.
+	* expr.h (try_tablejump): Add additional parameter to the
+	declaration.
+	* stmt.c (tree-flow.h): Include.
+	(case_node): Add new fields count and subtree_count.
+	(add_case_node): Pass count as a paramater and initialize
+	count field of case_node.
+	(case_probability): New macro.
+	(expand_case): Propagate profile information from the tree
+	level to RTL during switch case expansion.
+	(balance_case_nodes): Compute subtree_count for case nodes.
+	(emit_case_nodes): Set branch probabilities for generated
+	branches.
 
 2012-02-01  Dehao Chen  <dehao@google.com>
 
@@ -218,6 +756,7 @@
 
 2011-12-12   Teresa Johnson  <tejohnson@google.com>
 
+	Backport r182254 from google/main.
 
 2011-12-11   Diego Novillo  <dnovillo@google.com>
 

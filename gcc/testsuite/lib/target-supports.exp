@@ -394,6 +394,18 @@ proc check_section_exclude_available { } {
   }]
 }
 
+# If this target uses a linker that supports plugins and can load
+# the function reordering linker plugin.
+
+proc check_linker_function_reordering_plugin_supported {} {
+    return [check_runtime_nocache function_reordering_plugin_supported {
+		int main()
+		{
+		  return 0;
+		}    
+  } "-freorder-functions=callgraph"]
+}
+
 # Returns true if --gc-sections is supported on the target.
 
 proc check_gc_sections_available { } {
@@ -3062,7 +3074,8 @@ proc check_effective_target_vect_condition { } {
 	     || [istarget ia64-*-*]
 	     || [istarget i?86-*-*]
 	     || [istarget spu-*-*]
-	     || [istarget x86_64-*-*] } {
+	     || [istarget x86_64-*-*]
+	     || ([istarget arm*-*-*] && [check_effective_target_arm_neon_ok]) } {
 	   set et_vect_cond_saved 1
 	}
     }

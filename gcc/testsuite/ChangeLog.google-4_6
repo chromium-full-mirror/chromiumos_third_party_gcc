@@ -1,8 +1,52 @@
-2012-02-10  Wei Guozhi  <carrot@google.com>
-	Backported r183933 from mainline
-	2012-02-06  Jakub Jelinek  <jakub@redhat.com>
+2012-04-04  Dehao Chen  <dehao@google.com>
+	* gcc.dg/predict-1.c: Revert r185948, which causes regression for
+	major applications.
+	* gcc.dg/predict-2.c: Likewise
+	* gcc.dg/predict-3.c: Likewise
+	* gcc.dg/predict-4.c: Likewise
+	* gcc.dg/predict-5.c: Likewise
+	* gcc.dg/predict-6.c: Likewise
 
-	* gcc.c-torture/execute/pr52129.c: New test.
+2012-03-29  Dehao Chen  <dehao@google.com>
+
+	* gcc.dg/predict-1.c: Check if LOOP_IV_COMPARE static predict
+	heuristic is working properly.
+	* gcc.dg/predict-2.c: Likewise
+	* gcc.dg/predict-3.c: Likewise
+	* gcc.dg/predict-4.c: Likewise
+	* gcc.dg/predict-5.c: Likewise
+	* gcc.dg/predict-6.c: Likewise
+
+2012-03-21   Harshit Chopra  <harshit@google.com>
+	Backport r183888 from google/main.
+
+	2012-02-03   Harshit Chopra  <harshit@google.com>
+
+	Restricting the tests to run for 64-bit target since function patching
+	is only supported for 64-bit targets.
+
+	* gcc.target/i386/patch-functions-1.c: Restrict to 64-bit targets.
+	* gcc.target/i386/patch-functions-2.c: Likewise
+	* gcc.target/i386/patch-functions-3.c: Likewise
+	* gcc.target/i386/patch-functions-4.c: Likewise
+	* gcc.target/i386/patch-functions-5.c: Likewise
+	* gcc.target/i386/patch-functions-6.c: Likewise
+	* gcc.target/i386/patch-functions-7.c: Likewise
+
+2012-02-19  Jeffrey Yasskin <jyasskin@google.com>
+        Backport r183223 from gcc-4_6-branch to fix a segfault in C++11
+	mode.
+	
+        2012-01-16  Jason Merrill  <jason@redhat.com>
+
+                PR c++/51868
+                * g++.dg/cpp0x/rv-bitfield.C: New.
+                * g++.dg/cpp0x/rv-bitfield2.C: New.
+
+2012-02-01  Easwaran Raman  <eraman@google.com>
+
+	* tree-prof/switch-case-1.c: New test.
+	* tree-prof/switch-case-2.c: New test.
 
 2011-01-31  Dehao Chen  <dehao@google.com>
 

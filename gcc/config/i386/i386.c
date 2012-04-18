@@ -1886,6 +1886,10 @@ static unsigned int initial_ix86_tune_features[X86_TUNE_LAST] = {
   /* X86_TUNE_PARTIAL_FLAG_REG_STALL */
   m_CORE2I7 | m_GENERIC,
 
+  /* X86_TUNE_LCP_STALL: Avoid an expensive length-changing prefix stall
+     on 16-bit immediate moves into memory on Core2 and Corei7.  */
+  m_CORE2I7 | m_GENERIC,
+
   /* X86_TUNE_USE_HIMODE_FIOP */
   m_386 | m_486 | m_K6_GEODE,
 
@@ -11332,6 +11336,214 @@ ix86_expand_epilogue (int style)
   m->fs = frame_state_save;
 }
 
+
+/* True if the current function should be patched with nops at prologue and
+   returns.  */
+static bool patch_current_function_p = false;
+
+/* Return true if we patch the current function. By default a function
+   is patched if it has loops or if the number of insns is greater than
+   patch_functions_min_instructions (number of insns roughly translates
+   to number of instructions).  */
+
+static bool
+check_should_patch_current_function (void)
+{
+  int num_insns = 0;
+  rtx insn;
+  const char* func_name = NULL;
+  struct loops loops;
+  int num_loops = 0;
+  int min_functions_instructions;
+
+  /* Patch the function if it has at least a loop.  */
+  if (!patch_functions_ignore_loops)
+    {
+      if (DECL_STRUCT_FUNCTION (current_function_decl)->cfg)
+        {
+          num_loops = flow_loops_find (&loops);
+          /* FIXME - Deallocating the loop causes a seg-fault.  */
+#if 0
+          flow_loops_free (&loops);
+#endif
+          /* We are not concerned with the function body as a loop.  */
+          if (num_loops > 1)
+            return true;
+        }
+    }
+
+  /* Else, check if function has more than patch_functions_min_instrctions.  */
+
+  /* Borrowed this code from rest_of_handle_final() in final.c.  */
+  func_name = XSTR (XEXP (DECL_RTL (current_function_decl), 0), 0);
+  if (!patch_functions_dont_always_patch_main &&
+      func_name &&
+      strcmp("main", func_name) == 0)
+    return true;
+
+  min_functions_instructions =
+      PARAM_VALUE (PARAM_FUNCTION_PATCH_MIN_INSTRUCTIONS);
+  if (min_functions_instructions > 0)
+    {
+      /* Calculate the number of instructions in this function and only emit
+         function patch for instrumentation if it is greater than
+         patch_functions_min_instructions.  */
+      for (insn = get_insns (); insn; insn = NEXT_INSN (insn))
+        {
+          if (NONDEBUG_INSN_P (insn))
+            ++num_insns;
+        }
+      if (num_insns < min_functions_instructions)
+        return false;
+    }
+
+  return true;
+}
+
+/* Emit the 11-byte patch space for the function prologue for functions that
+   qualify.  */
+
+static void
+ix86_output_function_prologue (FILE *file,
+                               HOST_WIDE_INT size ATTRIBUTE_UNUSED)
+{
+  /* Only for 64-bit target.  */
+  if (TARGET_64BIT && patch_functions_for_instrumentation)
+    {
+      patch_current_function_p = check_should_patch_current_function();
+      /* Emit the instruction 'jmp 09' followed by 9 bytes to make it 11-bytes
+         of nop.  */
+      ix86_output_function_nops_prologue_epilogue (
+          file,
+          FUNCTION_PATCH_PROLOGUE_SECTION,
+          ASM_BYTE"0xeb,0x09",
+          9);
+    }
+}
+
+/* Emit the nop bytes at function prologue or return (including tail call
+   jumps). The number of nop bytes generated is at least 8.
+   Also emits a section named SECTION_NAME, which is a backpointer section
+   holding the addresses of the nop bytes in the text section.
+   SECTION_NAME is either '_function_patch_prologue' or
+   '_function_patch_epilogue'. The backpointer section can be used to navigate
+   through all the function entry and exit points which are patched with nops.
+   PRE_INSTRUCTIONS are the instructions, if any, at the start of the nop byte
+   sequence. NUM_REMAINING_NOPS are the number of nop bytes to fill,
+   excluding the number of bytes in PRE_INSTRUCTIONS.
+   Returns true if the function was patched, false otherwise.  */
+
+bool
+ix86_output_function_nops_prologue_epilogue (FILE *file,
+                                             const char *section_name,
+                                             const char *pre_instructions,
+                                             int num_remaining_nops)
+{
+  static int labelno = 0;
+  char label[32], section_label[32];
+  section *section = NULL;
+  int num_actual_nops = num_remaining_nops - sizeof(void *);
+  unsigned int section_flags = SECTION_RELRO;
+  char *section_name_comdat = NULL;
+  const char *decl_section_name = NULL;
+  size_t len;
+
+  gcc_assert (num_remaining_nops >= 0);
+
+  if (!patch_current_function_p)
+    return false;
+
+  ASM_GENERATE_INTERNAL_LABEL (label, "LFPEL", labelno);
+  ASM_GENERATE_INTERNAL_LABEL (section_label, "LFPESL", labelno++);
+
+  /* Align the start of nops to 2-byte boundary so that the 2-byte jump
+     instruction can be patched atomically at run time.  */
+  ASM_OUTPUT_ALIGN (file, 1);
+
+  /* Emit nop bytes. They look like the following:
+       $LFPEL0:
+         <pre_instruction>
+         0x90 (repeated num_actual_nops times)
+         .quad $LFPESL0
+     followed by section 'section_name' which contains the address
+     of instruction at 'label'.
+   */
+  ASM_OUTPUT_INTERNAL_LABEL (file, label);
+  if (pre_instructions)
+    fprintf (file, "%s\n", pre_instructions);
+
+  while (num_actual_nops-- > 0)
+    asm_fprintf (file, ASM_BYTE"0x90\n");
+
+  fprintf (file, ASM_QUAD);
+  assemble_name_raw (file, section_label);
+  fprintf (file, "\n");
+
+  /* Emit the backpointer section. For functions belonging to comdat group,
+     we emit a different section named '<section_name>.foo' where 'foo' is
+     the name of the comdat section. This section is later renamed to
+     '<section_name>' by ix86_elf_asm_named_section().
+     We emit a unique section name for the back pointer section for comdat
+     functions because otherwise the 'get_section' call may return an existing
+     non-comdat section with the same name, leading to references from
+     non-comdat section to comdat functions.
+  */
+  if (current_function_decl != NULL_TREE &&
+      DECL_ONE_ONLY (current_function_decl) &&
+      HAVE_COMDAT_GROUP)
+    {
+      decl_section_name =
+          TREE_STRING_POINTER (DECL_SECTION_NAME (current_function_decl));
+      len = strlen (decl_section_name) + strlen (section_name) + 1;
+      section_name_comdat = (char *) alloca (len);
+      sprintf (section_name_comdat, "%s.%s", section_name, decl_section_name);
+      section_name = section_name_comdat;
+      section_flags |= SECTION_LINKONCE;
+    }
+  section = get_section (section_name, section_flags, current_function_decl);
+  switch_to_section (section);
+  /* Align the section to 8-byte boundary.  */
+  ASM_OUTPUT_ALIGN (file, 3);
+
+  /* Emit address of the start of nop bytes in the section:
+       $LFPESP0:
+         .quad $LFPEL0
+   */
+  ASM_OUTPUT_INTERNAL_LABEL (file, section_label);
+  fprintf(file, ASM_QUAD"\t");
+  assemble_name_raw (file, label);
+  fprintf (file, "\n");
+
+  /* Switching back to text section.  */
+  switch_to_section (function_section (current_function_decl));
+  return true;
+}
+
+/* Strips the characters after '_function_patch_prologue' or
+   '_function_patch_epilogue' and emits the section.  */
+
+static void
+ix86_elf_asm_named_section (const char *name, unsigned int flags,
+                            tree decl)
+{
+  const char *section_name = name;
+  if (HAVE_COMDAT_GROUP && flags & SECTION_LINKONCE)
+    {
+      const int prologue_section_name_length =
+          sizeof(FUNCTION_PATCH_PROLOGUE_SECTION) - 1;
+      const int epilogue_section_name_length =
+          sizeof(FUNCTION_PATCH_EPILOGUE_SECTION) - 1;
+
+      if (strncmp (name, FUNCTION_PATCH_PROLOGUE_SECTION,
+                   prologue_section_name_length) == 0)
+        section_name = FUNCTION_PATCH_PROLOGUE_SECTION;
+      else if (strncmp (name, FUNCTION_PATCH_EPILOGUE_SECTION,
+                        epilogue_section_name_length) == 0)
+        section_name = FUNCTION_PATCH_EPILOGUE_SECTION;
+    }
+  default_elf_asm_named_section (section_name, flags, decl);
+}
+
 /* Reset from the function's potential modifications.  */
 
 static void
@@ -14290,6 +14502,13 @@ ix86_print_operand (FILE *file, rtx x, int code)
 	  return;
 
 	case 'H':
+	  if (!offsettable_memref_p (x))
+	    {
+	      output_operand_lossage ("operand is not an offsettable memory "
+				      "reference, invalid operand "
+				      "code 'H'");
+	      return;
+	    }
 	  /* It doesn't actually matter what mode we use here, as we're
 	     only going to use this for printing.  */
 	  x = adjust_address_nv (x, DImode, 8);
@@ -22134,6 +22353,15 @@ ix86_output_call_insn (rtx insn, rtx call_op, int addr_op)
 
   if (SIBLING_CALL_P (insn))
     {
+      /* Just before the sibling call, add 11-bytes of nops to patch function
+         exit: 2 bytes for 'jmp 09' and remaining 9 bytes.  */
+      if (TARGET_64BIT && patch_functions_for_instrumentation)
+        ix86_output_function_nops_prologue_epilogue (
+            asm_out_file,
+            FUNCTION_PATCH_EPILOGUE_SECTION,
+            ASM_BYTE"0xeb, 0x09",
+            9);
+
       if (direct_p)
 	return addr_op ? "jmp\t%P1" : "jmp\t%P0";
       /* SEH epilogue detection requires the indirect branch case
@@ -35925,82 +36153,6 @@ ix86_autovectorize_vector_sizes (void)
   return (TARGET_AVX && !TARGET_PREFER_AVX128) ? 32 | 16 : 0;
 }
 
-/* If LOOP contains a possible LCP stalling instruction on corei7,
-   calculate new number of times to unroll instead of NUNROLL so that
-   the unrolled loop will still likely fit into the loop stream detector. */
-static unsigned
-ix86_loop_unroll_adjust (unsigned nunroll, struct loop *loop)
-{
-  basic_block *body, bb;
-  unsigned i;
-  rtx insn;
-  bool found = false;
-  unsigned newunroll;
-
-  if (ix86_tune != PROCESSOR_COREI7_64 &&
-      ix86_tune != PROCESSOR_COREI7_32)
-    return nunroll;
-
-  /* Look for instructions that store a constant into HImode (16-bit)
-     memory. These require a length-changing prefix and on corei7 are
-     prone to LCP stalls. These stalls can be avoided if the loop
-     is streamed from the loop stream detector. */
-  body = get_loop_body (loop);
-  for (i = 0; i < loop->num_nodes; i++)
-    {
-      bb = body[i];
-
-      FOR_BB_INSNS (bb, insn)
-        {
-          rtx set_expr, dest;
-          set_expr = single_set (insn);
-          if (!set_expr)
-            continue;
-
-          dest = SET_DEST (set_expr);
-
-          /* Don't reduce unroll factor in loops with floating point
-             computation, which tend to benefit more heavily from 
-             larger unroll factors and are less likely to bottleneck
-             at the decoder. */
-          if (FLOAT_MODE_P (GET_MODE (dest)))
-          {
-            free (body);
-            return nunroll;
-          }
-
-          if (!found
-              && GET_MODE (dest) == HImode
-              && CONST_INT_P (SET_SRC (set_expr))
-              && MEM_P (dest))
-            {
-              found = true;
-              /* Keep walking loop body to look for FP computations above. */
-            }
-        }
-    }
-  free (body);
-
-  if (!found)
-    return nunroll;
-
-  if (dump_file)
-    {
-      fprintf (dump_file, 
-               ";; Loop contains HImode store of const (possible LCP stalls),\n");
-      fprintf (dump_file, 
-               "   reduce unroll factor to fit into Loop Stream Detector\n");
-    }
-
-  /* On corei7 the loop stream detector can hold 28 uops, so
-     don't allow unrolling to exceed that many instructions. */
-  newunroll = 28 / loop->av_ninsns;
-  if (newunroll < nunroll)
-    return newunroll;
-
-  return nunroll;
-}
-
 /* Initialize the GCC target structure.  */
 #undef TARGET_RETURN_IN_MEMORY
 #define TARGET_RETURN_IN_MEMORY ix86_return_in_memory
@@ -36035,8 +36187,14 @@ ix86_loop_unroll_adjust (unsigned nunroll, struct loop *loop)
 #undef TARGET_BUILTIN_RECIPROCAL
 #define TARGET_BUILTIN_RECIPROCAL ix86_builtin_reciprocal
 
+#undef TARGET_ASM_FUNCTION_PROLOGUE
+#define TARGET_ASM_FUNCTION_PROLOGUE ix86_output_function_prologue
+
 #undef TARGET_ASM_FUNCTION_EPILOGUE
 #define TARGET_ASM_FUNCTION_EPILOGUE ix86_output_function_epilogue
+
+#undef TARGET_ASM_NAMED_SECTION
+#define TARGET_ASM_NAMED_SECTION ix86_elf_asm_named_section
 
 #undef TARGET_ENCODE_SECTION_INFO
 #ifndef SUBTARGET_ENCODE_SECTION_INFO
@@ -36329,9 +36487,6 @@ ix86_loop_unroll_adjust (unsigned nunroll, struct loop *loop)
 #undef TARGET_INIT_LIBFUNCS
 #define TARGET_INIT_LIBFUNCS darwin_rename_builtins
 #endif
-
-#undef TARGET_LOOP_UNROLL_ADJUST
-#define TARGET_LOOP_UNROLL_ADJUST ix86_loop_unroll_adjust
 
 struct gcc_target targetm = TARGET_INITIALIZER;
 

@@ -155,7 +155,7 @@ static rtx do_store_flag (sepops, rtx, enum machine_mode);
 #ifdef PUSH_ROUNDING
 static void emit_single_push_insn (enum machine_mode, rtx, tree);
 #endif
-static void do_tablejump (rtx, enum machine_mode, rtx, rtx, rtx);
+static void do_tablejump (rtx, enum machine_mode, rtx, rtx, rtx, int);
 static rtx const_vector_from_tree (tree);
 static void write_complex_part (rtx, rtx, bool);
 
@@ -6307,6 +6307,24 @@ get_inner_reference (tree exp, HOST_WIDE_INT *pbitsize,
   /* Otherwise, split it up.  */
   if (offset)
     {
+      /* Avoid returning a negative bitpos as this may wreak havoc later.  */
+      if (double_int_negative_p (bit_offset))
+        {
+	  double_int mask
+	    = double_int_mask (BITS_PER_UNIT == 8
+			       ? 3 : exact_log2 (BITS_PER_UNIT));
+	  double_int tem = double_int_and_not (bit_offset, mask);
+	  /* TEM is the bitpos rounded to BITS_PER_UNIT towards -Inf.
+	     Subtract it to BIT_OFFSET and add it (scaled) to OFFSET.  */
+	  bit_offset = double_int_sub (bit_offset, tem);
+	  tem = double_int_rshift (tem,
+				   BITS_PER_UNIT == 8
+				   ? 3 : exact_log2 (BITS_PER_UNIT),
+				   HOST_BITS_PER_DOUBLE_INT, true);
+	  offset = size_binop (PLUS_EXPR, offset,
+			       double_int_to_tree (sizetype, tem));
+	}
+
       *pbitpos = double_int_to_shwi (bit_offset);
       *poffset = offset;
     }
@@ -7008,7 +7026,12 @@ expand_expr_addr_expr_1 (tree exp, rtx target, enum machine_mode tmode,
      generating ADDR_EXPR of something that isn't an LVALUE.  The only
      exception here is STRING_CST.  */
   if (CONSTANT_CLASS_P (exp))
-    return XEXP (expand_expr_constant (exp, 0, modifier), 0);
+    {
+      result = XEXP (expand_expr_constant (exp, 0, modifier), 0);
+      if (modifier < EXPAND_SUM)
+	result = force_operand (result, target);
+      return result;
+    }
 
   /* Everything must be something allowed by is_gimple_addressable.  */
   switch (TREE_CODE (exp))
@@ -7029,7 +7052,11 @@ expand_expr_addr_expr_1 (tree exp, rtx target, enum machine_mode tmode,
 
     case CONST_DECL:
       /* Expand the initializer like constants above.  */
-      return XEXP (expand_expr_constant (DECL_INITIAL (exp), 0, modifier), 0);
+      result = XEXP (expand_expr_constant (DECL_INITIAL (exp),
+					   0, modifier), 0);
+      if (modifier < EXPAND_SUM)
+	result = force_operand (result, target);
+      return result;
 
     case REALPART_EXPR:
       /* The real part of the complex number is always first, therefore
@@ -9620,10 +9647,32 @@ expand_expr_real_1 (tree exp, rtx target, enum machine_mode tmode,
 	 results.  */
       if (MEM_P (op0))
 	{
+	  enum insn_code icode;
+
 	  op0 = copy_rtx (op0);
 
 	  if (TYPE_ALIGN_OK (type))
 	    set_mem_align (op0, MAX (MEM_ALIGN (op0), TYPE_ALIGN (type)));
+	  else if (mode != BLKmode
+		   && MEM_ALIGN (op0) < GET_MODE_ALIGNMENT (mode)
+		   /* If the target does have special handling for unaligned
+		      loads of mode then use them.  */
+		   && ((icode = optab_handler (movmisalign_optab, mode))
+		       != CODE_FOR_nothing))
+	    {
+	      rtx reg, insn;
+
+	      op0 = adjust_address (op0, mode, 0);
+	      /* We've already validated the memory, and we're creating a
+		 new pseudo destination.  The predicates really can't
+		 fail.  */
+	      reg = gen_reg_rtx (mode);
+
+	      /* Nor can the insn generator.  */
+	      insn = GEN_FCN (icode) (reg, op0);
+	      emit_insn (insn);
+	      return reg;
+	    }
 	  else if (STRICT_ALIGNMENT
 		   && mode != BLKmode
 		   && MEM_ALIGN (op0) < GET_MODE_ALIGNMENT (mode))
@@ -10360,7 +10409,7 @@ try_casesi (tree index_type, tree index_expr, tree minval, tree range,
 
 static void
 do_tablejump (rtx index, enum machine_mode mode, rtx range, rtx table_label,
-	      rtx default_label)
+	      rtx default_label, int default_probability)
 {
   rtx temp, vector;
 
@@ -10376,8 +10425,16 @@ do_tablejump (rtx index, enum machine_mode mode, rtx range, rtx table_label,
      the maximum value of the range.  */
 
   if (default_label)
-    emit_cmp_and_jump_insns (index, range, GTU, NULL_RTX, mode, 1,
-			     default_label);
+    {
+      emit_cmp_and_jump_insns (index, range, GTU, NULL_RTX, mode, 1,
+			       default_label);
+      if (default_probability != -1)
+        {
+          rtx jump_insn = get_last_insn();
+          add_reg_note (jump_insn, REG_BR_PROB, GEN_INT (default_probability));
+        }
+    }
+
 
   /* If index is in range, it must fit in Pmode.
      Convert to Pmode so we can index with it.  */
@@ -10420,7 +10477,7 @@ do_tablejump (rtx index, enum machine_mode mode, rtx range, rtx table_label,
 
 int
 try_tablejump (tree index_type, tree index_expr, tree minval, tree range,
-	       rtx table_label, rtx default_label)
+	       rtx table_label, rtx default_label, int default_probability)
 {
   rtx index;
 
@@ -10438,7 +10495,7 @@ try_tablejump (tree index_type, tree index_expr, tree minval, tree range,
 			       TYPE_MODE (TREE_TYPE (range)),
 			       expand_normal (range),
 			       TYPE_UNSIGNED (TREE_TYPE (range))),
-		table_label, default_label);
+		table_label, default_label, default_probability);
   return 1;
 }
 

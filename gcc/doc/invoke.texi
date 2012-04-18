@@ -306,6 +306,7 @@ Objective-C and Objective-C++ Dialects}.
 -fdump-tree-ssa@r{[}-@var{n}@r{]} -fdump-tree-pre@r{[}-@var{n}@r{]} @gol
 -fdump-tree-ccp@r{[}-@var{n}@r{]} -fdump-tree-dce@r{[}-@var{n}@r{]} @gol
 -fdump-tree-gimple@r{[}-raw@r{]} -fdump-tree-mudflap@r{[}-@var{n}@r{]} @gol
+-fdump-tree-tsan@r{[}-@var{n}@r{]} @gol
 -fdump-tree-dom@r{[}-@var{n}@r{]} @gol
 -fdump-tree-dse@r{[}-@var{n}@r{]} @gol
 -fdump-tree-phiprop@r{[}-@var{n}@r{]} @gol
@@ -376,8 +377,8 @@ Objective-C and Objective-C++ Dialects}.
 -floop-parallelize-all -flto -flto-compression-level
 -flto-partition=@var{alg} -flto-report -fmerge-all-constants @gol
 -fmerge-constants -fmodulo-sched -fmodulo-sched-allow-regmoves @gol
--fmove-loop-invariants fmudflap -fmudflapir -fmudflapth -fno-branch-count-reg @gol
--fno-default-inline @gol
+-fmove-loop-invariants -fmudflap -fmudflapir -fmudflapth -fno-branch-count-reg @gol
+-ftsan -ftsan-ignore -fno-default-inline @gol
 -fno-defer-pop -fno-function-cse -fno-guess-branch-probability @gol
 -fno-inline -fno-math-errno -fno-peephole -fno-peephole2 @gol
 -fno-sched-interblock -fno-sched-spec -fno-signed-zeros @gol
@@ -395,7 +396,7 @@ Objective-C and Objective-C++ Dialects}.
 -freorder-blocks-and-partition -freorder-functions @gol
 -frerun-cse-after-loop -freschedule-modulo-scheduled-loops @gol
 -fripa -fripa-disallow-asm-modules -fripa-disallow-opt-mismatch @gol
--fripa-no-promote-always-inline-func -fripa-verbose @gol
+-fripa-inc-path-sub=@var{path_mapping} -fripa-no-promote-always-inline-func -fripa-verbose @gol
 -fripa-peel-size-limit -fripa-unroll-size-limit -frounding-math @gol
 -fsched2-use-superblocks -fsched-pressure @gol
 -fsched-spec-load -fsched-spec-load-dangerous @gol
@@ -5812,6 +5813,11 @@ appending @file{.dce} to the source file name.
 Dump each function after adding mudflap instrumentation.  The file name is
 made by appending @file{.mudflap} to the source file name.
 
+@item tsan
+@opindex fdump-tree-tsan
+Dump each function after adding ThreadSanitizer instrumentation.  The file name is
+made by appending @file{.tsan} to the source file name.
+
 @item sra
 @opindex fdump-tree-sra
 Dump each function after performing scalar replacement of aggregates.  The
@@ -6588,6 +6594,12 @@ instrumentation should ignore pointer reads.  This produces less
 instrumentation (and therefore faster execution) and still provides
 some protection against outright memory corrupting writes, but allows
 erroneously read data to propagate within a program.
+
+@item -ftsan -ftsan-ignore
+@opindex ftsan
+@opindex ftsan-ignore
+Add ThreadSanitizer instrumentation. Use @option{-ftsan-ignore} to specify
+an ignore file. Refer to http://go/tsan for details.
 
 @item -fthread-jumps
 @opindex fthread-jumps
@@ -7593,6 +7605,10 @@ Also profile feedback must be available in to make this option effective.  See
 
 Enabled at levels @option{-O2}, @option{-O3}, @option{-Os}.
 
+@item -freorder-functions=@var{alg}
+@opindex freorder-functions
+This invokes a linker plugin that globally reorders functions in the final binary according to the algorithm specified. Currently, only one type of reordering is supported, @code{callgraph}.  This algorithm places functions that are connected by hot callgraph edges closer.  This option also enables @option{-ffunction-sections}.  Also, profile feedback must be available to makes this option effective.  This option emits callgraph edge profile information in special sections named .gnu.callgraph.text. The params variable "note-cgraph-section-edge-threshold" can be used to only list edges above a certain threshold.
+
 @item -fstrict-aliasing
 @opindex fstrict-aliasing
 Allow the compiler to assume the strictest aliasing rules applicable to
@@ -8133,6 +8149,11 @@ instrumentation code that enables dynamic call-graph analysis.
 During the @option{-fprofile-use} phase, this flag enables cross-module
 optimizations such as inlining.
 
+Currently there are two implementations for ripa. You can additionally specify
+a string parameter: @code{FE} is a Frond-End based implementation;
+@code{streaming} is an implementation that is based on LTO streaming technology.
+The default (without string parameter) is @code{FE} implementation.
+
 @item -fripa-disallow-asm-modules
 @opindex fripa-disallow-asm-modules
 During profile-gen, if this flag is enabled, and the module has asm statements,
@@ -8148,6 +8169,14 @@ Don't import an auxiliary module, if the GCC command line options used for this
 auxiliary module during the profile-generate stage were different from those used
 for the primary module. Note that any mismatches in warning-related options are
 ignored for this comparison.
+
+@item -fripa-inc-path-sub=@var{path_mapping}
+@opindex fripa-inc-path-sub
+This option allows LIPO profile data associated with one compiler to be usable
+by another compiler at different installation path. A user can use this option
+to specify an include search path mapping so that the compiler can convert include
+search paths stored in gcda files into exisiting paths. The mapping is specified
+as a comma separated sub path pairs in the form: OLD_SUBPATH:NEW_SUBPATH.
 
 @item -fripa-no-promote-always-inline-func
 @opindex fripa-no-promote-always-inline-func
@@ -8172,14 +8201,22 @@ of a large code footprint. Enabled by default under @option{-fripa}. Code size
 estimation and thresholds are controlled by the @option{codesize-hotness-threshold}
 and @option{unrollpeel-codesize-threshold} parameters.
 
-@item -fcallgraph-profiles-sections
-@opindex fcallgraph-profiles-sections
-Emit call graph edge profile counts in .note.callgraph.text sections. This is
-used in conjunction with @option{-fprofile-use}. A new .note.callgraph.text
-section is created for each function. This section lists every callee and the
-number of times it is called. The params variable
-"note-cgraph-section-edge-threshold" can be used to only list edges above a
-certain threshold.
+@item fripa-auxiliary_module_id
+@opindex fripa-auxiliary_module_id
+Specify the global module id for an auxiliary module. This is only effective in
+-fripa=streaming compilation mode.
+
+@item fripa-mgf-gen
+@opindex fripa-mgf-gen
+Set the module group control file name that will be used in compiling the primary
+module. This option is only effective in -fripa=streaming compilation mode.
+
+@item fripa-mgf-use
+@opindex fripa-mgf-use
+With this option, compiler will not generate a module group control file when
+building the primary module. Compiler will use this specified file to build
+the auxiliary modules. This option is only effective in -fripa=streaming
+compilation mode.
 
 @item -frecord-gcc-switches-in-elf
 @opindex frecord-gcc-switches-in-elf

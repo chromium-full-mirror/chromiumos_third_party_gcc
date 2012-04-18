@@ -1086,9 +1086,33 @@ foptimize-locality
 Common Report Var(flag_optimize_locality)
 Optimization based on improving memory reference locality.
 
+fripa-auxiliary_module_id=
+Common RejectNegative Joined UInteger RejectDriver Var(flag_ripa_aux_mod_id)
+-fripa-auxiliary_module_id=<number>  Specify auxiliary module id; used in fripa=streaming.
+
+; Nonzero if in streaming ripa mode
+;int flag_dyn_ipa = 0
+Variable
+int flag_ripa_stream = 0
+
+fripa-mgf-gen=
+Common Joined RejectNegative RejectDriver Var(ripa_mgf_gen_fname)
+Set the module group control file name.
+
+fripa-mgf-use=
+Common Driver Joined RejectNegative Var(ripa_mgf_use_fname)
+Use this file as the module group control file. This silently voids -fripa-mgf-gen.
+
+; Common Report Var(flag_dyn_ipa)
+; Common Report Var(flag_ripa_stream)
 fripa
 Common Report Var(flag_dyn_ipa)
 Perform Dynamic Inter-Procedural Analysis.
+
+; This will overwrite the fripa in the command line.
+fripa=
+Common Joined RejectNegative Var
+-fripa=[FE|streaming]  Set the mode for Dynamic Inter-Procedural Analysis.
 
 fripa-disallow-asm-modules
 Common Report Var(flag_ripa_disallow_asm_modules)
@@ -1110,6 +1134,10 @@ Limit non-const non-FP loop peeling under dynamic IPA estimates of large code fo
 fripa-unroll-size-limit
 Common Report Var(flag_ripa_unroll_size_limit) Init(1) Optimization
 Limit non-const non-FP loop unrolling under dynamic IPA estimates of large code footprint
+
+fripa-inc-path-sub=
+Common Joined RejectNegative Var(lipo_inc_path_pattern)
+Substitute substring in include paths with a new string to allow reuse profile data
 
 fearly-inlining
 Common Report Var(flag_early_inlining) Init(1) Optimization
@@ -1210,6 +1238,10 @@ Allow function addresses to be held in registers
 ffunction-sections
 Common Report Var(flag_function_sections)
 Place each function into its own section
+
+fgcda=
+Common Joined RejectNegative Var(gcov_da_name)
+Set the gcov data file name.
 
 fgcse
 Common Report Var(flag_gcse) Optimization
@@ -1538,6 +1570,14 @@ fmudflapir
 Common RejectNegative Report Var(flag_mudflap_ignore_reads)
 Ignore read operations when inserting mudflap instrumentation
 
+ftsan
+Common RejectNegative Report Var(flag_tsan)
+Add ThreadSanitizer instrumentation
+
+ftsan-ignore=
+Common RejectNegative Joined Var(flag_tsan_ignore)
+-ftsan-ignore=filename	ThreadSanitizer ignore file
+
 fdce
 Common Var(flag_dce) Init(1) Optimization
 Use the RTL dead code elimination pass
@@ -1677,7 +1717,7 @@ Common Report Var(flag_profile_dump) Init(0) Optimization
 Dump CFG profile for comparison.
 
 fprofile-generate
-Common
+Common Var(flag_profile_generate)
 Enable common options for generating profile info for profile feedback directed optimizations
 
 fprofile-generate=
@@ -1746,8 +1786,18 @@ Common Report Var(flag_reorder_blocks_and_partition) Optimization
 Reorder basic blocks and partition into hot and cold sections
 
 freorder-functions
-Common Report Var(flag_reorder_functions) Optimization
+Common Report Var(flag_reorder_functions,1) Init(0) Optimization
 Reorder functions to improve code placement
+
+freorder-functions=
+Common Joined RejectNegative Enum(function_reorder) Var(flag_reorder_functions) Init(0) Optimization
+-freorder-functions=[callgraph]	Select the scheme for function reordering. This invokes a linker plugin.  Generate .note.callgraph.text sections listing callees and edge counts.
+
+Enum
+Name(function_reorder) Type(int) UnknownError(unrecognized function reorder value %qs)
+ 
+EnumValue
+Enum(function_reorder) String(callgraph) Value(2)
 
 frerun-cse-after-loop
 Common Report Var(flag_rerun_cse_after_loop) Optimization
@@ -2320,6 +2370,10 @@ Generate debug information in COFF format
 gdwarf-
 Common Joined UInteger Var(dwarf_version) Init(2) Negative(gstabs)
 Generate debug information in DWARF v2 (or later) format
+
+gfission
+Common Driver JoinedOrMissing Var(dwarf_split_debug_info,1)
+Generate debug information in separate .dwo files
 
 ggdb
 Common JoinedOrMissing
