@@ -1,0 +1,204 @@
+2012-05-16  Xinliang David Li  <davidxl@google.com>
+
+	* c-family/c-opts.c (is_parsing_done_p): New function.
+	* cp/semantics.c (cp_clear_constexpr_hashtable): Ditto.
+	* cp/decl2.c (cp_clear_defered_fns): Clear constexpr hash.
+	* cp/mangle.c (mangle_decl): Save decl for binding clearing.
+	* cp/cp-tree.h: New prototype declaration.
+	* l-ipo.c: New prototype declaration.
+
+
+2012-05-15   Teresa Johnson  <tejohnson@google.com>
+
+	Backport from google/main r187536:
+	2012-05-15   Teresa Johnson  <tejohnson@google.com>
+
+	* doc/invoke.texi (profile-generate-sampling-period): Rename
+	from profile-generate-sampling-rate.
+	* tree-profile.c (gcov_sampling_period_decl): Rename from
+	gcov_sampling_rate_decl.
+	(gcov_has_sampling_decl): New variable.
+	(insert_if_then, add_sampling_wrapper): Rename variables from "*rate*"
+	to "*period*".
+	(gimple_init_instrumentation_sampling): Ditto, and add handling
+	for gcov_has_sampling_decl.
+	* params.def (profile-generate-sampling-period): Rename
+	from profile-generate-sampling-rate.
+
+2012-05-15   Diego Novillo  <dnovillo@google.com>
+
+	Merge from gcc-4_7-branch rev 187362.
+
+2012-05-14  Xinliang David Li  <davidxl@google.com>
+
+	* cgraphbuild.c (record_reference_to_real_target_from_alias):
+	New function.
+	(mark_address): Record reference to the resolved target node
+	in LIPO mode. Also record reference to alias's real target.
+	(rebuild_cgraph_edges): As above.
+	* cgraph.c (cgraph_clone_edge): Create cgraph edge for
+	indirect call inlining edge properly.
+	* l-ipo.c (cgraph_lipo_get_resolved_node_1): Do not force
+	creating cgraph node.
+	(fixup_reference_list): New function.
+	(varpool_do_link): Fix up initializer's references to functions
+	after linking.
+
+2012-05-09  Teresa Johnson  <tejohnson@google.com>
+
+	Backport from trunk r187297:
+	2012-05-08   Teresa Johnson  <tejohnson@google.com>
+
+	* gcov-io.h (__gcov_reset, __gcov_dump): Declare.
+	* doc/gcov.texi: Add note on using __gcov_reset and __gcov_dump.
+
+2012-05-08  Xinliang David Li  <davidxl@google.com>
+
+	Fix issue 6457844
+
+	* ipa-inline-transform.c (inline_call): When
+	fixing up cgraph edge callees which are aliases,
+	find the real resolved alias target in LIPO mode.
+	* cgraphunit.c (cgraph_redirect_edge_call_stmt_to_callee):
+	Remove unnecssary check in LIPO mode.
+	* ipa-inline.c (inline_small_functions): Compute
+	max_count properly by considering indirect edges.
+
+
+
+2012-05-08  Xinliang David Li  <davidxl@google.com>
+
+	Fix issue 6461583
+
+	* profile.c (instrument_values): Skip static ctor/dtors
+	for ic counter allocation to match instrumentation.
+	* tree-profile.c (gimple_gen_ic_profiler): Remove
+	unnecessary guard in FDO mode.
+
+2012-05-03  Dehao Chen  <dehao@google.com>
+
+	Backport r185949 from google-main.
+
+	2012-03-29  Dehao Chen  <dehao@google.com>
+
+		* predict.c (predict_iv_comparison): Add the comparison of
+		induction variable against its initial value.
+
+2012-05-01   Rong Xu  <xur@google.com>
+
+	Backport r187028 from google-main.
+
+	2012-05-01   Rong Xu  <xur@google.com>
+
+		* gcc/cp/rtti.c (get_tinfo_decl): generate tinfo for aux 
+		modules in LIPO.
+
+2012-04-25   Diego Novillo  <dnovillo@google.com>
+
+	Add better commit message for recent merge.
+
+2012-04-25   Diego Novillo  <dnovillo@google.com>
+
+	Merge from gcc-4_7-branch rev 186721.
+
+2012-04-20  Xinliang David Li  <davidxl@google.com>
+
+	Backport r186622 from trunk
+	* tree-ssa-copy.c (propagate_tree_value_into_stmt): Use
+	update_call_from_tree when propagating into a call.
+
+
+	* varasm.c (alias_target_node_exist_p): New function.
+	(finish_alias_1): Use the new function in LIPO mode.
+
+2012-04-12  Xinliang David Li  <davidxl@google.com>
+
+	* cgraphbuild.c (rebuild_cgraph_edges): Add ipa reference from
+	an alias node to its body node (post LIPO linking one) to avoid
+	the body being eliminated.
+	* varasm.c (finish_aliases_1): Do not emit error for an alias
+	which is artificial in LIPO mode -- it exists but can not be
+	found.
+
+2012-04-11  Teresa Johnson  <tejohnson@google.com>
+
+	Revert r182254 since it is subsumed by r186332.
+
+2012-04-11   Teresa Johnson  <tejohnson@google.com>
+
+	Backport r186176 from trunk.
+
+	2012-04-05  Teresa Johnson  <tejohnson@google.com>
+		    H.J. Lu  <hongjiu.lu@intel.com>
+
+	* config/i386/i386.h (ix86_tune_indices): Add
+	X86_TUNE_LCP_STALL.
+	* config/i386/i386.md (move immediate to memory peephole2):
+	Add cases for HImode move when LCP stall avoidance is needed.
+	* config/i386/i386.c (initial_ix86_tune_features): Initialize
+	X86_TUNE_LCP_STALL entry.
+
+2012-04-10  Xinliang David Li  <davidxl@google.com>
+
+	* mversn-dispatch.c (builtin_dispatch_ipa_clone): returns
+	TODO flags when there are changes.
+	(do_convert_builtin_dispatch): Ditto.
+
+2012-04-09  Xinliang David Li  <davidxl@google.com>
+
+	Fix b/6300341: LIPO profile-gen ICEs 
+
+	* coverage.c (converage_dc_end_function): Properly initialize
+	the fn_decl and ctr_data field of the coverage_data.
+
+2012-03-07  Sriraman Tallam  <tmsriram@google.com>
+
+	Backport from google/main rev 185083
+
+	        * config/i386/i386.c (build_struct_with_one_bit_fields): New function.
+	        (make_var_decl): New function.
+	        (get_field_from_struct): New function.
+	        (fold_builtin_target): New function.
+	        (ix86_fold_builtin): New function.
+	        (ix86_expand_builtin): Expand new builtins by folding them.
+	        (make_platform_builtin): New functions.
+	        (ix86_init_platform_type_builtins): Make the new builtins.
+	        (ix86_init_builtins): Make new builtins to detect CPU type.
+	        (TARGET_FOLD_BUILTIN): New macro.
+	        (IX86_BUILTIN_CPU_SUPPORTS_CMOV): New enum value.
+	        (IX86_BUILTIN_CPU_SUPPORTS_MMX): New enum value.
+	        (IX86_BUILTIN_CPU_SUPPORTS_POPCOUNT): New enum value.
+	        (IX86_BUILTIN_CPU_SUPPORTS_SSE): New enum value.
+	        (IX86_BUILTIN_CPU_SUPPORTS_SSE2): New enum value.
+	        (IX86_BUILTIN_CPU_SUPPORTS_SSE3): New enum value.
+	        (IX86_BUILTIN_CPU_SUPPORTS_SSSE3): New enum value.
+	        (IX86_BUILTIN_CPU_SUPPORTS_SSE4_1): New enum value.
+	        (IX86_BUILTIN_CPU_SUPPORTS_SSE4_2): New enum value.
+	        (IX86_BUILTIN_CPU_INIT): New enum value.
+	        (IX86_BUILTIN_CPU_IS_AMD): New enum value.
+	        (IX86_BUILTIN_CPU_IS_INTEL): New enum value.
+	        (IX86_BUILTIN_CPU_IS_INTEL_ATOM): New enum value.
+	        (IX86_BUILTIN_CPU_IS_INTEL_CORE2): New enum value.
+	        (IX86_BUILTIN_CPU_IS_INTEL_COREI7_NEHALEM): New enum value.
+	        (IX86_BUILTIN_CPU_IS_INTEL_COREI7_WESTMERE): New enum value.
+	        (IX86_BUILTIN_CPU_IS_INTEL_COREI7_SANDYBRIDGE): New enum value.
+	        (IX86_BUILTIN_CPU_IS_AMDFAM10_BARCELONA): New enum value.
+	        (IX86_BUILTIN_CPU_IS_AMDFAM10_SHANGHAI): New enum value.
+	        (IX86_BUILTIN_CPU_IS_AMDFAM10_ISTANBUL): New enum value.
+	        (IX86_BUILTIN_CPU_IS_AMDFAM15H_BDVER1): New enum value.
+	        (IX86_BUILTIN_CPU_IS_AMDFAM15H_BDVER2): New enum value.
+	        * config/i386/i386-builtin-types.def: New function type.
+	        * testsuite/gcc.target/builtin_target.c: New testcase.
+
+2012-03-07  Diego Novillo  <dnovillo@google.com>
+
+	Merge from google/main rev 184996.
+
+2012-02-26  Ollie Wild  <aaw@google.com>
+
+	* BASE-VER: Change to 4.7.x-google.
+
+2012-02-23   Diego Novillo  <dnovillo@google.com>
+
+	* BASE-VER: Change to 4.7.0-google.
+	* DEV-PHASE: Change to prerelease.
