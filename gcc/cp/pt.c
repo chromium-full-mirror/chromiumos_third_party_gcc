@@ -10779,6 +10779,8 @@ tsubst_decl (tree t, tree args, tsubst_flags_t complain)
 		tmpl = DECL_TI_TEMPLATE (t);
 		gen_tmpl = most_general_template (tmpl);
 		argvec = tsubst (DECL_TI_ARGS (t), args, complain, in_decl);
+		if (argvec == error_mark_node)
+		  RETURN (error_mark_node);
 		hash = hash_tmpl_and_args (gen_tmpl, argvec);
 		spec = retrieve_specialization (gen_tmpl, argvec, hash);
 	      }
@@ -20482,10 +20484,9 @@ do_auto_deduction (tree type, tree init, tree auto_node)
   tree decl;
   int val;
 
-  if (processing_template_decl
-      && (TREE_TYPE (init) == NULL_TREE
-	  || BRACE_ENCLOSED_INITIALIZER_P (init)))
-    /* Not enough information to try this yet.  */
+  if (type_dependent_expression_p (init))
+    /* Defining a subset of type-dependent expressions that we can deduce
+       from ahead of time isn't worth the trouble.  */
     return type;
 
   /* The name of the object being declared shall not appear in the

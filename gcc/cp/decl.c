@@ -553,8 +553,9 @@ poplevel (int keep, int reverse, int functionbody)
   scope_kind kind;
   unsigned ix;
   cp_label_binding *label_bind;
+  bool subtime;
 
-  timevar_start (TV_NAME_LOOKUP);
+  subtime = timevar_cond_start (TV_NAME_LOOKUP);
  restart:
 
   block = NULL_TREE;
@@ -820,7 +821,7 @@ poplevel (int keep, int reverse, int functionbody)
   if (kind == sk_cleanup)
     goto restart;
 
-  timevar_stop (TV_NAME_LOOKUP);
+  timevar_cond_stop (TV_NAME_LOOKUP, subtime);
   return block;
 }
 
@@ -10620,7 +10621,7 @@ check_default_argument (tree decl, tree arg)
 
   if (warn_zero_as_null_pointer_constant
       && c_inhibit_evaluation_warnings == 0
-      && (POINTER_TYPE_P (decl_type) || TYPE_PTR_TO_MEMBER_P (decl_type))
+      && (TYPE_PTR_P (decl_type) || TYPE_PTR_TO_MEMBER_P (decl_type))
       && null_ptr_cst_p (arg)
       && !NULLPTR_TYPE_P (TREE_TYPE (arg)))
     {

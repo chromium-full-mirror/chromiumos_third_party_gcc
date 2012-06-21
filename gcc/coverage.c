@@ -468,6 +468,8 @@ read_counts_file (const char *da_file_name, unsigned module_id)
 	  gcov_read_summary (&sum);
 	  for (ix = 0; ix != GCOV_COUNTERS_SUMMABLE; ix++)
 	    {
+	      summary.ctrs[ix].num_hot_counters
+                  += sum.ctrs[ix].num_hot_counters;
 	      summary.ctrs[ix].runs += sum.ctrs[ix].runs;
 	      summary.ctrs[ix].sum_all += sum.ctrs[ix].sum_all;
 	      if (summary.ctrs[ix].run_max < sum.ctrs[ix].run_max)
@@ -2333,7 +2335,7 @@ coverage_finish (void)
   if (bbg_file_name && gcov_close ())
     unlink (bbg_file_name);
   
-  if (!local_tick || local_tick == (unsigned)-1)
+  if (!local_tick)
     /* Only remove the da file, if we cannot stamp it.  If we can
        stamp it, libgcov will DTRT.  */
     unlink (da_file_name);

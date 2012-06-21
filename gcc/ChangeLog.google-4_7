@@ -1,3 +1,284 @@
+2012-06-21   Diego Novillo  <dnovillo@google.com>
+
+	Merge from trunk rev 188808.
+
+2012-06-15   Cary Coutant  <ccoutant@google.com>
+
+    Revert Fission patches r182490, r182891, r183042, and r183320.
+    This will clear the way to backport the final patches from trunk.
+
+    r182490:
+
+	2011-12-19  Sterling Augustine <saugustine@google.com>
+
+	    * dwarf2out.c (DEBUG_PUBNAMES_SECTION_LABEL,
+	    DEBUG_PUBTYPES_SECTION_LABEL): Define.
+	    (debug_pubnames_section_label, debug_pubtypes_section_label):
+	    Declare.
+	    (is_namespace_die, is_class_die): New functions.
+	    (add_enumerator_pubname): New function.
+	    (add_pubname): Call is_namespace_die, is_cu_die, and is_class_die in
+	    conditional.
+	    (add_pubtype): Call is_namespace_die. Rework name calculation.  Call
+	    type_tag, lang_hooks.dwarf_name and add_enumerator_pubname.
+	    (output_pubnames): Output debug_pubnames_section_label or
+	    debug_pubtypes_section_label.
+	    (base_type_die): Call add_pubtype.
+	    (gen_namespace_die): Call add_pubname_string and lang_hooks.dwarf_name.
+	    (dwarf2_out_init): Generate debug_pubnames_section_label and
+	    debug_pubtypes_section_label.
+	    (pubtypes_section_empty): New function.
+	    (dwarf2_out_finish): Call add_AT_lineptr if pubnames or pubtypes is
+	    non-empty.  When dealing with pubnames, change assertion to conditional.
+	    Call pubtypes_section_empty.  Likewise when dealing with pubtypes.
+	    Move code checking for empty section to...
+	    (pubtypes_section_empty): Here.
+	    * target.def: Switch boolean to enable pubnames and pubtypes.
+
+    r182891:
+
+	2012-01-04   Sterling Augustine  <saugustine@google.com>
+
+	    * dwarf2out.c (add_pubname): Move conditional clause from outer to
+	    inner if-statement.
+	    (dwarf2out_finish): Fix conditions to output DW_AT_GNU_pubnames and
+	    DW_AT_GNU_pubtypes.  Move decision to output pubnames and pubtypes from
+	    here...
+	    (output_pubnames): ...to here.
+	    (pubtypes_section_empty): Delete unused function.
+
+    r183042:
+
+	2012-01-09   Sterling Augustine  <saugustine@google.com>
+
+	    * dwarf2out.c (output_pubnames): Add check for info_section_emitted.
+
+    r183320:
+
+	2012-01-19   Sterling Augustine  <saugustine@google.com>
+
+	    * dwarf2out.c (break_out_comdat_types): Add DW_AT_GNU_pubnames and
+	    DW_AT_GNU_pubtypes attributes.
+
+2012-06-15   Easwaran Raman  <eraman@google.com>
+  Cherrypick r188675 from trunk.
+	2012-06-15  Easwaran Raman  <eraman@google.com>
+		* passes.c (init_optimization_passes): Remove pass_call_cdce
+		from its current position and insert after pass_dce.
+
+2012-06-09   Xinliang Davidl Li  <davidxl@google.com>
+
+	l-ipo.c (pop_module_scope): Stop timer after
+	pending decl handling.
+
+2012-06-09   Xinliang Davidl Li  <davidxl@google.com>
+
+	c-family/c-opts.c (lipo_max_mem_reached):  Scale up
+	memory allocated to acount for optimizer uses.
+	params.def: tune up max lipo mem parameter to 2.8G.
+
+2012-06-07   Easwaran Raman  <eraman@google.com>
+  Backport r179412 from google/gcc-4_6 branch.
+	2011-09-30  Easwaran Raman  <eraman@google.com>
+
+		* tree-profile.c (gcov_sample_counter_decl): Add GTY marker.
+		(gcov_sampling_rate_decl): Likewise.
+		(add_sampling_to_edge_counters): Do not free
+		instrumentation_to_be_sampled.
+		(cleanup_instrumentation_sampling): New function.
+		(tree_profiling): Call cleanup_instrumentation_sampling at the end.
+
+2012-06-07  Teresa Johnson  <tejohnson@google.com>
+
+	Backport from google/main r188308.
+	2012-06-07  Teresa Johnson  <tejohnson@google.com>
+
+	* doc/invoke.texi: Rename -fripa-peel-size-limit
+        and -fripa-unroll-size-limit to -fpeel-codesize-limit and
+        -funroll-codesize-limit, respectively. Remove
+        codesize-hotness-threshold param and add unrollpeel-hotness-threshold
+        param.
+	* gcov-io.c (gcov_write_summary): Write new summary info.
+	(gcov_read_summary): Read new summary info.
+	* gcov-io.h (GCOV_TAG_SUMMARY_LENGTH): Update for new summary info.
+        (struct gcov_ctr_summary): Add new summary info: num_hot_counters.
+	* loop-unroll.c (limit_code_size): Renamed to
+        code_size_limit_factor.
+	(code_size_limit_factor): Renamed from limit_code size. Update to
+        use new summary info and refine for very hot loops.
+	(decide_unrolling_and_peeling): Remove call to limit_code_size.
+        (decide_unroll_runtime_iterations): Call code_size_limit_factor
+        to control the unroll factor.
+	(decide_peel_simple, decide_unroll_stupid): Ditto.
+	* coverage.c (read_counts_file): Propagate new summary info.
+	* common.opt: Rename -fripa-peel-size-limit
+        and -fripa-unroll-size-limit to -fpeel-codesize-limit and
+        -funroll-codesize-limit, respectively.
+	* tree-optimize.c (cgraph_codesize_estimate): Remove.
+	(compute_codesize_estimate): Remove.
+	(execute_cleanup_cfg_post_optimizing): Remove call to
+        compute_codesize_estimate.
+	* params.def (PARAM_UNROLLPEEL_CODESIZE_THRESHOLD): Remove.
+        (PARAM_UNROLLPEEL_HOTNESS_THRESHOLD): Add.
+	* gcov-dump.c (tag_summary): Dump new summary info.
+
+2012-06-07  Dehao Chen  <dehao@google.com>
+
+	* gcc/cgraph.c (cgraph_node): Add attribute to function decl.
+	* gcc/opts-global.c (add_attribute_pattern): New function.
+	(pattern_match_function_attributes): New function.
+	(handle_common_deferred_options): Handle new options.
+	* gcc/opts.c (common_handle_option): Handle new options.
+	* gcc/opts.h (handle_common_deferred_options): New function.
+	* gcc/common.opt (ffunction_attribute_list): New option.
+
+2012-06-06   Diego Novillo  <dnovillo@google.com>
+
+  Cherry pick rev 188207.
+
+      2012-06-04  Paolo Carlini  <paolo.carlini@oracle.com>
+      
+	    PR c++/53524
+	    * doc/invoke.texi (Wenum-compare): Update documentation.
+      
+      /cp
+      2012-06-04  Paolo Carlini  <paolo.carlini@oracle.com>
+      
+	    PR c++/53524
+	    * call.c (build_conditional_expr_1): Use OPT_Wenum_compare
+	    to control enumeral mismatch in conditional expression too.
+      
+      /testsuite
+      2012-06-04  Paolo Carlini  <paolo.carlini@oracle.com>
+      
+	    PR c++/53524
+	    * g++.dg/warn/Wenum-compare-no-2: New.
+
+2012-06-06   Xinliang David Li  <davidxl@google.com>
+
+	coverage.c (coverage_finish): Do not remove gcda file with
+	-frandom-seed option -- this recovers the compiler behavior
+	before gcc4_7.
+
+
+2012-06-05   Diego Novillo  <dnovillo@google.com>
+
+	Merge from gcc-4_7-branch rev 188095 (minus rev 187877).
+
+2012-06-02  Xinliang David Li  <davidxl@google.com>
+
+	l-ipo.c (promote_static_var_func): Promoted static variables from
+	primary modules should be marked as externally visible and being
+	prevailing def to avoid being localized again later.
+
+
+2012-06-02   Easwaran Raman  <eraman@google.com>
+
+	* gcc/ipa-inline.c (want_early_inline_function_p): Boost early
+	inlining of comdats. Allow more tuning by using params.
+	* gcc/params.def (PARAM_EARLY_INLINING_INSNS_NON_LEAF): New param.
+	(PARAM_EARLY_INLINING_INSNS_ANY): Likewise.
+	(PARAM_EARLY_INLINING_INSNS_COMDAT): Likewise.
+
+2012-05-30  Dehao Chen  <dehao@google.com>
+
+	* predict.c (predict_extra_loop_exit): New function to predict for
+	extra loop exits resulted from short-circuit conditions.
+
+2012-05-24   Rong Xu  <xur@google.com>
+
+	* l-ipo.c (create_unique_name): Make temp names demanglable.
+
+2012-05-21   Easwaran Raman  <eraman@google.com>
+
+	* gcc/basic-block.h (maybe_hot_count_p): New declaration.
+	* gcc/cgraph.c (dump_cgraph_node): Dump max_bb_count.
+	(cgraph_clone_node): Update max_bb_count.
+	* gcc/cgraph.h (cgraph_node): Add new field max_bb_count.
+	* gcc/cgraphbuild.c (rebuild_cgraph_edges): Compute max_bb_count.
+	* gcc/cgraphunit.c (cgraph_copy_node_for_versioning): Copy max_bb_count.
+	* gcc/ipa-inline-transform.c (inline_call): Update max_bb_count of
+	the function to which this callsite is eventually inlined to.
+	* gcc/ipa-inline.c (edge_hot_enough_p): New function.
+	(want_inline_small_function_p): Call edge_hot_enough_p instead
+	of cgraph_maybe_hot_edge_p.
+	* gcc/params.def (PARAM_INLINE_FUNCTION_OVERHEAD_SIZE): New param.
+	* gcc/predict.c (maybe_hot_count_p): Make it non static.
+	* gcc/testsuite/gcc.dg/tree-prof/inliner-1.c: Add option
+	--param inline-hot-caller=0.
+	* gcc/testsuite/gcc.dg/tree-prof/lipo/inliner-1_0.c: Likewise.
+
+2012-05-18   Teresa Johnson  <tejohnson@google.com>
+
+	Backport from google/main r187660:
+	2012-05-18   Teresa Johnson  <tejohnson@google.com>
+
+	* doc/invoke.texi: Update the documentation with new params.
+	* loop-unroll.c (loop_has_FP_comp): Remove function.
+	(max_unroll_with_branches): New function.
+	(decide_unroll_constant_iterations, decide_unroll_runtime_iterations):
+        Add heuristic to avoid increasing branch mispredicts when unrolling.
+	(limit_code_size, decide_peel_simple, decide_unroll_stupid): Retrieve
+        number of branches from niter_desc instead of via function that walks
+        loop.
+	* loop-iv.c (get_simple_loop_desc): Invoke new analyze_loop_insns
+        function, and add guards to enable this function to work for the
+        outermost loop.
+	* cfgloop.c (insn_has_fp_set, analyze_loop_insns): New functions.
+        (num_loop_branches): Remove.
+	* cfgloop.h (struct niter_desc): Added new fields to cache additional
+        loop analysis information.
+        (num_loop_branches): Remove.
+	(analyze_loop_insns): Declare.
+	* params.def (PARAM_MIN_ITER_UNROLL_WITH_BRANCHES): New param.
+        (PARAM_UNROLL_OUTER_LOOP_BRANCH_BUDGET): Ditto.
+
+2012-05-16  Sriraman Tallam  <tmsriram@google.com>
+
+	Port from google/gcc-4_6 
+	r177289, r177308, r179104, r179289, r179303, r179404, r182447
+	
+	* doc/invoke.texi: Document -freorder-functions=*
+	* cgraphbuild.c (remove_cgraph_callee_edges): Preserve
+	callgraph till pass_final.
+	* configure: Regenerate.
+	* final.c (dump_cgraph_profiles): New function.
+	(rest_of_handle_final): Call dumping of cgraph profiles in
+	.gnu.text.callgraph sections.
+	* gcc.c (LINK_COMMAND_SPEC): Process -freorder-functions=
+	(set_func_reorder_linker_plugin_spec): New function.
+	(main): Call function reorder plugin.
+	* testsuite/lib/target-supports-dg.exp
+	(dg-require-section-exclude): New proc.
+	(dg-require-linker-function-reordering-plugin): New proc.
+	* testsuite/lib/target-supports.exp
+	(check_section_exclude_available): New proc.
+	(check_linker_function_reordering_plugin_supported): New proc.
+	* testsuite/g++.dg/tree-prof/callgraph-profiles.C: New test.
+	* config.in: undef FRPLUGINSONAME
+	* opts.c
+	* configure.ac (FRPLUGINSONAME): Define 
+	* common.opt (fcallgraph-profiles-sections): Remove.
+	(freorder-functions=): New option.
+	* tree-optimize.c (gate_all_optimizations): Mark last cleanup of
+	callgraph.
+	* config.host: Set function reordering plugin.
+	* params.def (PARAM_NOTE_CGRAPH_SECTION_EDGE_THRESHOLD): Remove.
+	(PARAM_GNU_CGRAPH_SECTION_EDGE_THRESHOLD): Add.
+
+2012-05-16  Xinliang David Li  <davidxl@google.com>
+
+	* tree-profile.c (add_sampling_wrapper): Call
+	add_referenced_var for sampling related variables.
+	(gimple_init_instrumentation_sampling): Do not
+	call varpool_finalize for external decls.
+
+2012-05-16  Xinliang David Li  <davidxl@google.com>
+
+	* cgraph.c (cgraph_set_call_stmt): Resolve target
+	to the real target in LIPO mode.
+	(cgraph_create_virtual_clone): Ditto.
+
 2012-05-16  Xinliang David Li  <davidxl@google.com>
 
 	* c-family/c-opts.c (is_parsing_done_p): New function.

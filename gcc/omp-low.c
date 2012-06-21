@@ -851,6 +851,19 @@ omp_copy_decl_1 (tree var, omp_context *ctx)
   return omp_copy_decl_2 (var, DECL_NAME (var), TREE_TYPE (var), ctx);
 }
 
+/* Build COMPONENT_REF and set TREE_THIS_VOLATILE and TREE_READONLY on it
+   as appropriate.  */
+static tree
+omp_build_component_ref (tree obj, tree field)
+{
+  tree ret = build3 (COMPONENT_REF, TREE_TYPE (field), obj, field, NULL);
+  if (TREE_THIS_VOLATILE (field))
+    TREE_THIS_VOLATILE (ret) |= 1;
+  if (TREE_READONLY (field))
+    TREE_READONLY (ret) |= 1;
+  return ret;
+}
+
 /* Build tree nodes to access the field for VAR on the receiver side.  */
 
 static tree
@@ -865,7 +878,7 @@ build_receiver_ref (tree var, bool by_ref, omp_context *ctx)
     field = x;
 
   x = build_simple_mem_ref (ctx->receiver_decl);
-  x = build3 (COMPONENT_REF, TREE_TYPE (field), x, field, NULL);
+  x = omp_build_component_ref (x, field);
   if (by_ref)
     x = build_simple_mem_ref (x);
 
@@ -915,8 +928,7 @@ static tree
 build_sender_ref (tree var, omp_context *ctx)
 {
   tree field = lookup_sfield (var, ctx);
-  return build3 (COMPONENT_REF, TREE_TYPE (field),
-		 ctx->sender_decl, field, NULL);
+  return omp_build_component_ref (ctx->sender_decl, field);
 }
 
 /* Add a new field for VAR inside the structure CTX->SENDER_DECL.  */
@@ -1811,8 +1823,8 @@ scan_omp_single (gimple stmt, omp_context *outer_ctx)
 
 
 /* Check OpenMP nesting restrictions.  */
-static void
-check_omp_nesting_restrictions (gimple  stmt, omp_context *ctx)
+static bool
+check_omp_nesting_restrictions (gimple stmt, omp_context *ctx)
 {
   switch (gimple_code (stmt))
     {
@@ -1831,17 +1843,19 @@ check_omp_nesting_restrictions (gimple  stmt, omp_context *ctx)
 	  case GIMPLE_OMP_TASK:
 	    if (is_gimple_call (stmt))
 	      {
-		warning (0, "barrier region may not be closely nested inside "
-			    "of work-sharing, critical, ordered, master or "
-			    "explicit task region");
-		return;
+		error_at (gimple_location (stmt),
+			  "barrier region may not be closely nested inside "
+			  "of work-sharing, critical, ordered, master or "
+			  "explicit task region");
+		return false;
 	      }
-	    warning (0, "work-sharing region may not be closely nested inside "
-			"of work-sharing, critical, ordered, master or explicit "
-			"task region");
-	    return;
+	    error_at (gimple_location (stmt),
+		      "work-sharing region may not be closely nested inside "
+		      "of work-sharing, critical, ordered, master or explicit "
+		      "task region");
+	    return false;
 	  case GIMPLE_OMP_PARALLEL:
-	    return;
+	    return true;
 	  default:
 	    break;
 	  }
@@ -1854,11 +1868,12 @@ check_omp_nesting_restrictions (gimple  stmt, omp_context *ctx)
 	  case GIMPLE_OMP_SECTIONS:
 	  case GIMPLE_OMP_SINGLE:
 	  case GIMPLE_OMP_TASK:
-	    warning (0, "master region may not be closely nested inside "
-			"of work-sharing or explicit task region");
-	    return;
+	    error_at (gimple_location (stmt),
+		      "master region may not be closely nested inside "
+		      "of work-sharing or explicit task region");
+	    return false;
 	  case GIMPLE_OMP_PARALLEL:
-	    return;
+	    return true;
 	  default:
 	    break;
 	  }
@@ -1869,17 +1884,22 @@ check_omp_nesting_restrictions (gimple  stmt, omp_context *ctx)
 	  {
 	  case GIMPLE_OMP_CRITICAL:
 	  case GIMPLE_OMP_TASK:
-	    warning (0, "ordered region may not be closely nested inside "
-			"of critical or explicit task region");
-	    return;
+	    error_at (gimple_location (stmt),
+		      "ordered region may not be closely nested inside "
+		      "of critical or explicit task region");
+	    return false;
 	  case GIMPLE_OMP_FOR:
 	    if (find_omp_clause (gimple_omp_for_clauses (ctx->stmt),
 				 OMP_CLAUSE_ORDERED) == NULL)
-	      warning (0, "ordered region must be closely nested inside "
+	      {
+		error_at (gimple_location (stmt),
+			  "ordered region must be closely nested inside "
 			  "a loop region with an ordered clause");
-	    return;
+		return false;
+	      }
+	    return true;
 	  case GIMPLE_OMP_PARALLEL:
-	    return;
+	    return true;
 	  default:
 	    break;
 	  }
@@ -1890,14 +1910,16 @@ check_omp_nesting_restrictions (gimple  stmt, omp_context *ctx)
 	    && (gimple_omp_critical_name (stmt)
 		== gimple_omp_critical_name (ctx->stmt)))
 	  {
-	    warning (0, "critical region may not be nested inside a critical "
-			"region with the same name");
-	    return;
+	    error_at (gimple_location (stmt),
+		      "critical region may not be nested inside a critical "
+		      "region with the same name");
+	    return false;
 	  }
       break;
     default:
       break;
     }
+  return true;
 }
 
 
@@ -1968,14 +1990,20 @@ scan_omp_1_stmt (gimple_stmt_iterator *gsi, bool *handled_ops_p,
   /* Check the OpenMP nesting restrictions.  */
   if (ctx != NULL)
     {
+      bool remove = false;
       if (is_gimple_omp (stmt))
-	check_omp_nesting_restrictions (stmt, ctx);
+	remove = !check_omp_nesting_restrictions (stmt, ctx);
       else if (is_gimple_call (stmt))
 	{
 	  tree fndecl = gimple_call_fndecl (stmt);
 	  if (fndecl && DECL_BUILT_IN_CLASS (fndecl) == BUILT_IN_NORMAL
 	      && DECL_FUNCTION_CODE (fndecl) == BUILT_IN_GOMP_BARRIER)
-	    check_omp_nesting_restrictions (stmt, ctx);
+	    remove = !check_omp_nesting_restrictions (stmt, ctx);
+	}
+      if (remove)
+	{
+	  stmt = gimple_build_nop ();
+	  gsi_replace (gsi, stmt, false);
 	}
     }
 
@@ -6534,7 +6562,7 @@ create_task_copyfn (gimple task_stmt, omp_context *ctx)
 	  sf = (tree) n->value;
 	  sf = *(tree *) pointer_map_contains (tcctx.cb.decl_map, sf);
 	  src = build_simple_mem_ref_loc (loc, sarg);
-	  src = build3 (COMPONENT_REF, TREE_TYPE (sf), src, sf, NULL);
+	  src = omp_build_component_ref (src, sf);
 	  t = build2 (MODIFY_EXPR, TREE_TYPE (*p), *p, src);
 	  append_to_statement_list (t, &list);
 	}
@@ -6557,9 +6585,9 @@ create_task_copyfn (gimple task_stmt, omp_context *ctx)
 	if (tcctx.cb.decl_map)
 	  sf = *(tree *) pointer_map_contains (tcctx.cb.decl_map, sf);
 	src = build_simple_mem_ref_loc (loc, sarg);
-	src = build3 (COMPONENT_REF, TREE_TYPE (sf), src, sf, NULL);
+	src = omp_build_component_ref (src, sf);
 	dst = build_simple_mem_ref_loc (loc, arg);
-	dst = build3 (COMPONENT_REF, TREE_TYPE (f), dst, f, NULL);
+	dst = omp_build_component_ref (dst, f);
 	t = build2 (MODIFY_EXPR, TREE_TYPE (dst), dst, src);
 	append_to_statement_list (t, &list);
 	break;
@@ -6580,14 +6608,14 @@ create_task_copyfn (gimple task_stmt, omp_context *ctx)
 	    if (tcctx.cb.decl_map)
 	      sf = *(tree *) pointer_map_contains (tcctx.cb.decl_map, sf);
 	    src = build_simple_mem_ref_loc (loc, sarg);
-	    src = build3 (COMPONENT_REF, TREE_TYPE (sf), src, sf, NULL);
+	    src = omp_build_component_ref (src, sf);
 	    if (use_pointer_for_field (decl, NULL) || is_reference (decl))
 	      src = build_simple_mem_ref_loc (loc, src);
 	  }
 	else
 	  src = decl;
 	dst = build_simple_mem_ref_loc (loc, arg);
-	dst = build3 (COMPONENT_REF, TREE_TYPE (f), dst, f, NULL);
+	dst = omp_build_component_ref (dst, f);
 	t = lang_hooks.decls.omp_clause_copy_ctor (c, dst, src);
 	append_to_statement_list (t, &list);
 	break;
@@ -6606,14 +6634,14 @@ create_task_copyfn (gimple task_stmt, omp_context *ctx)
 	    if (tcctx.cb.decl_map)
 	      sf = *(tree *) pointer_map_contains (tcctx.cb.decl_map, sf);
 	    src = build_simple_mem_ref_loc (loc, sarg);
-	    src = build3 (COMPONENT_REF, TREE_TYPE (sf), src, sf, NULL);
+	    src = omp_build_component_ref (src, sf);
 	    if (use_pointer_for_field (decl, NULL))
 	      src = build_simple_mem_ref_loc (loc, src);
 	  }
 	else
 	  src = decl;
 	dst = build_simple_mem_ref_loc (loc, arg);
-	dst = build3 (COMPONENT_REF, TREE_TYPE (f), dst, f, NULL);
+	dst = omp_build_component_ref (dst, f);
 	t = build2 (MODIFY_EXPR, TREE_TYPE (dst), dst, src);
 	append_to_statement_list (t, &list);
 	break;
@@ -6645,10 +6673,10 @@ create_task_copyfn (gimple task_stmt, omp_context *ctx)
 	  sf = (tree) n->value;
 	  sf = *(tree *) pointer_map_contains (tcctx.cb.decl_map, sf);
 	  src = build_simple_mem_ref_loc (loc, sarg);
-	  src = build3 (COMPONENT_REF, TREE_TYPE (sf), src, sf, NULL);
+	  src = omp_build_component_ref (src, sf);
 	  src = build_simple_mem_ref_loc (loc, src);
 	  dst = build_simple_mem_ref_loc (loc, arg);
-	  dst = build3 (COMPONENT_REF, TREE_TYPE (f), dst, f, NULL);
+	  dst = omp_build_component_ref (dst, f);
 	  t = lang_hooks.decls.omp_clause_copy_ctor (c, dst, src);
 	  append_to_statement_list (t, &list);
 	  n = splay_tree_lookup (ctx->field_map,
@@ -6656,7 +6684,7 @@ create_task_copyfn (gimple task_stmt, omp_context *ctx)
 	  df = (tree) n->value;
 	  df = *(tree *) pointer_map_contains (tcctx.cb.decl_map, df);
 	  ptr = build_simple_mem_ref_loc (loc, arg);
-	  ptr = build3 (COMPONENT_REF, TREE_TYPE (df), ptr, df, NULL);
+	  ptr = omp_build_component_ref (ptr, df);
 	  t = build2 (MODIFY_EXPR, TREE_TYPE (ptr), ptr,
 		      build_fold_addr_expr_loc (loc, dst));
 	  append_to_statement_list (t, &list);

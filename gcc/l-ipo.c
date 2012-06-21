@@ -33,6 +33,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "l-ipo.h"
 #include "coverage.h"
 #include "gcov-io.h"
+#include "timevar.h"
 
 struct GTY(()) saved_module_scope
 {
@@ -392,6 +393,7 @@ pop_module_scope (void)
   at_eof = 1;
   cgraph_process_same_body_aliases ();
   lang_hooks.l_ipo.process_pending_decls (input_location);
+  timevar_stop (TV_PHASE_DEFERRED);
   lang_hooks.l_ipo.clear_deferred_fns ();
   at_eof = 0;
 
@@ -1726,15 +1728,15 @@ create_unique_name (tree decl, unsigned module_id)
       char *n;
       unsigned fno =  FUNC_DECL_FUNC_ID (context);
       n = (char *)alloca (strlen (name) + 15);
-      sprintf (n, "%s_%u", name, fno);
+      sprintf (n, "%s.%u", name, fno);
       name = n;
     }
 
   assembler_name = (char*) alloca (strlen (name) + 30);
-  sprintf (assembler_name, "%s_cmo_%u", name, module_id);
+  sprintf (assembler_name, "%s.cmo.%u", name, module_id);
   seq = get_name_seq_num (assembler_name);
   if (seq)
-    sprintf (assembler_name, "%s_%d", assembler_name, seq);
+    sprintf (assembler_name, "%s.%d", assembler_name, seq);
 
   assemb_id = get_identifier (assembler_name);
 
@@ -1781,6 +1783,16 @@ promote_static_var_func (unsigned module_id, tree decl, bool is_extern)
     {
       struct varpool_node *node = varpool_node (decl);
       node->resolution = LDPR_UNKNOWN;
+      /* Statics from exported primary module are very likely
+         referenced by other modules, so they should be made
+         externally visible (to be avoided to be localized again).
+         Another way to do this is to set force_output bit or
+         change the logic in varpool_externally_visible in ipa.c.  */
+      if (!is_extern)
+        {
+          node->resolution = LDPR_PREVAILING_DEF;
+          node->externally_visible = true;
+        }
       varpool_link_node (node);
     }
 

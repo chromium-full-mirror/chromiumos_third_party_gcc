@@ -100,6 +100,7 @@ The callgraph:
 #include "lto-streamer.h"
 #include "l-ipo.h"
 #include "ipa-inline.h"
+#include "opts.h"
 
 const char * const ld_plugin_symbol_resolution_names[]=
 {
@@ -550,6 +551,7 @@ cgraph_create_node (tree decl)
       node->origin->nested = node;
     }
   cgraph_add_assembler_hash_node (node);
+  pattern_match_function_attributes (decl);
   return node;
 }
 
@@ -861,6 +863,8 @@ cgraph_set_call_stmt (struct cgraph_edge *e, gimple new_stmt)
       /* Constant propagation (and possibly also inlining?) can turn an
 	 indirect call into a direct one.  */
       struct cgraph_node *new_callee = cgraph_get_node (decl);
+      if (L_IPO_COMP_MODE && cgraph_pre_profiling_inlining_done)
+        new_callee = cgraph_lipo_get_resolved_node (decl);
 
       gcc_checking_assert (new_callee);
       cgraph_make_edge_direct (e, new_callee);
@@ -1860,6 +1864,9 @@ dump_cgraph_node (FILE *f, struct cgraph_node *node)
   if (node->count)
     fprintf (f, " executed "HOST_WIDEST_INT_PRINT_DEC"x",
 	     (HOST_WIDEST_INT)node->count);
+  if (node->max_bb_count)
+    fprintf (f, " hottest bb executed "HOST_WIDEST_INT_PRINT_DEC"x",
+	     (HOST_WIDEST_INT)node->max_bb_count);
   if (node->origin)
     fprintf (f, " nested in: %s", cgraph_node_name (node->origin));
   if (node->needed)
@@ -2174,6 +2181,10 @@ cgraph_clone_node (struct cgraph_node *n, tree decl, gcov_type count, int freq,
   new_node->global = n->global;
   new_node->rtl = n->rtl;
   new_node->count = count;
+  new_node->max_bb_count = count;
+  if (n->count)
+    new_node->max_bb_count = ((n->max_bb_count + n->count / 2)
+                              / n->count) * count;
   new_node->is_versioned_clone = n->is_versioned_clone;
   new_node->frequency = n->frequency;
   new_node->clone = n->clone;
@@ -2192,6 +2203,9 @@ cgraph_clone_node (struct cgraph_node *n, tree decl, gcov_type count, int freq,
       n->count -= count;
       if (n->count < 0)
 	n->count = 0;
+      n->max_bb_count -= new_node->max_bb_count;
+      if (n->max_bb_count < 0)
+	n->max_bb_count = 0;
     }
 
   FOR_EACH_VEC_ELT (cgraph_edge_p, redirect_callers, i, e)
@@ -2328,6 +2342,8 @@ cgraph_create_virtual_clone (struct cgraph_node *old_node,
       if (TREE_CODE (var) == FUNCTION_DECL)
 	{
 	  struct cgraph_node *ref_node = cgraph_get_node (var);
+          if (L_IPO_COMP_MODE && cgraph_pre_profiling_inlining_done)
+            ref_node = cgraph_lipo_get_resolved_node (var);
 	  gcc_checking_assert (ref_node);
 	  ipa_record_reference (new_node, NULL, ref_node, NULL, IPA_REF_ADDR,
 				NULL);

@@ -408,7 +408,6 @@ leaf_node_p (struct cgraph_node *n)
   return true;
 }
 
-
 /* Return true if we are interested in inlining small function.  */
 
 static bool
@@ -429,10 +428,10 @@ want_early_inline_function_p (struct cgraph_edge *e)
   else
     {
       int growth = estimate_edge_growth (e);
-      if (growth <= 0)
+      struct cgraph_node *callee = e->callee;
+      if (growth <= PARAM_VALUE (PARAM_EARLY_INLINING_INSNS_ANY))
 	;
-      else if (!cgraph_maybe_hot_edge_p (e)
-	       && growth > 0)
+      else if (!cgraph_maybe_hot_edge_p (e))
 	{
 	  if (dump_file)
 	    fprintf (dump_file, "  will not early inline: %s/%i->%s/%i, "
@@ -442,8 +441,12 @@ want_early_inline_function_p (struct cgraph_edge *e)
 		     growth);
 	  want_inline = false;
 	}
+      else if (DECL_COMDAT (callee->decl)
+               && growth <= PARAM_VALUE (PARAM_EARLY_INLINING_INSNS_COMDAT))
+        ;
       else if (!leaf_node_p (callee)
-	       && growth > 0)
+               && (growth
+                   > PARAM_VALUE (PARAM_EARLY_INLINING_INSNS_NON_LEAF)))
 	{
 	  if (dump_file)
 	    fprintf (dump_file, "  will not early inline: %s/%i->%s/%i, "
@@ -465,6 +468,20 @@ want_early_inline_function_p (struct cgraph_edge *e)
 	}
     }
   return want_inline;
+}
+
+/* Returns true if an edge or its caller are hot enough to
+   be considered for inlining.  */
+
+static bool
+edge_hot_enough_p (struct cgraph_edge *edge)
+{
+  if (cgraph_maybe_hot_edge_p (edge))
+    return true;
+  if (PARAM_VALUE (PARAM_INLINE_HOT_CALLER)
+      && maybe_hot_count_p (edge->caller->max_bb_count))
+    return true;
+  return false;
 }
 
 /* Return true if we are interested in inlining small function.
@@ -545,7 +562,7 @@ want_inline_small_function_p (struct cgraph_edge *e, bool report)
 	  want_inline = false;
 	}
       /* If call is cold, do not inline when function body would grow. */
-      else if (!cgraph_maybe_hot_edge_p (e))
+      else if (!edge_hot_enough_p (e))
 	{
           e->inline_failed = CIF_UNLIKELY_CALL;
 	  want_inline = false;

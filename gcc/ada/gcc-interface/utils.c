@@ -4474,20 +4474,6 @@ maybe_unconstrained_array (tree exp)
 
   return exp;
 }
-
-/* If EXP's type is a VECTOR_TYPE, return EXP converted to the associated
-   TYPE_REPRESENTATIVE_ARRAY.  */
-
-tree
-maybe_vector_array (tree exp)
-{
-  tree etype = TREE_TYPE (exp);
-
-  if (VECTOR_TYPE_P (etype))
-    exp = convert (TYPE_REPRESENTATIVE_ARRAY (etype), exp);
-
-  return exp;
-}
 
 /* Return true if EXPR is an expression that can be folded as an operand
    of a VIEW_CONVERT_EXPR.  See ada-tree.h for a complete rationale.  */
@@ -4909,8 +4895,12 @@ gnat_write_global_declarations (void)
   if (!VEC_empty (tree, types_used_by_cur_var_decl))
     {
       struct varpool_node *node;
+      char *label;
+
+      ASM_FORMAT_PRIVATE_NAME (label, first_global_object_name, 0);
       dummy_global
-	= build_decl (BUILTINS_LOCATION, VAR_DECL, NULL_TREE, void_type_node);
+	= build_decl (BUILTINS_LOCATION, VAR_DECL, get_identifier (label),
+		      void_type_node);
       TREE_STATIC (dummy_global) = 1;
       TREE_ASM_WRITTEN (dummy_global) = 1;
       node = varpool_node (dummy_global);

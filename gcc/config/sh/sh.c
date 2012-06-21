@@ -747,8 +747,6 @@ sh_option_override (void)
     if (! VALID_REGISTER_P (ADDREGNAMES_REGNO (regno)))
       sh_additional_register_names[regno][0] = '\0';
 
-  flag_omit_frame_pointer = (PREFERRED_DEBUGGING_TYPE == DWARF2_DEBUG);
-
   if ((flag_pic && ! TARGET_PREFERGOT)
       || (TARGET_SHMEDIA && !TARGET_PT_FIXED))
     flag_no_function_cse = 1;
@@ -780,22 +778,17 @@ sh_option_override (void)
 	flag_schedule_insns = 0;
     }
 
-    if ((target_flags_explicit & MASK_ACCUMULATE_OUTGOING_ARGS) == 0)
-       target_flags |= MASK_ACCUMULATE_OUTGOING_ARGS;
-
-  /* Unwind info is not correct around the CFG unless either a frame 
-     pointer is present or M_A_O_A is set.  Fixing this requires rewriting 
-     unwind info generation to be aware of the CFG and propagating states 
+  /* Unwind info is not correct around the CFG unless either a frame
+     pointer is present or M_A_O_A is set.  Fixing this requires rewriting
+     unwind info generation to be aware of the CFG and propagating states
      around edges.  */
   if ((flag_unwind_tables || flag_asynchronous_unwind_tables
-       || flag_exceptions || flag_non_call_exceptions)   
-      && flag_omit_frame_pointer
-      && !(target_flags & MASK_ACCUMULATE_OUTGOING_ARGS))
+       || flag_exceptions || flag_non_call_exceptions)
+      && flag_omit_frame_pointer && !TARGET_ACCUMULATE_OUTGOING_ARGS)
     {
-      if (target_flags_explicit & MASK_ACCUMULATE_OUTGOING_ARGS)
-	warning (0, "unwind tables currently require either a frame pointer "
-		 "or -maccumulate-outgoing-args for correctness");
-      target_flags |= MASK_ACCUMULATE_OUTGOING_ARGS;
+      warning (0, "unwind tables currently require either a frame pointer "
+	       "or -maccumulate-outgoing-args for correctness");
+      TARGET_ACCUMULATE_OUTGOING_ARGS = 1;
     }
 
   /* Unwinding with -freorder-blocks-and-partition does not work on this
@@ -805,7 +798,7 @@ sh_option_override (void)
     {
       if (flag_exceptions)
 	{
-	  inform (input_location, 
+	  inform (input_location,
 		  "-freorder-blocks-and-partition does not work with "
 		  "exceptions on this architecture");
 	  flag_reorder_blocks_and_partition = 0;
@@ -2811,22 +2804,26 @@ shiftcosts (rtx x)
 {
   int value;
 
+  /* There is no pattern for constant first operand.  */
+  if (CONST_INT_P (XEXP (x, 0)))
+    return MAX_COST;
+
   if (TARGET_SHMEDIA)
-    return 1;
+    return COSTS_N_INSNS (1);
 
   if (GET_MODE_SIZE (GET_MODE (x)) > UNITS_PER_WORD)
     {
       if (GET_MODE (x) == DImode
 	  && CONST_INT_P (XEXP (x, 1))
 	  && INTVAL (XEXP (x, 1)) == 1)
-	return 2;
+	return COSTS_N_INSNS (2);
 
       /* Everything else is invalid, because there is no pattern for it.  */
       return MAX_COST;
     }
   /* If shift by a non constant, then this will be expensive.  */
   if (!CONST_INT_P (XEXP (x, 1)))
-    return SH_DYNAMIC_SHIFT_COST;
+    return COSTS_N_INSNS (SH_DYNAMIC_SHIFT_COST);
 
   /* Otherwise, return the true cost in instructions.  Cope with out of range
      shift counts more or less arbitrarily.  */
@@ -2838,10 +2835,10 @@ shiftcosts (rtx x)
       /* If SH3, then we put the constant in a reg and use shad.  */
       if (cost > 1 + SH_DYNAMIC_SHIFT_COST)
 	cost = 1 + SH_DYNAMIC_SHIFT_COST;
-      return cost;
+      return COSTS_N_INSNS (cost);
     }
   else
-    return shift_insns[value];
+    return COSTS_N_INSNS (shift_insns[value]);
 }
 
 /* Return the cost of an AND/XOR/IOR operation.  */
@@ -3074,7 +3071,7 @@ sh_rtx_costs (rtx x, int code, int outer_code, int opno ATTRIBUTE_UNUSED,
     case ASHIFT:
     case ASHIFTRT:
     case LSHIFTRT:
-      *total = COSTS_N_INSNS (shiftcosts (x));
+      *total = shiftcosts (x);
       return true;
 
     case DIV:
@@ -4720,9 +4717,12 @@ find_barrier (int num_mova, rtx mova, rtx from)
       /* Don't emit a constant table int the middle of global pointer setting,
 	 since that that would move the addressing base GOT into another table. 
 	 We need the first mov instruction before the _GLOBAL_OFFSET_TABLE_
-	 in the pool anyway, so just move up the whole constant pool.  */
-      if (last_got)
-        from = PREV_INSN (last_got);
+	 in the pool anyway, so just move up the whole constant pool.
+	 However, avoid doing so when the last single GOT mov is the starting
+	 insn itself.  Going past above the start insn would create a negative
+	 offset, causing errors.  */
+      if (last_got && last_got != orig)
+	from = PREV_INSN (last_got);
 
       /* Don't insert the constant pool table at the position which
 	 may be the landing pad.  */
@@ -7205,6 +7205,13 @@ sh_expand_prologue (void)
       emit_insn (gen_shcompact_incoming_args ());
     }
 
+  /* If we are profiling, make sure no instructions are scheduled before
+     the call to mcount.  Similarly if some call instructions are swapped
+     before frame related insns, it'll confuse the unwinder because
+     currently SH has no unwind info for function epilogues.  */
+  if (crtl->profile || flag_exceptions || flag_unwind_tables)
+    emit_insn (gen_blockage ());
+
   if (flag_stack_usage_info)
     current_function_static_stack_size = stack_usage;
 }
@@ -8138,10 +8145,8 @@ sh_dwarf_register_span (rtx reg)
   return
     gen_rtx_PARALLEL (VOIDmode,
 		      gen_rtvec (2,
-				 gen_rtx_REG (SFmode,
-					      DBX_REGISTER_NUMBER (regno+1)),
-				 gen_rtx_REG (SFmode,
-					      DBX_REGISTER_NUMBER (regno))));
+				 gen_rtx_REG (SFmode, regno + 1),
+				 gen_rtx_REG (SFmode, regno)));
 }
 
 static enum machine_mode

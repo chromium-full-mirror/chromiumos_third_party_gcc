@@ -163,10 +163,10 @@ init_ic_make_global_vars (void)
 static struct pointer_set_t *instrumentation_to_be_sampled = NULL;
 
 /* extern __thread gcov_unsigned_t __gcov_sample_counter  */
-static tree gcov_sample_counter_decl = NULL_TREE;
+static GTY(()) tree gcov_sample_counter_decl = NULL_TREE;
 
 /* extern gcov_unsigned_t __gcov_sampling_period  */
-static tree gcov_sampling_period_decl = NULL_TREE;
+static tree GTY(()) gcov_sampling_period_decl = NULL_TREE;
 
 /* extern gcov_unsigned_t __gcov_has_sampling  */
 static tree gcov_has_sampling_decl = NULL_TREE;
@@ -226,6 +226,7 @@ add_sampling_wrapper (gimple stmt_start, gimple stmt_end)
 
   /* Create all the new statements needed.  */
   stmt_inc_counter1 = gimple_build_assign (tmp1, gcov_sample_counter_decl);
+  add_referenced_var (gcov_sample_counter_decl);
   one = build_int_cst (get_gcov_unsigned_t (), 1);
   stmt_inc_counter2 = gimple_build_assign_with_ops (
       PLUS_EXPR, tmp2, tmp1, one);
@@ -234,6 +235,7 @@ add_sampling_wrapper (gimple stmt_start, gimple stmt_end)
   stmt_reset_counter = gimple_build_assign (gcov_sample_counter_decl, zero);
   tmp3 = make_ssa_name (tmp_var, NULL);
   stmt_assign_period = gimple_build_assign (tmp3, gcov_sampling_period_decl);
+  add_referenced_var (gcov_sampling_period_decl);
   stmt_if = gimple_build_cond (GE_EXPR, tmp2, tmp3, NULL_TREE, NULL_TREE);
 
   /* Insert them for now in the original basic block.  */
@@ -284,9 +286,13 @@ add_sampling_to_edge_counters (void)
             break;
           }
       }
+}
 
+static void
+cleanup_instrumentation_sampling (void)
+{
   /* Free the bitmap.  */
-  if (instrumentation_to_be_sampled)
+  if (flag_profile_generate_sampling && instrumentation_to_be_sampled)
     {
       pointer_set_destroy (instrumentation_to_be_sampled);
       instrumentation_to_be_sampled = NULL;
@@ -353,7 +359,6 @@ gimple_init_instrumentation_sampling (void)
       if (targetm.have_tls && !is_kernel_build)
         DECL_TLS_MODEL (gcov_sample_counter_decl) =
             decl_default_tls_model (gcov_sample_counter_decl);
-      varpool_finalize_decl (gcov_sample_counter_decl);
     }
 }
 
@@ -1415,7 +1420,8 @@ tree_profiling (void)
       gcov_type_tmp_var = NULL_TREE;
 
       /* Local pure-const may imply need to fixup the cfg.  */
-      execute_fixup_cfg ();
+      if (execute_fixup_cfg () & TODO_cleanup_cfg)
+	cleanup_tree_cfg ();
       branch_prob ();
 
       if (! flag_branch_probabilities
@@ -1494,6 +1500,7 @@ tree_profiling (void)
     }
 
   del_node_map();
+  cleanup_instrumentation_sampling();
   return 0;
 }
 

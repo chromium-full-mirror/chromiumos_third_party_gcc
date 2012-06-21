@@ -1,3 +1,34 @@
+2012-06-14  Tobias Burnus  <burnus@net-b.de>
+
+	Backport from mainline
+	2012-06-04  Tobias Burnus  <burnus@net-b.de>
+
+	PR fortran/50619
+	* resolve.c (build_default_init_expr): Don't initialize
+	ASSOCIATE names.
+
+2012-06-14  Tobias Burnus  <burnus@net-b.de>
+
+	PR fortran/53597
+	* decl.c (match_attr_spec): Only mark module variables
+	as SAVE_IMPLICIT for Fortran 2008 and later.
+
+2012-06-14  Release Manager
+
+	* GCC 4.7.1 released.
+
+2012-06-01  Tobias Burnus  <burnus@net-b.de>
+
+	PR fortran/53521
+	* trans.c (gfc_deallocate_scalar_with_status): Properly
+	handle the case size == 0.
+
+2012-05-23  Tobias Burnus  <burnus@net-b.de>
+
+	PR fortran/53389
+	* trans-array.c (gfc_add_loop_ss_code): Don't evaluate expression, if
+	ss->is_alloc_lhs is set.
+
 2012-05-07  Tobias Burnus  <burnus@net-b.de>
 
 	Backport from mainline:
