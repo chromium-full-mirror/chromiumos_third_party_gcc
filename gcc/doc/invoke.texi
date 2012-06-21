@@ -197,8 +197,8 @@ in the following sections.
 -fno-default-inline  -fvisibility-inlines-hidden @gol
 -fvisibility-ms-compat @gol
 -Wabi  -Wconversion-null  -Wctor-dtor-privacy @gol
--Wdelete-non-virtual-dtor -Wnarrowing -Wnoexcept @gol
--Wnon-virtual-dtor  -Wreorder @gol
+-Wdelete-non-virtual-dtor -Wliteral-suffix -Wnarrowing @gol
+-Wnoexcept -Wnon-virtual-dtor  -Wreorder @gol
 -Weffc++  -Wstrict-null-sentinel @gol
 -Wno-non-template-friend  -Wold-style-cast @gol
 -Woverloaded-virtual  -Wno-pmf-conversions @gol
@@ -370,7 +370,8 @@ Objective-C and Objective-C++ Dialects}.
 -fdelete-null-pointer-checks -fdevirtualize -fdse @gol
 -fearly-inlining -fipa-sra -fexpensive-optimizations -ffat-lto-objects @gol
 -ffast-math -ffinite-math-only -ffloat-store -fexcess-precision=@var{style} @gol
--fforward-propagate -ffp-contract=@var{style} -ffunction-sections @gol
+-fforward-propagate -ffp-contract=@var{style} @gol
+-ffunction-attribute-list -ffunction-sections @gol
 -fgcse -fgcse-after-reload -fgcse-las -fgcse-lm -fgraphite-identity @gol
 -fgcse-sm -fif-conversion -fif-conversion2 -findirect-inlining @gol
 -finline-functions -finline-functions-called-once -finline-limit=@var{n} @gol
@@ -392,7 +393,7 @@ Objective-C and Objective-C++ Dialects}.
 -fno-sched-interblock -fno-sched-spec -fno-signed-zeros @gol
 -fno-toplevel-reorder -fno-trapping-math -fno-zero-initialized-in-bss @gol
 -fomit-frame-pointer -foptimize-register-move -foptimize-sibling-calls @gol
--fpartial-inlining -fpeel-loops -fpredictive-commoning @gol
+-fpartial-inlining -fpeel-codesize-limit -fpeel-loops -fpredictive-commoning @gol
 -fprefetch-loop-arrays @gol
 -fprofile-correction -fprofile-dir=@var{path} -fprofile-generate @gol
 -fprofile-generate=@var{path} -fprofile-generate-sampling @gol
@@ -404,8 +405,8 @@ Objective-C and Objective-C++ Dialects}.
 -freorder-blocks-and-partition -freorder-functions @gol
 -frerun-cse-after-loop -freschedule-modulo-scheduled-loops @gol
 -fripa -fripa-disallow-asm-modules -fripa-disallow-opt-mismatch @gol
--fripa-inc-path-sub=@var{path_mapping} -fripa-no-promote-always-inline-func -fripa-verbose @gol
--fripa-peel-size-limit -fripa-unroll-size-limit -frounding-math @gol
+-fripa-inc-path-sub=@var{path_mapping} -fripa-no-promote-always-inline-func @gol
+-fripa-verbose -frounding-math @gol
 -fsched2-use-superblocks -fsched-pressure @gol
 -fsched-spec-load -fsched-spec-load-dangerous @gol
 -fsched-stalled-insns-dep[=@var{n}] -fsched-stalled-insns[=@var{n}] @gol
@@ -428,7 +429,7 @@ Objective-C and Objective-C++ Dialects}.
 -ftree-parallelize-loops=@var{n} -ftree-pre -ftree-pta -ftree-reassoc @gol
 -ftree-sink -ftree-sra -ftree-switch-conversion -ftree-tail-merge @gol
 -ftree-ter -ftree-vect-loop-version -ftree-vectorize -ftree-vrp @gol
--funit-at-a-time -funroll-all-loops -funroll-loops @gol
+-funit-at-a-time -funroll-all-loops -funroll-loops -funroll-codesize-limit @gol
 -funsafe-loop-optimizations -funsafe-math-optimizations -funswitch-loops @gol
 -fvariable-expansion-in-unroller -fvect-cost-model -fvpt -fweb @gol
 -fwhole-program -fwpa -fuse-ld -fuse-linker-plugin @gol
@@ -2437,6 +2438,30 @@ has virtual functions and non-virtual destructor. It is unsafe to delete
 an instance of a derived class through a pointer to a base class if the
 base class does not have a virtual destructor.  This warning is enabled
 by @option{-Wall}.
+
+@item -Wliteral-suffix @r{(C++ and Objective-C++ only)}
+@opindex Wliteral-suffix
+@opindex Wno-literal-suffix
+Warn when a string or character literal is followed by a ud-suffix which does
+not begin with an underscore.  As a conforming extension, GCC treats such
+suffixes as separate preprocessing tokens in order to maintain backwards
+compatibility with code that uses formatting macros from @code{<inttypes.h>}.
+For example:
+
+@smallexample
+#define __STDC_FORMAT_MACROS
+#include <inttypes.h>
+#include <stdio.h>
+
+int main() @{
+  int64_t i64 = 123;
+  printf("My int64: %"PRId64"\n", i64);
+@}
+@end smallexample
+
+In this case, @code{PRId64} is treated as a separate preprocessing token.
+
+This warning is enabled by default.
 
 @item -Wnarrowing @r{(C++ and Objective-C++ only)}
 @opindex Wnarrowing
@@ -8311,12 +8336,12 @@ the profile feedback data files. See @option{-fprofile-dir}.
 @opindex -fprofile-generate-sampling
 
 Enable sampling for instrumented binaries.  Instead of recording every event,
-record only every N-th event, where N (the sampling rate) can be set either
+record only every N-th event, where N (the sampling period) can be set either
 at compile time using
-@option{--param profile-generate-sampling-rate=@var{value}}, or
-at execution start time through environment variable @samp{GCOV_SAMPLING_RATE}.
+@option{--param profile-generate-sampling-period=@var{value}}, or at
+execution start time through environment variable @samp{GCOV_SAMPLING_PERIOD}.
 
-At this time sampling applies only to branch counters.  A sampling rate of 100
+At this time sampling applies only to branch counters.  A sampling period of 100
 decreases instrumentated binary slowdown from up to 20x for heavily threaded
 applications down to around 2x.  @option{-fprofile-correction} is always
 needed with sampling.
@@ -8399,20 +8424,6 @@ Do not promote static functions with always inline attribute in LIPO compilation
 @opindex fripa-verbose
 Enable printing of verbose information about dynamic inter-procedural optimizations.
 This is used in conjunction with the @option{-fripa}.
-
-@item -fripa-peel-size-limit
-@opindex fripa-peel-size-limit
-Limit loop peeling of non-const non-FP loops in a LIPO compilation under estimates
-of a large code footprint. Enabled by default under @option{-fripa}. Code size
-estimation and thresholds are controlled by the @option{codesize-hotness-threshold}
-and @option{unrollpeel-codesize-threshold} parameters.
-
-@item -fripa-unroll-size-limit
-@opindex fripa-unroll-size-limit
-Limit loop unrolling of non-const non-FP loops in a LIPO compilation under estimates
-of a large code footprint. Enabled by default under @option{-fripa}. Code size
-estimation and thresholds are controlled by the @option{codesize-hotness-threshold}
-and @option{unrollpeel-codesize-threshold} parameters.
 
 @item -fcallgraph-profiles-sections
 @opindex fcallgraph-profiles-sections
@@ -8750,6 +8761,14 @@ the loop is entered.  This usually makes programs run more slowly.
 @option{-funroll-all-loops} implies the same options as
 @option{-funroll-loops}.
 
+@item -funroll-codesize-limit
+@opindex funroll-codesize-limit
+Limit loop unrolling of non-const non-FP loops in a profile feedback compilation
+under estimates of a large code footprint. Enabled by default with
+@option{-fprofile-use}. Code size and execution weight thresholds are controlled
+by the @option{unrollpeel-codesize-threshold} and
+@option{unrollpeel-hotness-threshold} parameters.
+
 @item -fpeel-loops
 @opindex fpeel-loops
 Peels loops for which there is enough information that they do not
@@ -8757,6 +8776,14 @@ roll much (from profile feedback).  It also turns on complete loop peeling
 (i.e.@: complete removal of loops with small constant number of iterations).
 
 Enabled with @option{-fprofile-use}.
+
+@item -fpeel-codesize-limit
+@opindex fpeel-codesize-limit
+Limit loop peeling of non-const non-FP loops in a profile feedback compilation
+under estimates of a large code footprint. Enabled by default with
+@option{-fprofile-use}. Code size and execution weight thresholds are controlled
+by the @option{unrollpeel-codesize-threshold} and
+@option{unrollpeel-hotness-threshold} parameters.
 
 @item -fmove-loop-invariants
 @opindex fmove-loop-invariants
@@ -8789,6 +8816,15 @@ create larger object and executable files and will also be slower.
 You will not be able to use @code{gprof} on all systems if you
 specify this option and you may have problems with debugging if
 you specify both this option and @option{-g}.
+
+@item -ffunction-attribute-list
+@opindex ffunction-attribute-list
+List of function name patterns that will be applied specified attribute.
+For example, the following command line will add "cold" attribute to
+functions that has "ErrorMessage" in its name.
+@smallexample
+gcc -ffunction-atribute-list=cold:ErrorMessage -c foo.c
+@end smallexample
 
 @item -fbranch-target-load-optimize
 @opindex fbranch-target-load-optimize
@@ -9144,18 +9180,26 @@ hot loops. Its default value is 16.
 @item max-completely-peel-loop-nest-depth
 The maximum depth of a loop nest suitable for complete peeling.
 
-@item codesize-hotness-threshold
-The minimum profile count of basic blocks to look at when estimating
-the code size footprint of the call graph in a LIPO compile.
-
 @item unrollpeel-codesize-threshold
-Maximum LIPO code size footprint estimate for loop unrolling and peeling.
+Maximum profile-based code size footprint estimate for loop unrolling and
+peeling.
+
+@item unrollpeel-hotness-threshold
+Maximum ratio of total execution count to loop entry block count under which
+most profile-based code size estimates will be ignored for loop unrolling and
+peeling.
 
 @item max-unswitch-insns
 The maximum number of insns of an unswitched loop.
 
 @item max-unswitch-level
 The maximum number of branches unswitched in a single loop.
+
+@item min-iter-unroll-with-branches
+Minimum iteration count to ignore branch effects when unrolling.
+
+@item unroll-outer-loop-branch-budget
+Maximum number of branches allowed in hot outer loop region after unroll.
 
 @item lim-expensive
 The minimum cost of an expensive expression in the loop invariant motion.
@@ -9938,6 +9982,11 @@ Use @var{script} as the linker script.  This option is supported by most
 systems using the GNU linker.  On some targets, such as bare-board
 targets without an operating system, the @option{-T} option may be required
 when linking to avoid references to undefined symbols.
+
+@item -Xclang-only @var{option}
+@opindex Xclang-only
+Ignore @var{option}.  This is used by some custom drivers to pass options
+to Clang but not GCC.
 
 @item -Xlinker @var{option}
 @opindex Xlinker

@@ -3702,6 +3702,8 @@ cp_clear_deferred_fns (void)
   VEC_free (tree, gc, deferred_fns);
   keyed_classes = NULL;
   VEC_free (tree, gc, no_linkage_decls);
+  no_linkage_decls = NULL;
+  cp_clear_constexpr_hashtable ();
 }
 
 /* Collect declarations from all namespaces relevant to SOURCE_FILE.  */
@@ -4112,12 +4114,15 @@ cp_write_global_declarations (void)
   emit_support_tinfos ();
 
   if (!L_IPO_COMP_MODE)
-    cp_process_pending_declarations (locus);
+    {
+      cp_process_pending_declarations (locus);
+      timevar_stop (TV_PHASE_DEFERRED);
+    }
 
   /* Collect candidates for Java hidden aliases.  */
   candidates = collect_candidates_for_java_method_aliases ();
 
-  timevar_stop (TV_PHASE_DEFERRED);
+
   timevar_start (TV_PHASE_CGRAPH);
 
   cgraph_finalize_compilation_unit ();

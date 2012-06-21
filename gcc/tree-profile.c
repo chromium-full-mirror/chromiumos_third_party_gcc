@@ -163,10 +163,13 @@ init_ic_make_global_vars (void)
 static struct pointer_set_t *instrumentation_to_be_sampled = NULL;
 
 /* extern __thread gcov_unsigned_t __gcov_sample_counter  */
-static tree gcov_sample_counter_decl = NULL_TREE;
+static GTY(()) tree gcov_sample_counter_decl = NULL_TREE;
 
-/* extern gcov_unsigned_t __gcov_sampling_rate  */
-static tree gcov_sampling_rate_decl = NULL_TREE;
+/* extern gcov_unsigned_t __gcov_sampling_period  */
+static GTY(()) tree gcov_sampling_period_decl = NULL_TREE;
+
+/* extern gcov_unsigned_t __gcov_has_sampling  */
+static tree gcov_has_sampling_decl = NULL_TREE;
 
 /* forward declaration.  */
 void gimple_init_instrumentation_sampling (void);
@@ -200,7 +203,7 @@ insert_if_then (gimple stmt_start, gimple stmt_end, gimple stmt_if)
    Into:
 
    __gcov_sample_counter++;
-   if (__gcov_sample_counter >= __gcov_sampling_rate)
+   if (__gcov_sample_counter >= __gcov_sampling_period)
      {
        __gcov_sample_counter = 0;
        ORIGINAL CODE
@@ -214,7 +217,7 @@ add_sampling_wrapper (gimple stmt_start, gimple stmt_end)
 {
   tree zero, one, tmp_var, tmp1, tmp2, tmp3;
   gimple stmt_inc_counter1, stmt_inc_counter2, stmt_inc_counter3;
-  gimple stmt_reset_counter, stmt_assign_rate, stmt_if;
+  gimple stmt_reset_counter, stmt_assign_period, stmt_if;
   gimple_stmt_iterator gsi;
 
   tmp_var = create_tmp_reg (get_gcov_unsigned_t (), "PROF_sample");
@@ -223,6 +226,7 @@ add_sampling_wrapper (gimple stmt_start, gimple stmt_end)
 
   /* Create all the new statements needed.  */
   stmt_inc_counter1 = gimple_build_assign (tmp1, gcov_sample_counter_decl);
+  add_referenced_var (gcov_sample_counter_decl);
   one = build_int_cst (get_gcov_unsigned_t (), 1);
   stmt_inc_counter2 = gimple_build_assign_with_ops (
       PLUS_EXPR, tmp2, tmp1, one);
@@ -230,7 +234,8 @@ add_sampling_wrapper (gimple stmt_start, gimple stmt_end)
   zero = build_int_cst (get_gcov_unsigned_t (), 0);
   stmt_reset_counter = gimple_build_assign (gcov_sample_counter_decl, zero);
   tmp3 = make_ssa_name (tmp_var, NULL);
-  stmt_assign_rate = gimple_build_assign (tmp3, gcov_sampling_rate_decl);
+  stmt_assign_period = gimple_build_assign (tmp3, gcov_sampling_period_decl);
+  add_referenced_var (gcov_sampling_period_decl);
   stmt_if = gimple_build_cond (GE_EXPR, tmp2, tmp3, NULL_TREE, NULL_TREE);
 
   /* Insert them for now in the original basic block.  */
@@ -238,7 +243,7 @@ add_sampling_wrapper (gimple stmt_start, gimple stmt_end)
   gsi_insert_before (&gsi, stmt_inc_counter1, GSI_SAME_STMT);
   gsi_insert_before (&gsi, stmt_inc_counter2, GSI_SAME_STMT);
   gsi_insert_before (&gsi, stmt_inc_counter3, GSI_SAME_STMT);
-  gsi_insert_before (&gsi, stmt_assign_rate, GSI_SAME_STMT);
+  gsi_insert_before (&gsi, stmt_assign_period, GSI_SAME_STMT);
   gsi_insert_before (&gsi, stmt_reset_counter, GSI_SAME_STMT);
 
   /* Insert IF block.  */
@@ -281,9 +286,13 @@ add_sampling_to_edge_counters (void)
             break;
           }
       }
+}
 
+static void
+cleanup_instrumentation_sampling (void)
+{
   /* Free the bitmap.  */
-  if (instrumentation_to_be_sampled)
+  if (flag_profile_generate_sampling && instrumentation_to_be_sampled)
     {
       pointer_set_destroy (instrumentation_to_be_sampled);
       instrumentation_to_be_sampled = NULL;
@@ -293,25 +302,47 @@ add_sampling_to_edge_counters (void)
 void
 gimple_init_instrumentation_sampling (void)
 {
-  if (!gcov_sampling_rate_decl)
+  if (!gcov_sampling_period_decl)
     {
-      /* Define __gcov_sampling_rate regardless of -fprofile-generate-sampling.
-         Otherwise the extern reference to it from libgcov becomes unmatched.
+      /* Define __gcov_sampling_period regardless of
+         -fprofile-generate-sampling. Otherwise the extern reference to
+         it from libgcov becomes unmatched.
       */
-      gcov_sampling_rate_decl = build_decl (
+      gcov_sampling_period_decl = build_decl (
           UNKNOWN_LOCATION,
           VAR_DECL,
-          get_identifier ("__gcov_sampling_rate"),
+          get_identifier ("__gcov_sampling_period"),
           get_gcov_unsigned_t ());
-      TREE_PUBLIC (gcov_sampling_rate_decl) = 1;
-      DECL_ARTIFICIAL (gcov_sampling_rate_decl) = 1;
-      DECL_COMDAT_GROUP (gcov_sampling_rate_decl)
-          = DECL_ASSEMBLER_NAME (gcov_sampling_rate_decl);
-      TREE_STATIC (gcov_sampling_rate_decl) = 1;
-      DECL_INITIAL (gcov_sampling_rate_decl) = build_int_cst (
+      TREE_PUBLIC (gcov_sampling_period_decl) = 1;
+      DECL_ARTIFICIAL (gcov_sampling_period_decl) = 1;
+      DECL_COMDAT_GROUP (gcov_sampling_period_decl)
+          = DECL_ASSEMBLER_NAME (gcov_sampling_period_decl);
+      TREE_STATIC (gcov_sampling_period_decl) = 1;
+      DECL_INITIAL (gcov_sampling_period_decl) = build_int_cst (
           get_gcov_unsigned_t (),
-          PARAM_VALUE (PARAM_PROFILE_GENERATE_SAMPLING_RATE));
-      varpool_finalize_decl (gcov_sampling_rate_decl);
+          PARAM_VALUE (PARAM_PROFILE_GENERATE_SAMPLING_PERIOD));
+      varpool_finalize_decl (gcov_sampling_period_decl);
+    }
+
+  if (!gcov_has_sampling_decl)
+    {
+      /* Initialize __gcov_has_sampling to 1 if -fprofile-generate-sampling
+         specified, 0 otherwise. Used by libgcov to determine whether
+         a request to set the sampling period makes sense.  */
+      gcov_has_sampling_decl = build_decl (
+          UNKNOWN_LOCATION,
+          VAR_DECL,
+          get_identifier ("__gcov_has_sampling"),
+          get_gcov_unsigned_t ());
+      TREE_PUBLIC (gcov_has_sampling_decl) = 1;
+      DECL_ARTIFICIAL (gcov_has_sampling_decl) = 1;
+      DECL_COMDAT_GROUP (gcov_has_sampling_decl)
+          = DECL_ASSEMBLER_NAME (gcov_has_sampling_decl);
+      TREE_STATIC (gcov_has_sampling_decl) = 1;
+      DECL_INITIAL (gcov_has_sampling_decl) = build_int_cst (
+          get_gcov_unsigned_t (),
+          flag_profile_generate_sampling ? 1 : 0);
+      varpool_finalize_decl (gcov_has_sampling_decl);
     }
 
   if (flag_profile_generate_sampling && !instrumentation_to_be_sampled)
@@ -328,7 +359,6 @@ gimple_init_instrumentation_sampling (void)
       if (targetm.have_tls && !is_kernel_build)
         DECL_TLS_MODEL (gcov_sample_counter_decl) =
             decl_default_tls_model (gcov_sample_counter_decl);
-      varpool_finalize_decl (gcov_sample_counter_decl);
     }
 }
 
@@ -596,11 +626,6 @@ gimple_gen_ic_profiler (histogram_value value, unsigned tag, unsigned base)
   gimple stmt;
   gimple_stmt_iterator gsi;
   tree ref_ptr;
-
-  /* TODO add option -- only disble for topn icall profiling.  */
-  if (DECL_STATIC_CONSTRUCTOR (current_function_decl) 
-      || DECL_STATIC_CONSTRUCTOR (current_function_decl))
-    return;
  
   stmt = value->hvalue.stmt;
   gsi = gsi_for_stmt (stmt);
@@ -1474,6 +1499,7 @@ tree_profiling (void)
     }
 
   del_node_map();
+  cleanup_instrumentation_sampling();
   return 0;
 }
 

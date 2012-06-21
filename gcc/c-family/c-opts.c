@@ -111,6 +111,8 @@ static size_t deferred_count;
 /* Number of deferred options scanned for -include.  */
 static size_t include_cursor;
 
+static bool parsing_done_p = false;
+
 static void handle_OPT_d (const char *);
 static void set_std_cxx98 (int);
 static void set_std_cxx11 (int);
@@ -477,6 +479,10 @@ c_common_handle_option (size_t scode, const char *arg, int value,
 
     case OPT_Winvalid_pch:
       cpp_opts->warn_invalid_pch = value;
+      break;
+
+    case OPT_Wliteral_suffix:
+      cpp_opts->warn_literal_suffix = value;
       break;
 
     case OPT_Wlong_long:
@@ -1123,7 +1129,9 @@ lipo_max_mem_reached (unsigned int i)
 {
   if (L_IPO_COMP_MODE && PARAM_VALUE (PARAM_MAX_LIPO_MEMORY)
       && i < (num_in_fnames - 1)
-      && ((ggc_total_allocated () >> 10)
+      /* Scale up memory usage by 25% to account for memory consumption
+         by the optimizer.  */
+      && ((ggc_total_allocated () >> 10) * 1.25
           > (size_t) PARAM_VALUE (PARAM_MAX_LIPO_MEMORY))) {
     i++;
     do {
@@ -1177,6 +1185,15 @@ c_common_parse_file (void)
       if (!this_input_filename)
 	break;
     }
+    parsing_done_p = true;
+}
+
+/* Returns true if parsing is done  */
+
+bool
+is_parsing_done_p (void)
+{
+  return parsing_done_p;
 }
 
 /* Common finish hook for the C, ObjC and C++ front ends.  */

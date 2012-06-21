@@ -440,7 +440,7 @@ typedef HOST_WIDEST_INT gcov_type;
 #define GCOV_TAG_OBJECT_SUMMARY  ((gcov_unsigned_t)0xa1000000) /* Obsolete */
 #define GCOV_TAG_PROGRAM_SUMMARY ((gcov_unsigned_t)0xa3000000)
 #define GCOV_TAG_SUMMARY_LENGTH  \
-	(1 + GCOV_COUNTERS_SUMMABLE * (2 + 3 * 2))
+	(1 + GCOV_COUNTERS_SUMMABLE * (3 + 3 * 2))
 #define GCOV_TAG_MODULE_INFO ((gcov_unsigned_t)0xa4000000)
 #define GCOV_TAG_PMU_LOAD_LATENCY_INFO ((gcov_unsigned_t)0xa5000000)
 #define GCOV_TAG_PMU_LOAD_LATENCY_LENGTH(filename)  \
@@ -541,6 +541,8 @@ typedef HOST_WIDEST_INT gcov_type;
 struct gcov_ctr_summary
 {
   gcov_unsigned_t num;		/* number of counters.  */
+  gcov_unsigned_t num_hot_counters;/* number of counters to reach a given
+                                      percent of sum_all.  */
   gcov_unsigned_t runs;		/* number of program runs */
   gcov_type sum_all;		/* sum of all counters accumulated.  */
   gcov_type run_max;		/* maximum value on a single run.  */
@@ -739,6 +741,12 @@ extern void __gcov_init (struct gcov_info *) ATTRIBUTE_HIDDEN;
 
 /* Called before fork, to avoid double counting.  */
 extern void __gcov_flush (void) ATTRIBUTE_HIDDEN;
+
+/* Function to reset all counters to 0.  */
+extern void __gcov_reset (void);
+
+/* Function to enable early write of profile information so far.  */
+extern void __gcov_dump (void);
 
 /* The merge function that just sums the counters.  */
 extern void __gcov_merge_add (gcov_type *, unsigned) ATTRIBUTE_HIDDEN;

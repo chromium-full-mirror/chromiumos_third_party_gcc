@@ -78,6 +78,14 @@ void __gcov_init (struct gcov_info *p __attribute__ ((unused))) {}
 void __gcov_flush (void) {}
 #endif
 
+#ifdef L_gcov_reset
+void __gcov_reset (void) {}
+#endif
+
+#ifdef L_gcov_dump
+void __gcov_dump (void) {}
+#endif
+
 #ifdef L_gcov_merge_add
 void __gcov_merge_add (gcov_type *counters  __attribute__ ((unused)),
 		       unsigned n_counters __attribute__ ((unused))) {}
@@ -104,8 +112,27 @@ void __gcov_merge_delta (gcov_type *counters  __attribute__ ((unused)),
 #endif
 #endif /* __GCOV_KERNEL__ */
 
+extern void gcov_clear (void) ATTRIBUTE_HIDDEN;
+extern void gcov_exit (void) ATTRIBUTE_HIDDEN;
+extern int gcov_dump_complete ATTRIBUTE_HIDDEN;
+
 #ifdef L_gcov
 #include "gcov-io.c"
+
+/* Create a strong reference to these symbols so that they are
+   unconditionally pulled into the instrumented binary, even when
+   the only reference is a weak reference. This is necessary because
+   we are using weak references to handle older compilers that
+   pre-date these new functions. A subtlety of the linker is that
+   it will only resolve weak references defined within archive libraries
+   when there is a string reference to something else defined within
+   the same object file. Since these two functions are defined within
+   their own object files (using L_gcov_reset and L_gcov_dump), they
+   would not get resolved. Since there are symbols within the main L_gcov
+   section that are strongly referenced during -fprofile-generate builds,
+   these symbols will always need to be resolved.  */
+void (*__gcov_dummy_ref1)() = &__gcov_reset;
+void (*__gcov_dummy_ref2)() = &__gcov_dump;
 
 /* Utility function for outputing errors.  */
 static int
@@ -129,16 +156,24 @@ extern char * __gcov_pmu_profile_filename;
 extern char * __gcov_pmu_profile_options;
 extern gcov_unsigned_t __gcov_pmu_top_n_address;
 
-/* Sampling rate.  */
-extern gcov_unsigned_t __gcov_sampling_rate;
-static int gcov_sampling_rate_initialized = 0;
-void __gcov_set_sampling_rate (unsigned int rate);
+/* Sampling period.  */
+extern gcov_unsigned_t __gcov_sampling_period;
+extern gcov_unsigned_t __gcov_has_sampling;
+static int gcov_sampling_period_initialized = 0;
+void __gcov_set_sampling_period (unsigned int period);
+unsigned int __gcov_sampling_enabled ();
 
-/* Set sampling rate to RATE.  */
+/* Set sampling period to PERIOD.  */
 
-void __gcov_set_sampling_rate (unsigned int rate)
+void __gcov_set_sampling_period (unsigned int period)
 {
-  __gcov_sampling_rate = rate;
+  gcc_assert (__gcov_has_sampling);
+  __gcov_sampling_period = period;
+}
+
+unsigned int __gcov_sampling_enabled ()
+{
+  return __gcov_has_sampling;
 }
 
 /* Per thread sample counter.  */
@@ -153,10 +188,10 @@ static gcov_unsigned_t gcov_crc32;
 
 /* Size of the longest file name. */
 static size_t gcov_max_filename = 0;
-#endif /* __GCOV_KERNEL__ */
 
 /* Unique identifier assigned to each module (object file).  */
 static gcov_unsigned_t gcov_cur_module_id = 0;
+#endif /* __GCOV_KERNEL__ */
 
 /* Pointer to the direct-call counters (per call-site counters).
    Initialized by the caller.  */
@@ -204,6 +239,9 @@ static char *gi_filename, *gi_filename_up;
 static int gcov_open_by_filename (char * gi_filename);
 static int gcov_exit_init (void);
 static void gcov_dump_one_gcov (struct gcov_info *gi_ptr);
+
+/* Flag when the profile has already been dumped via __gcov_dump().  */
+int gcov_dump_complete = 0;
 
 /* Make sure path component of the given FILENAME exists, create
    missing directories. FILENAME must be writable.
@@ -585,11 +623,16 @@ gcov_dump_module_info (void)
    in two separate programs, and we must keep the two program
    summaries separate.  */
 
-static void
+void
 gcov_exit (void)
 {
   struct gcov_info *gi_ptr;
   int dump_module_info;
+
+  /* Prevent the counters from being dumped a second time on exit when the
+     application already wrote out the profile using __gcov_dump().  */
+  if (gcov_dump_complete)
+    return;
 
   /* Stop and write the PMU profile data into the global file.  */
   pmu_profile_stop ();
@@ -605,22 +648,50 @@ gcov_exit (void)
   free (gi_filename);
 }
 
+/* Reset all counters to zero.  */
+
+void
+gcov_clear (void)
+{
+  const struct gcov_info *gi_ptr;
+  for (gi_ptr = __gcov_list; gi_ptr; gi_ptr = gi_ptr->next)
+    {
+      unsigned t_ix, f_ix;
+      const struct gcov_ctr_info *ci_ptr;
+      const struct gcov_fn_info *gfi_ptr;
+
+      for (f_ix = 0; (unsigned)f_ix != gi_ptr->n_functions; f_ix++)
+        {
+          gfi_ptr = gi_ptr->functions[f_ix];
+          ci_ptr = gfi_ptr->ctrs;
+
+          for (t_ix = 0; t_ix < GCOV_COUNTERS; t_ix++)
+            {
+              if (!gcov_counter_active (gi_ptr, t_ix))
+                continue;
+              memset (ci_ptr->values, 0, sizeof (gcov_type) * ci_ptr->num);
+              ci_ptr++;
+            }
+        }
+    }
+}
+
 /* Add a new object file onto the bb chain.  Invoked automatically
    when running an object file's global ctors.  */
 
 void
 __gcov_init (struct gcov_info *info)
 {
-  if (!gcov_sampling_rate_initialized)
+  if (!gcov_sampling_period_initialized)
     {
-      const char* env_value_str = getenv ("GCOV_SAMPLING_RATE");
+      const char* env_value_str = getenv ("GCOV_SAMPLING_PERIOD");
       if (env_value_str)
         {
           int env_value_int = atoi(env_value_str);
           if (env_value_int >= 1)
-            __gcov_sampling_rate = env_value_int;
+            __gcov_sampling_period = env_value_int;
         }
-      gcov_sampling_rate_initialized = 1;
+      gcov_sampling_period_initialized = 1;
     }
 
   if (!info->version || !info->n_functions)
@@ -675,30 +746,9 @@ __gcov_init (struct gcov_info *info)
 void
 __gcov_flush (void)
 {
-  const struct gcov_info *gi_ptr;
-
   __gcov_stop_pmu_profiler ();
   gcov_exit ();
-  for (gi_ptr = __gcov_list; gi_ptr; gi_ptr = gi_ptr->next)
-    {
-      unsigned t_ix, f_ix;
-      const struct gcov_ctr_info *ci_ptr;
-      const struct gcov_fn_info *gfi_ptr;
-
-      for (f_ix = 0; (unsigned)f_ix != gi_ptr->n_functions; f_ix++)
-        {
-          gfi_ptr = gi_ptr->functions[f_ix];
-          ci_ptr = gfi_ptr->ctrs;
-
-          for (t_ix = 0; t_ix < GCOV_COUNTERS; t_ix++)
-            {
-              if (!gcov_counter_active (gi_ptr, t_ix))
-                continue;
-              memset (ci_ptr->values, 0, sizeof (gcov_type) * ci_ptr->num);
-              ci_ptr++;
-            }
-        }
-    }
+  gcov_clear ();
   __gcov_start_pmu_profiler ();
 }
 
@@ -758,6 +808,118 @@ gcov_sort_topn_counter_arrays (const struct gcov_info *gi_ptr)
           ci_ptr++;
         }
      }
+}
+
+/* Used by qsort to sort gcov values in descending order.  */
+
+static int
+sort_by_reverse_gcov_value (const void *pa, const void *pb)
+{
+  const gcov_type a = *(gcov_type const *)pa;
+  const gcov_type b = *(gcov_type const *)pb;
+
+  if (b > a)
+    return 1;
+  else if (b == a)
+    return 0;
+  else
+    return -1;
+}
+
+/* Determines the number of counters required to cover a given percentage
+   of the total sum of execution counts in the summary, which is then also
+   recorded in SUM.  */
+
+static void
+gcov_compute_cutoff_values (struct gcov_summary *sum)
+{
+  struct gcov_info *gi_ptr;
+  const struct gcov_fn_info *gfi_ptr;
+  const struct gcov_ctr_info *ci_ptr;
+  struct gcov_ctr_summary *cs_ptr;
+  unsigned t_ix, f_ix, i, ctr_info_ix, index;
+  gcov_unsigned_t c_num;
+  gcov_type *value_array;
+  gcov_type cum, cum_cutoff;
+  char *cutoff_str;
+  unsigned cutoff_perc;
+
+#define CUM_CUTOFF_PERCENT_TIMES_10 999
+  cutoff_str = getenv ("GCOV_HOTCODE_CUTOFF_TIMES_10");
+  if (cutoff_str && strlen (cutoff_str))
+    cutoff_perc = atoi (cutoff_str);
+  else
+    cutoff_perc = CUM_CUTOFF_PERCENT_TIMES_10;
+
+  /* This currently only applies to arc counters.  */
+  t_ix = GCOV_COUNTER_ARCS;
+
+  /* First check if there are any counts recorded for this counter.  */
+  cs_ptr = &(sum->ctrs[t_ix]);
+  if (!cs_ptr->num)
+    return;
+
+  /* Determine the cumulative counter value at the specified cutoff
+     percentage and record the percentage for use by gcov consumers.
+     Check for overflow when sum_all is multiplied by the cutoff_perc,
+     and if so, do the divide first.  */
+  if (cs_ptr->sum_all*cutoff_perc < cs_ptr->sum_all)
+    /* Overflow, do the divide first.  */
+    cum_cutoff = cs_ptr->sum_all / 1000 * cutoff_perc;
+  else
+    /* Otherwise multiply first to get the correct value for small
+       values of sum_all.  */
+    cum_cutoff = (cs_ptr->sum_all * cutoff_perc) / 1000;
+
+  /* Next, walk through all the per-object structures and save each of
+     the count values in value_array.  */
+  index = 0;
+  value_array = (gcov_type *) malloc (sizeof (gcov_type) * cs_ptr->num);
+  for (gi_ptr = __gcov_list; gi_ptr; gi_ptr = gi_ptr->next)
+    {
+      if (!gi_ptr->merge[t_ix])
+        continue;
+
+      /* Find the appropriate index into the gcov_ctr_info array
+         for the counter we are currently working on based on the
+         existence of the merge function pointer for this object.  */
+      for (i = 0, ctr_info_ix = 0; i < t_ix; i++)
+        {
+          if (gi_ptr->merge[i])
+            ctr_info_ix++;
+        }
+      for (f_ix = 0; f_ix != gi_ptr->n_functions; f_ix++)
+        {
+          gfi_ptr = gi_ptr->functions[f_ix];
+
+          if (!gfi_ptr || gfi_ptr->key != gi_ptr)
+            continue;
+
+          ci_ptr = &gfi_ptr->ctrs[ctr_info_ix];
+          /* Sanity check that there are enough entries in value_arry
+            for this function's counters. Gracefully handle the case when
+            there are not, in case something in the profile info is
+            corrupted.  */
+          c_num = ci_ptr->num;
+          if (index + c_num > cs_ptr->num)
+            c_num = cs_ptr->num - index;
+          /* Copy over this function's counter values.  */
+          memcpy (&value_array[index], ci_ptr->values,
+                  sizeof (gcov_type) * c_num);
+          index += c_num;
+        }
+    }
+
+  /* Sort all the counter values by descending value and finally
+     accumulate the values from hottest on down until reaching
+     the cutoff value computed earlier.  */
+  qsort (value_array, cs_ptr->num, sizeof (gcov_type),
+         sort_by_reverse_gcov_value);
+  for (cum = 0, c_num = 0; c_num < cs_ptr->num && cum < cum_cutoff; c_num++)
+    cum += value_array[c_num];
+  /* Record the number of counters required to reach the cutoff value.  */
+  cs_ptr->num_hot_counters = c_num;
+  free (value_array);
 }
 
 /* Compute object summary recored in gcov_info INFO. The result is
@@ -827,7 +989,7 @@ gcov_merge_gcda_file (struct gcov_info *gi_ptr)
 #ifndef __GCOV_KERNEL__
   const struct gcov_fn_info *gfi_ptr;
   int error = 0;
-  gcov_unsigned_t tag, length;
+  gcov_unsigned_t tag, length, version, stamp;
 
   eof_pos = 0;
   summary_pos = 0;
@@ -841,12 +1003,12 @@ gcov_merge_gcda_file (struct gcov_info *gi_ptr)
           gcov_error ("profiling:%s:Not a gcov data file\n", gi_filename);
           goto read_fatal;
         }
-     length = gcov_read_unsigned ();
-     if (!gcov_version (gi_ptr, length, gi_filename))
+     version = gcov_read_unsigned ();
+     if (!gcov_version (gi_ptr, version, gi_filename))
        goto read_fatal;
 
-     length = gcov_read_unsigned ();
-     if (length != gi_ptr->stamp)
+     stamp = gcov_read_unsigned ();
+     if (stamp != gi_ptr->stamp)
        /* Read from a different compilation. Overwrite the file.  */
        goto rewrite;
 
@@ -921,7 +1083,7 @@ gcov_merge_gcda_file (struct gcov_info *gi_ptr)
            if ((error = gcov_is_error ()))
              goto read_error;
        }
-     if (tag)
+     if (tag && tag != GCOV_TAG_MODULE_INFO)
        {
          read_mismatch:;
 	 fprintf (stderr, "profiling:%s:Merge mismatch for %s\n",
@@ -960,6 +1122,8 @@ rewrite:;
           {
             if (!cs_prg->runs++)
               cs_prg->num = cs_tprg->num;
+            if (cs_tprg->num_hot_counters > cs_prg->num_hot_counters)
+              cs_prg->num_hot_counters = cs_tprg->num_hot_counters;
             cs_prg->sum_all += cs_tprg->sum_all;
             if (cs_prg->run_max < cs_tprg->run_max)
               cs_prg->run_max = cs_tprg->run_max;
@@ -1125,6 +1289,7 @@ gcov_exit_init (void)
          is FDO/LIPO.  */
       dump_module_info |= gi_ptr->mod_info->is_primary;
     }
+  gcov_compute_cutoff_values (&this_program);
 
   gcov_alloc_filename ();
 
@@ -1154,6 +1319,37 @@ gcov_dump_one_gcov (struct gcov_info *gi_ptr)
 }
 
 #endif /* L_gcov */
+
+#ifdef L_gcov_reset
+
+/* Function that can be called from application to reset counters to zero,
+   in order to collect profile in region of interest.  */
+
+void
+__gcov_reset (void)
+{
+  gcov_clear ();
+  /* Re-enable dumping to support collecting profile in multiple regions
+     of interest.  */
+  gcov_dump_complete = 0;
+}
+
+#endif /* L_gcov_reset */
+
+#ifdef L_gcov_dump
+
+/* Function that can be called from application to write profile collected
+   so far, in order to collect profile in region of interest.  */
+
+void
+__gcov_dump (void)
+{
+  gcov_exit ();
+  /* Prevent profile from being dumped a second time on application exit.  */
+  gcov_dump_complete = 1;
+}
+
+#endif /* L_gcov_dump */
 
 #ifdef L_gcov_merge_add
 /* The profile merging function that just adds the counters.  It is given

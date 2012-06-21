@@ -1,3 +1,297 @@
+2012-06-15   Cary Coutant  <ccoutant@google.com>
+
+    Revert Fission patches r182490, r182891, r183042, and r183320.
+    These will be going into trunk, and will eventually merge back into
+    google/main from there.
+
+    r182490:
+
+	2011-12-19  Sterling Augustine <saugustine@google.com>
+
+	    * dwarf2out.c (DEBUG_PUBNAMES_SECTION_LABEL,
+	    DEBUG_PUBTYPES_SECTION_LABEL): Define.
+	    (debug_pubnames_section_label, debug_pubtypes_section_label):
+	    Declare.
+	    (is_namespace_die, is_class_die): New functions.
+	    (add_enumerator_pubname): New function.
+	    (add_pubname): Call is_namespace_die, is_cu_die, and is_class_die in
+	    conditional.
+	    (add_pubtype): Call is_namespace_die. Rework name calculation.  Call
+	    type_tag, lang_hooks.dwarf_name and add_enumerator_pubname.
+	    (output_pubnames): Output debug_pubnames_section_label or
+	    debug_pubtypes_section_label.
+	    (base_type_die): Call add_pubtype.
+	    (gen_namespace_die): Call add_pubname_string and lang_hooks.dwarf_name.
+	    (dwarf2_out_init): Generate debug_pubnames_section_label and
+	    debug_pubtypes_section_label.
+	    (pubtypes_section_empty): New function.
+	    (dwarf2_out_finish): Call add_AT_lineptr if pubnames or pubtypes is
+	    non-empty.  When dealing with pubnames, change assertion to conditional.
+	    Call pubtypes_section_empty.  Likewise when dealing with pubtypes.
+	    Move code checking for empty section to...
+	    (pubtypes_section_empty): Here.
+	    * target.def: Switch boolean to enable pubnames and pubtypes.
+
+    r182891:
+
+	2012-01-04   Sterling Augustine  <saugustine@google.com>
+
+	    * dwarf2out.c (add_pubname): Move conditional clause from outer to
+	    inner if-statement.
+	    (dwarf2out_finish): Fix conditions to output DW_AT_GNU_pubnames and
+	    DW_AT_GNU_pubtypes.  Move decision to output pubnames and pubtypes from
+	    here...
+	    (output_pubnames): ...to here.
+	    (pubtypes_section_empty): Delete unused function.
+
+    r183042:
+
+	2012-01-09   Sterling Augustine  <saugustine@google.com>
+
+	    * dwarf2out.c (output_pubnames): Add check for info_section_emitted.
+
+    r183320:
+
+	2012-01-19   Sterling Augustine  <saugustine@google.com>
+
+	    * dwarf2out.c (break_out_comdat_types): Add DW_AT_GNU_pubnames and
+	    DW_AT_GNU_pubtypes attributes.
+
+2012-06-10  Dehao Chen  <dehao@google.com>
+
+	Backport r188303 from google-4_7
+	* gcc/cgraph.c (cgraph_node): Add attribute to function decl.
+	* gcc/opts-global.c (add_attribute_pattern): New function.
+	(pattern_match_function_attributes): New function.
+	(handle_common_deferred_options): Handle new options.
+	* gcc/opts.c (common_handle_option): Handle new options.
+	* gcc/opts.h (handle_common_deferred_options): New function.
+	* gcc/common.opt (ffunction_attribute_list): New option.
+
+2012-06-09   Xinliang Davidl Li  <davidxl@google.com>
+
+	Backport r188365 from google-4_7
+	l-ipo.c (pop_module_scope): Stop timer after
+	pending decl handling.
+
+2012-06-09   Xinliang Davidl Li  <davidxl@google.com>
+
+	Backport r188363 from google-4_7 branch
+	c-family/c-opts.c (lipo_max_mem_reached):  Scale up
+	memory allocated to acount for optimizer uses.
+	params.def: tune up max lipo mem parameter to 2.8G.
+
+2012-06-07   Easwaran Raman  <eraman@google.com>
+  Backport r179412 from google/gcc-4_6 branch.
+	2011-09-30  Easwaran Raman  <eraman@google.com>
+
+		* tree-profile.c (gcov_sample_counter_decl): Add GTY marker.
+		(gcov_sampling_rate_decl): Likewise.
+		(add_sampling_to_edge_counters): Do not free
+		instrumentation_to_be_sampled.
+		(cleanup_instrumentation_sampling): New function.
+		(tree_profiling): Call cleanup_instrumentation_sampling at the end.
+
+2012-06-07  Teresa Johnson  <tejohnson@google.com>
+
+	* doc/invoke.texi: Rename -fripa-peel-size-limit
+        and -fripa-unroll-size-limit to -fpeel-codesize-limit and
+        -funroll-codesize-limit, respectively. Remove
+        codesize-hotness-threshold param and add unrollpeel-hotness-threshold
+        param.
+	* gcov-io.c (gcov_write_summary): Write new summary info.
+	(gcov_read_summary): Read new summary info.
+	* gcov-io.h (GCOV_TAG_SUMMARY_LENGTH): Update for new summary info.
+        (struct gcov_ctr_summary): Add new summary info: num_hot_counters.
+	* loop-unroll.c (limit_code_size): Renamed to
+        code_size_limit_factor.
+	(code_size_limit_factor): Renamed from limit_code size. Update to
+        use new summary info and refine for very hot loops.
+	(decide_unrolling_and_peeling): Remove call to limit_code_size.
+        (decide_unroll_runtime_iterations): Call code_size_limit_factor
+        to control the unroll factor.
+	(decide_peel_simple, decide_unroll_stupid): Ditto.
+	* coverage.c (read_counts_file): Propagate new summary info.
+	* common.opt: Rename -fripa-peel-size-limit
+        and -fripa-unroll-size-limit to -fpeel-codesize-limit and
+        -funroll-codesize-limit, respectively.
+	* tree-optimize.c (cgraph_codesize_estimate): Remove.
+	(compute_codesize_estimate): Remove.
+	(execute_cleanup_cfg_post_optimizing): Remove call to
+        compute_codesize_estimate.
+	* params.def (PARAM_UNROLLPEEL_CODESIZE_THRESHOLD): Remove.
+        (PARAM_UNROLLPEEL_HOTNESS_THRESHOLD): Add.
+	* gcov-dump.c (tag_summary): Dump new summary info.
+
+2012-06-06   Xinliang David Li  <davidxl@google.com>
+
+	Backport r188271 from google-4_7
+	coverage.c (coverage_finish): Do not remove gcda file with
+	-frandom-seed option -- this recovers the compiler behavior
+	before gcc4_7.
+
+2012-06-02  Xinliang David Li  <davidxl@google.com>
+
+	Backport 188161 from google-4_7 branch.
+
+	l-ipo.c (promote_static_var_func): Promoted static variables from
+	primary modules should be marked as externally visible and being
+	prevailing def to avoid being localized again later.
+
+2012-05-30  Dehao Chen  <dehao@google.com>
+
+	* predict.c (predict_extra_loop_exit): New function to predict for
+	extra loop exits resulted from short-circuit conditions.
+
+2012-05-18   Teresa Johnson  <tejohnson@google.com>
+
+	This entry goes with r187660.
+
+	* doc/invoke.texi: Update the documentation with new params.
+	* loop-unroll.c (loop_has_FP_comp): Remove function.
+	(max_unroll_with_branches): New function.
+	(decide_unroll_constant_iterations, decide_unroll_runtime_iterations):
+        Add heuristic to avoid increasing branch mispredicts when unrolling.
+	(limit_code_size, decide_peel_simple, decide_unroll_stupid): Retrieve
+        number of branches from niter_desc instead of via function that walks
+        loop.
+	* loop-iv.c (get_simple_loop_desc): Invoke new analyze_loop_insns
+        function, and add guards to enable this function to work for the
+        outermost loop.
+	* cfgloop.c (insn_has_fp_set, analyze_loop_insns): New functions.
+        (num_loop_branches): Remove.
+	* cfgloop.h (struct niter_desc): Added new fields to cache additional
+        loop analysis information.
+        (num_loop_branches): Remove.
+	(analyze_loop_insns): Declare.
+	* params.def (PARAM_MIN_ITER_UNROLL_WITH_BRANCHES): New param.
+        (PARAM_UNROLL_OUTER_LOOP_BRANCH_BUDGET): Ditto.
+
+2012-05-16  Xinliang David Li  <davidxl@google.com>
+
+	Backport r187613 from google/gcc-4_7 branch.
+
+2012-05-16  Xinliang David Li  <davidxl@google.com>
+
+	Backport r187610 from google/gcc-4_7 branch.
+
+2012-05-16  Xinliang David Li  <davidxl@google.com>
+
+	Backport r187602 from google/gcc-4_7 branch.
+
+2012-05-15   Teresa Johnson  <tejohnson@google.com>
+
+	* doc/invoke.texi (profile-generate-sampling-period): Rename
+	from profile-generate-sampling-rate.
+	* tree-profile.c (gcov_sampling_period_decl): Rename from
+	gcov_sampling_rate_decl.
+	(gcov_has_sampling_decl): New variable.
+	(insert_if_then, add_sampling_wrapper): Rename variables from "*rate*"
+	to "*period*".
+	(gimple_init_instrumentation_sampling): Ditto, and add handling
+	for gcov_has_sampling_decl.
+	* params.def (profile-generate-sampling-period): Rename
+	from profile-generate-sampling-rate.
+
+2012-05-14  Xinliang David Li  <davidxl@google.com>
+
+	Backport r187488 from google/gcc-4_7
+	* cgraphbuild.c (record_reference_to_real_target_from_alias):
+	New function.
+	(mark_address): Record reference to the resolved target node
+	in LIPO mode. Also record reference to alias's real target.
+	(rebuild_cgraph_edges): As above.
+	* cgraph.c (cgraph_clone_edge): Create cgraph edge for
+	indirect call inlining edge properly.
+	* l-ipo.c (cgraph_lipo_get_resolved_node_1): Do not force
+	creating cgraph node.
+	(fixup_reference_list): New function.
+	(varpool_do_link): Fix up initializer's references to functions
+	after linking.
+
+2012-05-09  Teresa Johnson  <tejohnson@google.com>
+
+	Backport from trunk r187297:
+	2012-05-08   Teresa Johnson  <tejohnson@google.com>
+
+	* gcov-io.h (__gcov_reset, __gcov_dump): Declare.
+	* doc/gcov.texi: Add note on using __gcov_reset and __gcov_dump.
+
+2012-05-08  Xinliang David Li  <davidxl@google.com>
+
+	Fix issue 6457844 (backport r187312 from google-4_7)
+
+	* ipa-inline-transform.c (inline_call): When
+	fixing up cgraph edge callees which are aliases,
+	find the real resolved alias target in LIPO mode.
+	* cgraphunit.c (cgraph_redirect_edge_call_stmt_to_callee):
+	Remove unnecssary check in LIPO mode.
+	* ipa-inline.c (inline_small_functions): Compute
+	max_count properly by considering indirect edges.
+
+
+2012-05-08  Xinliang David Li  <davidxl@google.com>
+
+	Fix issue 6461583 (backport r187310 from google-4_7)
+
+	* profile.c (instrument_values): Skip static ctor/dtors
+	for ic counter allocation to match instrumentation.
+	* tree-profile.c (gimple_gen_ic_profiler): Remove
+	unnecessary guard in FDO mode.
+
+
+2012-05-01   Rong Xu  <xur@google.com>
+
+	* gcc/cp/rtti.c (get_tinfo_decl): generate tinfo for aux 
+	modules in LIPO.
+
+>>>>>>> .r187488
+2012-04-15  Xinliang David Li  <davidxl@google.com>
+
+	* varasm.c (alias_target_node_exist_p): New function.
+	(finish_alias_1): Use the new function in LIPO mode.
+
+2012-04-12  Xinliang David Li  <davidxl@google.com>
+
+	* cgraphbuild.c (rebuild_cgraph_edges): Add ipa reference from
+	an alias node to its body node (post LIPO linking one) to avoid
+	the body being eliminated.
+	* varasm.c (finish_aliases_1): Do not emit error for an alias
+	which is artificial in LIPO mode -- it exists but can not be
+	found.
+
+2012-04-11  Teresa Johnson  <tejohnson@google.com>
+
+	Revert r182254 since it is subsumed by r186176 on trunk.
+	Limit unrolling of loops with LCP stalling instructions on Core i7
+	so that they will fit into the LSD.
+	* loop-unroll.c (decide_unroll_constant_iterations): Call loop
+	unroll target hook.
+	* config/i386/i386.c (ix86_loop_unroll_adjust): New function.
+	(TARGET_LOOP_UNROLL_ADJUST): Define hook for x86.
+
+2012-04-10  Xinliang David Li  <davidxl@google.com>
+
+	* mversn-dispatch.c (builtin_dispatch_ipa_clone): returns
+	TODO flags when there are changes.
+	(do_convert_builtin_dispatch): Ditto.
+
+
+2012-04-09  Xinliang David Li  <davidxl@google.com>
+
+	Fix b/6300341: LIPO profile-gen ICEs 
+
+	* coverage.c (converage_dc_end_function): Properly initialize
+	the fn_decl and ctr_data field of the coverage_data.
+
+2012-04-03  Harshit Chopra  <harshit@google.com>
+
+	* config/i386/i386.c (check_should_patch_current_function): Made C90
+	compatible.
+	* config/i386/i386.md: Added '\t' to bytes generated by
+	ix86_output_function_nops_prologue_epilogue for proper formatting
+	of assembly.
+
 2012-03-29  Dehao Chen  <dehao@google.com>
 
 	* predict.c (predict_iv_comparison): Add the comparison of induction
