@@ -1,3 +1,29 @@
+2012-07-10  Xinliang David Li  <davidxl@google.com>
+
+	Backport r189413 from trunk
+	* doc/invoke.texi: New option documented.
+	* flag-types.h: New enum type.
+	* gimplify.c (gimplify_bind_expr): Control
+	clobber generation with new option.
+	(gimplify_target_expr): Ditto.
+	common.opt: New option.
+
+2012-07-10  Xinliang David Li  <davidxl@google.com>
+
+	* Revert r189107
+
+2012-07-01  Xinliang David Li  <davidxl@google.com>
+
+	* common.opt: -ftemp-reuse-stack option.
+	* gimplify.c (gimplify_target_expr): Check new flag.
+
+2012-06-29  Xinliang David Li  <davidxl@google.com>
+
+	* coverage.c (coverage_init): Initialize dyn-ipa
+	paramater decls.
+	* tree-profile.c (init_comdat_decl): New function.
+	(tree_init_dyn_ipa_paramters): Ditto.
+
 2012-06-27  Dehao Chen  <dehao@google.com>
 
 	Backport from trunk r188981.
