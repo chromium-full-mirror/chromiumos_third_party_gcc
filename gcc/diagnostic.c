@@ -1,6 +1,6 @@
 /* Language-independent diagnostic subroutines for the GNU Compiler Collection
    Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
-   2009, 2010 Free Software Foundation, Inc.
+   2009, 2010, 2011, 2012 Free Software Foundation, Inc.
    Contributed by Gabriel Dos Reis <gdr@codesourcery.com>
 
 This file is part of GCC.
@@ -96,6 +96,7 @@ diagnostic_initialize (diagnostic_context *context, int n_opts)
   memset (context->diagnostic_count, 0, sizeof context->diagnostic_count);
   context->some_warnings_are_errors = false;
   context->warning_as_error_requested = false;
+  context->force_warnings_requested = false;
   context->n_opts = n_opts;
   context->classify_diagnostic = XNEWVEC (diagnostic_t, n_opts);
   for (i = 0; i < n_opts; i++)
@@ -151,6 +152,7 @@ diagnostic_set_info_translated (diagnostic_info *diagnostic, const char *msg,
 				va_list *args, location_t location,
 				diagnostic_t kind)
 {
+  location = map_discriminator_location (location);
   diagnostic->message.err_no = errno;
   diagnostic->message.args_ptr = args;
   diagnostic->message.format_spec = msg;
@@ -255,9 +257,9 @@ diagnostic_action_after_output (diagnostic_context *context,
 }
 
 void
-diagnostic_report_current_module (diagnostic_context *context)
+diagnostic_report_current_module (diagnostic_context *context, location_t where)
 {
-  const struct line_map *map;
+  const struct line_map *map = NULL;
 
   if (pp_needs_newline (context->printer))
     {
@@ -265,10 +267,16 @@ diagnostic_report_current_module (diagnostic_context *context)
       pp_needs_newline (context->printer) = false;
     }
 
-  if (input_location <= BUILTINS_LOCATION)
+  if (where <= BUILTINS_LOCATION)
     return;
 
-  map = linemap_lookup (line_table, input_location);
+  if (has_discriminator (where))
+    where = map_discriminator_location (where);
+
+  linemap_resolve_location (line_table, where,
+			    LRK_MACRO_DEFINITION_LOCATION,
+			    &map);
+
   if (map && diagnostic_last_module_changed (context, map))
     {
       diagnostic_set_last_module (context, map);
@@ -278,18 +286,18 @@ diagnostic_report_current_module (diagnostic_context *context)
 	  if (context->show_column)
 	    pp_verbatim (context->printer,
 			 "In file included from %s:%d:%d",
-			 map->to_file,
+			 LINEMAP_FILE (map),
 			 LAST_SOURCE_LINE (map), LAST_SOURCE_COLUMN (map));
 	  else
 	    pp_verbatim (context->printer,
 			 "In file included from %s:%d",
-			 map->to_file, LAST_SOURCE_LINE (map));
+			 LINEMAP_FILE (map), LAST_SOURCE_LINE (map));
 	  while (! MAIN_FILE_P (map))
 	    {
 	      map = INCLUDED_FROM (line_table, map);
 	      pp_verbatim (context->printer,
 			   ",\n                 from %s:%d",
-			   map->to_file, LAST_SOURCE_LINE (map));
+			   LINEMAP_FILE (map), LAST_SOURCE_LINE (map));
 	    }
 	  pp_verbatim (context->printer, ":");
 	  pp_newline (context->printer);
@@ -301,7 +309,7 @@ void
 default_diagnostic_starter (diagnostic_context *context,
 			    diagnostic_info *diagnostic)
 {
-  diagnostic_report_current_module (context);
+  diagnostic_report_current_module (context, diagnostic->location);
   pp_set_prefix (context->printer, diagnostic_build_prefix (context,
 							    diagnostic));
 }
@@ -437,7 +445,8 @@ diagnostic_report_diagnostic (diagnostic_context *context,
      individual warnings can be overridden back to warnings with
      -Wno-error=*.  */
   if (context->warning_as_error_requested
-      && diagnostic->kind == DK_WARNING)
+      && diagnostic->kind == DK_WARNING
+      && !context->force_warnings_requested)
     {
       diagnostic->kind = DK_ERROR;
     }
@@ -459,7 +468,10 @@ diagnostic_report_diagnostic (diagnostic_context *context,
 	  /* FIXME: Stupid search.  Optimize later. */
 	  for (i = context->n_classification_history - 1; i >= 0; i --)
 	    {
-	      if (context->classification_history[i].location <= location)
+	      if (linemap_location_before_p
+		  (line_table,
+		   context->classification_history[i].location,
+		   location))
 		{
 		  if (context->classification_history[i].kind == (int) DK_POP)
 		    {
@@ -479,7 +491,9 @@ diagnostic_report_diagnostic (diagnostic_context *context,
       /* This tests if the user provided the appropriate -Werror=foo
 	 option.  */
       if (diag_class == DK_UNSPECIFIED
-	  && context->classify_diagnostic[diagnostic->option_index] != DK_UNSPECIFIED)
+	  && context->classify_diagnostic[diagnostic->option_index] != DK_UNSPECIFIED
+	  && (context->classify_diagnostic[diagnostic->option_index] != DK_ERROR
+	      || !context->force_warnings_requested))
 	{
 	  diagnostic->kind = context->classify_diagnostic[diagnostic->option_index];
 	}

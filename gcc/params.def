@@ -1,6 +1,6 @@
 /* params.def - Run-time parameters.
    Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
-   2011
+   2011, 2012
    Free Software Foundation, Inc.
    Written by Mark Mitchell <mark@codesourcery.com>.
 
@@ -38,16 +38,6 @@ along with GCC; see the file COPYING3.  If not see
      the minimum).
 
    Be sure to add an entry to invoke.texi summarizing the parameter.  */
-
-/* The threshold ratio between current and hottest structure counts.
-   We say that if the ratio of the current structure count,
-   calculated by profiling, to the hottest structure count
-   in the program is less than this parameter, then structure
-   reorganization is not applied. The default is 10%.  */
-DEFPARAM (PARAM_STRUCT_REORG_COLD_STRUCT_RATIO,
-	  "struct-reorg-cold-struct-ratio",
-	  "The threshold ratio between current and hottest structure counts",
-	  10, 0, 100)
 
 /* When branch is predicted to be taken with probability lower than this
    threshold (in percent), then it is considered well predictable. */
@@ -115,6 +105,11 @@ DEFPARAM (PARAM_INLINE_FUNCTION_OVERHEAD_SIZE,
 	  "Size estimate of function overhead (prologue/epilogue) for inlining purposes",
 	  7, 0, 0)
 
+DEFPARAM (PARAM_INLINE_HOT_CALLER,
+	  "inline-hot-caller",
+	  "Consider cold callsites for inlining if caller contains hot code",
+	  1, 0, 1)
+
 /* Limit of iterations of early inliner.  This basically bounds number of
    nested indirect calls early inliner can resolve.  Deeper chains are still
    handled by late inlining.  */
@@ -126,7 +121,7 @@ DEFPARAM (PARAM_EARLY_INLINER_MAX_ITERATIONS,
 /* Limit on probability of entry BB.  */
 DEFPARAM (PARAM_COMDAT_SHARING_PROBABILITY,
 	  "comdat-sharing-probability",
-	  "Probability that COMDAT function will be shared with different compilatoin unit",
+	  "Probability that COMDAT function will be shared with different compilation unit",
 	  20, 0, 0)
 
 /* Limit on probability of entry BB.  */
@@ -180,6 +175,13 @@ DEFPARAM(PARAM_MAX_PENDING_LIST_LENGTH,
 	 "The maximum length of scheduling's pending operations list",
 	 32, 0, 0)
 
+/* This parameter limits the number of backtracking attempts when using the
+   haifa scheduler for modulo scheduling.  */
+DEFPARAM(PARAM_MAX_MODULO_BACKTRACK_ATTEMPTS,
+	 "max-modulo-backtrack-attempts",
+	 "The maximum number of backtrack attempts the scheduler should make when modulo scheduling a loop",
+	 40, 0, 0)
+
 DEFPARAM(PARAM_LARGE_FUNCTION_INSNS,
 	 "large-function-insns",
 	 "The size of function body to be considered large",
@@ -203,7 +205,19 @@ DEFPARAM(PARAM_IPCP_UNIT_GROWTH,
 DEFPARAM(PARAM_EARLY_INLINING_INSNS,
 	 "early-inlining-insns",
 	 "Maximal estimated growth of function body caused by early inlining of single call",
-	 10, 0, 0)
+	 11, 0, 0)
+DEFPARAM(PARAM_EARLY_INLINING_INSNS_NON_LEAF,
+	 "early-inlining-insns-non-leaf",
+	 "Maximal allowed growth of a non-leaf function body caused by early inlining of single call",
+	 0, 0, 0)
+DEFPARAM(PARAM_EARLY_INLINING_INSNS_ANY,
+	 "early-inlining-insns-any",
+	 "Early inline calls if growth does not exceed this limit",
+	 0, 0, 0)
+DEFPARAM(PARAM_EARLY_INLINING_INSNS_COMDAT,
+	 "early-inlining-insns-comdat",
+	 "Early inline calls to comdate functions if growth does not exceed this limit",
+	 15, 0, 0)
 DEFPARAM(PARAM_LARGE_STACK_FRAME,
 	 "large-stack-frame",
 	 "The size of stack frame to be considered large",
@@ -340,21 +354,32 @@ DEFPARAM(PARAM_MAX_UNROLL_ITERATIONS,
 	 "max-completely-peel-loop-nest-depth",
 	 "The maximum depth of a loop nest we completely peel",
 	 8, 0, 0)
-/* The minimum profile count of basic blocks to look at when estimating
- * the code size footprint of the call graph in a dynamic IPA compile. */
-DEFPARAM(PARAM_CODESIZE_HOTNESS_THRESHOLD,
-	"codesize-hotness-threshold",
-	"Minimum profile count of basic blocks counted towards dynamic IPA "
-	"code size footprint estimate",
-	10000, 0, 0)
 /* The maximum code size estimate under which loop unrolling and peeling
- * is allowed in a dynamic IPA compile. This currently applies to loops with
- * non-constant iteration counts and no floating point computations. */
+ * is allowed in a profile feedback compile. This currently applies to loops
+ * with non-constant iteration counts and no floating point computations.  */
 DEFPARAM(PARAM_UNROLLPEEL_CODESIZE_THRESHOLD,
 	"unrollpeel-codesize-threshold",
-	"Maximum dynamic IPA code size footprint estimate for loop unrolling "
+	"Maximum profile-based code size footprint estimate for loop unrolling "
 	"and peeling",
-	10000, 0, 0)
+	15000, 0, 0)
+/* The maximum ratio of total profiled execution counts to loop entry block
+   count that must be exceeded to ignore most code size limits when unrolling
+   and peeling.  */
+DEFPARAM(PARAM_UNROLLPEEL_HOTNESS_THRESHOLD,
+        "unrollpeel-hotness-threshold",
+        "Maximum ratio of total profiled execution count to loop entry "
+        "block count under which most codesize limits for unrolling and "
+        "peeling will be ignored",
+        100, 1, 0)
+
+DEFPARAM(PARAM_MIN_ITER_UNROLL_WITH_BRANCHES,
+	"min-iter-unroll-with-branches",
+	"Minimum iteration count to ignore branch effects when unrolling",
+	50, 0, 0)
+DEFPARAM(PARAM_UNROLL_OUTER_LOOP_BRANCH_BUDGET,
+	"unroll-outer-loop-branch-budget",
+	"Maximum number of branches allowed in hot outer loop region after unroll",
+	25, 0, 0)
 
 /* The maximum number of insns of an unswitched loop.  */
 DEFPARAM(PARAM_MAX_UNSWITCH_INSNS,
@@ -385,6 +410,11 @@ DEFPARAM(PARAM_SMS_MAX_II_FACTOR,
 	 "sms-max-ii-factor",
 	 "A factor for tuning the upper bound that swing modulo scheduler uses for scheduling a loop",
 	 100, 0, 0)
+/* The minimum value of stage count that swing modulo scheduler will generate.  */
+DEFPARAM(PARAM_SMS_MIN_SC,
+        "sms-min-sc",
+        "The minimum value of stage count that swing modulo scheduler will generate.",
+        2, 1, 1)
 DEFPARAM(PARAM_SMS_DFA_HISTORY,
 	 "sms-dfa-history",
 	 "The number of cycles the swing modulo scheduler considers when checking conflicts using DFA",
@@ -397,7 +427,7 @@ DEFPARAM(PARAM_SMS_LOOP_AVERAGE_COUNT_THRESHOLD,
 DEFPARAM(HOT_BB_COUNT_FRACTION,
 	 "hot-bb-count-fraction",
 	 "Select fraction of the maximal count of repetitions of basic block in program given basic block needs to have to be considered hot",
-	 40000, 0, 0)
+	 60000, 0, 0)
 DEFPARAM(HOT_BB_FREQUENCY_FRACTION,
 	 "hot-bb-frequency-fraction",
 	 "Select fraction of the maximal frequency of executions of basic block in function given basic block needs to have to be considered hot",
@@ -604,6 +634,11 @@ DEFPARAM(PARAM_MAX_RELOAD_SEARCH_INSNS,
 	 "max-reload-search-insns",
 	 "The maximum number of instructions to search backward when looking for equivalent reload",
 	 100, 0, 0)
+
+DEFPARAM(PARAM_SINK_FREQUENCY_THRESHOLD,
+	 "sink-frequency-threshold",
+	 "Target block's relative execution frequency (as a percentage) required to sink a statement",
+	 75, 0, 100)
 
 DEFPARAM(PARAM_MAX_SCHED_REGION_BLOCKS,
 	 "max-sched-region-blocks",
@@ -854,6 +889,12 @@ DEFPARAM (PARAM_GRAPHITE_MAX_BBS_PER_FUNCTION,
 	  "maximum number of basic blocks per function to be analyzed by Graphite",
 	  100, 0, 0)
 
+/* Avoid data dependence analysis on very large loops.  */
+DEFPARAM (PARAM_LOOP_MAX_DATAREFS_FOR_DATADEPS,
+	  "loop-max-datarefs-for-datadeps",
+	  "Maximum number of datarefs in loop for building loop data dependencies",
+	  1000, 0, 0)
+
 /* Avoid doing loop invariant motion on very large loops.  */
 
 DEFPARAM (PARAM_LOOP_INVARIANT_MAX_BBS_IN_LOOP,
@@ -904,10 +945,37 @@ DEFPARAM (PARAM_MAX_LIPO_GROUP,
 DEFPARAM (PARAM_MAX_LIPO_MEMORY,
 	  "max-lipo-mem",
 	  "don't import aux files if memory consumption exceeds this value",
-	  2400000, 0, 0)
+	  2800000, 0, 0)
 
-DEFPARAM (PARAM_PROFILE_GENERATE_SAMPLING_RATE,
-         "profile-generate-sampling-rate",
+/* In LIPO profile-gen, use this parameter to record the cutoff value used at
+   profile collection runtime.  */
+DEFPARAM (PARAM_LIPO_CUTOFF,
+	  "lipo-cutoff",
+	  "The cutoff value of cumulative profile count. The value is between"
+          "0-99. 100 is reserved as a special value indicating default cutoff" 
+          "which is set at runtime. When the parameter is used and if its value"
+          "is not 100, it overrides the dafault as well as the value set by the"
+          " enviornment variable",
+	  100, 0, 100)
+
+/* In LIPO profile-gen, use this parameter to set random group generation
+   seed value.  */
+DEFPARAM (PARAM_LIPO_RANDOM_SEED,
+	  "lipo-random-seed",
+	  "random seed value used in random group testing",
+	  0, 0, 0)
+
+/* In LIPO profile-gen, use this parmaeter to set random group max size at profile
+   collection runtime.  */
+DEFPARAM (PARAM_LIPO_RANDOM_GROUP_SIZE,
+	  "lipo-random-group-size",
+	  "In LIPO random group testing, this parameter is used to set max group"
+          " size. The default value is 0 which is treated specially and specifies"
+          " no random grouping.",
+	  0, 0, 300)
+
+DEFPARAM (PARAM_PROFILE_GENERATE_SAMPLING_PERIOD,
+         "profile-generate-sampling-period",
          "sampling rate with -fprofile-generate-sampling",
          100, 0, 2000000000)
 
@@ -953,7 +1021,7 @@ DEFPARAM (PARAM_MIN_INSN_TO_PREFETCH_RATIO,
 	  "min-insn-to-prefetch-ratio",
 	  "Min. ratio of insns to prefetches to enable prefetching for "
           "a loop with an unknown trip count",
-	  10, 0, 0)
+	  9, 0, 0)
 
 DEFPARAM (PARAM_PREFETCH_MIN_INSN_TO_MEM_RATIO,
 	  "prefetch-min-insn-to-mem-ratio",
@@ -966,6 +1034,14 @@ DEFPARAM (PARAM_MAX_VARTRACK_SIZE,
 	  "max-vartrack-size",
 	  "Max. size of var tracking hash tables",
 	  50000000, 0, 0)
+
+/* Set maximum recursion depth for var tracking expression expansion
+   and resolution.  */
+
+DEFPARAM (PARAM_MAX_VARTRACK_EXPR_DEPTH,
+	  "max-vartrack-expr-depth",
+	  "Max. recursion depth for expanding var tracking expressions",
+	  12, 0, 0)
 
 /* Set minimum insn uid for non-debug insns.  */
 
@@ -980,22 +1056,35 @@ DEFPARAM (PARAM_IPA_SRA_PTR_GROWTH_FACTOR,
 	  "a pointer to an aggregate with",
 	  2, 0, 0)
 
-DEFPARAM (PARAM_DEVIRT_TYPE_LIST_SIZE,
-	  "devirt-type-list-size",
-	  "Maximum size of a type list associated with each parameter for "
-	  "devirtualization",
+DEFPARAM (PARAM_TM_MAX_AGGREGATE_SIZE,
+	  "tm-max-aggregate-size",
+	  "Size in bytes after which thread-local aggregates should be "
+	  "instrumented with the logging functions instead of save/restore "
+	  "pairs",
+	  9, 0, 0)
+
+DEFPARAM (PARAM_IPA_CP_VALUE_LIST_SIZE,
+	  "ipa-cp-value-list-size",
+	  "Maximum size of a list of values associated with each parameter for "
+	  "interprocedural constant propagation",
 	  8, 0, 0)
+
+DEFPARAM (PARAM_IPA_CP_EVAL_THRESHOLD,
+	  "ipa-cp-eval-threshold",
+	  "Threshold ipa-cp opportunity evaluation that is still considered "
+	  "beneficial to clone.",
+	  500, 0, 0)
 
 /* WHOPR partitioning configuration.  */
 
 DEFPARAM (PARAM_LTO_PARTITIONS,
 	  "lto-partitions",
-	  "Number of paritions program should be split to",
-	  32, 0, 0)
+	  "Number of partitions the program should be split to",
+	  32, 1, 0)
 
 DEFPARAM (MIN_PARTITION_SIZE,
 	  "lto-min-partition",
-	  "Size of minimal paritition for WHOPR (in estimated instructions)",
+	  "Minimal size of a partition for LTO (in estimated instructions)",
 	  1000, 0, 0)
 
 DEFPARAM (PARAM_MIN_MCF_CANCEL_ITERS,
@@ -1026,8 +1115,8 @@ DEFPARAM (PARAM_MVERSN_CLONE_CGRAPH_DEPTH,
 
 /* Only output those call graph edges in .gnu.callgraph.text sections
    whose count is greater than this value. */
-DEFPARAM (PARAM_NOTE_CGRAPH_SECTION_EDGE_THRESHOLD,
-	  "note-cgraph-section-edge-threshold",
+DEFPARAM (PARAM_GNU_CGRAPH_SECTION_EDGE_THRESHOLD,
+	  "gnu-cgraph-section-edge-threshold",
 	  "minimum call graph edge count for inclusion in "
           ".gnu.callgraph.text section",
 	  0, 0, 0)
@@ -1037,10 +1126,67 @@ DEFPARAM (PARAM_PMU_PROFILE_N_ADDRESS,
 	  "While doing PMU profiling symbolize this many top addresses.",
 	  50, 1, 10000)
 
-DEFPARAM (PARAM_MAX_FUNCTION_SIZE_FOR_AUTO_CLONING,
-	  "autoclone-function-size-limit",
-	  "Do not auto clone functions beyond this size.",
-	  5000, 0, 100000)
+/* Maximum number of conditional store pairs that can be sunk.  */
+DEFPARAM (PARAM_MAX_STORES_TO_SINK,
+          "max-stores-to-sink",
+          "Maximum number of conditional store pairs that can be sunk",
+          2, 0, 0)
+
+/* Override CASE_VALUES_THRESHOLD of when to switch from doing switch
+   statements via if statements to using a table jump operation.  If the value
+   is 0, the default CASE_VALUES_THRESHOLD will be used.  */
+DEFPARAM (PARAM_CASE_VALUES_THRESHOLD,
+          "case-values-threshold",
+          "The smallest number of different values for which it is best to "
+	  "use a jump-table instead of a tree of conditional branches, "
+	  "if 0, use the default for the machine",
+          0, 0, 0)
+
+/* Data race flags for C++0x memory model compliance.  */
+DEFPARAM (PARAM_ALLOW_LOAD_DATA_RACES,
+	  "allow-load-data-races",
+	  "Allow new data races on loads to be introduced",
+	  1, 0, 1)
+
+DEFPARAM (PARAM_ALLOW_STORE_DATA_RACES,
+	  "allow-store-data-races",
+	  "Allow new data races on stores to be introduced",
+	  1, 0, 1)
+
+DEFPARAM (PARAM_ALLOW_PACKED_LOAD_DATA_RACES,
+	  "allow-packed-load-data-races",
+	  "Allow new data races on packed data loads to be introduced",
+	  1, 0, 1)
+
+DEFPARAM (PARAM_ALLOW_PACKED_STORE_DATA_RACES,
+	  "allow-packed-store-data-races",
+	  "Allow new data races on packed data stores to be introduced",
+	  1, 0, 1)
+
+/* Reassociation width to be used by tree reassoc optimization.  */
+DEFPARAM (PARAM_TREE_REASSOC_WIDTH,
+	  "tree-reassoc-width",
+	  "Set the maximum number of instructions executed in parallel in "
+	  "reassociated tree. If 0, use the target dependent heuristic.",
+	  0, 0, 0)
+
+DEFPARAM (PARAM_MAX_TAIL_MERGE_COMPARISONS,
+          "max-tail-merge-comparisons",
+          "Maximum amount of similar bbs to compare a bb with",
+          10, 0, 0)
+
+DEFPARAM (PARAM_MAX_TAIL_MERGE_ITERATIONS,
+          "max-tail-merge-iterations",
+          "Maximum amount of iterations of the pass over a function",
+          2, 0, 0)
+
+/* Maximum number of strings for which strlen optimization pass will
+   track string lenths.  */
+DEFPARAM (PARAM_MAX_TRACKED_STRLENS,
+	  "max-tracked-strlens",
+	  "Maximum number of strings for which strlen optimization pass will "
+	  "track string lengths",
+	  1000, 0, 0)
 
 /* Parameters to be used with -mpatch-functions-for-instrumentation.
    See config/i386/i386.opt  */

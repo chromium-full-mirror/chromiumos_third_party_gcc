@@ -26,13 +26,12 @@ along with GCC; see the file COPYING3.  If not see
 extern void coverage_init (const char *, const char*);
 extern void coverage_finish (void);
 
-/* Complete the coverage information for the current function. Once
-   per function.  */
-extern void coverage_end_function (unsigned, unsigned);
-
 /* Start outputting coverage information for the current
-   function. Repeatable per function.  */
-extern int coverage_begin_output (unsigned, unsigned);
+   function.  */
+extern int coverage_begin_function (unsigned, unsigned);
+
+/* Complete the coverage information for the current function.  */
+extern void coverage_end_function (unsigned, unsigned);
 
 /* Compute the control flow checksum for the current function.  */
 extern unsigned coverage_compute_cfg_checksum (void);
@@ -77,10 +76,8 @@ extern tree get_gcov_unsigned_t (void);
 /* Mark this module as containing asm statements.  */
 extern void coverage_has_asm_stmt (void);
 
-/* Check if the specified options are valid for pmu profilig.  */
-extern int check_pmu_profile_options (const char *options);
-
 /* Defined in tree-profile.c.  */
 extern void tree_init_instrumentation_sampling (void);
+extern void tree_init_dyn_ipa_parameters (void);
 
 #endif

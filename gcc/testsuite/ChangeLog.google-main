@@ -1,7 +1,64 @@
-2012-01-30   Han Shen  <shenhan@google.com>
+2012-02-03   Harshit Chopra  <harshit@google.com>
+
+  Restricting the tests to run for 64-bit target since function patching
+	  is only supported for 64-bit targets.
+
+	* gcc.target/i386/patch-functions-1.c: Restrict to 64-bit targets.
+	* gcc.target/i386/patch-functions-2.c: Likewise
+	* gcc.target/i386/patch-functions-3.c: Likewise
+	* gcc.target/i386/patch-functions-4.c: Likewise
+	* gcc.target/i386/patch-functions-5.c: Likewise
+	* gcc.target/i386/patch-functions-6.c: Likewise
+	* gcc.target/i386/patch-functions-7.c: Likewise
+
+2011-02-01  Dehao Chen  <dehao@google.com>
+
+	* gcc.dg/predict-1.c: Check if LOOP_IV_COMPARE static predict
+	heuristic is working properly.
+	* gcc.dg/predict-2.c: Likewise.
+	* gcc/dg/predict-3.c: Likewise.
+	* gcc/dg/predict-4.c: Likewise.
+
+2012-01-26   Han Shen  <shenhan@google.com>
 
 	* gcc.dg/fstack-protector-strong.c: New test.
 	* g++.dg/fstack-protector-strong.C: New test.
+
+2012-01-04   Sterling Augustine  <saugustine@google.com>
+
+       * g++.dg/diagnostic/bindings1.C: Adjust expected output.
+       * g++.dg/ext/pretty3.C: Likewise.
+       * g++.dg/pr44486.C: Likewise.
+       * g++.dg/warn/Wuninitializable-member.C: Likewise.
+       * g++.dg/warn/pr35711.C: Likewise.
+       * g++.old-deja/g++.pt/memtemp77.C: Likewise.
+
+2011-12-17   Easwaran Raman  <eraman@google.com>
+
+	* g++.dg/other/sized-delete-1.C: New test.
+
+2011-12-16  Dehao Chen  <dehao@google.com>
+
+	* gcc.dg/inline-dump.c: New test.
+
+2011-12-12  Dmitry Vyukov  <dvyukov@google.com>
+
+	* gcc.dg/tsan.h: Fix compiler warnings.
+	* gcc.dg/tsan-ignore.c: Fix compiler warnings.
+	* gcc.dg/tsan-ignore.h: Fix compiler warnings.
+	* gcc.dg/tsan-mop.c: Fix compiler warnings.
+
+2011-10-17  Dehao Chen  <dehao@google.com>
+
+	* gcc.dg/record-gcc-switches-in-elf-1.c: New test.
+
+2011-07-26  David Li  <davidxl@google.com>
+
+	* testsuite/gcc.dg/tree-prof/lipo/val-prof-2_0.c: update test case
+
+2011-07-25   Diego Novillo  <dnovillo@google.com>
+
+	* g++.dg/dg.exp: Remove tests in directory thread-ann.
 
 2011-06-16   Sharad Singhai  <singhai@google.com>
 

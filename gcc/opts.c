@@ -23,21 +23,23 @@ along with GCC; see the file COPYING3.  If not see
 #include "system.h"
 #include "intl.h"
 #include "coretypes.h"
-#include "tm.h" /* Needed by rtl.h and used for STACK_CHECK_BUILTIN,
+#include "tm.h" /* For STACK_CHECK_BUILTIN,
 		   STACK_CHECK_STATIC_BUILTIN, DEFAULT_GDB_EXTENSIONS,
 		   DWARF2_DEBUGGING_INFO and DBX_DEBUGGING_INFO.  */
-#include "rtl.h" /* Needed by insn-attr.h.  */
 #include "opts.h"
 #include "options.h"
 #include "flags.h"
 #include "params.h"
 #include "diagnostic.h"
 #include "opts-diagnostic.h"
-#include "insn-attr.h"		/* For INSN_SCHEDULING and DELAY_SLOTS.  */
-#include "target.h"
+#include "insn-attr-common.h"
+#include "common/common-target.h"
 
-/* Defined in coverage.c.  */
-extern int check_pmu_profile_options (const char *options);
+/* Indexed by enum debug_info_type.  */
+const char *const debug_type_names[] =
+{
+  "none", "stabs", "coff", "dwarf-2", "xcoff", "vms"
+};
 
 /* Parse the -femit-struct-debug-detailed option value
    and set the flag variables. */
@@ -228,21 +230,13 @@ target_handle_option (struct gcc_options *opts,
 		      struct gcc_options *opts_set,
 		      const struct cl_decoded_option *decoded,
 		      unsigned int lang_mask ATTRIBUTE_UNUSED, int kind,
-		      location_t loc ATTRIBUTE_UNUSED,
+		      location_t loc,
 		      const struct cl_option_handlers *handlers ATTRIBUTE_UNUSED,
 		      diagnostic_context *dc)
 {
-  gcc_assert (opts == &global_options);
-  gcc_assert (opts_set == &global_options_set);
   gcc_assert (dc == global_dc);
-  gcc_assert (decoded->canonical_option_num_elements <= 2);
   gcc_assert (kind == DK_UNSPECIFIED);
-  /* Although the location is not passed down to
-     targetm.handle_option, do not make assertions about its value;
-     options may come from optimize attributes and having the correct
-     location in the handler is not generally important.  */
-  return targetm.handle_option (decoded->opt_index, decoded->arg,
-				decoded->value);
+  return targetm_common.handle_option (opts, opts_set, decoded, loc);
 }
 
 /* Add comma-separated strings to a char_p vector.  */
@@ -300,26 +294,21 @@ init_options_struct (struct gcc_options *opts, struct gcc_options *opts_set)
   opts_set->x_param_values = XCNEWVEC (int, num_params);
   init_param_values (opts->x_param_values);
 
-  /* Use priority coloring if cover classes is not defined for the
-     target.  */
-  if (targetm.ira_cover_classes == NULL)
-    opts->x_flag_ira_algorithm = IRA_ALGORITHM_PRIORITY;
-
   /* Initialize whether `char' is signed.  */
   opts->x_flag_signed_char = DEFAULT_SIGNED_CHAR;
   /* Set this to a special "uninitialized" value.  The actual default
      is set after target options have been processed.  */
   opts->x_flag_short_enums = 2;
 
-  /* Initialize target_flags before targetm.target_option.optimization
+  /* Initialize target_flags before default_options_optimization
      so the latter can modify it.  */
-  opts->x_target_flags = targetm.default_target_flags;
+  opts->x_target_flags = targetm_common.default_target_flags;
 
   /* Some targets have ABI-specified unwind tables.  */
-  opts->x_flag_unwind_tables = targetm.unwind_tables_default;
+  opts->x_flag_unwind_tables = targetm_common.unwind_tables_default;
 
   /* Some targets have other target-specific initialization.  */
-  targetm.target_option.init_struct (opts);
+  targetm_common.option_init_struct (opts);
 }
 
 /* If indicated by the optimization level LEVEL (-Os if SIZE is set,
@@ -398,7 +387,7 @@ maybe_default_option (struct gcc_options *opts,
 			     lang_mask, DK_UNSPECIFIED, loc,
 			     handlers, dc);
   else if (default_opt->arg == NULL
-	   && !(option->flags & CL_REJECT_NEGATIVE))
+	   && !option->cl_reject_negative)
     handle_generated_option (opts, opts_set, default_opt->opt_index,
 			     default_opt->arg, !default_opt->value,
 			     lang_mask, DK_UNSPECIFIED, loc,
@@ -445,6 +434,7 @@ static const struct default_options default_options_table[] =
     { OPT_LEVELS_1_PLUS, OPT_fipa_reference, NULL, 1 },
     { OPT_LEVELS_1_PLUS, OPT_fipa_profile, NULL, 1 },
     { OPT_LEVELS_1_PLUS, OPT_fmerge_constants, NULL, 1 },
+    { OPT_LEVELS_1_PLUS, OPT_fshrink_wrap, NULL, 1 },
     { OPT_LEVELS_1_PLUS, OPT_fsplit_wide_types, NULL, 1 },
     { OPT_LEVELS_1_PLUS, OPT_ftree_ccp, NULL, 1 },
     { OPT_LEVELS_1_PLUS, OPT_ftree_bit_ccp, NULL, 1 },
@@ -495,6 +485,8 @@ static const struct default_options default_options_table[] =
     { OPT_LEVELS_2_PLUS, OPT_falign_jumps, NULL, 1 },
     { OPT_LEVELS_2_PLUS, OPT_falign_labels, NULL, 1 },
     { OPT_LEVELS_2_PLUS, OPT_falign_functions, NULL, 1 },
+    { OPT_LEVELS_2_PLUS, OPT_ftree_tail_merge, NULL, 1 },
+    { OPT_LEVELS_2_PLUS_SPEED_ONLY, OPT_foptimize_strlen, NULL, 1 },
 
     /* -O3 optimizations.  */
     { OPT_LEVELS_3_PLUS, OPT_ftree_loop_distribute_patterns, NULL, 1 },
@@ -502,6 +494,7 @@ static const struct default_options default_options_table[] =
     /* Inlining of functions reducing size is a good idea with -Os
        regardless of them being declared inline.  */
     { OPT_LEVELS_3_PLUS_AND_SIZE, OPT_finline_functions, NULL, 1 },
+    { OPT_LEVELS_1_PLUS, OPT_finline_functions_called_once, NULL, 1 },
     { OPT_LEVELS_3_PLUS, OPT_funswitch_loops, NULL, 1 },
     { OPT_LEVELS_3_PLUS, OPT_fgcse_after_reload, NULL, 1 },
     { OPT_LEVELS_3_PLUS, OPT_ftree_vectorize, NULL, 1 },
@@ -611,7 +604,7 @@ default_options_optimization (struct gcc_options *opts,
 
   /* Allow default optimizations to be specified on a per-machine basis.  */
   maybe_default_options (opts, opts_set,
-			 targetm.target_option.optimization_table,
+			 targetm_common.option_optimization_table,
 			 opts->x_optimize, opts->x_optimize_size,
 			 opts->x_optimize_fast, lang_mask, handlers, loc, dc);
 }
@@ -675,6 +668,9 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
       opts->x_flag_toplevel_reorder = 0;
     }
 
+  if (opts->x_flag_tm && opts->x_flag_non_call_exceptions)
+    sorry ("transactional memory is not supported with non-call exceptions");
+
   /* -Wmissing-noreturn is alias for -Wsuggest-attribute=noreturn.  */
   if (opts->x_warn_missing_noreturn)
     opts->x_warn_suggest_attribute_noreturn = true;
@@ -720,7 +716,7 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
      generating unwind info.  If opts->x_flag_exceptions is turned on
      we need to turn off the partitioning optimization.  */
 
-  ui_except = targetm.except_unwind_info (opts);
+  ui_except = targetm_common.except_unwind_info (opts);
 
   if (opts->x_flag_exceptions
       && opts->x_flag_reorder_blocks_and_partition
@@ -737,7 +733,7 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
      optimization.  */
 
   if (opts->x_flag_unwind_tables
-      && !targetm.unwind_tables_default
+      && !targetm_common.unwind_tables_default
       && opts->x_flag_reorder_blocks_and_partition
       && (ui_except == UI_SJLJ || ui_except == UI_TARGET))
     {
@@ -753,9 +749,9 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
      support named sections.  */
 
   if (opts->x_flag_reorder_blocks_and_partition
-      && (!targetm.have_named_sections
+      && (!targetm_common.have_named_sections
 	  || (opts->x_flag_unwind_tables
-	      && targetm.unwind_tables_default
+	      && targetm_common.unwind_tables_default
 	      && (ui_except == UI_SJLJ || ui_except == UI_TARGET))))
     {
       inform (loc,
@@ -774,26 +770,12 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
   if (!opts->x_flag_sel_sched_pipelining)
     opts->x_flag_sel_sched_pipelining_outer_loops = 0;
 
-  if (!targetm.ira_cover_classes
-      && opts->x_flag_ira_algorithm == IRA_ALGORITHM_CB)
-    {
-      inform (loc,
-	      "-fira-algorithm=CB does not work on this architecture");
-      opts->x_flag_ira_algorithm = IRA_ALGORITHM_PRIORITY;
-    }
-
   if (opts->x_flag_conserve_stack)
     {
       maybe_set_param_value (PARAM_LARGE_STACK_FRAME, 100,
 			     opts->x_param_values, opts_set->x_param_values);
       maybe_set_param_value (PARAM_STACK_FRAME_GROWTH, 40,
 			     opts->x_param_values, opts_set->x_param_values);
-    }
-  if (opts->x_flag_wpa || opts->x_flag_ltrans)
-    {
-      /* These passes are not WHOPR compatible yet.  */
-      opts->x_flag_ipa_pta = 0;
-      opts->x_flag_ipa_struct_reorg = 0;
     }
 
   if (opts->x_flag_lto)
@@ -808,7 +790,9 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
 #else
       error_at (loc, "LTO support has not been enabled in this configuration");
 #endif
-    }
+      if (!opts->x_flag_fat_lto_objects && !HAVE_LTO_PLUGIN)
+        error_at (loc, "-fno-fat-lto-objects are supported only with linker plugin.");
+}
   if ((opts->x_flag_lto_partition_balanced != 0) + (opts->x_flag_lto_partition_1to1 != 0)
        + (opts->x_flag_lto_partition_none != 0) >= 1)
     {
@@ -824,7 +808,7 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
     opts->x_flag_split_stack = 0;
   else if (opts->x_flag_split_stack)
     {
-      if (!targetm.supports_split_stack (true, opts))
+      if (!targetm_common.supports_split_stack (true, opts))
 	{
 	  error_at (loc, "%<-fsplit-stack%> is not supported by "
 		    "this compiler configuration");
@@ -847,9 +831,44 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
 	 opts->x_param_values, opts_set->x_param_values);
     }
 
+  /* Set PARAM_MAX_STORES_TO_SINK to 0 if either vectorization or if-conversion
+     is disabled.  */
+  if (!opts->x_flag_tree_vectorize || !opts->x_flag_tree_loop_if_convert)
+    maybe_set_param_value (PARAM_MAX_STORES_TO_SINK, 0,
+                           opts->x_param_values, opts_set->x_param_values);
+
+  /* This replaces set_Wunused.  */
+  if (opts->x_warn_unused_function == -1)
+    opts->x_warn_unused_function = opts->x_warn_unused;
+  if (opts->x_warn_unused_label == -1)
+    opts->x_warn_unused_label = opts->x_warn_unused;
+  /* Wunused-parameter is enabled if both -Wunused -Wextra are enabled.  */
+  if (opts->x_warn_unused_parameter == -1)
+    opts->x_warn_unused_parameter = (opts->x_warn_unused
+				     && opts->x_extra_warnings);
+  if (opts->x_warn_unused_variable == -1)
+    opts->x_warn_unused_variable = opts->x_warn_unused;
+  /* Wunused-but-set-parameter is enabled if both -Wunused -Wextra are
+     enabled.  */
+  if (opts->x_warn_unused_but_set_parameter == -1)
+    opts->x_warn_unused_but_set_parameter = (opts->x_warn_unused
+					     && opts->x_extra_warnings);
+  if (opts->x_warn_unused_but_set_variable == -1)
+    opts->x_warn_unused_but_set_variable = opts->x_warn_unused;
+  if (opts->x_warn_unused_value == -1)
+    opts->x_warn_unused_value = opts->x_warn_unused;
+
+  /* This replaces set_Wextra.  */
+  if (opts->x_warn_uninitialized == -1)
+    opts->x_warn_uninitialized = opts->x_extra_warnings;
+
   /* Turn on -ffunction-sections when -freorder-functions=* is used.  */
   if (opts->x_flag_reorder_functions > 1)
     opts->x_flag_function_sections = 1;
+
+  /* The -gsplit-dwarf option requires -gpubnames.  */
+  if (opts->x_dwarf_split_debug_info)
+    opts->x_debug_generate_pub_sections = 1;
 }
 
 #define LEFT_COLUMN	27
@@ -1004,7 +1023,7 @@ print_filtered_help (unsigned int include_flags,
 
       /* With the -Q option enabled we change the descriptive text associated
 	 with an option to be an indication of its current setting.  */
-      if (!quiet_flag)
+      if (!opts->x_quiet_flag)
 	{
 	  void *flag_var = option_flag_var (i, opts);
 
@@ -1142,7 +1161,7 @@ print_specific_help (unsigned int include_flags,
 
   /* Sanity check: Make sure that we do not have more
      languages than we have bits available to enumerate them.  */
-  gcc_assert ((1U << cl_lang_count) < CL_MIN_OPTION_CLASS);
+  gcc_assert ((1U << cl_lang_count) <= CL_MIN_OPTION_CLASS);
 
   /* If we have not done so already, obtain
      the desired maximum width of the output.  */
@@ -1231,6 +1250,23 @@ print_specific_help (unsigned int include_flags,
 		       opts->x_help_columns, opts, lang_mask);
 }
 
+
+/* Check the command line OPTIONS passed to
+   -fpmu-profile-generate. Return 0 if the options are valid, non-zero
+   otherwise.  */
+
+static int
+check_pmu_profile_options (const char *options)
+{
+  if (strcmp(options, "load-latency") &&
+      strcmp(options, "load-latency-verbose") &&
+      strcmp(options, "branch-mispredict") &&
+      strcmp(options, "branch-mispredict-verbose"))
+    return 1;
+  return 0;
+}
+
+
 /* Handle target- and language-independent options.  Return zero to
    generate an "unknown option" message.  Only options that need
    extra handling need to be listed here; if you simply want
@@ -1264,6 +1300,9 @@ common_handle_option (struct gcc_options *opts,
 	unsigned int undoc_mask;
 	unsigned int i;
 
+	if (lang_mask == CL_DRIVER)
+	  break;;
+
 	undoc_mask = ((opts->x_verbose_flag | opts->x_extra_warnings)
 		      ? 0
 		      : CL_UNDOCUMENTED);
@@ -1283,12 +1322,11 @@ common_handle_option (struct gcc_options *opts,
       }
 
     case OPT__target_help:
+      if (lang_mask == CL_DRIVER)
+	break;
+
       print_specific_help (CL_TARGET, CL_UNDOCUMENTED, 0, opts, lang_mask);
       opts->x_exit_after_options = true;
-
-      /* Allow the target a chance to give the user some additional information.  */
-      if (targetm.help)
-	targetm.help ();
       break;
 
     case OPT__help_:
@@ -1301,6 +1339,9 @@ common_handle_option (struct gcc_options *opts,
 
 	   --help=target,^undocumented  */
 	unsigned int exclude_flags = 0;
+
+	if (lang_mask == CL_DRIVER)
+	  break;
 
 	/* Walk along the argument string, parsing each word in turn.
 	   The format is:
@@ -1412,6 +1453,9 @@ common_handle_option (struct gcc_options *opts,
       }
 
     case OPT__version:
+      if (lang_mask == CL_DRIVER)
+	break;
+
       opts->x_exit_after_options = true;
       break;
 
@@ -1421,9 +1465,20 @@ common_handle_option (struct gcc_options *opts,
       /* Currently handled in a prescan.  */
       break;
 
+    case OPT_Werror:
+      dc->warning_as_error_requested = value;
+      break;
+
     case OPT_Werror_:
+      if (lang_mask == CL_DRIVER)
+	break;
+
       enable_warning_as_error (arg, value, lang_mask, handlers,
 			       opts, opts_set, loc, dc);
+      break;
+
+    case OPT_Wforce_warnings:
+      dc->force_warnings_requested = value;
       break;
 
     case OPT_Wlarger_than_:
@@ -1441,12 +1496,17 @@ common_handle_option (struct gcc_options *opts,
       break;
 
     case OPT_Wshadow:
-      warn_shadow_local = value;
-      warn_shadow_compatible_local = value;
+      opts->x_warn_shadow_local = value;
+      opts->x_warn_shadow_compatible_local = value;
       break;
 
     case OPT_Wshadow_local:
-      warn_shadow_compatible_local = value;
+      opts->x_warn_shadow_compatible_local = value;
+      break;
+
+    case OPT_Wstack_usage_:
+      opts->x_warn_stack_usage = value;
+      opts->x_flag_stack_usage_info = value != -1;
       break;
 
     case OPT_Wstrict_aliasing:
@@ -1565,7 +1625,6 @@ common_handle_option (struct gcc_options *opts,
     case OPT_fprofile_use_:
       opts->x_profile_data_prefix = xstrdup (arg);
       opts->x_flag_profile_use = true;
-      flag_profile_use = 1;
       value = true;
       /* No break here - do -fprofile-use processing. */
     case OPT_fprofile_use:
@@ -1596,7 +1655,6 @@ common_handle_option (struct gcc_options *opts,
 
     case OPT_fprofile_generate_:
       opts->x_profile_data_prefix = xstrdup (arg);
-      flag_profile_generate = 1;
       value = true;
       /* No break here - do -fprofile-generate processing. */
     case OPT_fprofile_generate:
@@ -1611,7 +1669,7 @@ common_handle_option (struct gcc_options *opts,
       /* FIXME: Instrumentation we insert makes ipa-reference bitmaps
 	 quadratic.  Disable the pass until better memory representation
 	 is done.  */
-      if (!opts_set->x_flag_ipa_reference && in_lto_p)
+      if (!opts_set->x_flag_ipa_reference && opts->x_in_lto_p)
         opts->x_flag_ipa_reference = false;
       break;
 
@@ -1640,6 +1698,10 @@ common_handle_option (struct gcc_options *opts,
       break;
 
     case OPT_frandom_seed_:
+      /* Deferred.  */
+      break;
+
+    case OPT_ffunction_attribute_list_:
       /* Deferred.  */
       break;
 
@@ -1692,6 +1754,11 @@ common_handle_option (struct gcc_options *opts,
       /* Deferred.  */
       break;
 
+    case OPT_fstack_usage:
+      opts->x_flag_stack_usage = value;
+      opts->x_flag_stack_usage_info = value != 0;
+      break;
+
     case OPT_ftree_vectorizer_verbose_:
       vect_set_verbosity_level (opts, value);
       break;
@@ -1709,12 +1776,12 @@ common_handle_option (struct gcc_options *opts,
       if (value < 2 || value > 4)
 	error_at (loc, "dwarf version %d is not supported", value);
       else
-	dwarf_version = value;
+	opts->x_dwarf_version = value;
       set_debug_level (DWARF2_DEBUG, false, "", opts, opts_set, loc);
       break;
 
-    case OPT_gfission:
-      set_debug_level (NO_DEBUG, DEFAULT_GDB_EXTENSIONS, arg, opts, opts_set,
+    case OPT_gsplit_dwarf:
+      set_debug_level (NO_DEBUG, DEFAULT_GDB_EXTENSIONS, "", opts, opts_set,
 		       loc);
       break;
 
@@ -1772,23 +1839,7 @@ common_handle_option (struct gcc_options *opts,
 
     case OPT_Wuninitialized:
       /* Also turn on maybe uninitialized warning.  */
-      warn_maybe_uninitialized = value;
-      break;
-
-    case OPT_fripa:
-      if (flag_ripa_stream)
-        flag_dyn_ipa = 0;
-      break;
-
-    case OPT_fripa_:
-      flag_ripa_stream = 0;
-      flag_dyn_ipa = 0;
-      if (!strcmp (arg, "FE"))
-        flag_dyn_ipa = 1;
-      else if (!strcmp (arg, "streaming"))
-        flag_ripa_stream = 1;
-      else
-        error ("Unrecognized -fripa= value \"%s\"", arg);
+      opts->x_warn_maybe_uninitialized = value;
       break;
 
     default:

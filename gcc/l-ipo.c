@@ -33,7 +33,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "l-ipo.h"
 #include "coverage.h"
 #include "gcov-io.h"
-#include "tree-pretty-print.h"
+#include "timevar.h"
 
 struct GTY(()) saved_module_scope
 {
@@ -391,7 +391,9 @@ pop_module_scope (void)
     primary_module_last_loc = input_location;
 
   at_eof = 1;
+  cgraph_process_same_body_aliases ();
   lang_hooks.l_ipo.process_pending_decls (input_location);
+  timevar_stop (TV_PHASE_DEFERRED);
   lang_hooks.l_ipo.clear_deferred_fns ();
   at_eof = 0;
 
@@ -1068,7 +1070,8 @@ cgraph_unify_type_alias_sets (void)
         {
           push_cfun (DECL_STRUCT_FUNCTION (node->decl));
           current_function_decl = node->decl;
-          cgraph_collect_type_referenced ();
+          if (gimple_has_body_p (current_function_decl))
+            cgraph_collect_type_referenced ();
           current_function_decl = NULL;
           pop_cfun ();
         }
@@ -1097,7 +1100,7 @@ cgraph_is_aux_decl_external (struct cgraph_node *node)
 {
   tree decl = node->decl;
 
-  if (!(L_IPO_COMP_MODE || L_IPO_STREAM_COMP_MODE))
+  if (!L_IPO_COMP_MODE)
     return false;
 
   if (!cgraph_is_auxiliary (decl))
@@ -1108,26 +1111,15 @@ cgraph_is_aux_decl_external (struct cgraph_node *node)
   if (node->is_versioned_clone)
     return false;
 
-  /* Reverse the process order for virtual and comdat functions
-     in streaming lipo.  */
-  if (!flag_ripa_stream)
-    {
-      /* virtual functions won't be deleted in the primary module.  */
-      if (DECL_VIRTUAL_P (decl))
-        return true;
-    }
+  /* virtual functions won't be deleted in the primary module.  */
+  if (DECL_VIRTUAL_P (decl))
+    return true;
 
   /* Comdat or weak functions in aux modules are not external --
      there is no guarantee that the definitition will be emitted
      in the primary compilation of this auxiliary module.  */
   if (DECL_COMDAT (decl) || DECL_WEAK (decl))
     return false;
-
-  if (flag_ripa_stream)
-    {
-      if (DECL_VIRTUAL_P (decl))
-        return true;
-    }
 
   if (!TREE_PUBLIC (decl))
     return false;
@@ -1390,7 +1382,7 @@ cgraph_lipo_get_resolved_node_1 (tree decl, bool do_assert)
   struct cgraph_sym **slot;
 
   /* Handle alias decl. */
-  slot = cgraph_sym (cgraph_node (decl)->decl);
+  slot = cgraph_sym (decl);
 
   if (!slot || !*slot)
     {
@@ -1403,11 +1395,11 @@ cgraph_lipo_get_resolved_node_1 (tree decl, bool do_assert)
              extern etc), they may be removed from the link table
              before direct calls to them are exposed (via indirect
              call promtion by const folding etc). When this happens,
-             the node will be to be relinked. A probably better fix
+             the node will need to be relinked. A probably better fix
              is to modify the callgraph so that they are not eliminated
              in the first place -- this will allow inlining to happen.  */
 
-          struct cgraph_node *n = cgraph_node (decl);
+          struct cgraph_node *n = cgraph_get_create_node (decl);
           if (!n->analyzed)
             {
               gcc_assert (DECL_EXTERNAL (decl)
@@ -1450,7 +1442,7 @@ cgraph_lipo_get_resolved_node (tree decl)
          modules. Skip the real resolution here to avoid merging '__builtin_xxx'
          with 'xxx'.  */
       || DECL_BUILT_IN (decl))
-    return cgraph_node (decl);
+    return cgraph_get_create_node (decl);
 
   node = cgraph_lipo_get_resolved_node_1 (decl, true);
   return node;
@@ -1736,15 +1728,15 @@ create_unique_name (tree decl, unsigned module_id)
       char *n;
       unsigned fno =  FUNC_DECL_FUNC_ID (context);
       n = (char *)alloca (strlen (name) + 15);
-      sprintf (n, "%s_%u", name, fno);
+      sprintf (n, "%s.%u", name, fno);
       name = n;
     }
 
   assembler_name = (char*) alloca (strlen (name) + 30);
-  sprintf (assembler_name, "%s_cmo_%u", name, module_id);
+  sprintf (assembler_name, "%s.cmo.%u", name, module_id);
   seq = get_name_seq_num (assembler_name);
   if (seq)
-    sprintf (assembler_name, "%s_%d", assembler_name, seq);
+    sprintf (assembler_name, "%s.%d", assembler_name, seq);
 
   assemb_id = get_identifier (assembler_name);
 
@@ -1772,7 +1764,7 @@ promote_static_var_func (unsigned module_id, tree decl, bool is_extern)
 
   if (DECL_ASSEMBLER_NAME_SET_P (decl)
       && TREE_CODE (decl) == FUNCTION_DECL)
-    cgraph_remove_assembler_hash_node (cgraph_node (decl));
+    cgraph_remove_assembler_hash_node (cgraph_get_create_node (decl));
 
   assemb_id = create_unique_name (decl, module_id);
   SET_DECL_ASSEMBLER_NAME (decl, assemb_id);
@@ -1782,24 +1774,26 @@ promote_static_var_func (unsigned module_id, tree decl, bool is_extern)
 
   if (TREE_CODE (decl) == FUNCTION_DECL)
     {
-      struct cgraph_node *node = cgraph_node (decl);
+      struct cgraph_node *node = cgraph_get_create_node (decl);
 
       node->resolution = LDPR_UNKNOWN;
       cgraph_add_assembler_hash_node (node);
-      if (flag_opt_info >= OPT_INFO_MAX) 
-        inform (UNKNOWN_LOCATION, "Promote function %s to global (%d): %s",
-                get_name (decl),is_extern,
-                IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME(decl)));
     }
   else
     {
       struct varpool_node *node = varpool_node (decl);
       node->resolution = LDPR_UNKNOWN;
+      /* Statics from exported primary module are very likely
+         referenced by other modules, so they should be made
+         externally visible (to be avoided to be localized again).
+         Another way to do this is to set force_output bit or
+         change the logic in varpool_externally_visible in ipa.c.  */
+      if (!is_extern)
+        {
+          node->resolution = LDPR_PREVAILING_DEF;
+          node->externally_visible = true;
+        }
       varpool_link_node (node);
-      if (flag_opt_info >= OPT_INFO_MAX) 
-        inform (UNKNOWN_LOCATION, "Promote variable %s to global (%d): %s",
-                get_name (decl),is_extern,
-                IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME(decl)));
     }
 
   if (is_extern)
@@ -1858,9 +1852,31 @@ process_module_scope_static_var (struct varpool_node *vnode)
     }
   else
     {
-      if (primary_module_id && primary_module_exported && !TREE_PUBLIC (decl))
+      if (PRIMARY_MODULE_EXPORTED && !TREE_PUBLIC (decl))
         promote_static_var_func (vnode->module_id, decl,
                                  varpool_is_auxiliary (vnode));
+    }
+}
+
+/* Promote all aliases of CNODE.  */
+
+static void
+promote_function_aliases (struct cgraph_node *cnode, unsigned mod_id,
+                          bool is_extern)
+{
+  int i;
+  struct ipa_ref *ref;
+
+  for (i = 0; ipa_ref_list_refering_iterate (&cnode->ref_list, i, ref); i++)
+    {
+      if (ref->use == IPA_REF_ALIAS)
+        {
+          struct cgraph_node *alias = ipa_ref_refering_node (ref);
+          tree alias_decl = alias->decl;
+          /* Should assert  */
+          if (cgraph_get_module_id (alias_decl) == mod_id)
+            promote_static_var_func (mod_id, alias_decl, is_extern);
+        }
     }
 }
 
@@ -1871,6 +1887,9 @@ process_module_scope_static_func (struct cgraph_node *cnode)
 {
   tree decl = cnode->decl;
   bool addr_taken;
+  unsigned mod_id;
+  struct ipa_ref *ref;
+  int i;
 
   if (TREE_PUBLIC (decl)
       || !TREE_STATIC (decl)
@@ -1885,15 +1904,15 @@ process_module_scope_static_func (struct cgraph_node *cnode)
   /* Can be local -- the promotion pass need to be done after
      callgraph build when address taken bit is set.  */
   addr_taken = cnode->address_taken;
-  if (!addr_taken && cnode->same_body)
+  if (!addr_taken)
     {
-      struct cgraph_node *alias = cnode->same_body;
-      while (alias)
-        {
-	  if (alias->address_taken)
-	    addr_taken = true;
-          alias = alias->next;
-        }
+      for (i = 0; ipa_ref_list_refering_iterate (&cnode->ref_list, i, ref); i++)
+        if (ref->use == IPA_REF_ALIAS)
+          {
+	    struct cgraph_node *alias = ipa_ref_refering_node (ref);
+	    if (alias->address_taken)
+	      addr_taken = true;
+          }
     }
   if (!addr_taken)
     {
@@ -1905,60 +1924,27 @@ process_module_scope_static_func (struct cgraph_node *cnode)
       return;
     }
 
+  mod_id = cgraph_get_module_id (decl);
   if (cgraph_is_auxiliary (decl))
     {
-      unsigned mod_id;
-
-      gcc_assert (cgraph_get_module_id (decl) != primary_module_id);
-      mod_id = cgraph_get_module_id (decl);
+      gcc_assert (mod_id != primary_module_id);
       /* Promote static function to global.  */
       if (mod_id)
         {
           promote_static_var_func (mod_id, decl, 1);
-
-          /* Process aliases  */
-          if (cnode->same_body)
-            {
-              struct cgraph_node *alias = cnode->same_body;
-              while (alias)
-                {
-                  if (!alias->thunk.thunk_p)
-                    {
-                      tree alias_decl = alias->decl;
-                      /* Should assert  */
-                      if (cgraph_get_module_id (alias_decl) == mod_id)
-                        promote_static_var_func (mod_id, alias_decl, 1);
-                    }
-                   alias = alias->next;
-                }
-            }
+          promote_function_aliases (cnode, mod_id, 1);
         }
     }
   else
     {
-      if (primary_module_exported
+      if (PRIMARY_MODULE_EXPORTED
           /* skip static_init routines.  */
           && !DECL_ARTIFICIAL (decl))
         {
-          promote_static_var_func (cgraph_get_module_id (decl), decl, 0);
+          promote_static_var_func (mod_id, decl, 0);
           cgraph_mark_if_needed (decl);
 
-          /* Process aliases  */
-          if (cnode->same_body)
-            {
-              struct cgraph_node *alias = cnode->same_body;
-              while (alias)
-                {
-                  if (!alias->thunk.thunk_p)
-                    {
-                      tree alias_decl = alias->decl;
-                      /* Should assert  */
-                      if (cgraph_get_module_id (alias_decl) == cgraph_get_module_id (decl))
-                        promote_static_var_func (cgraph_get_module_id (decl), alias_decl, 0);
-                    }
-                   alias = alias->next;
-                }
-            }
+          promote_function_aliases (cnode, mod_id, 0);
         }
     }
 }
@@ -1971,7 +1957,7 @@ cgraph_process_module_scope_statics (void)
   struct cgraph_node *pf;
   struct varpool_node *pv;
 
-  if (!(L_IPO_COMP_MODE || L_IPO_STREAM_COMP_MODE))
+  if (!L_IPO_COMP_MODE)
     return;
 
   promo_ent_hash_tab = htab_create (10, promo_ent_hash,
@@ -2183,6 +2169,37 @@ varpool_link_node (struct varpool_node *node)
     *slot = node;
 }
 
+/* Fixup references of VNODE.  */
+
+static void
+fixup_reference_list (struct varpool_node *node)
+{
+  int i;
+  struct ipa_ref *ref;
+  struct ipa_ref_list *list = &node->ref_list;
+  VEC(cgraph_node_ptr, heap) *new_refered = NULL;
+  struct cgraph_node *c;
+  enum ipa_ref_use use_type = IPA_REF_LOAD;
+
+  for (i = 0; ipa_ref_list_reference_iterate (list, i, ref); i++)
+    {
+      if (ref->refered_type == IPA_REF_CGRAPH)
+	{
+	  struct cgraph_node *cnode = ipa_ref_node (ref);
+          struct cgraph_node *r_cnode = cgraph_lipo_get_resolved_node (cnode->decl);
+          if (r_cnode != cnode)
+            {
+              VEC_safe_push (cgraph_node_ptr, heap, new_refered, r_cnode);
+              use_type = ref->use;
+            }
+        }
+    }
+  for (i = 0; VEC_iterate (cgraph_node_ptr, new_refered, i, c); ++i)
+    {
+      ipa_record_reference (NULL, node, c, NULL, use_type, NULL);
+    }
+}
+
 /* Perform cross module linking for var_decls.  */
 
 void
@@ -2201,8 +2218,11 @@ varpool_do_link (void)
 
   /* Merge the externally visible attribute.  */
   for (node = varpool_nodes; node; node = node->next)
-    if (node->externally_visible)
-      (real_varpool_node (node->decl))->externally_visible = true;
+    {
+      if (node->externally_visible)
+        (real_varpool_node (node->decl))->externally_visible = true;
+      fixup_reference_list (node);
+    }
 }
 
 /* Get the list of assembler name ids with reference bit set.  */

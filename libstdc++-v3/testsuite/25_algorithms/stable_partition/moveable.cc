@@ -1,6 +1,6 @@
 // { dg-options "-std=gnu++0x" }
 
-// Copyright (C) 2009, 2010, 2012 Free Software Foundation, Inc.
+// Copyright (C) 2009, 2010, 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -19,10 +19,6 @@
 
 // 25.2.12 [lib.alg.partitions] Partitions.
 
-// XXX FIXME:  parallel-mode should deal correctly with moveable-only types
-// per C++0x, at minimum smoothly fall back to serial.
-#undef _GLIBCXX_PARALLEL
-
 #include <algorithm>
 #include <functional>
 #include <testsuite_hooks.h>
@@ -39,8 +35,7 @@ const int A[] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
 const int B[] = {2, 4, 6, 8, 10, 12, 14, 16, 1, 3, 5, 7, 9, 11, 13, 15, 17};
 const int N = sizeof(A) / sizeof(int);
 
-// Check that starting with a value the predicate returns true for
-// works too. (PR52822)
+// Check that starting with a true predicate works too. (PR52822)
 const int A2[] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17};
 const int B2[] = {2, 4, 6, 8, 10, 12, 14, 16, 3, 5, 7, 9, 11, 13, 15, 17};
 const int N2 = sizeof(A2) / sizeof(int);
@@ -52,8 +47,7 @@ struct Pred
   { return (x.val % 2) == 0; }
 };
 
-// 25.2.12 stable_partition(), starting with a value for which the
-// predicate returns false.
+// 25.2.12 stable_partition(), starting with a false predicate.
 void
 test01()
 {
@@ -67,8 +61,7 @@ test01()
   VERIFY( std::equal(s1, s1 + N, B) );
 }
 
-// 25.2.12 stable_partition(), starting with a value for which the
-// predicate returns true.
+// 25.2.12 stable_partition(), starting with a true predicate.
 void
 test02()
 {

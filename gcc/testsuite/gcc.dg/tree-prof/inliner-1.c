@@ -1,4 +1,4 @@
-/* { dg-options "-O2 -fno-inline-hot-caller -fdump-tree-optimized" } */
+/* { dg-options "-O2 --param inline-hot-caller=0 -fdump-tree-optimized" } */
 int a;
 int b[100];
 void abort (void);

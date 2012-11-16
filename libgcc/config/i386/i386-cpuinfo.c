@@ -21,7 +21,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "cpuid.h"
 #include "tsystem.h"
 
-int __cpu_indicator_init (void) __attribute__ ((constructor));
+int __cpu_indicator_init (void) __attribute__ ((constructor (101)));
 
 enum vendor_signatures
 {
@@ -29,8 +29,7 @@ enum vendor_signatures
   SIG_AMD =	0x68747541 /* Auth */
 };
 
-
-/* Features supported. */
+/* ISA Features supported. */
 
 struct __processor_features
 {
@@ -227,12 +226,12 @@ __get_cpuid_output (unsigned int __level,
 
 
 /* A constructor function that is sets __cpu_model and __cpu_features with
-   the right values.  This needs to run only once.
-   If another constructor needs to use these values, explicitly call this
-   function from the other constructor.  Otherwise, the ordering of
-   constructors could make this constructor run later.  */
+   the right values.  This needs to run only once.  This constructor is
+   given the highest priority and it should run before constructors without
+   the priority set.  However, it still runs after ifunc initializers and
+   needs to be called explicitly there.  */
 
-int __attribute__ ((constructor))
+int __attribute__ ((constructor (101)))
 __cpu_indicator_init (void)
 {
   unsigned int eax, ebx, ecx, edx;

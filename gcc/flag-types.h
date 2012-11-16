@@ -106,6 +106,14 @@ enum symbol_visibility
 };
 #endif
 
+/* The stack reuse level.  */
+enum stack_reuse_level
+{
+  SR_NONE,
+  SR_NAMED_VARS,
+  SR_ALL
+};
+
 /* The algorithm used for the integrated register allocator (IRA).  */
 enum ira_algorithm
 {
@@ -118,7 +126,11 @@ enum ira_region
 {
   IRA_REGION_ONE,
   IRA_REGION_ALL,
-  IRA_REGION_MIXED
+  IRA_REGION_MIXED,
+  /* This value means that there were no options -fira-region on the
+     command line and that we should choose a value depending on the
+     used -O option.  */
+  IRA_REGION_AUTODETECT
 };
 
 /* The options for excess precision.  */

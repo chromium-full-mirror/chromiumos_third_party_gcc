@@ -1,5 +1,5 @@
 /* Transformations based on profile information for values.
-   Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+   Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
    Free Software Foundation, Inc.
 
 This file is part of GCC.
@@ -50,6 +50,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "params.h"
 #include "l-ipo.h"
 #include "profile.h"
+#include "ipa-inline.h"
 
 /* In this file value profile based optimizations are placed.  Currently the
    following optimizations are implemented (for more detailed descriptions
@@ -626,17 +627,7 @@ gimple_value_profile_transformations (void)
     }
 
   if (changed)
-    {
-      counts_to_freqs ();
-      /* Value profile transformations may change inline parameters
-         a lot (e.g., indirect call promotion introduces new direct calls).
-         The update is also needed to avoid compiler ICE -- when MULTI
-         target icall promotion happens, the caller's size may become
-         negative when the promoted direct calls get promoted.  */
-      /* Guard this for LIPO for now.  */
-      if (L_IPO_COMP_MODE || flag_ripa_stream)
-        compute_inline_parameters (cgraph_node (current_function_decl));
-    }
+    counts_to_freqs ();
 
   return changed;
 }
@@ -1162,7 +1153,7 @@ init_node_map (void)
 {
   struct cgraph_node *n;
 
-  if (L_IPO_COMP_MODE || flag_ripa_stream)
+  if (L_IPO_COMP_MODE)
     return;
 
   if (get_last_funcdef_no ())
@@ -1182,8 +1173,8 @@ init_node_map (void)
 void
 del_node_map (void)
 {
-  if (L_IPO_COMP_MODE || flag_ripa_stream)
-    return;
+   if (L_IPO_COMP_MODE)
+     return;
 
    VEC_free (cgraph_node_ptr, heap, cgraph_node_map);
    cgraph_node_map = NULL;
@@ -1273,7 +1264,7 @@ init_gid_map (void)
       if (!f || DECL_ABSTRACT (n->decl))
         continue;
       /* The global function id computed at profile-use time
-         is slightly different from the one computed in
+        is slightly different from the one computed in
          instrumentation runtime -- for the latter, the intra-
          module function ident is 1 based while in profile-use
          phase, it is zero based. See get_next_funcdef_no in
@@ -1296,7 +1287,7 @@ init_gid_map (void)
 void
 cgraph_init_gid_map (void)
 {
-  if (!(L_IPO_COMP_MODE || flag_ripa_stream))
+  if (!L_IPO_COMP_MODE)
     return;
 
   init_gid_map ();
@@ -1318,6 +1309,7 @@ find_func_by_global_id (unsigned HOST_WIDE_INT gid)
     return entp->node;
   return NULL;
 }
+
 
 /* Perform sanity check on the indirect call target. Due to race conditions,
    false function target may be attributed to an indirect call site. If the
@@ -1357,7 +1349,7 @@ gimple_ic (gimple icall_stmt, struct cgraph_node *direct_call,
   tree optype = build_pointer_type (void_type_node);
   edge e_cd, e_ci, e_di, e_dj = NULL, e_ij;
   gimple_stmt_iterator gsi;
-  int lp_nr;
+  int lp_nr, dflags;
 
   cond_bb = gimple_bb (icall_stmt);
   gsi = gsi_for_stmt (icall_stmt);
@@ -1384,6 +1376,9 @@ gimple_ic (gimple icall_stmt, struct cgraph_node *direct_call,
   update_stmt (icall_stmt);
   dcall_stmt = gimple_copy (icall_stmt);
   gimple_call_set_fndecl (dcall_stmt, direct_call->decl);
+  dflags = flags_from_decl_or_type (direct_call->decl);
+  if ((dflags & ECF_NORETURN) != 0)
+    gimple_call_set_lhs (dcall_stmt, NULL_TREE);
   gsi_insert_before (&gsi, dcall_stmt, GSI_SAME_STMT);
 
   /* Fix CFG. */
@@ -1428,17 +1423,23 @@ gimple_ic (gimple icall_stmt, struct cgraph_node *direct_call,
 
   if (e_ij != NULL)
     {
-      e_dj = make_edge (dcall_bb, join_bb, EDGE_FALLTHRU);
-      e_dj->probability = REG_BR_PROB_BASE;
-      e_dj->count = count;
+      if ((dflags & ECF_NORETURN) != 0)
+	e_ij->count = all;
+      else
+	{
+	  e_dj = make_edge (dcall_bb, join_bb, EDGE_FALLTHRU);
+	  e_dj->probability = REG_BR_PROB_BASE;
+	  e_dj->count = count;
 
+	  e_ij->count = all - count;
+	}
       e_ij->probability = REG_BR_PROB_BASE;
-      e_ij->count = all - count;
     }
 
   /* Insert PHI node for the call result if necessary.  */
   if (gimple_call_lhs (icall_stmt)
-      && TREE_CODE (gimple_call_lhs (icall_stmt)) == SSA_NAME)
+      && TREE_CODE (gimple_call_lhs (icall_stmt)) == SSA_NAME
+      && (dflags & ECF_NORETURN) == 0)
     {
       tree result = gimple_call_lhs (icall_stmt);
       gimple phi = create_phi_node (result, join_bb);
@@ -1632,7 +1633,6 @@ gimple_ic_transform_mult_targ (gimple stmt, histogram_value histogram)
     {
       /* TODO: should mark the call edge. */
       DECL_DISREGARD_INLINE_LIMITS (direct_call1->decl) = 1;
-      direct_call1->local.disregard_inline_limits = 1;
     }
   if (dump_file)
     {
@@ -1671,7 +1671,6 @@ gimple_ic_transform_mult_targ (gimple stmt, histogram_value histogram)
         {
           /* TODO: should mark the call edge.  */
           DECL_DISREGARD_INLINE_LIMITS (direct_call2->decl) = 1;
-          direct_call2->local.disregard_inline_limits = 1;
         }
       if (dump_file)
         {
@@ -1919,13 +1918,13 @@ gimple_stringops_transform (gimple_stmt_iterator *gsi)
   else
     prob = 0;
   dest = gimple_call_arg (stmt, 0);
-  dest_align = get_pointer_alignment (dest, BIGGEST_ALIGNMENT);
+  dest_align = get_pointer_alignment (dest);
   switch (fcode)
     {
     case BUILT_IN_MEMCPY:
     case BUILT_IN_MEMPCPY:
       src = gimple_call_arg (stmt, 1);
-      src_align = get_pointer_alignment (src, BIGGEST_ALIGNMENT);
+      src_align = get_pointer_alignment (src);
       if (!can_move_by_pieces (val, MIN (dest_align, src_align)))
 	return false;
       break;
@@ -2075,6 +2074,7 @@ gimple_indirect_call_to_profile (gimple stmt, histogram_values *values)
   tree callee;
 
   if (gimple_code (stmt) != GIMPLE_CALL
+      || gimple_call_internal_p (stmt)
       || gimple_call_fndecl (stmt) != NULL_TREE)
     return;
 
@@ -2082,7 +2082,7 @@ gimple_indirect_call_to_profile (gimple stmt, histogram_values *values)
 
   VEC_reserve (histogram_value, heap, *values, 3);
 
-  if (flag_dyn_ipa || flag_ripa_stream)
+  if (flag_dyn_ipa)
     VEC_quick_push (histogram_value, *values,
 		    gimple_alloc_histogram_value (cfun, HIST_TYPE_INDIR_CALL_TOPN,
 						  stmt, callee));

@@ -338,18 +338,30 @@ make_edges (basic_block min, basic_block max, int update_p)
 	  /* Add any appropriate EH edges.  */
 	  rtl_make_eh_edge (edge_cache, bb, insn);
 
-	  if (code == CALL_INSN && nonlocal_goto_handler_labels)
+	  if (code == CALL_INSN)
 	    {
-	      /* ??? This could be made smarter: in some cases it's possible
-		 to tell that certain calls will not do a nonlocal goto.
-		 For example, if the nested functions that do the nonlocal
-		 gotos do not have their addresses taken, then only calls to
-		 those functions or to other nested functions that use them
-		 could possibly do nonlocal gotos.  */
 	      if (can_nonlocal_goto (insn))
-		for (x = nonlocal_goto_handler_labels; x; x = XEXP (x, 1))
-		  make_label_edge (edge_cache, bb, XEXP (x, 0),
-				   EDGE_ABNORMAL | EDGE_ABNORMAL_CALL);
+		{
+		  /* ??? This could be made smarter: in some cases it's
+		     possible to tell that certain calls will not do a
+		     nonlocal goto.  For example, if the nested functions
+		     that do the nonlocal gotos do not have their addresses
+		     taken, then only calls to those functions or to other
+		     nested functions that use them could possibly do
+		     nonlocal gotos.  */
+		  for (x = nonlocal_goto_handler_labels; x; x = XEXP (x, 1))
+		    make_label_edge (edge_cache, bb, XEXP (x, 0),
+				     EDGE_ABNORMAL | EDGE_ABNORMAL_CALL);
+		}
+
+	      if (flag_tm)
+		{
+		  rtx note;
+		  for (note = REG_NOTES (insn); note; note = XEXP (note, 1))
+		    if (REG_NOTE_KIND (note) == REG_TM)
+		      make_label_edge (edge_cache, bb, XEXP (note, 0),
+				       EDGE_ABNORMAL | EDGE_ABNORMAL_CALL);
+		}
 	    }
 	}
 
@@ -522,21 +534,6 @@ find_bb_boundaries (basic_block bb)
     purge_dead_tablejump_edges (bb, table);
 }
 
-/* Check if there is at least one edge in EDGES with a non-zero count
-   field.  */
-
-static bool
-non_zero_profile_counts ( VEC(edge,gc) *edges) {
-  edge e;
-  edge_iterator ei;
-  FOR_EACH_EDGE(e, ei, edges)
-    {
-      if (e->count > 0)
-        return true;
-    }
-  return false;
-}
-
 /*  Assume that frequency of basic block B is known.  Compute frequencies
     and probabilities of outgoing edges.  */
 
@@ -564,6 +561,7 @@ compute_outgoing_frequencies (basic_block b)
 	  return;
 	}
     }
+
   if (single_succ_p (b))
     {
       e = single_succ_edge (b);
@@ -571,10 +569,6 @@ compute_outgoing_frequencies (basic_block b)
       e->count = b->count;
       return;
     }
-  else if (non_zero_profile_counts (b->succs)){
-    /*Profile counts already set, but REG_NOTE missing. Retain the counts.  */
-    return;
-  }
   guess_outgoing_edge_probabilities (b);
   if (b->count)
     FOR_EACH_EDGE (e, ei, b->succs)

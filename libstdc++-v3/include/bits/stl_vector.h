@@ -60,7 +60,9 @@
 #include <bits/stl_iterator_base_funcs.h>
 #include <bits/functexcept.h>
 #include <bits/concept_check.h>
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
 #include <initializer_list>
+#endif
 
 namespace std _GLIBCXX_VISIBILITY(default)
 {
@@ -70,14 +72,17 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
   template<typename _Tp, typename _Alloc>
     struct _Vector_base
     {
-      typedef typename _Alloc::template rebind<_Tp>::other _Tp_alloc_type;
+      typedef typename __gnu_cxx::__alloc_traits<_Alloc>::template
+        rebind<_Tp>::other _Tp_alloc_type;
+      typedef typename __gnu_cxx::__alloc_traits<_Tp_alloc_type>::pointer
+       	pointer;
 
       struct _Vector_impl 
       : public _Tp_alloc_type
       {
-	typename _Tp_alloc_type::pointer _M_start;
-	typename _Tp_alloc_type::pointer _M_finish;
-	typename _Tp_alloc_type::pointer _M_end_of_storage;
+	pointer _M_start;
+	pointer _M_finish;
+	pointer _M_end_of_storage;
 
 	_Vector_impl()
 	: _Tp_alloc_type(), _M_start(0), _M_finish(0), _M_end_of_storage(0)
@@ -86,21 +91,35 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 	_Vector_impl(_Tp_alloc_type const& __a)
 	: _Tp_alloc_type(__a), _M_start(0), _M_finish(0), _M_end_of_storage(0)
 	{ }
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+	_Vector_impl(_Tp_alloc_type&& __a)
+	: _Tp_alloc_type(std::move(__a)),
+	  _M_start(0), _M_finish(0), _M_end_of_storage(0)
+	{ }
+#endif
+
+	void _M_swap_data(_Vector_impl& __x)
+	{
+	  std::swap(_M_start, __x._M_start);
+	  std::swap(_M_finish, __x._M_finish);
+	  std::swap(_M_end_of_storage, __x._M_end_of_storage);
+	}
       };
       
     public:
       typedef _Alloc allocator_type;
 
       _Tp_alloc_type&
-      _M_get_Tp_allocator()
+      _M_get_Tp_allocator() _GLIBCXX_NOEXCEPT
       { return *static_cast<_Tp_alloc_type*>(&this->_M_impl); }
 
       const _Tp_alloc_type&
-      _M_get_Tp_allocator() const
+      _M_get_Tp_allocator() const _GLIBCXX_NOEXCEPT
       { return *static_cast<const _Tp_alloc_type*>(&this->_M_impl); }
 
       allocator_type
-      get_allocator() const
+      get_allocator() const _GLIBCXX_NOEXCEPT
       { return allocator_type(_M_get_Tp_allocator()); }
 
       _Vector_base()
@@ -111,30 +130,30 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       _Vector_base(size_t __n)
       : _M_impl()
-      {
-	this->_M_impl._M_start = this->_M_allocate(__n);
-	this->_M_impl._M_finish = this->_M_impl._M_start;
-	this->_M_impl._M_end_of_storage = this->_M_impl._M_start + __n;
-      }
+      { _M_create_storage(__n); }
 
       _Vector_base(size_t __n, const allocator_type& __a)
       : _M_impl(__a)
-      {
-	this->_M_impl._M_start = this->_M_allocate(__n);
-	this->_M_impl._M_finish = this->_M_impl._M_start;
-	this->_M_impl._M_end_of_storage = this->_M_impl._M_start + __n;
-      }
+      { _M_create_storage(__n); }
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
+      _Vector_base(_Tp_alloc_type&& __a)
+      : _M_impl(std::move(__a)) { }
+
       _Vector_base(_Vector_base&& __x)
-      : _M_impl(__x._M_get_Tp_allocator())
+      : _M_impl(std::move(__x._M_get_Tp_allocator()))
+      { this->_M_impl._M_swap_data(__x._M_impl); }
+
+      _Vector_base(_Vector_base&& __x, const allocator_type& __a)
+      : _M_impl(__a)
       {
-	this->_M_impl._M_start = __x._M_impl._M_start;
-	this->_M_impl._M_finish = __x._M_impl._M_finish;
-	this->_M_impl._M_end_of_storage = __x._M_impl._M_end_of_storage;
-	__x._M_impl._M_start = 0;
-	__x._M_impl._M_finish = 0;
-	__x._M_impl._M_end_of_storage = 0;
+	if (__x.get_allocator() == __a)
+	  this->_M_impl._M_swap_data(__x._M_impl);
+	else
+	  {
+	    size_t __n = __x._M_impl._M_finish - __x._M_impl._M_start;
+	    _M_create_storage(__n);
+	  }
       }
 #endif
 
@@ -145,15 +164,24 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
     public:
       _Vector_impl _M_impl;
 
-      typename _Tp_alloc_type::pointer
+      pointer
       _M_allocate(size_t __n)
       { return __n != 0 ? _M_impl.allocate(__n) : 0; }
 
       void
-      _M_deallocate(typename _Tp_alloc_type::pointer __p, size_t __n)
+      _M_deallocate(pointer __p, size_t __n)
       {
 	if (__p)
 	  _M_impl.deallocate(__p, __n);
+      }
+
+    private:
+      void
+      _M_create_storage(size_t __n)
+      {
+	this->_M_impl._M_start = this->_M_allocate(__n);
+	this->_M_impl._M_finish = this->_M_impl._M_start;
+	this->_M_impl._M_end_of_storage = this->_M_impl._M_start + __n;
       }
     };
 
@@ -186,13 +214,14 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       
       typedef _Vector_base<_Tp, _Alloc>			 _Base;
       typedef typename _Base::_Tp_alloc_type		 _Tp_alloc_type;
+      typedef __gnu_cxx::__alloc_traits<_Tp_alloc_type>  _Alloc_traits;
 
     public:
       typedef _Tp					 value_type;
-      typedef typename _Tp_alloc_type::pointer           pointer;
-      typedef typename _Tp_alloc_type::const_pointer     const_pointer;
-      typedef typename _Tp_alloc_type::reference         reference;
-      typedef typename _Tp_alloc_type::const_reference   const_reference;
+      typedef typename _Base::pointer                    pointer;
+      typedef typename _Alloc_traits::const_pointer      const_pointer;
+      typedef typename _Alloc_traits::reference          reference;
+      typedef typename _Alloc_traits::const_reference    const_reference;
       typedef __gnu_cxx::__normal_iterator<pointer, vector> iterator;
       typedef __gnu_cxx::__normal_iterator<const_pointer, vector>
       const_iterator;
@@ -229,7 +258,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  Creates a %vector with no elements.
-       *  @param  a  An allocator object.
+       *  @param  __a  An allocator object.
        */
       explicit
       vector(const allocator_type& __a)
@@ -238,9 +267,9 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
       /**
        *  @brief  Creates a %vector with default constructed elements.
-       *  @param  n  The number of elements to initially create.
+       *  @param  __n  The number of elements to initially create.
        *
-       *  This constructor fills the %vector with @a n default
+       *  This constructor fills the %vector with @a __n default
        *  constructed elements.
        */
       explicit
@@ -250,11 +279,11 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  Creates a %vector with copies of an exemplar element.
-       *  @param  n  The number of elements to initially create.
-       *  @param  value  An element to copy.
-       *  @param  a  An allocator.
+       *  @param  __n  The number of elements to initially create.
+       *  @param  __value  An element to copy.
+       *  @param  __a  An allocator.
        *
-       *  This constructor fills the %vector with @a n copies of @a value.
+       *  This constructor fills the %vector with @a __n copies of @a __value.
        */
       vector(size_type __n, const value_type& __value,
 	     const allocator_type& __a = allocator_type())
@@ -263,11 +292,11 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 #else
       /**
        *  @brief  Creates a %vector with copies of an exemplar element.
-       *  @param  n  The number of elements to initially create.
-       *  @param  value  An element to copy.
-       *  @param  a  An allocator.
+       *  @param  __n  The number of elements to initially create.
+       *  @param  __value  An element to copy.
+       *  @param  __a  An allocator.
        *
-       *  This constructor fills the %vector with @a n copies of @a value.
+       *  This constructor fills the %vector with @a __n copies of @a __value.
        */
       explicit
       vector(size_type __n, const value_type& __value = value_type(),
@@ -278,15 +307,16 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  %Vector copy constructor.
-       *  @param  x  A %vector of identical element and allocator types.
+       *  @param  __x  A %vector of identical element and allocator types.
        *
        *  The newly-created %vector uses a copy of the allocation
-       *  object used by @a x.  All the elements of @a x are copied,
+       *  object used by @a __x.  All the elements of @a __x are copied,
        *  but any extra memory in
-       *  @a x (for fast expansion) will not be copied.
+       *  @a __x (for fast expansion) will not be copied.
        */
       vector(const vector& __x)
-      : _Base(__x.size(), __x._M_get_Tp_allocator())
+      : _Base(__x.size(),
+        _Alloc_traits::_S_select_on_copy(__x._M_get_Tp_allocator()))
       { this->_M_impl._M_finish =
 	  std::__uninitialized_copy_a(__x.begin(), __x.end(),
 				      this->_M_impl._M_start,
@@ -296,24 +326,47 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
       /**
        *  @brief  %Vector move constructor.
-       *  @param  x  A %vector of identical element and allocator types.
+       *  @param  __x  A %vector of identical element and allocator types.
        *
-       *  The newly-created %vector contains the exact contents of @a x.
-       *  The contents of @a x are a valid, but unspecified %vector.
+       *  The newly-created %vector contains the exact contents of @a __x.
+       *  The contents of @a __x are a valid, but unspecified %vector.
        */
-      vector(vector&& __x)
+      vector(vector&& __x) noexcept
       : _Base(std::move(__x)) { }
+
+      /// Copy constructor with alternative allocator
+      vector(const vector& __x, const allocator_type& __a)
+      : _Base(__x.size(), __a)
+      { this->_M_impl._M_finish =
+	  std::__uninitialized_copy_a(__x.begin(), __x.end(),
+				      this->_M_impl._M_start,
+				      _M_get_Tp_allocator());
+      }
+
+      /// Move constructor with alternative allocator
+      vector(vector&& __rv, const allocator_type& __m)
+      : _Base(std::move(__rv), __m)
+      {
+	if (__rv.get_allocator() != __m)
+	  {
+	    this->_M_impl._M_finish =
+	      std::__uninitialized_move_a(__rv.begin(), __rv.end(),
+					  this->_M_impl._M_start,
+					  _M_get_Tp_allocator());
+	    __rv.clear();
+	  }
+      }
 
       /**
        *  @brief  Builds a %vector from an initializer list.
-       *  @param  l  An initializer_list.
-       *  @param  a  An allocator.
+       *  @param  __l  An initializer_list.
+       *  @param  __a  An allocator.
        *
        *  Create a %vector consisting of copies of the elements in the
-       *  initializer_list @a l.
+       *  initializer_list @a __l.
        *
        *  This will call the element type's copy constructor N times
-       *  (where N is @a l.size()) and do no memory reallocation.
+       *  (where N is @a __l.size()) and do no memory reallocation.
        */
       vector(initializer_list<value_type> __l,
 	     const allocator_type& __a = allocator_type())
@@ -326,9 +379,9 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  Builds a %vector from a range.
-       *  @param  first  An input iterator.
-       *  @param  last  An input iterator.
-       *  @param  a  An allocator.
+       *  @param  __first  An input iterator.
+       *  @param  __last  An input iterator.
+       *  @param  __a  An allocator.
        *
        *  Create a %vector consisting of copies of the elements from
        *  [first,last).
@@ -356,16 +409,16 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  not touched in any way.  Managing the pointer is the user's
        *  responsibility.
        */
-      ~vector()
+      ~vector() _GLIBCXX_NOEXCEPT
       { std::_Destroy(this->_M_impl._M_start, this->_M_impl._M_finish,
 		      _M_get_Tp_allocator()); }
 
       /**
        *  @brief  %Vector assignment operator.
-       *  @param  x  A %vector of identical element and allocator types.
+       *  @param  __x  A %vector of identical element and allocator types.
        *
-       *  All the elements of @a x are copied, but any extra memory in
-       *  @a x (for fast expansion) will not be copied.  Unlike the
+       *  All the elements of @a __x are copied, but any extra memory in
+       *  @a __x (for fast expansion) will not be copied.  Unlike the
        *  copy constructor, the allocator object is not copied.
        */
       vector&
@@ -374,27 +427,29 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
       /**
        *  @brief  %Vector move assignment operator.
-       *  @param  x  A %vector of identical element and allocator types.
+       *  @param  __x  A %vector of identical element and allocator types.
        *
-       *  The contents of @a x are moved into this %vector (without copying).
-       *  @a x is a valid, but unspecified %vector.
+       *  The contents of @a __x are moved into this %vector (without copying,
+       *  if the allocators permit it).
+       *  @a __x is a valid, but unspecified %vector.
        */
       vector&
-      operator=(vector&& __x)
+      operator=(vector&& __x) noexcept(_Alloc_traits::_S_nothrow_move())
       {
-	// NB: DR 1204.
-	// NB: DR 675.
-	this->clear();
-	this->swap(__x);
+        constexpr bool __move_storage =
+          _Alloc_traits::_S_propagate_on_move_assign()
+          || _Alloc_traits::_S_always_equal();
+        _M_move_assign(std::move(__x),
+                       integral_constant<bool, __move_storage>());
 	return *this;
       }
 
       /**
        *  @brief  %Vector list assignment operator.
-       *  @param  l  An initializer_list.
+       *  @param  __l  An initializer_list.
        *
        *  This function fills a %vector with copies of the elements in the
-       *  initializer list @a l.
+       *  initializer list @a __l.
        *
        *  Note that the assignment completely changes the %vector and
        *  that the resulting %vector's size is the same as the number
@@ -410,10 +465,10 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  Assigns a given value to a %vector.
-       *  @param  n  Number of elements to be assigned.
-       *  @param  val  Value to be assigned.
+       *  @param  __n  Number of elements to be assigned.
+       *  @param  __val  Value to be assigned.
        *
-       *  This function fills a %vector with @a n copies of the given
+       *  This function fills a %vector with @a __n copies of the given
        *  value.  Note that the assignment completely changes the
        *  %vector and that the resulting %vector's size is the same as
        *  the number of elements assigned.  Old data may be lost.
@@ -424,11 +479,11 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  Assigns a range to a %vector.
-       *  @param  first  An input iterator.
-       *  @param  last   An input iterator.
+       *  @param  __first  An input iterator.
+       *  @param  __last   An input iterator.
        *
        *  This function fills a %vector with copies of the elements in the
-       *  range [first,last).
+       *  range [__first,__last).
        *
        *  Note that the assignment completely changes the %vector and
        *  that the resulting %vector's size is the same as the number
@@ -446,10 +501,10 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
       /**
        *  @brief  Assigns an initializer list to a %vector.
-       *  @param  l  An initializer_list.
+       *  @param  __l  An initializer_list.
        *
        *  This function fills a %vector with copies of the elements in the
-       *  initializer list @a l.
+       *  initializer list @a __l.
        *
        *  Note that the assignment completely changes the %vector and
        *  that the resulting %vector's size is the same as the number
@@ -470,7 +525,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  element order.
        */
       iterator
-      begin()
+      begin() _GLIBCXX_NOEXCEPT
       {
 #if __google_stl_debug_dangling_vector
         if (!this->_M_is_valid())
@@ -485,7 +540,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  element order.
        */
       const_iterator
-      begin() const
+      begin() const _GLIBCXX_NOEXCEPT
       {
 #if __google_stl_debug_dangling_vector
         if (!this->_M_is_valid())
@@ -500,7 +555,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  element order.
        */
       iterator
-      end()
+      end() _GLIBCXX_NOEXCEPT
       {
 #if __google_stl_debug_dangling_vector
         if (!this->_M_is_valid())
@@ -515,7 +570,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  ordinary element order.
        */
       const_iterator
-      end() const
+      end() const _GLIBCXX_NOEXCEPT
       {
 #if __google_stl_debug_dangling_vector
         if (!this->_M_is_valid())
@@ -530,7 +585,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  element order.
        */
       reverse_iterator
-      rbegin()
+      rbegin() _GLIBCXX_NOEXCEPT
       { return reverse_iterator(end()); }
 
       /**
@@ -539,7 +594,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  reverse element order.
        */
       const_reverse_iterator
-      rbegin() const
+      rbegin() const _GLIBCXX_NOEXCEPT
       { return const_reverse_iterator(end()); }
 
       /**
@@ -548,7 +603,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  in reverse element order.
        */
       reverse_iterator
-      rend()
+      rend() _GLIBCXX_NOEXCEPT
       { return reverse_iterator(begin()); }
 
       /**
@@ -557,7 +612,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  is done in reverse element order.
        */
       const_reverse_iterator
-      rend() const
+      rend() const _GLIBCXX_NOEXCEPT
       { return const_reverse_iterator(begin()); }
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
@@ -567,7 +622,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  element order.
        */
       const_iterator
-      cbegin() const
+      cbegin() const noexcept
       { return const_iterator(this->_M_impl._M_start); }
 
       /**
@@ -576,7 +631,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  ordinary element order.
        */
       const_iterator
-      cend() const
+      cend() const noexcept
       { return const_iterator(this->_M_impl._M_finish); }
 
       /**
@@ -585,7 +640,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  reverse element order.
        */
       const_reverse_iterator
-      crbegin() const
+      crbegin() const noexcept
       { return const_reverse_iterator(end()); }
 
       /**
@@ -594,14 +649,14 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  is done in reverse element order.
        */
       const_reverse_iterator
-      crend() const
+      crend() const noexcept
       { return const_reverse_iterator(begin()); }
 #endif
 
       // [23.2.4.2] capacity
       /**  Returns the number of elements in the %vector.  */
       size_type
-      size() const
+      size() const _GLIBCXX_NOEXCEPT
       {
 #if __google_stl_debug_dangling_vector
         if (!this->_M_is_valid())
@@ -612,13 +667,13 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**  Returns the size() of the largest possible %vector.  */
       size_type
-      max_size() const
-      { return _M_get_Tp_allocator().max_size(); }
+      max_size() const _GLIBCXX_NOEXCEPT
+      { return _Alloc_traits::max_size(_M_get_Tp_allocator()); }
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
       /**
        *  @brief  Resizes the %vector to the specified number of elements.
-       *  @param  new_size  Number of elements the %vector should contain.
+       *  @param  __new_size  Number of elements the %vector should contain.
        *
        *  This function will %resize the %vector to the specified
        *  number of elements.  If the number is smaller than the
@@ -636,8 +691,8 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  Resizes the %vector to the specified number of elements.
-       *  @param  new_size  Number of elements the %vector should contain.
-       *  @param  x  Data with which new elements should be populated.
+       *  @param  __new_size  Number of elements the %vector should contain.
+       *  @param  __x  Data with which new elements should be populated.
        *
        *  This function will %resize the %vector to the specified
        *  number of elements.  If the number is smaller than the
@@ -656,8 +711,8 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 #else
       /**
        *  @brief  Resizes the %vector to the specified number of elements.
-       *  @param  new_size  Number of elements the %vector should contain.
-       *  @param  x  Data with which new elements should be populated.
+       *  @param  __new_size  Number of elements the %vector should contain.
+       *  @param  __x  Data with which new elements should be populated.
        *
        *  This function will %resize the %vector to the specified
        *  number of elements.  If the number is smaller than the
@@ -679,7 +734,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       /**  A non-binding request to reduce capacity() to size().  */
       void
       shrink_to_fit()
-      { std::__shrink_to_fit<vector>::_S_do_it(*this); }
+      { _M_shrink_to_fit(); }
 #endif
 
       /**
@@ -687,7 +742,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  hold before needing to allocate more memory.
        */
       size_type
-      capacity() const
+      capacity() const _GLIBCXX_NOEXCEPT
       {
 #if __google_stl_debug_dangling_vector
         if (!this->_M_is_valid())
@@ -701,13 +756,13 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  equal end().)
        */
       bool
-      empty() const
+      empty() const _GLIBCXX_NOEXCEPT
       { return begin() == end(); }
 
       /**
        *  @brief  Attempt to preallocate enough memory for specified number of
        *          elements.
-       *  @param  n  Number of elements required.
+       *  @param  __n  Number of elements required.
        *  @throw  std::length_error  If @a n exceeds @c max_size().
        *
        *  This function attempts to reserve enough memory for the
@@ -727,7 +782,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       // element access
       /**
        *  @brief  Subscript access to the data contained in the %vector.
-       *  @param n The index of the element for which data should be
+       *  @param __n The index of the element for which data should be
        *  accessed.
        *  @return  Read/write reference to data.
        *
@@ -750,7 +805,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  Subscript access to the data contained in the %vector.
-       *  @param n The index of the element for which data should be
+       *  @param __n The index of the element for which data should be
        *  accessed.
        *  @return  Read-only (constant) reference to data.
        *
@@ -783,10 +838,10 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
     public:
       /**
        *  @brief  Provides access to the data contained in the %vector.
-       *  @param n The index of the element for which data should be
+       *  @param __n The index of the element for which data should be
        *  accessed.
        *  @return  Read/write reference to data.
-       *  @throw  std::out_of_range  If @a n is an invalid index.
+       *  @throw  std::out_of_range  If @a __n is an invalid index.
        *
        *  This function provides for safer data access.  The parameter
        *  is first checked that it is in the range of the vector.  The
@@ -801,10 +856,10 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  Provides access to the data contained in the %vector.
-       *  @param n The index of the element for which data should be
+       *  @param __n The index of the element for which data should be
        *  accessed.
        *  @return  Read-only (constant) reference to data.
-       *  @throw  std::out_of_range  If @a n is an invalid index.
+       *  @throw  std::out_of_range  If @a __n is an invalid index.
        *
        *  This function provides for safer data access.  The parameter
        *  is first checked that it is in the range of the vector.  The
@@ -861,7 +916,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 #else
       pointer
 #endif
-      data()
+      data() _GLIBCXX_NOEXCEPT
       { return std::__addressof(front()); }
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
@@ -869,13 +924,13 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 #else
       const_pointer
 #endif
-      data() const
+      data() const _GLIBCXX_NOEXCEPT
       { return std::__addressof(front()); }
 
       // [23.2.4.3] modifiers
       /**
        *  @brief  Add data to the end of the %vector.
-       *  @param  x  Data to be added.
+       *  @param  __x  Data to be added.
        *
        *  This is a typical stack operation.  The function creates an
        *  element at the end of the %vector and assigns the given data
@@ -888,11 +943,16 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       {
 	if (this->_M_impl._M_finish != this->_M_impl._M_end_of_storage)
 	  {
-	    this->_M_impl.construct(this->_M_impl._M_finish, __x);
+	    _Alloc_traits::construct(this->_M_impl, this->_M_impl._M_finish,
+	                             __x);
 	    ++this->_M_impl._M_finish;
 	  }
 	else
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+	  _M_emplace_back_aux(__x);
+#else
 	  _M_insert_aux(end(), __x);
+#endif
       }
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
@@ -918,14 +978,14 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       pop_back()
       {
 	--this->_M_impl._M_finish;
-	this->_M_impl.destroy(this->_M_impl._M_finish);
+	_Alloc_traits::destroy(this->_M_impl, this->_M_impl._M_finish);
       }
 
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
       /**
        *  @brief  Inserts an object in %vector before specified iterator.
-       *  @param  position  An iterator into the %vector.
-       *  @param  args  Arguments.
+       *  @param  __position  An iterator into the %vector.
+       *  @param  __args  Arguments.
        *  @return  An iterator that points to the inserted data.
        *
        *  This function will insert an object of type T constructed
@@ -941,8 +1001,8 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  Inserts given value into %vector before specified iterator.
-       *  @param  position  An iterator into the %vector.
-       *  @param  x  Data to be inserted.
+       *  @param  __position  An iterator into the %vector.
+       *  @param  __x  Data to be inserted.
        *  @return  An iterator that points to the inserted data.
        *
        *  This function will insert a copy of the given value before
@@ -956,8 +1016,8 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 #ifdef __GXX_EXPERIMENTAL_CXX0X__
       /**
        *  @brief  Inserts given rvalue into %vector before specified iterator.
-       *  @param  position  An iterator into the %vector.
-       *  @param  x  Data to be inserted.
+       *  @param  __position  An iterator into the %vector.
+       *  @param  __x  Data to be inserted.
        *  @return  An iterator that points to the inserted data.
        *
        *  This function will insert a copy of the given rvalue before
@@ -971,8 +1031,8 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  Inserts an initializer_list into the %vector.
-       *  @param  position  An iterator into the %vector.
-       *  @param  l  An initializer_list.
+       *  @param  __position  An iterator into the %vector.
+       *  @param  __l  An initializer_list.
        *
        *  This function will insert copies of the data in the 
        *  initializer_list @a l into the %vector before the location
@@ -989,9 +1049,9 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  Inserts a number of copies of given data into the %vector.
-       *  @param  position  An iterator into the %vector.
-       *  @param  n  Number of elements to be inserted.
-       *  @param  x  Data to be inserted.
+       *  @param  __position  An iterator into the %vector.
+       *  @param  __n  Number of elements to be inserted.
+       *  @param  __x  Data to be inserted.
        *
        *  This function will insert a specified number of copies of
        *  the given data before the location specified by @a position.
@@ -1006,12 +1066,12 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  Inserts a range into the %vector.
-       *  @param  position  An iterator into the %vector.
-       *  @param  first  An input iterator.
-       *  @param  last   An input iterator.
+       *  @param  __position  An iterator into the %vector.
+       *  @param  __first  An input iterator.
+       *  @param  __last   An input iterator.
        *
        *  This function will insert copies of the data in the range
-       *  [first,last) into the %vector before the location specified
+       *  [__first,__last) into the %vector before the location specified
        *  by @a pos.
        *
        *  Note that this kind of operation could be expensive for a
@@ -1030,7 +1090,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  Remove element at given position.
-       *  @param  position  Iterator pointing to element to be erased.
+       *  @param  __position  Iterator pointing to element to be erased.
        *  @return  An iterator pointing to the next element (or end()).
        *
        *  This function will erase the element at the given position and thus
@@ -1048,14 +1108,14 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  Remove a range of elements.
-       *  @param  first  Iterator pointing to the first element to be erased.
-       *  @param  last  Iterator pointing to one past the last element to be
-       *                erased.
-       *  @return  An iterator pointing to the element pointed to by @a last
+       *  @param  __first  Iterator pointing to the first element to be erased.
+       *  @param  __last  Iterator pointing to one past the last element to be
+       *                  erased.
+       *  @return  An iterator pointing to the element pointed to by @a __last
        *           prior to erasing (or end()).
        *
-       *  This function will erase the elements in the range [first,last) and
-       *  shorten the %vector accordingly.
+       *  This function will erase the elements in the range
+       *  [__first,__last) and shorten the %vector accordingly.
        *
        *  Note This operation could be expensive and if it is
        *  frequently used the user should consider using std::list.
@@ -1069,7 +1129,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
       /**
        *  @brief  Swaps data with another %vector.
-       *  @param  x  A %vector of the same element and allocator types.
+       *  @param  __x  A %vector of the same element and allocator types.
        *
        *  This exchanges the elements between two vectors in constant time.
        *  (Three pointers, so it should be quite fast.)
@@ -1078,20 +1138,17 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        */
       void
       swap(vector& __x)
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+			noexcept(_Alloc_traits::_S_nothrow_swap())
+#endif
       {
 #if __google_stl_debug_dangling_vector
         if (!this->_M_is_valid() || !__x._M_is_valid())
           __throw_logic_error("swap() on corrupt (dangling?) vector");
 #endif
-	std::swap(this->_M_impl._M_start, __x._M_impl._M_start);
-	std::swap(this->_M_impl._M_finish, __x._M_impl._M_finish);
-	std::swap(this->_M_impl._M_end_of_storage,
-		  __x._M_impl._M_end_of_storage);
-
-	// _GLIBCXX_RESOLVE_LIB_DEFECTS
-	// 431. Swapping containers with unequal allocators.
-	std::__alloc_swap<_Tp_alloc_type>::_S_do_it(_M_get_Tp_allocator(),
-						    __x._M_get_Tp_allocator());
+	this->_M_impl._M_swap_data(__x._M_impl);
+	_Alloc_traits::_S_on_swap(_M_get_Tp_allocator(),
+	                          __x._M_get_Tp_allocator());
       }
 
       /**
@@ -1101,7 +1158,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        *  the user's responsibility.
        */
       void
-      clear()
+      clear() _GLIBCXX_NOEXCEPT
       {
 #if __google_stl_debug_dangling_vector
         if (!this->_M_is_valid())
@@ -1293,6 +1350,9 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       // Called by resize(n).
       void
       _M_default_append(size_type __n);
+
+      bool
+      _M_shrink_to_fit();
 #endif
 
       // Called by insert(p,x)
@@ -1303,6 +1363,10 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       template<typename... _Args>
         void
         _M_insert_aux(iterator __position, _Args&&... __args);
+
+      template<typename... _Args>
+        void
+        _M_emplace_back_aux(_Args&&... __args);
 #endif
 
       // Called by the latter.
@@ -1326,13 +1390,46 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 	std::_Destroy(__pos, this->_M_impl._M_finish, _M_get_Tp_allocator());
 	this->_M_impl._M_finish = __pos;
       }
+
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
+    private:
+      // Constant-time move assignment when source object's memory can be
+      // moved, either because the source's allocator will move too
+      // or because the allocators are equal.
+      void
+      _M_move_assign(vector&& __x, std::true_type) noexcept
+      {
+	const vector __tmp(std::move(*this));
+	this->_M_impl._M_swap_data(__x._M_impl);
+	if (_Alloc_traits::_S_propagate_on_move_assign())
+	  std::__alloc_on_move(_M_get_Tp_allocator(),
+			       __x._M_get_Tp_allocator());
+      }
+
+      // Do move assignment when it might not be possible to move source
+      // object's memory, resulting in a linear-time operation.
+      void
+      _M_move_assign(vector&& __x, std::false_type)
+      {
+	if (__x._M_get_Tp_allocator() == this->_M_get_Tp_allocator())
+	  _M_move_assign(std::move(__x), std::true_type());
+	else
+	  {
+	    // The rvalue's allocator cannot be moved and is not equal,
+	    // so we need to individually move each element.
+	    this->assign(std::__make_move_if_noexcept_iterator(__x.begin()),
+			 std::__make_move_if_noexcept_iterator(__x.end()));
+	    __x.clear();
+	  }
+      }
+#endif
     };
 
 
   /**
    *  @brief  Vector equality comparison.
-   *  @param  x  A %vector.
-   *  @param  y  A %vector of the same type as @a x.
+   *  @param  __x  A %vector.
+   *  @param  __y  A %vector of the same type as @a __x.
    *  @return  True iff the size and elements of the vectors are equal.
    *
    *  This is an equivalence relation.  It is linear in the size of the
@@ -1347,9 +1444,9 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 
   /**
    *  @brief  Vector ordering relation.
-   *  @param  x  A %vector.
-   *  @param  y  A %vector of the same type as @a x.
-   *  @return  True iff @a x is lexicographically less than @a y.
+   *  @param  __x  A %vector.
+   *  @param  __y  A %vector of the same type as @a __x.
+   *  @return  True iff @a __x is lexicographically less than @a __y.
    *
    *  This is a total ordering relation.  It is linear in the size of the
    *  vectors.  The elements must be comparable with @c <.

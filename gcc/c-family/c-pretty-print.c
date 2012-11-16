@@ -1,5 +1,5 @@
 /* Subroutines common to both C and C++ pretty-printers.
-   Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
+   Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
    Free Software Foundation, Inc.
    Contributed by Gabriel Dos Reis <gdr@integrable-solutions.net>
 
@@ -205,7 +205,8 @@ pp_c_cv_qualifiers (c_pretty_printer *pp, int qualifiers, bool func_type)
     {
       if (previous)
         pp_c_whitespace (pp);
-      pp_c_ws_string (pp, flag_isoc99 ? "restrict" : "__restrict__");
+      pp_c_ws_string (pp, (flag_isoc99 && !c_dialect_cxx ()
+			   ? "restrict" : "__restrict__"));
     }
 }
 
@@ -345,7 +346,7 @@ pp_c_type_specifier (c_pretty_printer *pp, tree t)
       break;
 
     case IDENTIFIER_NODE:
-      pp_c_tree_decl_identifier (pp, t);
+      pp_c_identifier (pp, IDENTIFIER_POINTER (t));
       break;
 
     case VOID_TYPE:
@@ -445,6 +446,8 @@ pp_c_specifier_qualifier_list (c_pretty_printer *pp, tree t)
 {
   const enum tree_code code = TREE_CODE (t);
 
+  if (!(pp->flags & pp_c_flag_gnu_v3) && code != POINTER_TYPE)
+    pp_c_type_qualifier_list (pp, t);
   switch (code)
     {
     case REFERENCE_TYPE:
@@ -458,6 +461,7 @@ pp_c_specifier_qualifier_list (c_pretty_printer *pp, tree t)
 	  {
 	    pp_c_whitespace (pp);
 	    pp_c_left_paren (pp);
+	    pp_c_attributes_display (pp, TYPE_ATTRIBUTES (pointee));
 	  }
 	else if (!c_dialect_cxx ())
 	  pp_c_whitespace (pp);
@@ -473,7 +477,8 @@ pp_c_specifier_qualifier_list (c_pretty_printer *pp, tree t)
     case VECTOR_TYPE:
     case COMPLEX_TYPE:
       if (code == COMPLEX_TYPE)
-	pp_c_ws_string (pp, flag_isoc99 ? "_Complex" : "__complex__");
+	pp_c_ws_string (pp, (flag_isoc99 && !c_dialect_cxx ()
+			     ? "_Complex" : "__complex__"));
       else if (code == VECTOR_TYPE)
 	{
 	  pp_c_ws_string (pp, "__vector");
@@ -489,7 +494,7 @@ pp_c_specifier_qualifier_list (c_pretty_printer *pp, tree t)
       pp_simple_type_specifier (pp, t);
       break;
     }
-  if (TREE_CODE (t) != POINTER_TYPE)
+  if ((pp->flags & pp_c_flag_gnu_v3) && code != POINTER_TYPE)
     pp_c_type_qualifier_list (pp, t);
 }
 
@@ -790,6 +795,47 @@ pp_c_attributes (c_pretty_printer *pp, tree attributes)
   pp_c_right_paren (pp);
 }
 
+/* Pretty-print ATTRIBUTES using GNU C extension syntax for attributes
+   marked to be displayed on disgnostic.  */
+
+void
+pp_c_attributes_display (c_pretty_printer *pp, tree a)
+{
+  bool is_first = true;
+
+  if (a == NULL_TREE)
+    return;
+
+  for (; a != NULL_TREE; a = TREE_CHAIN (a))
+    {
+      const struct attribute_spec *as;
+      as = lookup_attribute_spec (TREE_PURPOSE (a));
+      if (!as || as->affects_type_identity == false)
+        continue;
+      if (is_first)
+       {
+         pp_c_ws_string (pp, "__attribute__");
+         pp_c_left_paren (pp);
+         pp_c_left_paren (pp);
+         is_first = false;
+       }
+      else
+       {
+         pp_separate_with (pp, ',');
+       }
+      pp_tree_identifier (pp, TREE_PURPOSE (a));
+      if (TREE_VALUE (a))
+       pp_c_call_argument_list (pp, TREE_VALUE (a));
+    }
+
+  if (!is_first)
+    {
+      pp_c_right_paren (pp);
+      pp_c_right_paren (pp);
+      pp_c_whitespace (pp);
+    }
+}
+
 /* function-definition:
       declaration-specifiers declarator compound-statement  */
 
@@ -859,10 +905,17 @@ pp_c_string_literal (c_pretty_printer *pp, tree s)
 static void
 pp_c_integer_constant (c_pretty_printer *pp, tree i)
 {
-  tree type = TREE_TYPE (i);
+  /* We are going to compare the type of I to other types using
+     pointer comparison so we need to use its canonical type.  */
+  tree type =
+    TYPE_CANONICAL (TREE_TYPE (i))
+    ? TYPE_CANONICAL (TREE_TYPE (i))
+    : TREE_TYPE (i);
 
-  if (TREE_INT_CST_HIGH (i) == 0)
+  if (host_integerp (i, 0))
     pp_wide_integer (pp, TREE_INT_CST_LOW (i));
+  else if (host_integerp (i, 1))
+    pp_unsigned_wide_integer (pp, TREE_INT_CST_LOW (i));
   else
     {
       unsigned HOST_WIDE_INT low = TREE_INT_CST_LOW (i);
@@ -969,8 +1022,20 @@ pp_c_enumeration_constant (c_pretty_printer *pp, tree e)
 static void
 pp_c_floating_constant (c_pretty_printer *pp, tree r)
 {
+  const struct real_format *fmt
+    = REAL_MODE_FORMAT (TYPE_MODE (TREE_TYPE (r)));
+
+  REAL_VALUE_TYPE floating_cst = TREE_REAL_CST (r);
+  bool is_decimal = floating_cst.decimal;
+
+  /* See ISO C++ WG N1822.  Note: The fraction 643/2136 approximates
+     log10(2) to 7 significant digits.  */
+  int max_digits10 = 2 + (is_decimal ? fmt->p : fmt->p * 643L / 2136);
+
   real_to_decimal (pp_buffer (pp)->digit_buffer, &TREE_REAL_CST (r),
-		   sizeof (pp_buffer (pp)->digit_buffer), 0, 1);
+		   sizeof (pp_buffer (pp)->digit_buffer),
+		   max_digits10, 1);
+
   pp_string (pp, pp_buffer(pp)->digit_buffer);
   if (TREE_TYPE (r) == float_type_node)
     pp_character (pp, 'f');
@@ -2068,6 +2133,13 @@ pp_c_expression (c_pretty_printer *pp, tree e)
       pp_primary_expression (pp, e);
       break;
 
+    case SSA_NAME:
+      if (!DECL_ARTIFICIAL (SSA_NAME_VAR (e)))
+	pp_c_expression (pp, SSA_NAME_VAR (e));
+      else
+	pp_c_ws_string (pp, M_("<unknown>"));
+      break;
+
     case POSTINCREMENT_EXPR:
     case POSTDECREMENT_EXPR:
     case ARRAY_REF:
@@ -2200,10 +2272,6 @@ pp_c_expression (c_pretty_printer *pp, tree e)
 
     case C_MAYBE_CONST_EXPR:
       pp_c_expression (pp, C_MAYBE_CONST_EXPR_EXPR (e));
-      break;
-
-    case SSA_NAME:
-      pp_primary_expression (pp, SSA_NAME_VAR (e));
       break;
 
     default:

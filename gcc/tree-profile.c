@@ -165,11 +165,20 @@ static struct pointer_set_t *instrumentation_to_be_sampled = NULL;
 /* extern __thread gcov_unsigned_t __gcov_sample_counter  */
 static GTY(()) tree gcov_sample_counter_decl = NULL_TREE;
 
-/* extern gcov_unsigned_t __gcov_sampling_rate  */
-static GTY(()) tree gcov_sampling_rate_decl = NULL_TREE;
+/* extern gcov_unsigned_t __gcov_sampling_period  */
+static tree GTY(()) gcov_sampling_period_decl = NULL_TREE;
 
-/* forward declaration.  */
-void gimple_init_instrumentation_sampling (void);
+/* extern gcov_unsigned_t __gcov_has_sampling  */
+static tree gcov_has_sampling_decl = NULL_TREE;
+
+/* extern gcov_unsigned_t __gcov_lipo_cutoff  */
+static tree GTY(()) gcov_lipo_cutoff_decl = NULL_TREE;
+
+/* extern gcov_unsigned_t __gcov_lipo_random_seed  */
+static tree GTY(()) gcov_lipo_random_seed_decl = NULL_TREE;
+
+/* extern gcov_unsigned_t __gcov_lipo_random_group_size  */
+static tree GTY(()) gcov_lipo_random_group_size_decl = NULL_TREE;
 
 /* Insert STMT_IF around given sequence of consecutive statements in the
    same basic block starting with STMT_START, ending with STMT_END.  */
@@ -200,7 +209,7 @@ insert_if_then (gimple stmt_start, gimple stmt_end, gimple stmt_if)
    Into:
 
    __gcov_sample_counter++;
-   if (__gcov_sample_counter >= __gcov_sampling_rate)
+   if (__gcov_sample_counter >= __gcov_sampling_period)
      {
        __gcov_sample_counter = 0;
        ORIGINAL CODE
@@ -214,7 +223,7 @@ add_sampling_wrapper (gimple stmt_start, gimple stmt_end)
 {
   tree zero, one, tmp_var, tmp1, tmp2, tmp3;
   gimple stmt_inc_counter1, stmt_inc_counter2, stmt_inc_counter3;
-  gimple stmt_reset_counter, stmt_assign_rate, stmt_if;
+  gimple stmt_reset_counter, stmt_assign_period, stmt_if;
   gimple_stmt_iterator gsi;
 
   tmp_var = create_tmp_reg (get_gcov_unsigned_t (), "PROF_sample");
@@ -223,6 +232,7 @@ add_sampling_wrapper (gimple stmt_start, gimple stmt_end)
 
   /* Create all the new statements needed.  */
   stmt_inc_counter1 = gimple_build_assign (tmp1, gcov_sample_counter_decl);
+  add_referenced_var (gcov_sample_counter_decl);
   one = build_int_cst (get_gcov_unsigned_t (), 1);
   stmt_inc_counter2 = gimple_build_assign_with_ops (
       PLUS_EXPR, tmp2, tmp1, one);
@@ -230,7 +240,8 @@ add_sampling_wrapper (gimple stmt_start, gimple stmt_end)
   zero = build_int_cst (get_gcov_unsigned_t (), 0);
   stmt_reset_counter = gimple_build_assign (gcov_sample_counter_decl, zero);
   tmp3 = make_ssa_name (tmp_var, NULL);
-  stmt_assign_rate = gimple_build_assign (tmp3, gcov_sampling_rate_decl);
+  stmt_assign_period = gimple_build_assign (tmp3, gcov_sampling_period_decl);
+  add_referenced_var (gcov_sampling_period_decl);
   stmt_if = gimple_build_cond (GE_EXPR, tmp2, tmp3, NULL_TREE, NULL_TREE);
 
   /* Insert them for now in the original basic block.  */
@@ -238,7 +249,7 @@ add_sampling_wrapper (gimple stmt_start, gimple stmt_end)
   gsi_insert_before (&gsi, stmt_inc_counter1, GSI_SAME_STMT);
   gsi_insert_before (&gsi, stmt_inc_counter2, GSI_SAME_STMT);
   gsi_insert_before (&gsi, stmt_inc_counter3, GSI_SAME_STMT);
-  gsi_insert_before (&gsi, stmt_assign_rate, GSI_SAME_STMT);
+  gsi_insert_before (&gsi, stmt_assign_period, GSI_SAME_STMT);
   gsi_insert_before (&gsi, stmt_reset_counter, GSI_SAME_STMT);
 
   /* Insert IF block.  */
@@ -283,6 +294,51 @@ add_sampling_to_edge_counters (void)
       }
 }
 
+/* Helper function to define a variable in comdat with initialization.
+   DECL is the variable, PARAM is the parameter to set init value.  */
+
+static void
+init_comdat_decl (tree decl, int param)
+{
+  TREE_PUBLIC (decl) = 1;
+  DECL_ARTIFICIAL (decl) = 1;
+  DECL_COMDAT_GROUP (decl)
+      = DECL_ASSEMBLER_NAME (decl);
+  TREE_STATIC (decl) = 1;
+  DECL_INITIAL (decl) = build_int_cst (
+      get_gcov_unsigned_t (),
+      PARAM_VALUE (param));
+  varpool_finalize_decl (decl);
+}
+
+/* Initialization function for LIPO runtime parameters.  */
+
+void
+tree_init_dyn_ipa_parameters (void)
+{
+  if (!gcov_lipo_cutoff_decl)
+    {
+      gcov_lipo_cutoff_decl = build_decl (
+          UNKNOWN_LOCATION,
+          VAR_DECL,
+          get_identifier ("__gcov_lipo_cutoff"),
+          get_gcov_unsigned_t ());
+      init_comdat_decl (gcov_lipo_cutoff_decl, PARAM_LIPO_CUTOFF);
+      gcov_lipo_random_seed_decl = build_decl (
+          UNKNOWN_LOCATION,
+          VAR_DECL,
+          get_identifier ("__gcov_lipo_random_seed"),
+          get_gcov_unsigned_t ());
+      init_comdat_decl (gcov_lipo_random_seed_decl, PARAM_LIPO_RANDOM_SEED);
+      gcov_lipo_random_group_size_decl = build_decl (
+          UNKNOWN_LOCATION,
+          VAR_DECL,
+          get_identifier ("__gcov_lipo_random_group_size"),
+          get_gcov_unsigned_t ());
+      init_comdat_decl (gcov_lipo_random_group_size_decl, PARAM_LIPO_RANDOM_GROUP_SIZE);
+    }
+}
+
 static void
 cleanup_instrumentation_sampling (void)
 {
@@ -294,28 +350,52 @@ cleanup_instrumentation_sampling (void)
     }
 }
 
+/* Initialization function for FDO sampling.  */
+
 void
-gimple_init_instrumentation_sampling (void)
+tree_init_instrumentation_sampling (void)
 {
-  if (!gcov_sampling_rate_decl)
+  if (!gcov_sampling_period_decl)
     {
-      /* Define __gcov_sampling_rate regardless of -fprofile-generate-sampling.
-         Otherwise the extern reference to it from libgcov becomes unmatched.
+      /* Define __gcov_sampling_period regardless of
+         -fprofile-generate-sampling. Otherwise the extern reference to
+         it from libgcov becomes unmatched.
       */
-      gcov_sampling_rate_decl = build_decl (
+      gcov_sampling_period_decl = build_decl (
           UNKNOWN_LOCATION,
           VAR_DECL,
-          get_identifier ("__gcov_sampling_rate"),
+          get_identifier ("__gcov_sampling_period"),
           get_gcov_unsigned_t ());
-      TREE_PUBLIC (gcov_sampling_rate_decl) = 1;
-      DECL_ARTIFICIAL (gcov_sampling_rate_decl) = 1;
-      DECL_COMDAT_GROUP (gcov_sampling_rate_decl)
-          = DECL_ASSEMBLER_NAME (gcov_sampling_rate_decl);
-      TREE_STATIC (gcov_sampling_rate_decl) = 1;
-      DECL_INITIAL (gcov_sampling_rate_decl) = build_int_cst (
+      TREE_PUBLIC (gcov_sampling_period_decl) = 1;
+      DECL_ARTIFICIAL (gcov_sampling_period_decl) = 1;
+      DECL_COMDAT_GROUP (gcov_sampling_period_decl)
+          = DECL_ASSEMBLER_NAME (gcov_sampling_period_decl);
+      TREE_STATIC (gcov_sampling_period_decl) = 1;
+      DECL_INITIAL (gcov_sampling_period_decl) = build_int_cst (
           get_gcov_unsigned_t (),
-          PARAM_VALUE (PARAM_PROFILE_GENERATE_SAMPLING_RATE));
-      assemble_variable (gcov_sampling_rate_decl, 0, 0, 0);
+          PARAM_VALUE (PARAM_PROFILE_GENERATE_SAMPLING_PERIOD));
+      varpool_finalize_decl (gcov_sampling_period_decl);
+    }
+
+  if (!gcov_has_sampling_decl)
+    {
+      /* Initialize __gcov_has_sampling to 1 if -fprofile-generate-sampling
+         specified, 0 otherwise. Used by libgcov to determine whether
+         a request to set the sampling period makes sense.  */
+      gcov_has_sampling_decl = build_decl (
+          UNKNOWN_LOCATION,
+          VAR_DECL,
+          get_identifier ("__gcov_has_sampling"),
+          get_gcov_unsigned_t ());
+      TREE_PUBLIC (gcov_has_sampling_decl) = 1;
+      DECL_ARTIFICIAL (gcov_has_sampling_decl) = 1;
+      DECL_COMDAT_GROUP (gcov_has_sampling_decl)
+          = DECL_ASSEMBLER_NAME (gcov_has_sampling_decl);
+      TREE_STATIC (gcov_has_sampling_decl) = 1;
+      DECL_INITIAL (gcov_has_sampling_decl) = build_int_cst (
+          get_gcov_unsigned_t (),
+          flag_profile_generate_sampling ? 1 : 0);
+      varpool_finalize_decl (gcov_has_sampling_decl);
     }
 
   if (flag_profile_generate_sampling && !instrumentation_to_be_sampled)
@@ -332,7 +412,6 @@ gimple_init_instrumentation_sampling (void)
       if (targetm.have_tls && !is_kernel_build)
         DECL_TLS_MODEL (gcov_sample_counter_decl) =
             decl_default_tls_model (gcov_sample_counter_decl);
-      assemble_variable (gcov_sample_counter_decl, 0, 0, 0);
     }
 }
 
@@ -488,6 +567,7 @@ gimple_gen_edge_profiler (int edgeno, edge e)
   one = build_int_cst (gcov_type_node, 1);
   stmt1 = gimple_build_assign (gcov_type_tmp_var, ref);
   gimple_assign_set_lhs (stmt1, make_ssa_name (gcov_type_tmp_var, stmt1));
+  find_referenced_vars_in (stmt1);
   stmt2 = gimple_build_assign_with_ops (PLUS_EXPR, gcov_type_tmp_var,
 					gimple_assign_lhs (stmt1), one);
   gimple_assign_set_lhs (stmt2, make_ssa_name (gcov_type_tmp_var, stmt2));
@@ -509,7 +589,8 @@ prepare_instrumented_value (gimple_stmt_iterator *gsi, histogram_value value)
 {
   tree val = value->hvalue.value;
   if (POINTER_TYPE_P (TREE_TYPE (val)))
-    val = fold_convert (sizetype, val);
+    val = fold_convert (build_nonstandard_integer_type
+			  (TYPE_PRECISION (TREE_TYPE (val)), 1), val);
   return force_gimple_operand_gsi (gsi, fold_convert (gcov_type_node, val),
 				   true, NULL_TREE, true, GSI_SAME_STMT);
 }
@@ -537,6 +618,7 @@ gimple_gen_interval_profiler (histogram_value value, unsigned tag, unsigned base
   val = prepare_instrumented_value (&gsi, value);
   call = gimple_build_call (tree_interval_profiler_fn, 4,
 			    ref_ptr, val, start, steps);
+  find_referenced_vars_in (call);
   gsi_insert_before (&gsi, call, GSI_NEW_STMT);
 }
 
@@ -557,6 +639,7 @@ gimple_gen_pow2_profiler (histogram_value value, unsigned tag, unsigned base)
 				      true, NULL_TREE, true, GSI_SAME_STMT);
   val = prepare_instrumented_value (&gsi, value);
   call = gimple_build_call (tree_pow2_profiler_fn, 2, ref_ptr, val);
+  find_referenced_vars_in (call);
   gsi_insert_before (&gsi, call, GSI_NEW_STMT);
 }
 
@@ -577,6 +660,7 @@ gimple_gen_one_value_profiler (histogram_value value, unsigned tag, unsigned bas
 				      true, NULL_TREE, true, GSI_SAME_STMT);
   val = prepare_instrumented_value (&gsi, value);
   call = gimple_build_call (tree_one_value_profiler_fn, 2, ref_ptr, val);
+  find_referenced_vars_in (call);
   gsi_insert_before (&gsi, call, GSI_NEW_STMT);
 }
 
@@ -595,11 +679,6 @@ gimple_gen_ic_profiler (histogram_value value, unsigned tag, unsigned base)
   gimple stmt;
   gimple_stmt_iterator gsi;
   tree ref_ptr;
-
-  /* TODO add option -- only disble for topn icall profiling.  */
-  if (DECL_STATIC_CONSTRUCTOR (current_function_decl) 
-      || DECL_STATIC_CONSTRUCTOR (current_function_decl))
-    return;
  
   stmt = value->hvalue.stmt;
   gsi = gsi_for_stmt (stmt);
@@ -615,9 +694,12 @@ gimple_gen_ic_profiler (histogram_value value, unsigned tag, unsigned base)
 
   tmp1 = create_tmp_reg (ptr_void, "PROF");
   stmt1 = gimple_build_assign (ic_gcov_type_ptr_var, ref_ptr);
+  find_referenced_vars_in (stmt1);
   stmt2 = gimple_build_assign (tmp1, unshare_expr (value->hvalue.value));
   gimple_assign_set_lhs (stmt2, make_ssa_name (tmp1, stmt2));
+  find_referenced_vars_in (stmt2);
   stmt3 = gimple_build_assign (ic_void_ptr_var, gimple_assign_lhs (stmt2));
+  add_referenced_var (ic_void_ptr_var);
 
   gsi_insert_before (&gsi, stmt1, GSI_SAME_STMT);
   gsi_insert_before (&gsi, stmt2, GSI_SAME_STMT);
@@ -633,7 +715,7 @@ gimple_gen_ic_profiler (histogram_value value, unsigned tag, unsigned base)
 void
 gimple_gen_ic_func_profiler (void)
 {
-  struct cgraph_node * c_node = cgraph_node (current_function_decl);
+  struct cgraph_node * c_node = cgraph_get_create_node (current_function_decl);
   gimple_stmt_iterator gsi;
   gimple stmt1, stmt2;
   tree tree_uid, cur_func, counter_ptr, ptr_var, void0;
@@ -653,9 +735,11 @@ gimple_gen_ic_func_profiler (void)
   counter_ptr = force_gimple_operand_gsi (&gsi, ic_gcov_type_ptr_var,
 					  true, NULL_TREE, true,
 					  GSI_SAME_STMT);
+  add_referenced_var (ic_gcov_type_ptr_var);
   ptr_var = force_gimple_operand_gsi (&gsi, ic_void_ptr_var,
 				      true, NULL_TREE, true,
 				      GSI_SAME_STMT);
+  add_referenced_var (ic_void_ptr_var);
   tree_uid = build_int_cst (gcov_type_node, current_function_funcdef_no);
   stmt1 = gimple_build_call (tree_indirect_call_profiler_fn, 4,
 			     counter_ptr, tree_uid, cur_func, ptr_var);
@@ -724,12 +808,15 @@ gimple_gen_dc_profiler (unsigned base, gimple call_stmt)
   tmp1 = force_gimple_operand_gsi (&gsi, tmp1, true, NULL_TREE,
 				   true, GSI_SAME_STMT);
   stmt1 = gimple_build_assign (dc_gcov_type_ptr_var, tmp1);
+  find_referenced_vars_in (stmt1);
   tmp2 = create_tmp_var (ptr_void, "PROF_dc");
   add_referenced_var (tmp2);
   stmt2 = gimple_build_assign (tmp2, unshare_expr (callee));
+  find_referenced_vars_in (stmt2);
   tmp3 = make_ssa_name (tmp2, stmt2);
   gimple_assign_set_lhs (stmt2, tmp3);
   stmt3 = gimple_build_assign (dc_void_ptr_var, tmp3);
+  find_referenced_vars_in (stmt3);
   gsi_insert_before (&gsi, stmt1, GSI_SAME_STMT);
   gsi_insert_before (&gsi, stmt2, GSI_SAME_STMT);
   gsi_insert_before (&gsi, stmt3, GSI_SAME_STMT);
@@ -743,7 +830,7 @@ gimple_gen_dc_profiler (unsigned base, gimple call_stmt)
 static void
 gimple_gen_dc_func_profiler (void)
 {
-  struct cgraph_node * c_node = cgraph_node (current_function_decl);
+  struct cgraph_node * c_node = cgraph_get_create_node (current_function_decl);
   gimple_stmt_iterator gsi;
   gimple stmt1;
   tree cur_func, gcov_info, cur_func_id;
@@ -808,6 +895,7 @@ gimple_gen_average_profiler (histogram_value value, unsigned tag, unsigned base)
 				      true, GSI_SAME_STMT);
   val = prepare_instrumented_value (&gsi, value);
   call = gimple_build_call (tree_average_profiler_fn, 2, ref_ptr, val);
+  find_referenced_vars_in (call);
   gsi_insert_before (&gsi, call, GSI_NEW_STMT);
 }
 
@@ -828,6 +916,7 @@ gimple_gen_ior_profiler (histogram_value value, unsigned tag, unsigned base)
 				      true, NULL_TREE, true, GSI_SAME_STMT);
   val = prepare_instrumented_value (&gsi, value);
   call = gimple_build_call (tree_ior_profiler_fn, 2, ref_ptr, val);
+  find_referenced_vars_in (call);
   gsi_insert_before (&gsi, call, GSI_NEW_STMT);
 }
 
@@ -1369,8 +1458,7 @@ tree_profiling (void)
   for (node = cgraph_nodes; node; node = node->next)
     {
       if (!node->analyzed
-	  || !gimple_has_body_p (node->decl)
-	  || !(!node->clone_of || node->decl != node->clone_of->decl))
+	  || !gimple_has_body_p (node->decl))
 	continue;
 
       /* Don't profile functions produced for builtin stuff.  */
@@ -1384,6 +1472,9 @@ tree_profiling (void)
       /* Re-set global shared temporary variable for edge-counters.  */
       gcov_type_tmp_var = NULL_TREE;
 
+      /* Local pure-const may imply need to fixup the cfg.  */
+      if (execute_fixup_cfg () & TODO_cleanup_cfg)
+	cleanup_tree_cfg ();
       branch_prob ();
 
       if (! flag_branch_probabilities
@@ -1572,7 +1663,7 @@ struct simple_ipa_opt_pass pass_ipa_tree_profile =
   0,                                   /* properties_provided */
   0,                                   /* properties_destroyed */
   0,                                   /* todo_flags_start */
-  TODO_dump_func                       /* todo_flags_finish */
+  0                                    /* todo_flags_finish */
  }
 };
 

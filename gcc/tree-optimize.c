@@ -38,7 +38,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "flags.h"
 #include "cgraph.h"
 #include "tree-inline.h"
-#include "tree-mudflap.h"
 #include "tree-pass.h"
 #include "ggc.h"
 #include "cgraph.h"
@@ -47,7 +46,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "except.h"
 #include "plugin.h"
 #include "regset.h"	/* FIXME: For reg_obstack.  */
-#include "params.h"
 
 /* Decides if the cgraph callee edges are being cleaned up for the
    last time.  */
@@ -156,49 +154,6 @@ struct gimple_opt_pass pass_all_early_optimizations =
  }
 };
 
-int cgraph_codesize_estimate = -1;
-
-/* Estimate the code size from the dynamic IPA call graph. */
-static void
-compute_codesize_estimate(void)
-{
-  struct cgraph_node *node;
-  basic_block bb;
-  gimple_stmt_iterator bsi;
-  struct function *my_function;
-
-  if (!flag_dyn_ipa)
-    return;
-
-  if (cgraph_codesize_estimate >= 0)
-    return;
-  cgraph_codesize_estimate = 0;
-
-  for (node = cgraph_nodes; node; node = node->next)
-    {
-      if (node->count == 0)
-        continue;
-
-      if (!gimple_has_body_p(node->decl))
-        continue;
-
-      my_function = DECL_STRUCT_FUNCTION (node->decl);
-
-      FOR_EACH_BB_FN (bb, my_function)
-        {
-          if (bb->count < PARAM_VALUE (PARAM_CODESIZE_HOTNESS_THRESHOLD))
-            continue;
-          for (bsi = gsi_start_bb (bb); !gsi_end_p (bsi); gsi_next (&bsi))
-            {
-              gimple stmt = gsi_stmt (bsi);
-              cgraph_codesize_estimate += estimate_num_insns (stmt, &eni_size_weights);
-            }
-        }
-    }
-  if (dump_file)
-    fprintf (dump_file, "Code size estimate from cgraph: %d\n", cgraph_codesize_estimate);
-}
-
 /* Pass: cleanup the CFG just before expanding trees to RTL.
    This is just a round of label cleanups and case node grouping
    because after the tree optimizers have run such cleanups may
@@ -207,9 +162,11 @@ compute_codesize_estimate(void)
 static unsigned int
 execute_cleanup_cfg_post_optimizing (void)
 {
-  /* Estimate the code footprint for hot BBs before we enter RTL */
-  compute_codesize_estimate();
-  cleanup_tree_cfg ();
+  unsigned int todo = 0;
+
+  if (cleanup_tree_cfg ())
+    todo |= TODO_update_ssa;
+  maybe_remove_unreachable_handlers ();
   cleanup_dead_labels ();
   group_case_labels ();
   if ((flag_compare_debug_opt || flag_compare_debug)
@@ -241,7 +198,7 @@ execute_cleanup_cfg_post_optimizing (void)
 	    }
 	}
     }
-  return 0;
+  return todo;
 }
 
 struct gimple_opt_pass pass_cleanup_cfg_post_optimizing =
@@ -259,8 +216,7 @@ struct gimple_opt_pass pass_cleanup_cfg_post_optimizing =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_dump_func			/* todo_flags_finish */
-    | TODO_remove_unused_locals
+  TODO_remove_unused_locals             /* todo_flags_finish */
  }
 };
 
@@ -298,17 +254,18 @@ execute_fixup_cfg (void)
   edge_iterator ei;
 
   if (ENTRY_BLOCK_PTR->count)
-    count_scale = (cgraph_node (current_function_decl)->count * (double) REG_BR_PROB_BASE
-    		   + ENTRY_BLOCK_PTR->count / 2) / ENTRY_BLOCK_PTR->count;
+    count_scale = ((cgraph_get_node (current_function_decl)->count
+		    * (double) REG_BR_PROB_BASE + ENTRY_BLOCK_PTR->count / 2)
+		   / ENTRY_BLOCK_PTR->count);
   else
     count_scale = REG_BR_PROB_BASE;
 
-  ENTRY_BLOCK_PTR->count = cgraph_node (current_function_decl)->count;
+  ENTRY_BLOCK_PTR->count = cgraph_get_node (current_function_decl)->count;
   EXIT_BLOCK_PTR->count = (EXIT_BLOCK_PTR->count * (double) count_scale
   			   + REG_BR_PROB_BASE / 2) / REG_BR_PROB_BASE;
 
   FOR_EACH_EDGE (e, ei, ENTRY_BLOCK_PTR->succs)
-      e->count = (e->count * (double) count_scale
+    e->count = (e->count * (double) count_scale
        + REG_BR_PROB_BASE / 2) / REG_BR_PROB_BASE;
 
   FOR_EACH_BB (bb)
@@ -457,12 +414,6 @@ tree_rest_of_compilation (tree fndecl)
   input_location = DECL_SOURCE_LOCATION (fndecl);
   init_function_start (fndecl);
 
-  /* Even though we're inside a function body, we still don't want to
-     call expand_expr to calculate the size of a variable-sized array.
-     We haven't necessarily assigned RTL to all variables yet, so it's
-     not safe to try to expand expressions involving them.  */
-  cfun->dont_save_pending_sizes_p = 1;
-
   gimple_register_cfg_hooks ();
 
   bitmap_obstack_initialize (&reg_obstack); /* FIXME, only at RTL generation*/
@@ -512,7 +463,7 @@ tree_rest_of_compilation (tree fndecl)
 
   gimple_set_body (fndecl, NULL);
   if (DECL_STRUCT_FUNCTION (fndecl) == 0
-      && !cgraph_node (fndecl)->origin)
+      && !cgraph_get_node (fndecl)->origin)
     {
       /* Stop pointing to the local nodes about to be freed.
 	 But DECL_INITIAL must remain nonzero so we know this

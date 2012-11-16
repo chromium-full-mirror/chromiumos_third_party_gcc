@@ -143,11 +143,13 @@ struct GTY ((chain_next ("%h.next"))) loop {
      computes and caches the computed information in this field.  */
   tree nb_iterations;
 
-  /* An integer guaranteed to bound the number of iterations of the loop
-     from above.  */
+  /* An integer guaranteed to be greater or equal to nb_iterations.  Only
+     valid if any_upper_bound is true.  */
   double_int nb_iterations_upper_bound;
 
-  /* An integer giving the expected number of iterations of the loop.  */
+  /* An integer giving an estimate on nb_iterations.  Unlike
+     nb_iterations_upper_bound, there is no guarantee that it is at least
+     nb_iterations.  */
   double_int nb_iterations_estimate;
 
   bool any_upper_bound;
@@ -248,7 +250,6 @@ extern basic_block *get_loop_body_in_custom_order (const struct loop *,
 
 extern VEC (edge, heap) *get_loop_exit_edges (const struct loop *);
 edge single_exit (const struct loop *);
-extern unsigned num_loop_branches (const struct loop *);
 
 extern edge loop_preheader_edge (const struct loop *);
 extern edge loop_latch_edge (const struct loop *);
@@ -279,7 +280,9 @@ extern rtx doloop_condition_get (rtx);
 
 void estimate_numbers_of_iterations_loop (struct loop *, bool);
 HOST_WIDE_INT estimated_loop_iterations_int (struct loop *, bool);
+HOST_WIDE_INT max_stmt_executions_int (struct loop *, bool);
 bool estimated_loop_iterations (struct loop *, bool, double_int *);
+bool max_stmt_executions (struct loop *, bool, double_int *);
 
 /* Loop manipulation.  */
 extern bool can_duplicate_loop_p (const struct loop *loop);
@@ -351,7 +354,8 @@ struct rtx_iv
 };
 
 /* The description of an exit from the loop and of the number of iterations
-   till we take the exit.  */
+   till we take the exit. Also includes other information used primarily
+   by the loop unroller.  */
 
 struct niter_desc
 {
@@ -392,6 +396,18 @@ struct niter_desc
 
   /* The number of iterations of the loop.  */
   rtx niter_expr;
+
+  /* The number of branches in the loop.  */
+  unsigned num_branches;
+
+  /* The number of executed branches per iteration.  */
+  unsigned av_num_branches;
+
+  /* Whether the loop contains a call instruction.  */
+  bool has_call;
+
+  /* Whether the loop contains fp instructions.  */
+  bool has_fp;
 };
 
 extern void iv_analysis_loop_init (struct loop *);
@@ -405,6 +421,7 @@ extern void iv_analysis_done (void);
 
 extern struct niter_desc *get_simple_loop_desc (struct loop *loop);
 extern void free_simple_loop_desc (struct loop *loop);
+void analyze_loop_insns (const struct loop *, struct niter_desc *desc);
 
 static inline struct niter_desc *
 simple_loop_desc (struct loop *loop)

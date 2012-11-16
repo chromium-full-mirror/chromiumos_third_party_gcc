@@ -516,7 +516,7 @@ build_stack_assign (gimple_seq *seq)
   tree retaddr_decl;
   tree assign;
 
-  retaddr_decl = implicit_built_in_decls [BUILT_IN_RETURN_ADDRESS];
+  retaddr_decl = builtin_decl_implicit (BUILT_IN_RETURN_ADDRESS);
   pc_addr = build_call_expr (retaddr_decl, 1, integer_zero_node);
   op_size = build_int_cst_wide (sizetype, -(POINTER_SIZE / BITS_PER_UNIT), -1);
   op_expr = build2 (POINTER_PLUS_EXPR, ptr_type_node,
@@ -1078,7 +1078,8 @@ tsan_gate (void)
 
 /* Inserts __tsan_init () into the list of CTORs.  */
 
-void tsan_finish_file (void)
+void
+tsan_finish_file (void)
 {
   tree ctor_statements;
 

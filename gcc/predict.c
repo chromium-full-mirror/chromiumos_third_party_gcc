@@ -113,7 +113,7 @@ static const struct predictor_info predictor_info[]= {
 static inline bool
 maybe_hot_frequency_p (int freq)
 {
-  struct cgraph_node *node = cgraph_node (current_function_decl);
+  struct cgraph_node *node = cgraph_get_node (current_function_decl);
   if (!profile_info || !flag_branch_probabilities)
     {
       if (node->frequency == NODE_FREQUENCY_UNLIKELY_EXECUTED)
@@ -124,7 +124,7 @@ maybe_hot_frequency_p (int freq)
   if (profile_status == PROFILE_ABSENT)
     return true;
   if (node->frequency == NODE_FREQUENCY_EXECUTED_ONCE
-      && freq <= (ENTRY_BLOCK_PTR->frequency * 2 / 3))
+      && freq < (ENTRY_BLOCK_PTR->frequency * 2 / 3))
     return false;
   if (freq < ENTRY_BLOCK_PTR->frequency / PARAM_VALUE (HOT_BB_FREQUENCY_FRACTION))
     return false;
@@ -196,16 +196,32 @@ maybe_hot_edge_p (edge e)
   return maybe_hot_frequency_p (EDGE_FREQUENCY (e));
 }
 
+
 /* Return true in case BB is probably never executed.  */
+
 bool
 probably_never_executed_bb_p (const_basic_block bb)
 {
   if (profile_info && flag_branch_probabilities)
     return ((bb->count + profile_info->runs / 2) / profile_info->runs) == 0;
   if ((!profile_info || !flag_branch_probabilities)
-      && cgraph_node (current_function_decl)->frequency == NODE_FREQUENCY_UNLIKELY_EXECUTED)
+      && (cgraph_get_node (current_function_decl)->frequency
+	  == NODE_FREQUENCY_UNLIKELY_EXECUTED))
     return true;
   return false;
+}
+
+/* Return true if NODE should be optimized for size.  */
+
+bool
+cgraph_optimize_for_size_p (struct cgraph_node *node)
+{
+  if (optimize_size)
+    return true;
+  if (node && (node->frequency == NODE_FREQUENCY_UNLIKELY_EXECUTED))
+    return true;
+  else
+    return false;
 }
 
 /* Return true when current function should always be optimized for size.  */
@@ -213,10 +229,11 @@ probably_never_executed_bb_p (const_basic_block bb)
 bool
 optimize_function_for_size_p (struct function *fun)
 {
-  return (optimize_size
-	  || (fun && fun->decl
-	      && (cgraph_node (fun->decl)->frequency
-		  == NODE_FREQUENCY_UNLIKELY_EXECUTED)));
+  if (optimize_size)
+    return true;
+  if (!fun || !fun->decl)
+    return false;
+  return cgraph_optimize_for_size_p (cgraph_get_node (fun->decl));
 }
 
 /* Return true when current function should always be optimized for speed.  */
@@ -1070,6 +1087,10 @@ is_comparison_with_loop_invariant_p (gimple stmt, struct loop *loop,
     bound = get_base_value (bound);
   if (!bound)
     return false;
+  if (TREE_CODE (base) != INTEGER_CST)
+    base = get_base_value (base);
+  if (!base)
+    return false;
 
   *loop_invariant = bound;
   *compare_code = code;
@@ -1126,7 +1147,7 @@ expr_coherent_p (tree t1, tree t2)
 }
 
 /* Predict branch probability of BB when BB contains a branch that compares
-   an induction variable with LOOP_IV_BASE_VAR in LOOP to LOOP_BOUND_VAR. The
+   an induction variable in LOOP with LOOP_IV_BASE_VAR to LOOP_BOUND_VAR. The
    loop exit is compared using LOOP_BOUND_CODE, with step of LOOP_BOUND_STEP.
 
    E.g.
@@ -1185,8 +1206,7 @@ predict_iv_comparison (struct loop *loop, basic_block bb,
       return;
     }
 
-  if (!expr_coherent_p (loop_bound_var, compare_var)
-      || loop_iv_base_var != compare_base)
+  if (!expr_coherent_p (loop_iv_base_var, compare_base))
     return;
 
   /* If loop bound, base and compare bound are all constents, we can
@@ -1230,36 +1250,140 @@ predict_iv_comparison (struct loop *loop, basic_block bb,
       return;
     }
 
-  if ((loop_bound_code == LT_EXPR || loop_bound_code == LE_EXPR)
-      && (compare_code == LT_EXPR || compare_code == LE_EXPR))
-    predict_edge_def (then_edge, PRED_LOOP_IV_COMPARE, TAKEN);
-  else if ((loop_bound_code == GT_EXPR || loop_bound_code == GE_EXPR)
-	   && (compare_code == GT_EXPR || compare_code == GE_EXPR))
-    predict_edge_def (then_edge, PRED_LOOP_IV_COMPARE, TAKEN);
-  else if (loop_bound_code == NE_EXPR)
+  if (expr_coherent_p (loop_bound_var, compare_var))
     {
-      /* If the loop backedge condition is "(i != bound)", we do
-	 the comparison based on the step of IV:
-	   * step < 0 : backedge condition is like (i > bound)
-	   * step > 0 : backedge condition is like (i < bound)  */
-      gcc_assert (loop_bound_step != 0);
+      if ((loop_bound_code == LT_EXPR || loop_bound_code == LE_EXPR)
+	  && (compare_code == LT_EXPR || compare_code == LE_EXPR))
+	predict_edge_def (then_edge, PRED_LOOP_IV_COMPARE, TAKEN);
+      else if ((loop_bound_code == GT_EXPR || loop_bound_code == GE_EXPR)
+	       && (compare_code == GT_EXPR || compare_code == GE_EXPR))
+	predict_edge_def (then_edge, PRED_LOOP_IV_COMPARE, TAKEN);
+      else if (loop_bound_code == NE_EXPR)
+	{
+	  /* If the loop backedge condition is "(i != bound)", we do
+	     the comparison based on the step of IV:
+	     * step < 0 : backedge condition is like (i > bound)
+	     * step > 0 : backedge condition is like (i < bound)  */
+	  gcc_assert (loop_bound_step != 0);
+	  if (loop_bound_step > 0
+	      && (compare_code == LT_EXPR
+		  || compare_code == LE_EXPR))
+	    predict_edge_def (then_edge, PRED_LOOP_IV_COMPARE, TAKEN);
+	  else if (loop_bound_step < 0
+		   && (compare_code == GT_EXPR
+		       || compare_code == GE_EXPR))
+	    predict_edge_def (then_edge, PRED_LOOP_IV_COMPARE, TAKEN);
+	  else
+	    predict_edge_def (then_edge, PRED_LOOP_IV_COMPARE, NOT_TAKEN);
+	}
+      else
+	/* The branch is predicted not-taken if loop_bound_code is
+	   opposite with compare_code.  */
+	predict_edge_def (then_edge, PRED_LOOP_IV_COMPARE, NOT_TAKEN);
+    }
+  else if (expr_coherent_p (loop_iv_base_var, compare_var))
+    {
+      /* For cases like:
+	   for (i = s; i < h; i++)
+	     if (i > s + 2) ....
+	 The branch should be predicted taken.  */
       if (loop_bound_step > 0
-	  && (compare_code == LT_EXPR
-	      || compare_code == LE_EXPR))
+	  && (compare_code == GT_EXPR || compare_code == GE_EXPR))
 	predict_edge_def (then_edge, PRED_LOOP_IV_COMPARE, TAKEN);
       else if (loop_bound_step < 0
-	       && (compare_code == GT_EXPR
-		   || compare_code == GE_EXPR))
+	       && (compare_code == LT_EXPR || compare_code == LE_EXPR))
 	predict_edge_def (then_edge, PRED_LOOP_IV_COMPARE, TAKEN);
       else
 	predict_edge_def (then_edge, PRED_LOOP_IV_COMPARE, NOT_TAKEN);
     }
-  else
-    /* The branch is predicted not-taken if loop_bound_code is
-       opposite with compare_code.  */
-    predict_edge_def (then_edge, PRED_LOOP_IV_COMPARE, NOT_TAKEN);
 }
- 
+
+/* Predict for extra loop exits that will lead to EXIT_EDGE. The extra loop
+   exits are resulted from short-circuit conditions that will generate an
+   if_tmp. E.g.:
+
+   if (foo() || global > 10)
+     break;
+
+   This will be translated into:
+
+   BB3:
+     loop header...
+   BB4:
+     if foo() goto BB6 else goto BB5
+   BB5:
+     if global > 10 goto BB6 else goto BB7
+   BB6:
+     goto BB7
+   BB7:
+     iftmp = (PHI 0(BB5), 1(BB6))
+     if iftmp == 1 goto BB8 else goto BB3
+   BB8:
+     outside of the loop...
+
+   The edge BB7->BB8 is loop exit because BB8 is outside of the loop.
+   From the dataflow, we can infer that BB4->BB6 and BB5->BB6 are also loop
+   exits. This function takes BB7->BB8 as input, and finds out the extra loop
+   exits to predict them using PRED_LOOP_EXIT.  */
+
+static void
+predict_extra_loop_exits (edge exit_edge)
+{
+  unsigned i;
+  bool check_value_one;
+  gimple phi_stmt;
+  tree cmp_rhs, cmp_lhs;
+  gimple cmp_stmt = last_stmt (exit_edge->src);
+
+  if (!cmp_stmt || gimple_code (cmp_stmt) != GIMPLE_COND)
+    return;
+  cmp_rhs = gimple_cond_rhs (cmp_stmt);
+  cmp_lhs = gimple_cond_lhs (cmp_stmt);
+  if (!TREE_CONSTANT (cmp_rhs)
+      || !(integer_zerop (cmp_rhs) || integer_onep (cmp_rhs)))
+    return;
+  if (TREE_CODE (cmp_lhs) != SSA_NAME)
+    return;
+
+  /* If check_value_one is true, only the phi_args with value '1' will lead
+     to loop exit. Otherwise, only the phi_args with value '0' will lead to
+     loop exit.  */
+  check_value_one = (((integer_onep (cmp_rhs))
+		    ^ (gimple_cond_code (cmp_stmt) == EQ_EXPR))
+		    ^ ((exit_edge->flags & EDGE_TRUE_VALUE) != 0));
+
+  phi_stmt = SSA_NAME_DEF_STMT (cmp_lhs);
+  if (!phi_stmt || gimple_code (phi_stmt) != GIMPLE_PHI)
+    return;
+
+  for (i = 0; i < gimple_phi_num_args (phi_stmt); i++)
+    {
+      edge e1;
+      edge_iterator ei;
+      tree val = gimple_phi_arg_def (phi_stmt, i);
+      edge e = gimple_phi_arg_edge (phi_stmt, i);
+
+      if (!TREE_CONSTANT (val) || !(integer_zerop (val) || integer_onep (val)))
+	continue;
+      if (check_value_one ^ integer_onep (val))
+	continue;
+      if (VEC_length (edge, e->src->succs) != 1)
+	{
+	  if (!predicted_by_p (exit_edge->src, PRED_LOOP_ITERATIONS_GUESSED)
+	      && !predicted_by_p (exit_edge->src, PRED_LOOP_ITERATIONS)
+	      && !predicted_by_p (exit_edge->src, PRED_LOOP_EXIT))
+	    predict_edge_def (e, PRED_LOOP_EXIT, NOT_TAKEN);
+	  continue;
+	}
+
+      FOR_EACH_EDGE (e1, ei, e->src->preds)
+	if (!predicted_by_p (exit_edge->src, PRED_LOOP_ITERATIONS_GUESSED)
+	    && !predicted_by_p (exit_edge->src, PRED_LOOP_ITERATIONS)
+	    && !predicted_by_p (exit_edge->src, PRED_LOOP_EXIT))
+	  predict_edge_def (e1, PRED_LOOP_EXIT, NOT_TAKEN);
+    }
+}
+
 /* Predict edge probabilities by exploiting loop structure.  */
 
 static void
@@ -1295,6 +1419,8 @@ predict_loops (void)
 	  int probability;
 	  enum br_predictor predictor;
 
+	  predict_extra_loop_exits (ex);
+
 	  if (number_of_iterations_exit (loop, ex, &niter_desc, false))
 	    niter = niter_desc.niter;
 	  if (!niter || TREE_CODE (niter_desc.niter) != INTEGER_CST)
@@ -1314,7 +1440,7 @@ predict_loops (void)
 	     the loop, use it to predict this exit.  */
 	  else if (n_exits == 1)
 	    {
-	      nitercst = estimated_loop_iterations_int (loop, false);
+	      nitercst = max_stmt_executions_int (loop, false);
 	      if (nitercst < 0)
 		continue;
 	      if (nitercst > max)
@@ -1533,7 +1659,8 @@ static tree expr_expected_value (tree, bitmap);
 /* Helper function for expr_expected_value.  */
 
 static tree
-expr_expected_value_1 (tree type, tree op0, enum tree_code code, tree op1, bitmap visited)
+expr_expected_value_1 (tree type, tree op0, enum tree_code code,
+		       tree op1, bitmap visited)
 {
   gimple def;
 
@@ -1598,17 +1725,36 @@ expr_expected_value_1 (tree type, tree op0, enum tree_code code, tree op1, bitma
 	  tree decl = gimple_call_fndecl (def);
 	  if (!decl)
 	    return NULL;
-	  if (DECL_BUILT_IN_CLASS (decl) == BUILT_IN_NORMAL
-	      && DECL_FUNCTION_CODE (decl) == BUILT_IN_EXPECT)
-	    {
-	      tree val;
+	  if (DECL_BUILT_IN_CLASS (decl) == BUILT_IN_NORMAL)
+	    switch (DECL_FUNCTION_CODE (decl))
+	      {
+	      case BUILT_IN_EXPECT:
+		{
+		  tree val;
+		  if (gimple_call_num_args (def) != 2)
+		    return NULL;
+		  val = gimple_call_arg (def, 0);
+		  if (TREE_CONSTANT (val))
+		    return val;
+		  return gimple_call_arg (def, 1);
+		}
 
-	      if (gimple_call_num_args (def) != 2)
-		return NULL;
-	      val = gimple_call_arg (def, 0);
-	      if (TREE_CONSTANT (val))
-		return val;
-	      return gimple_call_arg (def, 1);
+	      case BUILT_IN_SYNC_BOOL_COMPARE_AND_SWAP_N:
+	      case BUILT_IN_SYNC_BOOL_COMPARE_AND_SWAP_1:
+	      case BUILT_IN_SYNC_BOOL_COMPARE_AND_SWAP_2:
+	      case BUILT_IN_SYNC_BOOL_COMPARE_AND_SWAP_4:
+	      case BUILT_IN_SYNC_BOOL_COMPARE_AND_SWAP_8:
+	      case BUILT_IN_SYNC_BOOL_COMPARE_AND_SWAP_16:
+	      case BUILT_IN_ATOMIC_COMPARE_EXCHANGE:
+	      case BUILT_IN_ATOMIC_COMPARE_EXCHANGE_N:
+	      case BUILT_IN_ATOMIC_COMPARE_EXCHANGE_1:
+	      case BUILT_IN_ATOMIC_COMPARE_EXCHANGE_2:
+	      case BUILT_IN_ATOMIC_COMPARE_EXCHANGE_4:
+	      case BUILT_IN_ATOMIC_COMPARE_EXCHANGE_8:
+	      case BUILT_IN_ATOMIC_COMPARE_EXCHANGE_16:
+		/* Assume that any given atomic operation has low contention,
+		   and thus the compare-and-swap operation succeeds.  */
+		return boolean_true_node;
 	    }
 	}
 
@@ -2121,7 +2267,7 @@ tree_estimate_probability_driver (void)
 {
   unsigned nb_loops;
 
-  loop_optimizer_init (0);
+  loop_optimizer_init (LOOPS_NORMAL);
   if (dump_file && (dump_flags & TDF_DETAILS))
     flow_loops_dump (dump_file, NULL, 0);
 
@@ -2150,7 +2296,8 @@ tree_estimate_probability_driver (void)
 static void
 predict_paths_for_bb (basic_block cur, basic_block bb,
 		      enum br_predictor pred,
-		      enum prediction taken)
+		      enum prediction taken,
+		      bitmap visited)
 {
   edge e;
   edge_iterator ei;
@@ -2171,7 +2318,7 @@ predict_paths_for_bb (basic_block cur, basic_block bb,
 	continue;
       gcc_assert (bb == cur || dominated_by_p (CDI_POST_DOMINATORS, cur, bb));
 
-      /* See if there is how many edge from e->src that is not abnormal
+      /* See if there is an edge from e->src that is not abnormal
 	 and does not lead to BB.  */
       FOR_EACH_EDGE (e2, ei2, e->src->succs)
 	if (e2 != e
@@ -2184,16 +2331,20 @@ predict_paths_for_bb (basic_block cur, basic_block bb,
 
       /* If there is non-abnormal path leaving e->src, predict edge
 	 using predictor.  Otherwise we need to look for paths
-	 leading to e->src.  */
+	 leading to e->src.
+
+	 The second may lead to infinite loop in the case we are predicitng
+	 regions that are only reachable by abnormal edges.  We simply
+	 prevent visiting given BB twice.  */
       if (found)
         predict_edge_def (e, pred, taken);
-      else
-	predict_paths_for_bb (e->src, e->src, pred, taken);
+      else if (bitmap_set_bit (visited, e->src->index))
+	predict_paths_for_bb (e->src, e->src, pred, taken, visited);
     }
   for (son = first_dom_son (CDI_POST_DOMINATORS, cur);
        son;
        son = next_dom_son (CDI_POST_DOMINATORS, son))
-    predict_paths_for_bb (son, bb, pred, taken);
+    predict_paths_for_bb (son, bb, pred, taken, visited);
 }
 
 /* Sets branch probabilities according to PREDiction and
@@ -2203,7 +2354,9 @@ static void
 predict_paths_leading_to (basic_block bb, enum br_predictor pred,
 			  enum prediction taken)
 {
-  predict_paths_for_bb (bb, bb, pred, taken);
+  bitmap visited = BITMAP_ALLOC (NULL);
+  predict_paths_for_bb (bb, bb, pred, taken, visited);
+  BITMAP_FREE (visited);
 }
 
 /* Like predict_paths_leading_to but take edge instead of basic block.  */
@@ -2226,7 +2379,11 @@ predict_paths_leading_to_edge (edge e, enum br_predictor pred,
 	break;
       }
   if (!has_nonloop_edge)
-    predict_paths_for_bb (bb, bb, pred, taken);
+    {
+      bitmap visited = BITMAP_ALLOC (NULL);
+      predict_paths_for_bb (bb, bb, pred, taken, visited);
+      BITMAP_FREE (visited);
+    }
   else
     predict_edge_def (e, pred, taken);
 }
@@ -2585,7 +2742,7 @@ void
 compute_function_frequency (void)
 {
   basic_block bb;
-  struct cgraph_node *node = cgraph_node (current_function_decl);
+  struct cgraph_node *node = cgraph_get_node (current_function_decl);
   if (DECL_STATIC_CONSTRUCTOR (current_function_decl)
       || MAIN_NAME_P (DECL_NAME (current_function_decl)))
     node->only_called_at_startup = true;
@@ -2634,7 +2791,7 @@ tree
 build_predict_expr (enum br_predictor predictor, enum prediction taken)
 {
   tree t = build1 (PREDICT_EXPR, void_type_node,
-		   build_int_cst (NULL, predictor));
+		   build_int_cst (integer_type_node, predictor));
   SET_PREDICT_EXPR_OUTCOME (t, taken);
   return t;
 }
