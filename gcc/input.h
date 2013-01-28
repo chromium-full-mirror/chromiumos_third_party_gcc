@@ -38,6 +38,9 @@ extern char builtins_location_check[(BUILTINS_LOCATION
 				     < RESERVED_LOCATION_COUNT) ? 1 : -1];
 
 extern expanded_location expand_location (source_location);
+extern const char * location_get_source_line(expanded_location xloc);
+extern expanded_location expand_location_to_spelling_point (source_location);
+extern source_location expansion_point_location_if_in_system_header (source_location);
 
 /* Historically GCC used location_t, while cpp used source_location.
    This could be removed but it hardly seems worth the effort.  */
@@ -45,20 +48,19 @@ typedef source_location location_t;
 
 extern location_t input_location;
 
-extern location_t location_with_discriminator (location_t, int);
-extern bool has_discriminator (location_t);
-extern location_t map_discriminator_location (location_t);
-extern int get_discriminator_from_locus (location_t);
-
 #define LOCATION_FILE(LOC) ((expand_location (LOC)).file)
 #define LOCATION_LINE(LOC) ((expand_location (LOC)).line)
 #define LOCATION_COLUMN(LOC)((expand_location (LOC)).column)
+#define LOCATION_LOCUS(LOC) \
+  ((IS_ADHOC_LOC(LOC)) ? get_location_from_adhoc_loc (line_table, LOC) : (LOC))
+#define LOCATION_BLOCK(LOC) \
+  ((tree) ((IS_ADHOC_LOC (LOC)) ? get_data_from_adhoc_loc (line_table, (LOC)) \
+  : NULL))
 
 #define input_line LOCATION_LINE (input_location)
 #define input_filename LOCATION_FILE (input_location)
 #define in_system_header_at(LOC) \
-  ((linemap_location_in_system_header_p (line_table, \
-                                         map_discriminator_location (LOC))))
+  ((linemap_location_in_system_header_p (line_table, LOC)))
 #define in_system_header (in_system_header_at (input_location))
 
 void dump_line_table_statistics (void);

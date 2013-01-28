@@ -1,7 +1,7 @@
 /* Collect static initialization info into data structures that can be
    traversed by C++ initialization and finalization routines.
    Copyright (C) 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011
+   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011, 2012
    Free Software Foundation, Inc.
    Contributed by Chris Smith (csmith@convex.com).
    Heavily modified by Michael Meissner (meissner@cygnus.com),
@@ -31,6 +31,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "coretypes.h"
 #include "tm.h"
 #include "filenames.h"
+#include "file-find.h"
 
 /* TARGET_64BIT may be defined to use driver specific functionality. */
 #undef TARGET_64BIT
@@ -237,21 +238,11 @@ static const char *target_system_root = TARGET_SYSTEM_ROOT;
 static const char *target_system_root = "";
 #endif
 
-/* Structure to hold all the directories in which to search for files to
-   execute.  */
-
-struct prefix_list
-{
-  const char *prefix;         /* String to prepend to the path.  */
-  struct prefix_list *next;   /* Next in linked list.  */
-};
-
-struct path_prefix
-{
-  struct prefix_list *plist;  /* List of prefixes to try */
-  int max_len;                /* Max length of a prefix in PLIST */
-  const char *name;           /* Name of this list (used in config stuff) */
-};
+/* Whether we may unlink the output file, which should be set as soon as we
+   know we have successfully produced it.  This is typically useful to prevent
+   blindly attempting to unlink a read-only output that the target linker
+   would leave untouched.  */
+bool may_unlink_output_file = false;
 
 #ifdef COLLECT_EXPORT_LIST
 /* Lists to keep libraries to be scanned for global constructors/destructors.  */
@@ -296,10 +287,6 @@ typedef enum {
 static symkind is_ctor_dtor (const char *);
 
 static void handler (int);
-static char *find_a_file (struct path_prefix *, const char *);
-static void add_prefix (struct path_prefix *, const char *);
-static void prefix_from_env (const char *, struct path_prefix *);
-static void prefix_from_string (const char *, struct path_prefix *);
 static void do_wait (const char *, struct pex_obj *);
 static void fork_execute (const char *, char **);
 static void maybe_unlink (const char *);
@@ -322,9 +309,6 @@ static void write_c_file_glob (FILE *, const char *);
 #endif
 #ifdef SCAN_LIBRARIES
 static void scan_libraries (const char *);
-#endif
-#if LINK_ELIMINATE_DUPLICATE_LDIRECTORIES
-static int is_in_args (const char *, const char **, const char **);
 #endif
 #ifdef COLLECT_EXPORT_LIST
 #if 0
@@ -403,13 +387,13 @@ collect_exit (int status)
 
   if (ldout != 0 && ldout[0])
     {
-      dump_file (ldout, stdout);
+      dump_ld_file (ldout, stdout);
       maybe_unlink (ldout);
     }
 
   if (lderrout != 0 && lderrout[0])
     {
-      dump_file (lderrout, stderr);
+      dump_ld_file (lderrout, stderr);
       maybe_unlink (lderrout);
     }
 
@@ -515,7 +499,7 @@ extract_string (const char **pp)
 }
 
 void
-dump_file (const char *name, FILE *to)
+dump_ld_file (const char *name, FILE *to)
 {
   FILE *stream = fopen (name, "r");
 
@@ -650,168 +634,6 @@ static const char *const target_machine = TARGET_MACHINE;
 
    Return 0 if not found, otherwise return its name, allocated with malloc.  */
 
-static char *
-find_a_file (struct path_prefix *pprefix, const char *name)
-{
-  char *temp;
-  struct prefix_list *pl;
-  int len = pprefix->max_len + strlen (name) + 1;
-
-  if (debug)
-    fprintf (stderr, "Looking for '%s'\n", name);
-
-#ifdef HOST_EXECUTABLE_SUFFIX
-  len += strlen (HOST_EXECUTABLE_SUFFIX);
-#endif
-
-  temp = XNEWVEC (char, len);
-
-  /* Determine the filename to execute (special case for absolute paths).  */
-
-  if (IS_ABSOLUTE_PATH (name))
-    {
-      if (access (name, X_OK) == 0)
-	{
-	  strcpy (temp, name);
-
-	  if (debug)
-	    fprintf (stderr, "  - found: absolute path\n");
-
-	  return temp;
-	}
-
-#ifdef HOST_EXECUTABLE_SUFFIX
-	/* Some systems have a suffix for executable files.
-	   So try appending that.  */
-      strcpy (temp, name);
-	strcat (temp, HOST_EXECUTABLE_SUFFIX);
-
-	if (access (temp, X_OK) == 0)
-	  return temp;
-#endif
-
-      if (debug)
-	fprintf (stderr, "  - failed to locate using absolute path\n");
-    }
-  else
-    for (pl = pprefix->plist; pl; pl = pl->next)
-      {
-	struct stat st;
-
-	strcpy (temp, pl->prefix);
-	strcat (temp, name);
-
-	if (stat (temp, &st) >= 0
-	    && ! S_ISDIR (st.st_mode)
-	    && access (temp, X_OK) == 0)
-	  return temp;
-
-#ifdef HOST_EXECUTABLE_SUFFIX
-	/* Some systems have a suffix for executable files.
-	   So try appending that.  */
-	strcat (temp, HOST_EXECUTABLE_SUFFIX);
-
-	if (stat (temp, &st) >= 0
-	    && ! S_ISDIR (st.st_mode)
-	    && access (temp, X_OK) == 0)
-	  return temp;
-#endif
-      }
-
-  if (debug && pprefix->plist == NULL)
-    fprintf (stderr, "  - failed: no entries in prefix list\n");
-
-  free (temp);
-  return 0;
-}
-
-/* Add an entry for PREFIX to prefix list PPREFIX.  */
-
-static void
-add_prefix (struct path_prefix *pprefix, const char *prefix)
-{
-  struct prefix_list *pl, **prev;
-  int len;
-
-  if (pprefix->plist)
-    {
-      for (pl = pprefix->plist; pl->next; pl = pl->next)
-	;
-      prev = &pl->next;
-    }
-  else
-    prev = &pprefix->plist;
-
-  /* Keep track of the longest prefix.  */
-
-  len = strlen (prefix);
-  if (len > pprefix->max_len)
-    pprefix->max_len = len;
-
-  pl = XNEW (struct prefix_list);
-  pl->prefix = xstrdup (prefix);
-
-  if (*prev)
-    pl->next = *prev;
-  else
-    pl->next = (struct prefix_list *) 0;
-  *prev = pl;
-}
-
-/* Take the value of the environment variable ENV, break it into a path, and
-   add of the entries to PPREFIX.  */
-
-static void
-prefix_from_env (const char *env, struct path_prefix *pprefix)
-{
-  const char *p;
-  p = getenv (env);
-
-  if (p)
-    prefix_from_string (p, pprefix);
-}
-
-static void
-prefix_from_string (const char *p, struct path_prefix *pprefix)
-{
-  const char *startp, *endp;
-  char *nstore = XNEWVEC (char, strlen (p) + 3);
-
-  if (debug)
-    fprintf (stderr, "Convert string '%s' into prefixes, separator = '%c'\n", p, PATH_SEPARATOR);
-
-  startp = endp = p;
-  while (1)
-    {
-      if (*endp == PATH_SEPARATOR || *endp == 0)
-	{
-	  strncpy (nstore, startp, endp-startp);
-	  if (endp == startp)
-	    {
-	      strcpy (nstore, "./");
-	    }
-	  else if (! IS_DIR_SEPARATOR (endp[-1]))
-	    {
-	      nstore[endp-startp] = DIR_SEPARATOR;
-	      nstore[endp-startp+1] = 0;
-	    }
-	  else
-	    nstore[endp-startp] = 0;
-
-	  if (debug)
-	    fprintf (stderr, "  - add prefix: %s\n", nstore);
-
-	  add_prefix (pprefix, nstore);
-	  if (*endp == 0)
-	    break;
-	  endp = startp = endp + 1;
-	}
-      else
-	endp++;
-    }
-  free (nstore);
-}
-
 #ifdef OBJECT_FORMAT_NONE
 
 /* Add an entry for the object file NAME to object file list LIST.
@@ -839,7 +661,7 @@ add_lto_object (struct lto_object_list *list, const char *name)
    files contain LTO info.  The linker command line LTO_LD_ARGV
    represents the linker command that would produce a final executable
    without the use of LTO. OBJECT_LST is a vector of object file names
-   appearing in LTO_LD_ARGV that are to be considerd for link-time
+   appearing in LTO_LD_ARGV that are to be considered for link-time
    recompilation, where OBJECT is a pointer to the last valid element.
    (This awkward convention avoids an impedance mismatch with the
    usage of similarly-named variables in main().)  The elements of
@@ -1020,19 +842,17 @@ maybe_run_lto_and_relink (char **lto_ld_argv, char **object_lst,
 int
 main (int argc, char **argv)
 {
-  static const char *const ld_suffix	     = "ld";
-  static const char *const gold_suffix       = "ld.gold";
-  static const char *const bfd_ld_suffix     = "ld.bfd";
-  static const char *const plugin_ld_suffix  = PLUGIN_LD;
-  static const char *const real_ld_suffix    = "real-ld";
+  static const char *const ld_suffix	= "ld";
+  static const char *const plugin_ld_suffix = PLUGIN_LD_SUFFIX;
+  static const char *const real_ld_suffix = "real-ld";
   static const char *const collect_ld_suffix = "collect-ld";
-  static const char *const nm_suffix	     = "nm";
-  static const char *const gnm_suffix	     = "gnm";
+  static const char *const nm_suffix	= "nm";
+  static const char *const gnm_suffix	= "gnm";
 #ifdef LDD_SUFFIX
-  static const char *const ldd_suffix	     = LDD_SUFFIX;
+  static const char *const ldd_suffix	= LDD_SUFFIX;
 #endif
-  static const char *const strip_suffix      = "strip";
-  static const char *const gstrip_suffix     = "gstrip";
+  static const char *const strip_suffix = "strip";
+  static const char *const gstrip_suffix = "gstrip";
 
 #ifdef CROSS_DIRECTORY_STRUCTURE
   /* If we look for a program in the compiler directories, we just use
@@ -1042,10 +862,6 @@ main (int argc, char **argv)
 
   const char *const full_ld_suffix =
     concat(target_machine, "-", ld_suffix, NULL);
-  const char *const full_gold_suffix =
-    concat (target_machine, "-", gold_suffix, NULL);
-  const char *const full_bfd_ld_suffix =
-    concat (target_machine, "-", bfd_ld_suffix, NULL);
   const char *const full_plugin_ld_suffix =
     concat(target_machine, "-", plugin_ld_suffix, NULL);
   const char *const full_nm_suffix =
@@ -1061,17 +877,15 @@ main (int argc, char **argv)
   const char *const full_gstrip_suffix =
     concat (target_machine, "-", gstrip_suffix, NULL);
 #else
-  const char *const full_ld_suffix	  = ld_suffix;
-  const char *const full_gold_suffix	  = gold_suffix;
-  const char *const full_bfd_ld_suffix	  = bfd_ld_suffix;
+  const char *const full_ld_suffix	= ld_suffix;
   const char *const full_plugin_ld_suffix = plugin_ld_suffix;
-  const char *const full_nm_suffix	  = nm_suffix;
-  const char *const full_gnm_suffix	  = gnm_suffix;
+  const char *const full_nm_suffix	= nm_suffix;
+  const char *const full_gnm_suffix	= gnm_suffix;
 #ifdef LDD_SUFFIX
-  const char *const full_ldd_suffix	  = ldd_suffix;
+  const char *const full_ldd_suffix	= ldd_suffix;
 #endif
-  const char *const full_strip_suffix	  = strip_suffix;
-  const char *const full_gstrip_suffix	  = gstrip_suffix;
+  const char *const full_strip_suffix	= strip_suffix;
+  const char *const full_gstrip_suffix	= gstrip_suffix;
 #endif /* CROSS_DIRECTORY_STRUCTURE */
 
   const char *arg;
@@ -1085,13 +899,7 @@ main (int argc, char **argv)
   const char **c_ptr;
   char **ld1_argv;
   const char **ld1;
-  enum linker_select
-  {
-    DFLT_LINKER,
-    PLUGIN_LINKER,
-    GOLD_LINKER,
-    BFD_LINKER
-  } selected_linker = DFLT_LINKER;
+  bool use_plugin = false;
 
   /* The kinds of symbols we will have to consider when scanning the
      outcome of a first pass link.  This is ALL to start with, then might
@@ -1182,21 +990,15 @@ main (int argc, char **argv)
         else if (! strcmp (argv[i], "-flto-partition=none"))
 	  no_partition = true;
         else if ((! strncmp (argv[i], "-flto=", 6)
-		  || ! strcmp (argv[i], "-flto"))
-		 && selected_linker != PLUGIN_LINKER)
+		  || ! strcmp (argv[i], "-flto")) && ! use_plugin)
 	  lto_mode = LTO_MODE_WHOPR;
 	else if (!strncmp (argv[i], "-fno-lto", 8))
 	  lto_mode = LTO_MODE_NONE;
         else if (! strcmp (argv[i], "-plugin"))
 	  {
-	    selected_linker =  PLUGIN_LINKER;
+	    use_plugin = true;
 	    lto_mode = LTO_MODE_NONE;
 	  }
-	else if (! strcmp (argv[i], "-use-gold"))
-	  selected_linker = GOLD_LINKER;
-	else if (! strcmp (argv[i], "-use-ld"))
-	  selected_linker = BFD_LINKER;
-
 #ifdef COLLECT_EXPORT_LIST
 	/* since -brtl, -bexport, -b64 are not position dependent
 	   also check for them here */
@@ -1215,6 +1017,7 @@ main (int argc, char **argv)
 #endif
       }
     vflag = debug;
+    find_file_set_debug (debug);
     if (no_partition && lto_mode == LTO_MODE_WHOPR)
       lto_mode = LTO_MODE_LTO;
   }
@@ -1278,108 +1081,35 @@ main (int argc, char **argv)
   /* Try to discover a valid linker/nm/strip to use.  */
 
   /* Maybe we know the right file to use (if not cross).  */
-  ld_file_name = NULL;
+  ld_file_name = 0;
 #ifdef DEFAULT_LINKER
   if (access (DEFAULT_LINKER, X_OK) == 0)
     ld_file_name = DEFAULT_LINKER;
-  if (ld_file_name == NULL)
+  if (ld_file_name == 0)
 #endif
 #ifdef REAL_LD_FILE_NAME
   ld_file_name = find_a_file (&path, REAL_LD_FILE_NAME);
-  if (ld_file_name == NULL)
+  if (ld_file_name == 0)
 #endif
   /* Search the (target-specific) compiler dirs for ld'.  */
   ld_file_name = find_a_file (&cpath, real_ld_suffix);
   /* Likewise for `collect-ld'.  */
-  if (ld_file_name == NULL)
+  if (ld_file_name == 0)
     ld_file_name = find_a_file (&cpath, collect_ld_suffix);
   /* Search the compiler directories for `ld'.  We have protection against
      recursive calls in find_a_file.  */
-  if (ld_file_name == NULL)
-    switch (selected_linker)
-      {
-      default:
-      case DFLT_LINKER:
-	ld_file_name = find_a_file (&cpath, ld_suffix);
-	break;
-      case PLUGIN_LINKER:
-	ld_file_name = find_a_file (&cpath, plugin_ld_suffix);
-	break;
-      case GOLD_LINKER:
-	ld_file_name = find_a_file (&cpath, gold_suffix);
-	break;
-      case BFD_LINKER:
-	ld_file_name = find_a_file (&cpath, bfd_ld_suffix);
-	break;
-      }
+  if (ld_file_name == 0)
+    ld_file_name = find_a_file (&cpath,
+				use_plugin
+				? plugin_ld_suffix
+				: ld_suffix);
   /* Search the ordinary system bin directories
      for `ld' (if native linking) or `TARGET-ld' (if cross).  */
-  if (ld_file_name == NULL)
-    switch (selected_linker)
-      {
-      default:
-      case DFLT_LINKER:
-	ld_file_name = find_a_file (&path, full_ld_suffix);
-	break;
-      case PLUGIN_LINKER:
-	ld_file_name = find_a_file (&path, full_plugin_ld_suffix);
-	break;
-      case GOLD_LINKER:
-	ld_file_name = find_a_file (&path, full_gold_suffix);
-	break;
-      case BFD_LINKER:
-	ld_file_name = find_a_file (&path, full_bfd_ld_suffix);
-	break;
-      }
-  /* If we failed to find a plugin-capable linker, try the ordinary one.  */
-  if (ld_file_name == NULL && selected_linker == PLUGIN_LINKER)
-    ld_file_name = find_a_file (&cpath, ld_suffix);
-
-  if ((vflag || debug) && ld_file_name == NULL)
-    {
-      struct prefix_list * p;
-      const char * s;
-
-      notice ("collect2: warning: unable to find linker.\n");
-
-#ifdef DEFAULT_LINKER
-      notice (" Searched for this absolute executable:\n");
-      notice (" %s\n", DEFAULT_LINKER);
-#endif
-
-      notice (" Searched in these paths:\n");
-      for (p = cpath.plist; p != NULL; p = p->next)
-	notice ("  %s\n", p->prefix);
-      notice (" For these executables:\n");
-      notice ("  %s\n", real_ld_suffix);
-      notice ("  %s\n", collect_ld_suffix);
-      switch (selected_linker)
-      {
-      default:
-      case DFLT_LINKER:    s = ld_suffix; break;
-      case PLUGIN_LINKER:  s = plugin_ld_suffix; break;
-      case GOLD_LINKER:    s = gold_suffix; break;
-      case BFD_LINKER:     s = bfd_ld_suffix; break;
-      }
-      notice ("  %s\n", s);
-
-      notice (" And searched in these paths:\n");
-      for (p = path.plist; p != NULL; p = p->next)
-	notice ("  %s\n", p->prefix);
-      notice (" For these executables:\n");
-#ifdef REAL_LD_FILE_NAME
-      notice (" %s\n", REAL_LD_FILE_NAME);
-#endif
-      switch (selected_linker)
-      {
-      default:
-      case DFLT_LINKER:    s = full_ld_suffix; break;
-      case PLUGIN_LINKER:  s = full_plugin_ld_suffix; break;
-      case GOLD_LINKER:    s = full_gold_suffix; break;
-      case BFD_LINKER:     s = full_bfd_ld_suffix; break;
-      }
-      notice ("  %s\n", s);
-    }
+  if (ld_file_name == 0)
+    ld_file_name = find_a_file (&path,
+				use_plugin
+				? full_plugin_ld_suffix
+				: full_ld_suffix);
 
 #ifdef REAL_NM_FILE_NAME
   nm_file_name = find_a_file (&path, REAL_NM_FILE_NAME);
@@ -1617,15 +1347,6 @@ main (int argc, char **argv)
 	    case 'L':
 	      add_prefix (&cmdline_lib_dirs, arg+2);
 	      break;
-#else
-#if LINK_ELIMINATE_DUPLICATE_LDIRECTORIES
-	    case 'L':
-	      if (is_in_args (arg,
-			      CONST_CAST2 (const char **, char **, ld1_argv),
-			      ld1 - 1))
-		--ld1;
-	      break;
-#endif /* LINK_ELIMINATE_DUPLICATE_LDIRECTORIES */
 #endif
 
 	    case 'o':
@@ -2200,15 +1921,22 @@ fork_execute (const char *prog, char **argv)
   do_wait (prog, pex);
 }
 
-/* Unlink a file unless we are debugging.  */
+/* Unlink FILE unless we are debugging or this is the output_file
+   and we may not unlink it.  */
 
 static void
 maybe_unlink (const char *file)
 {
-  if (!debug)
-    unlink_if_ordinary (file);
-  else
-    notice ("[Leaving %s]\n", file);
+  if (debug)
+    {
+      notice ("[Leaving %s]\n", file);
+      return;
+    }
+
+  if (file == output_file && !may_unlink_output_file)
+    return;
+
+  unlink_if_ordinary (file);
 }
 
 /* Call maybe_unlink on the NULL-terminated list, FILE_LIST.  */
@@ -2327,22 +2055,6 @@ write_list (FILE *stream, const char *prefix, struct id *list)
       list = list->next;
     }
 }
-
-#if LINK_ELIMINATE_DUPLICATE_LDIRECTORIES
-/* Given a STRING, return nonzero if it occurs in the list in range
-   [ARGS_BEGIN,ARGS_END).  */
-
-static int
-is_in_args (const char *string, const char **args_begin,
-	    const char **args_end)
-{
-  const char **args_pointer;
-  for (args_pointer = args_begin; args_pointer != args_end; ++args_pointer)
-    if (strcmp (string, *args_pointer) == 0)
-      return 1;
-  return 0;
-}
-#endif /* LINK_ELIMINATE_DUPLICATE_LDIRECTORIES */
 
 #ifdef COLLECT_EXPORT_LIST
 /* This function is really used only on AIX, but may be useful.  */
@@ -2675,7 +2387,7 @@ scan_prog_file (const char *prog_name, scanpass which_pass,
 
   /* LTO objects must be in a known format.  This check prevents
      us from accepting an archive containing LTO objects, which
-     gcc cannnot currently handle.  */
+     gcc cannot currently handle.  */
   if (which_pass == PASS_LTOINFO && !maybe_lto_object_file (prog_name))
     return;
 

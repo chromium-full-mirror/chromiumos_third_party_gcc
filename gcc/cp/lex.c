@@ -34,10 +34,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "flags.h"
 #include "c-family/c-pragma.h"
 #include "c-family/c-objc.h"
-#include "output.h"
 #include "tm_p.h"
 #include "timevar.h"
-#include "tree-threadsafe-analyze.h"
 
 static int interface_strcmp (const char *);
 static void init_cp_pragma (void);
@@ -175,7 +173,7 @@ init_reswords (void)
   tree id;
   int mask = 0;
 
-  if (cxx_dialect != cxx0x)
+  if (cxx_dialect < cxx0x)
     mask |= D_CXX0X;
   if (flag_no_asm)
     mask |= D_ASM | D_EXT;
@@ -332,21 +330,21 @@ parse_strconst_pragma (const char* name, int opt)
 }
 
 static void
-handle_pragma_vtable (cpp_reader* dfile ATTRIBUTE_UNUSED )
+handle_pragma_vtable (cpp_reader* /*dfile*/)
 {
   parse_strconst_pragma ("vtable", 0);
   sorry ("#pragma vtable no longer supported");
 }
 
 static void
-handle_pragma_unit (cpp_reader* dfile ATTRIBUTE_UNUSED )
+handle_pragma_unit (cpp_reader* /*dfile*/)
 {
   /* Validate syntax, but don't do anything.  */
   parse_strconst_pragma ("unit", 0);
 }
 
 static void
-handle_pragma_interface (cpp_reader* dfile ATTRIBUTE_UNUSED )
+handle_pragma_interface (cpp_reader* /*dfile*/)
 {
   tree fname = parse_strconst_pragma ("interface", 1);
   struct c_fileinfo *finfo;
@@ -386,7 +384,7 @@ handle_pragma_interface (cpp_reader* dfile ATTRIBUTE_UNUSED )
    any effect.  */
 
 static void
-handle_pragma_implementation (cpp_reader* dfile ATTRIBUTE_UNUSED )
+handle_pragma_implementation (cpp_reader* /*dfile*/)
 {
   tree fname = parse_strconst_pragma ("implementation", 1);
   const char *filename;
@@ -427,7 +425,7 @@ handle_pragma_implementation (cpp_reader* dfile ATTRIBUTE_UNUSED )
 
 /* Indicate that this file uses Java-personality exception handling.  */
 static void
-handle_pragma_java_exceptions (cpp_reader* dfile ATTRIBUTE_UNUSED)
+handle_pragma_java_exceptions (cpp_reader* /*dfile*/)
 {
   tree x;
   if (pragma_lex (&x) != CPP_EOF)
@@ -443,13 +441,6 @@ handle_pragma_java_exceptions (cpp_reader* dfile ATTRIBUTE_UNUSED)
 tree
 unqualified_name_lookup_error (tree name)
 {
-  /* Suppress the error message and return an error_mark_node if we are
-     parsing a lock attribute. We would like the lock attributes to
-     reference (and tolerate) names not in scope so that they provide
-     better code documentation capability.  */
-  if (parsing_lock_attribute)
-    return error_mark_node;
-
   if (IDENTIFIER_OPNAME_P (name))
     {
       if (name != ansi_opname (ERROR_MARK))
@@ -580,10 +571,11 @@ retrofit_lang_decl (tree t)
   else
     gcc_unreachable ();
 
-#ifdef GATHER_STATISTICS
-  tree_node_counts[(int)lang_decl] += 1;
-  tree_node_sizes[(int)lang_decl] += size;
-#endif
+  if (GATHER_STATISTICS)
+    {
+      tree_node_counts[(int)lang_decl] += 1;
+      tree_node_sizes[(int)lang_decl] += size;
+    }
 }
 
 void
@@ -610,10 +602,11 @@ cxx_dup_lang_specific_decl (tree node)
   memcpy (ld, DECL_LANG_SPECIFIC (node), size);
   DECL_LANG_SPECIFIC (node) = ld;
 
-#ifdef GATHER_STATISTICS
-  tree_node_counts[(int)lang_decl] += 1;
-  tree_node_sizes[(int)lang_decl] += size;
-#endif
+  if (GATHER_STATISTICS)
+    {
+      tree_node_counts[(int)lang_decl] += 1;
+      tree_node_sizes[(int)lang_decl] += size;
+    }
 }
 
 /* Copy DECL, including any language-specific parts.  */
@@ -647,10 +640,11 @@ copy_lang_type (tree node)
   memcpy (lt, TYPE_LANG_SPECIFIC (node), size);
   TYPE_LANG_SPECIFIC (node) = lt;
 
-#ifdef GATHER_STATISTICS
-  tree_node_counts[(int)lang_type] += 1;
-  tree_node_sizes[(int)lang_type] += size;
-#endif
+  if (GATHER_STATISTICS)
+    {
+      tree_node_counts[(int)lang_type] += 1;
+      tree_node_sizes[(int)lang_type] += size;
+    }
 }
 
 /* Copy TYPE, including any language-specific parts.  */
@@ -680,10 +674,11 @@ cxx_make_type (enum tree_code code)
       TYPE_LANG_SPECIFIC (t) = pi;
       pi->u.c.h.is_lang_type_class = 1;
 
-#ifdef GATHER_STATISTICS
-      tree_node_counts[(int)lang_type] += 1;
-      tree_node_sizes[(int)lang_type] += sizeof (struct lang_type);
-#endif
+      if (GATHER_STATISTICS)
+	{
+	  tree_node_counts[(int)lang_type] += 1;
+	  tree_node_sizes[(int)lang_type] += sizeof (struct lang_type);
+	}
     }
 
   /* Set up some flags that give proper default behavior.  */

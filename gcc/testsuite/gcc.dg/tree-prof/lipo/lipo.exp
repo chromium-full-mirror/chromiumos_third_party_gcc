@@ -27,7 +27,7 @@ if { ![check_profiling_available ""] } {
 
 # The procedures in profopt.exp need these parameters.
 set tool gcc
-set prof_ext "gcda"
+set prof_ext [list {gcda} {gcda.imports} ]
 
 # Override the list defined in profopt.exp.
 set PROFOPT_OPTIONS [list {}]
@@ -44,12 +44,6 @@ load_lib profopt.exp
 # profile data.
 set profile_option "-fprofile-generate -fripa -D_PROFILE_GENERATE"
 set feedback_option "-fprofile-use -fripa -D_PROFILE_USE"
-
-# Add -fno-section-anchors for powerpc.  Workround for Google ref b/6663281
-if {[istarget powerpc*-*-*]} {
-    set profile_option "$profile_option -fno-section-anchors"
-    set feedback_option "$feedback_option -fno-section-anchors"
-}
 
 foreach src [lsort [glob -nocomplain $srcdir/$subdir/*_0.c]] {
     # If we're only testing specific files and this isn't one of them, skip it.

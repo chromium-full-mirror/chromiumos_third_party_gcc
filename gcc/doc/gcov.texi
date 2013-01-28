@@ -124,17 +124,14 @@ gcov [@option{-v}|@option{--version}] [@option{-h}|@option{--help}]
      [@option{-a}|@option{--all-blocks}]
      [@option{-b}|@option{--branch-probabilities}]
      [@option{-c}|@option{--branch-counts}]
-     [@option{-m}|@option{--pmu-profile}]
      [@option{-u}|@option{--unconditional-branches}]
      [@option{-n}|@option{--no-output}]
      [@option{-l}|@option{--long-file-names}]
      [@option{-p}|@option{--preserve-paths}]
-     [@option{-q}|@option{--pmu_profile-path}]
      [@option{-r}|@option{--relative-only}]
      [@option{-f}|@option{--function-summaries}]
      [@option{-o}|@option{--object-directory} @var{directory|file}]
      [@option{-s}|@option{--source-prefix} @var{directory}]
-     [@option{-i}|@option{--intermediate-format}]
      [@option{-d}|@option{--display-progress}]
      @var{files}
 @c man end
@@ -173,14 +170,6 @@ be shown, unless the @option{-u} option is given.
 @itemx --branch-counts
 Write branch frequencies as the number of branches taken, rather than
 the percentage of branches taken.
-
-@item -m
-@itemx --pmu-profile
-Output the additional PMU profile information if available.
-
-@item -q
-@itemx --pmu_profile-path
-PMU profile path (default @file{pmuprofile.gcda}).
 
 @item -n
 @itemx --no-output
@@ -244,32 +233,6 @@ Unconditional branches are normally not interesting.
 @item -d
 @itemx --display-progress
 Display the progress on the standard output.
-
-@item -i
-@itemx --intermediate-format
-Output gcov file in an intermediate text format that can be used by
-@command{lcov} or other applications. It will output a single *.gcov file per
-*.gcda file. No source code is required.
-
-The format of the intermediate @file{.gcov} file is plain text with
-one entry per line
-
-@smallexample
-SF:@var{source_file_name}
-FN:@var{line_number},@var{function_name}
-FNDA:@var{execution_count},@var{function_name}
-BA:@var{line_num},@var{branch_coverage_type}
-DA:@var{line number},@var{execution_count}
-
-Where the @var{branch_coverage_type} is
-   0 (Branch not executed)
-   1 (Branch executed, but not taken)
-   2 (Branch executed and taken)
-
-There can be multiple SF entries in an intermediate gcov file. All
-entries following SF pertain to that source file until the next SF
-entry.
-@end smallexample
 
 @end table
 
@@ -588,20 +551,23 @@ collected at that point to be dumped to @file{.gcda} output files.
 
 @command{gcov} uses two files for profiling.  The names of these files
 are derived from the original @emph{object} file by substituting the
-file suffix with either @file{.gcno}, or @file{.gcda}.  All of these files
-are placed in the same directory as the object file, and contain data
-stored in a platform-independent format.
+file suffix with either @file{.gcno}, or @file{.gcda}.  The files
+contain coverage and profile data stored in a platform-independent format.
+The @file{.gcno} files are placed in the same directory as the object
+file.  By default, the @file{.gcda} files are also stored in the same
+directory as the object file, but the GCC @option{-fprofile-dir} option
+may be used to store the @file{.gcda} files in a separate directory.
 
-The @file{.gcno} file is generated when the source file is compiled with
-the GCC @option{-ftest-coverage} option.  It contains information to
+The @file{.gcno} notes file is generated when the source file is compiled
+with the GCC @option{-ftest-coverage} option.  It contains information to
 reconstruct the basic block graphs and assign source line numbers to
 blocks.
 
-The @file{.gcda} file is generated when a program containing object files
-built with the GCC @option{-fprofile-arcs} option is executed.  A
-separate @file{.gcda} file is created for each object file compiled with
-this option.  It contains arc transition counts, and some summary
-information.
+The @file{.gcda} count data file is generated when a program containing
+object files built with the GCC @option{-fprofile-arcs} option is executed.
+A separate @file{.gcda} file is created for each object file compiled with
+this option.  It contains arc transition counts, value profile counts, and
+some summary information.
 
 The full details of the file format is specified in @file{gcov-io.h},
 and functions provided in that header file should be used to access the

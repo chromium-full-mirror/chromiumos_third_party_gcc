@@ -44,9 +44,6 @@ extern bool lhd_do_nothing_t_return_bool (tree);
 extern int lhd_do_nothing_t_t_return_int (tree, tree);
 extern bool lhd_do_nothing_t_vp_return_bool (tree, void *);
 extern void lhd_do_nothing_f (struct function *);
-extern int lhd_do_nothing_t_return_int (tree);
-extern bool lhd_do_nothing_t_return_bool (tree);
-extern tree lhd_do_nothing_t_t_return_null_tree (tree, tree);
 extern tree lhd_pass_through_t (tree);
 extern bool lhd_post_options (const char **);
 extern alias_set_type lhd_get_alias_set (tree);
@@ -79,7 +76,6 @@ extern void lhd_init_options (unsigned int,
 extern bool lhd_complain_wrong_lang_p (const struct cl_option *);
 extern bool lhd_handle_option (size_t, const char *, int, int, location_t,
 			       const struct cl_option_handlers *);
-extern tree lhd_callgraph_analyze_expr (tree *, int *);
 
 
 /* Declarations for tree gimplification hooks.  */
@@ -127,6 +123,7 @@ extern void lhd_omp_firstprivatize_type_sizes (struct gimplify_omp_ctx *,
 #define LANG_HOOKS_EH_PERSONALITY	lhd_gcc_personality
 #define LANG_HOOKS_EH_RUNTIME_TYPE	lhd_pass_through_t
 #define LANG_HOOKS_EH_PROTECT_CLEANUP_ACTIONS	NULL
+#define LANG_HOOKS_BLOCK_MAY_FALLTHRU	hook_bool_const_tree_true
 #define LANG_HOOKS_EH_USE_CXA_END_CLEANUP	false
 #define LANG_HOOKS_DEEP_UNSHARING	false
 
@@ -143,23 +140,8 @@ extern void lhd_omp_firstprivatize_type_sizes (struct gimplify_omp_ctx *,
   LANG_HOOKS_TREE_INLINING_VAR_MOD_TYPE_P, \
 }
 
-#define LANG_HOOKS_CALLGRAPH_ANALYZE_EXPR lhd_callgraph_analyze_expr
-
-#define LANG_HOOKS_CALLGRAPH_INITIALIZER { \
-  LANG_HOOKS_CALLGRAPH_ANALYZE_EXPR \
-}
-
 /* Hooks for tree gimplification.  */
 #define LANG_HOOKS_GIMPLIFY_EXPR lhd_gimplify_expr
-
-/* Hook for getting the function decl from an obj_type_ref.  */
-#define LANG_HOOKS_GET_VIRTUAL_FUNCTION_DECL lhd_do_nothing_t_t_return_null_tree
-
-/* Hooks for thread safety analysis.  */
-#define LANG_HOOKS_DECL_IS_BASE_FIELD lhd_do_nothing_t_return_bool
-#define LANG_HOOKS_DECL_IS_CONSTRUCTOR lhd_do_nothing_t_return_bool
-#define LANG_HOOKS_DECL_IS_DESTRUCTOR lhd_do_nothing_t_return_bool
-#define LANG_HOOKS_DECL_IS_CONST_MEMBER_FUNC lhd_do_nothing_t_return_int
 
 /* Tree dump hooks.  */
 extern bool lhd_tree_dump_dump_tree (void *, tree);
@@ -345,7 +327,6 @@ extern void lhd_end_section (void);
   LANG_HOOKS_COMMON_ATTRIBUTE_TABLE, \
   LANG_HOOKS_FORMAT_ATTRIBUTE_TABLE, \
   LANG_HOOKS_TREE_INLINING_INITIALIZER, \
-  LANG_HOOKS_CALLGRAPH_INITIALIZER, \
   LANG_HOOKS_TREE_DUMP_INITIALIZER, \
   LANG_HOOKS_DECLS, \
   LANG_HOOKS_FOR_TYPES_INITIALIZER, \
@@ -355,11 +336,6 @@ extern void lhd_end_section (void);
   LANG_HOOKS_GET_INNERMOST_GENERIC_ARGS, \
   LANG_HOOKS_FUNCTION_PARAMETER_PACK_P, \
   LANG_HOOKS_GIMPLIFY_EXPR, \
-  LANG_HOOKS_GET_VIRTUAL_FUNCTION_DECL, \
-  LANG_HOOKS_DECL_IS_BASE_FIELD, \
-  LANG_HOOKS_DECL_IS_CONSTRUCTOR, \
-  LANG_HOOKS_DECL_IS_DESTRUCTOR, \
-  LANG_HOOKS_DECL_IS_CONST_MEMBER_FUNC, \
   LANG_HOOKS_BUILTIN_FUNCTION, \
   LANG_HOOKS_BUILTIN_FUNCTION_EXT_SCOPE, \
   LANG_HOOKS_USER_CONV_FUNCTION, \
@@ -368,6 +344,7 @@ extern void lhd_end_section (void);
   LANG_HOOKS_EH_PERSONALITY, \
   LANG_HOOKS_EH_RUNTIME_TYPE, \
   LANG_HOOKS_EH_PROTECT_CLEANUP_ACTIONS, \
+  LANG_HOOKS_BLOCK_MAY_FALLTHRU, \
   LANG_HOOKS_EH_USE_CXA_END_CLEANUP, \
   LANG_HOOKS_DEEP_UNSHARING \
 }

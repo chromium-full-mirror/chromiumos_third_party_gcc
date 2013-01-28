@@ -145,6 +145,7 @@ extern const unsigned int cl_lang_count;
 #define CL_JOINED		(1U << 22) /* If takes joined argument.  */
 #define CL_SEPARATE		(1U << 23) /* If takes a separate argument.  */
 #define CL_UNDOCUMENTED		(1U << 24) /* Do not output with --help.  */
+#define CL_NO_DWARF_RECORD	(1U << 25) /* Do not add to producer string.  */
 
 /* Flags for an enumerated option argument.  */
 #define CL_ENUM_CANONICAL	(1 << 0) /* Canonical for this value.  */
@@ -256,8 +257,6 @@ typedef struct
   const char *arg;
   int value;
 } cl_deferred_option;
-DEF_VEC_O(cl_deferred_option);
-DEF_VEC_ALLOC_O(cl_deferred_option,heap);
 
 /* Structure describing a single option-handling callback.  */
 
@@ -410,5 +409,4 @@ extern void set_struct_debug_option (struct gcc_options *opts,
 extern bool opt_enum_arg_to_value (size_t opt_index, const char *arg,
 				   int *value, unsigned int lang_mask);
 extern void write_opts_to_asm (void);
-extern void pattern_match_function_attributes (tree);
 #endif
