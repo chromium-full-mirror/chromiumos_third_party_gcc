@@ -1,5 +1,5 @@
 /* Builtins' description for AArch64 SIMD architecture.
-   Copyright (C) 2011, 2012 Free Software Foundation, Inc.
+   Copyright (C) 2011-2013 Free Software Foundation, Inc.
    Contributed by ARM Ltd.
 
    This file is part of GCC.
@@ -309,7 +309,7 @@ static GTY(()) tree aarch64_builtin_decls[AARCH64_BUILTIN_MAX];
 #define NUM_DREG_TYPES 6
 #define NUM_QREG_TYPES 6
 
-void
+static void
 aarch64_init_simd_builtins (void)
 {
   unsigned int i, fcode = AARCH64_SIMD_BUILTIN_BASE + 1;
@@ -1271,6 +1271,9 @@ aarch64_builtin_vectorized_function (tree fndecl, tree type_out, tree type_in)
 	case BUILT_IN_NEARBYINT:
 	case BUILT_IN_NEARBYINTF:
 	  return AARCH64_FIND_FRINT_VARIANT (frinti);
+	case BUILT_IN_SQRT:
+	case BUILT_IN_SQRTF:
+	  return AARCH64_FIND_FRINT_VARIANT (sqrt);
 #undef AARCH64_CHECK_BUILTIN_MODE
 #define AARCH64_CHECK_BUILTIN_MODE(C, N) \
   (out_mode == N##Imode && out_n == C \

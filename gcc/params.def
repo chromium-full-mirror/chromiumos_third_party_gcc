@@ -1,7 +1,5 @@
 /* params.def - Run-time parameters.
-   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
-   2011, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 2001-2013 Free Software Foundation, Inc.
    Written by Mark Mitchell <mark@codesourcery.com>.
 
 This file is part of GCC.
@@ -116,7 +114,7 @@ DEFPARAM (PARAM_INLINE_FUNCTION_OVERHEAD_SIZE,
 DEFPARAM (PARAM_EARLY_INLINER_MAX_ITERATIONS,
 	  "max-early-inliner-iterations",
 	  "The maximum number of nested indirect inlining performed by early inliner",
-	  10, 0, 0)
+	  1, 0, 0)
 
 /* Limit on probability of entry BB.  */
 DEFPARAM (PARAM_COMDAT_SHARING_PROBABILITY,
@@ -938,6 +936,20 @@ DEFPARAM (PARAM_LIPO_RANDOM_GROUP_SIZE,
           " no random grouping.",
 	  0, 0, 300)
 
+/* In LIPO profile-gen, use this parameter to specify the scale factor to propagate
+   callee module groups to caller.  */
+DEFPARAM (PARAM_LIPO_PROPAGATE_SCALE,
+	  "lipo-propagate-scale",
+	  "The scale factor to propagate callee module group's weight to the caller.",
+	  100, 0, 100)
+
+/* In LIPO profile-gen, use this parameter to enable cgraph dumping.   */
+DEFPARAM (PARAM_LIPO_DUMP_CGRAPH,
+	  "lipo-dump-cgraph",
+	  "Default is 0. If the value is 1, text dump is used. If the value "
+	  "is 2, .dot dump is enabled. ", 
+	  0, 0, 2)
+
 DEFPARAM (PARAM_PROFILE_GENERATE_SAMPLING_PERIOD,
          "profile-generate-sampling-period",
          "sampling rate with -fprofile-generate-sampling",
@@ -981,6 +993,14 @@ DEFPARAM (PARAM_MAX_VARTRACK_EXPR_DEPTH,
 	  "max-vartrack-expr-depth",
 	  "Max. recursion depth for expanding var tracking expressions",
 	  12, 0, 0)
+
+/* Set maximum length of value location list for which var tracking
+   should add reverse operations.  */
+
+DEFPARAM (PARAM_MAX_VARTRACK_REVERSE_OP_SIZE,
+	  "max-vartrack-reverse-op-size",
+	  "Max. size of loc list for which reverse ops should be added",
+	  50, 0, 0)
 
 /* Set minimum insn uid for non-debug insns.  */
 
@@ -1135,6 +1155,15 @@ DEFPARAM (PARAM_MAX_SLSR_CANDIDATE_SCAN,
 	  "Maximum length of candidate scans for straight-line "
 	  "strength reduction",
 	  50, 1, 999999)
+
+/* Parameters to be used with -mpatch-functions-for-instrumentation.
+   See config/i386/i386.opt  */
+DEFPARAM (PARAM_FUNCTION_PATCH_MIN_INSTRUCTIONS,
+          "function-patch-min-instructions",
+          "Minimum number of instructions in the function without loop before "
+          "the function is qualified for patching for instrumentation (for use "
+          "with -mpatch-functions-for-instrumentation)",
+          200, 0, 0)
 
 /*
 Local variables:

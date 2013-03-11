@@ -1,7 +1,5 @@
 /* Expands front end tree to back end RTL for GCC
-   Copyright (C) 1987, 1988, 1989, 1992, 1993, 1994, 1995, 1996, 1997,
-   1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
-   2010, 2011, 2012 Free Software Foundation, Inc.
+   Copyright (C) 1987-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -1765,6 +1763,10 @@ expand_switch_as_decision_tree_p (tree range,
     return true;
   if (!flag_jump_tables)
     return true;
+#ifndef ASM_OUTPUT_ADDR_DIFF_ELT
+  if (flag_pic)
+    return true;
+#endif
 
   /* If the switch is relatively small such that the cost of one
      indirect jump on the target are higher than the cost of a

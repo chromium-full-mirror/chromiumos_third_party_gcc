@@ -178,17 +178,23 @@ dnl
 AC_DEFUN([GLIBCXX_CHECK_ASSEMBLER_HWCAP], [
   test -z "$HWCAP_FLAGS" && HWCAP_FLAGS=''
 
-  ac_save_CFLAGS="$CFLAGS"
-  CFLAGS="$CFLAGS -Wa,-nH"
+  # Restrict the test to Solaris, other assemblers (e.g. AIX as) have -nH
+  # with a different meaning.
+  case ${target_os} in
+    solaris2*)
+      ac_save_CFLAGS="$CFLAGS"
+      CFLAGS="$CFLAGS -Wa,-nH"
 
-  AC_MSG_CHECKING([for as that supports -Wa,-nH])
-  AC_TRY_COMPILE([], [return 0;], [ac_hwcap_flags=yes],[ac_hwcap_flags=no])
-  if test "$ac_hwcap_flags" = "yes"; then
-    HWCAP_FLAGS="-Wa,-nH $HWCAP_FLAGS"
-  fi
-  AC_MSG_RESULT($ac_hwcap_flags)
+      AC_MSG_CHECKING([for as that supports -Wa,-nH])
+      AC_TRY_COMPILE([], [return 0;], [ac_hwcap_flags=yes],[ac_hwcap_flags=no])
+      if test "$ac_hwcap_flags" = "yes"; then
+	HWCAP_FLAGS="-Wa,-nH $HWCAP_FLAGS"
+      fi
+      AC_MSG_RESULT($ac_hwcap_flags)
 
-  CFLAGS="$ac_save_CFLAGS"
+      CFLAGS="$ac_save_CFLAGS"
+      ;;
+  esac
 
   AC_SUBST(HWCAP_FLAGS)
 ])
@@ -1301,6 +1307,17 @@ AC_DEFUN([GLIBCXX_ENABLE_LIBSTDCXX_TIME], [
       AC_MSG_RESULT($ac_has_usleep)
   fi
 
+  if test x"$ac_has_nanosleep$ac_has_sleep" = x"nono"; then
+      AC_MSG_CHECKING([for Sleep])
+      AC_TRY_COMPILE([#include <windows.h>],
+                     [Sleep(1)],
+                     [ac_has_win32_sleep=yes],[ac_has_win32_sleep=no])
+      if test x"$ac_has_win32_sleep" = x"yes"; then
+        AC_DEFINE(HAVE_WIN32_SLEEP,1, [Defined if Sleep exists.])
+      fi
+      AC_MSG_RESULT($ac_has_win32_sleep)
+  fi
+
   AC_SUBST(GLIBCXX_LIBS)
 
   CXXFLAGS="$ac_save_CXXFLAGS"
@@ -1722,7 +1739,12 @@ AC_DEFUN([GLIBCXX_CHECK_RANDOM_TR1], [
   AC_MSG_CHECKING([for "/dev/random" and "/dev/urandom" for TR1 random_device])
   AC_CACHE_VAL(glibcxx_cv_random_tr1, [
     if test -r /dev/random && test -r /dev/urandom; then
-      glibcxx_cv_random_tr1=yes;
+  ## For MSys environment the test above is detect as false-positive
+  ## on mingw-targets.  So disable it explicit for them.
+      case ${target_os} in
+	*mingw*) glibcxx_cv_random_tr1=no ;;
+	*) glibcxx_cv_random_tr1=yes ;;
+      esac
     else
       glibcxx_cv_random_tr1=no;
     fi

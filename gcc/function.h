@@ -1,7 +1,5 @@
 /* Structure for saving state for a nested function.
-   Copyright (C) 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
-   Free Software Foundation, Inc.
+   Copyright (C) 1989-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -584,6 +582,9 @@ struct GTY(()) function {
      being copied; this applies to both versioning and inlining.  Set to
      a string describing the reason for failure.  */
   const char * GTY((skip)) cannot_be_copied_reason;
+
+  /* Optabs for this function.  This is of type `struct target_optabs *'.  */
+  unsigned char *GTY ((atomic)) optabs;
 
   /* Collected bit flags.  */
 

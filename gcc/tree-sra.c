@@ -1,7 +1,7 @@
 /* Scalar Replacement of Aggregates (SRA) converts some structure
    references into scalar references, exposing them to the scalar
    optimizers.
-   Copyright (C) 2008, 2009, 2010, 2011, 2012 Free Software Foundation, Inc.
+   Copyright (C) 2008-2013 Free Software Foundation, Inc.
    Contributed by Martin Jambor <mjambor@suse.cz>
 
 This file is part of GCC.
@@ -716,7 +716,12 @@ type_internals_preclude_sra_p (tree type, const char **msg)
 	      {
 	        *msg = "structure field size not fixed";
 		return true;
-	      }	      
+	      }
+	    if (!host_integerp (bit_position (fld), 0))
+	      {
+	        *msg = "structure field size too big";
+		return true;
+	      }
 	    if (AGGREGATE_TYPE_P (ft)
 		    && int_bit_position (fld) % BITS_PER_UNIT != 0)
 	      {
@@ -1997,8 +2002,7 @@ create_access_replacement (struct access *access)
 static inline tree
 get_access_replacement (struct access *access)
 {
-  if (!access->replacement_decl)
-    access->replacement_decl = create_access_replacement (access);
+  gcc_checking_assert (access->replacement_decl);
   return access->replacement_decl;
 }
 
@@ -2154,7 +2158,6 @@ analyze_access_subtree (struct access *root, struct access *parent,
 	  || ((root->grp_scalar_read || root->grp_assignment_read)
 	      && (root->grp_scalar_write || root->grp_assignment_write))))
     {
-      bool new_integer_type;
       /* Always create access replacements that cover the whole access.
          For integral types this means the precision has to match.
 	 Avoid assumptions based on the integral type kind, too.  */
@@ -2173,41 +2176,37 @@ analyze_access_subtree (struct access *root, struct access *parent,
 	  root->expr = build_ref_for_offset (UNKNOWN_LOCATION,
 					     root->base, root->offset,
 					     root->type, NULL, false);
-	  new_integer_type = true;
-	}
-      else
-	new_integer_type = false;
 
-      if (dump_file && (dump_flags & TDF_DETAILS))
-	{
-	  fprintf (dump_file, "Marking ");
-	  print_generic_expr (dump_file, root->base, 0);
-	  fprintf (dump_file, " offset: %u, size: %u ",
-		   (unsigned) root->offset, (unsigned) root->size);
-	  fprintf (dump_file, " to be replaced%s.\n",
-		   new_integer_type ? " with an integer": "");
+	  if (dump_file && (dump_flags & TDF_DETAILS))
+	    {
+	      fprintf (dump_file, "Changing the type of a replacement for ");
+	      print_generic_expr (dump_file, root->base, 0);
+	      fprintf (dump_file, " offset: %u, size: %u ",
+		       (unsigned) root->offset, (unsigned) root->size);
+	      fprintf (dump_file, " to an integer.\n");
+	    }
 	}
 
       root->grp_to_be_replaced = 1;
+      root->replacement_decl = create_access_replacement (root);
       sth_created = true;
       hole = false;
     }
   else
     {
-      if (MAY_HAVE_DEBUG_STMTS && allow_replacements
+      if (allow_replacements
 	  && scalar && !root->first_child
-	  && (root->grp_scalar_write || root->grp_assignment_write))
+	  && (root->grp_scalar_write || root->grp_assignment_write)
+	  && !bitmap_bit_p (cannot_scalarize_away_bitmap,
+			    DECL_UID (root->base)))
 	{
 	  gcc_checking_assert (!root->grp_scalar_read
 			       && !root->grp_assignment_read);
-	  root->grp_to_be_debug_replaced = 1;
-	  if (dump_file && (dump_flags & TDF_DETAILS))
+	  sth_created = true;
+	  if (MAY_HAVE_DEBUG_STMTS)
 	    {
-	      fprintf (dump_file, "Marking ");
-	      print_generic_expr (dump_file, root->base, 0);
-	      fprintf (dump_file, " offset: %u, size: %u ",
-		       (unsigned) root->offset, (unsigned) root->size);
-	      fprintf (dump_file, " to be replaced with debug statements.\n");
+	      root->grp_to_be_debug_replaced = 1;
+	      root->replacement_decl = create_access_replacement (root);
 	    }
 	}
 
@@ -2217,17 +2216,11 @@ analyze_access_subtree (struct access *root, struct access *parent,
 	root->grp_total_scalarization = 0;
     }
 
-  if (sth_created
-      && (!hole || root->grp_total_scalarization))
-    {
-      root->grp_covered = 1;
-      return true;
-    }
-  if (root->grp_write || TREE_CODE (root->base) == PARM_DECL)
+  if (!hole || root->grp_total_scalarization)
+    root->grp_covered = 1;
+  else if (root->grp_write || TREE_CODE (root->base) == PARM_DECL)
     root->grp_unscalarized_data = 1; /* not covered and written to */
-  if (sth_created)
-    return true;
-  return false;
+  return sth_created;
 }
 
 /* Analyze all access trees linked by next_grp by the means of
@@ -2879,7 +2872,12 @@ load_assign_lhs_subreplacements (struct access *lacc, struct access *top_racc,
 							    lacc->size);
 
 	      if (racc && racc->grp_to_be_replaced)
-		drhs = get_access_replacement (racc);
+		{
+		  if (racc->grp_write)
+		    drhs = get_access_replacement (racc);
+		  else
+		    drhs = NULL;
+		}
 	      else if (*refreshed == SRA_UDH_LEFT)
 		drhs = build_debug_ref_for_model (loc, lacc->base, lacc->offset,
 						  lacc);
@@ -2969,7 +2967,11 @@ sra_modify_constructor_assign (gimple *stmt, gimple_stmt_iterator *gsi)
 static tree
 get_repl_default_def_ssa_name (struct access *racc)
 {
-  return get_or_create_ssa_default_def (cfun, get_access_replacement (racc));
+  gcc_checking_assert (!racc->grp_to_be_replaced &&
+		       !racc->grp_to_be_debug_replaced);
+  if (!racc->replacement_decl)
+    racc->replacement_decl = create_access_replacement (racc);
+  return get_or_create_ssa_default_def (cfun, racc->replacement_decl);
 }
 
 /* Return true if REF has a COMPONENT_REF with a bit-field field declaration
@@ -3084,15 +3086,13 @@ sra_modify_assign (gimple *stmt, gimple_stmt_iterator *gsi)
 	     ???  This should move to fold_stmt which we simply should
 	     call after building a VIEW_CONVERT_EXPR here.  */
 	  if (AGGREGATE_TYPE_P (TREE_TYPE (lhs))
-	      && !contains_bitfld_comp_ref_p (lhs)
-	      && !access_has_children_p (lacc))
+	      && !contains_bitfld_comp_ref_p (lhs))
 	    {
 	      lhs = build_ref_for_model (loc, lhs, 0, racc, gsi, false);
 	      gimple_assign_set_lhs (*stmt, lhs);
 	    }
 	  else if (AGGREGATE_TYPE_P (TREE_TYPE (rhs))
-		   && !contains_vce_or_bfcref_p (rhs)
-		   && !access_has_children_p (racc))
+		   && !contains_vce_or_bfcref_p (rhs))
 	    rhs = build_ref_for_model (loc, rhs, 0, lacc, gsi, false);
 
 	  if (!useless_type_conversion_p (TREE_TYPE (lhs), TREE_TYPE (rhs)))
@@ -3108,8 +3108,20 @@ sra_modify_assign (gimple *stmt, gimple_stmt_iterator *gsi)
 
   if (lacc && lacc->grp_to_be_debug_replaced)
     {
-      gimple ds = gimple_build_debug_bind (get_access_replacement (lacc),
-					   unshare_expr (rhs), *stmt);
+      tree dlhs = get_access_replacement (lacc);
+      tree drhs = unshare_expr (rhs);
+      if (!useless_type_conversion_p (TREE_TYPE (dlhs), TREE_TYPE (drhs)))
+	{
+	  if (AGGREGATE_TYPE_P (TREE_TYPE (drhs))
+	      && !contains_vce_or_bfcref_p (drhs))
+	    drhs = build_debug_ref_for_model (loc, drhs, 0, lacc);
+	  if (drhs
+	      && !useless_type_conversion_p (TREE_TYPE (dlhs),
+					     TREE_TYPE (drhs)))
+	    drhs = fold_build1_loc (loc, VIEW_CONVERT_EXPR,
+				    TREE_TYPE (dlhs), drhs);
+	}
+      gimple ds = gimple_build_debug_bind (dlhs, drhs, *stmt);
       gsi_insert_before (gsi, ds, GSI_SAME_STMT);
     }
 

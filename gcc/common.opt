@@ -1,7 +1,6 @@
 ; Options for the language- and target-independent parts of the compiler.
 
-; Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
-; Free Software Foundation, Inc.
+; Copyright (C) 2003-2013 Free Software Foundation, Inc.
 ;
 ; This file is part of GCC.
 ;
@@ -611,6 +610,15 @@ Wshadow
 Common Var(warn_shadow) Warning
 Warn when one local variable shadows another
 
+Wshadow-local
+Common Var(warn_shadow_local) Warning
+Warn when one local variable shadows another local variable or parameter
+
+Wshadow-compatible-local
+Common Var(warn_shadow_compatible_local) Warning
+Warn when one local variable shadows another local variable or parameter
+of compatible type
+
 Wstack-protector
 Common Var(warn_stack_protect) Warning
 Warn when not issuing stack smashing protection for some reason
@@ -848,12 +856,17 @@ Driver Undocumented
 ;    argument.
 ;    First selectable in G++ 4.7.
 ;
-; 7: The version of the ABI that treats nullptr_t as a builtin type.
+; 7: The version of the ABI that treats nullptr_t as a builtin type and
+;    corrects the mangling of lambdas in default argument scope.
 ;    First selectable in G++ 4.8.
 ; Additional positive integers will be assigned as new versions of
 ; the ABI become the default version of the ABI.
 fabi-version=
 Common Joined RejectNegative UInteger Var(flag_abi_version) Init(2)
+
+faggressive-loop-optimizations
+Common Report Var(flag_aggressive_loop_optimizations) Optimization Init(1) 
+Aggressively optimize loops using language constraints
 
 falign-functions
 Common Report Var(align_functions,0) Optimization UInteger
@@ -1750,6 +1763,13 @@ fprofile-generate-sampling
 Common Var(flag_profile_generate_sampling)
 Turn on instrumentation sampling with -fprofile-generate with rate set by --param profile-generate-sampling-rate or environment variable GCOV_SAMPLING_RATE
 
+femit-function-names
+Common Var(flag_emit_function_names)
+Print to stderr the mapping from module name and function id to assembler
+function name when -ftest-coverage, -fprofile-generate or -fprofile-use are
+active, for use in correlating function ids in gcda files with the function
+name.
+
 fprofile-strip=
 Common Joined RejectNegative Var(profile_base_name_suffix_to_strip)
 Specify a substring to be stripped from the profile base file name
@@ -2302,6 +2322,14 @@ funwind-tables
 Common Report Var(flag_unwind_tables) Optimization
 Just generate unwind tables for exception handling
 
+fuse-ld=bfd
+Common Negative(fuse-ld=gold)
+Use the bfd linker instead of the default linker
+
+fuse-ld=gold
+Common Negative(fuse-ld=bfd)
+Use the gold linker instead of the default linker
+
 fuse-linker-plugin
 Common Undocumented
 
@@ -2445,6 +2473,10 @@ grecord-gcc-switches
 Common RejectNegative Var(dwarf_record_gcc_switches,1)
 Record gcc command line switches in DWARF DW_AT_producer.
 
+gmlt
+Common RejectNegative
+Generate debug information at level 1 with minimal line table
+
 gno-split-dwarf
 Common Driver RejectNegative Var(dwarf_split_debug_info,0) Init(0)
 Don't generate debug information in separate .dwo files
@@ -2452,6 +2484,12 @@ Don't generate debug information in separate .dwo files
 gsplit-dwarf
 Common Driver RejectNegative Var(dwarf_split_debug_info,1)
 Generate debug information in separate .dwo files
+
+gfission
+Common Driver Alias(gsplit-dwarf)
+
+gno-fission
+Common Driver Alias(gno-split-dwarf)
 
 gstabs
 Common JoinedOrMissing Negative(gstabs+)

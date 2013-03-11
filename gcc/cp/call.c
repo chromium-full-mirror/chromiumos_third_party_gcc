@@ -1,8 +1,5 @@
 /* Functions related to invoking methods and overloaded functions.
-   Copyright (C) 1987, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
-   2010, 2011, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 1987-2013 Free Software Foundation, Inc.
    Contributed by Michael Tiemann (tiemann@cygnus.com) and
    modified by Brendan Kehoe (brendan@cygnus.com).
 
@@ -7050,7 +7047,10 @@ build_over_call (struct z_candidate *cand, int flags, tsubst_flags_t complain)
   if (!already_used)
     mark_used (fn);
 
-  if (DECL_VINDEX (fn) && (flags & LOOKUP_NONVIRTUAL) == 0)
+  if (DECL_VINDEX (fn) && (flags & LOOKUP_NONVIRTUAL) == 0
+      /* Don't mess with virtual lookup in fold_non_dependent_expr; virtual
+	 functions can't be constexpr.  */
+      && !in_template_function ())
     {
       tree t;
       tree binfo = lookup_base (TREE_TYPE (TREE_TYPE (argarray[0])),
@@ -7548,6 +7548,9 @@ build_new_method_call_1 (tree instance, tree fns, vec<tree, va_gc> **args,
 	 build_special_member_call.  */
       if (CONSTRUCTOR_NELTS (init_list) == 0
 	  && TYPE_HAS_DEFAULT_CONSTRUCTOR (basetype)
+	  /* For a user-provided default constructor, use the normal
+	     mechanisms so that protected access works.  */
+	  && !type_has_user_provided_default_constructor (basetype)
 	  && !processing_template_decl)
 	init = build_value_init (basetype, complain);
 
@@ -8779,11 +8782,18 @@ can_convert_arg (tree to, tree from, tree arg, int flags,
 
   /* Get the high-water mark for the CONVERSION_OBSTACK.  */
   p = conversion_obstack_alloc (0);
+  /* We want to discard any access checks done for this test,
+     as we might not be in the appropriate access context and
+     we'll do the check again when we actually perform the
+     conversion.  */
+  push_deferring_access_checks (dk_deferred);
 
   t  = implicit_conversion (to, from, arg, /*c_cast_p=*/false,
 			    flags, complain);
   ok_p = (t && !t->bad_p);
 
+  /* Discard the access checks now.  */
+  pop_deferring_access_checks ();
   /* Free all the conversions we allocated.  */
   obstack_free (&conversion_obstack, p);
 
@@ -9243,6 +9253,28 @@ extend_ref_init_temps (tree decl, tree init, vec<tree, va_gc> **cleanups)
     }
 
   return init;
+}
+
+/* Returns true iff an initializer for TYPE could contain temporaries that
+   need to be extended because they are bound to references or
+   std::initializer_list.  */
+
+bool
+type_has_extended_temps (tree type)
+{
+  type = strip_array_types (type);
+  if (TREE_CODE (type) == REFERENCE_TYPE)
+    return true;
+  if (CLASS_TYPE_P (type))
+    {
+      if (is_std_init_list (type))
+	return true;
+      for (tree f = next_initializable_field (TYPE_FIELDS (type));
+	   f; f = next_initializable_field (DECL_CHAIN (f)))
+	if (type_has_extended_temps (TREE_TYPE (f)))
+	  return true;
+    }
+  return false;
 }
 
 /* Returns true iff TYPE is some variant of std::initializer_list.  */

@@ -1,6 +1,5 @@
 /* SCC value numbering for trees
-   Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 2006-2013 Free Software Foundation, Inc.
    Contributed by Daniel Berlin <dan@dberlin.org>
 
 This file is part of GCC.
@@ -2402,10 +2401,8 @@ vn_phi_compute_hash (vn_phi_t vp1)
 
   /* If all PHI arguments are constants we need to distinguish
      the PHI node via its type.  */
-  type = TREE_TYPE (vp1->phiargs[0]);
-  result += (INTEGRAL_TYPE_P (type)
-	     + (INTEGRAL_TYPE_P (type)
-		? TYPE_PRECISION (type) + TYPE_UNSIGNED (type) : 0));
+  type = vp1->type;
+  result += vn_hash_type (type);
 
   FOR_EACH_VEC_ELT (vp1->phiargs, i, phi1op)
     {
@@ -2444,8 +2441,7 @@ vn_phi_eq (const void *p1, const void *p2)
 
       /* If the PHI nodes do not have compatible types
 	 they are not the same.  */
-      if (!types_compatible_p (TREE_TYPE (vp1->phiargs[0]),
-			       TREE_TYPE (vp2->phiargs[0])))
+      if (!types_compatible_p (vp1->type, vp2->type))
 	return false;
 
       /* Any phi in the same block will have it's arguments in the
@@ -2485,6 +2481,7 @@ vn_phi_lookup (gimple phi)
       def = TREE_CODE (def) == SSA_NAME ? SSA_VAL (def) : def;
       shared_lookup_phiargs.safe_push (def);
     }
+  vp1.type = TREE_TYPE (gimple_phi_result (phi));
   vp1.phiargs = shared_lookup_phiargs;
   vp1.block = gimple_bb (phi);
   vp1.hashcode = vn_phi_compute_hash (&vp1);
@@ -2517,6 +2514,7 @@ vn_phi_insert (gimple phi, tree result)
       args.safe_push (def);
     }
   vp1->value_id = VN_INFO (result)->value_id;
+  vp1->type = TREE_TYPE (gimple_phi_result (phi));
   vp1->phiargs = args;
   vp1->block = gimple_bb (phi);
   vp1->result = result;
@@ -3423,6 +3421,28 @@ visit_use (tree use)
 		}
 	      else
 		{
+		  /* First try to lookup the simplified expression.  */
+		  if (simplified)
+		    {
+		      enum gimple_rhs_class rhs_class;
+
+
+		      rhs_class = get_gimple_rhs_class (TREE_CODE (simplified));
+		      if ((rhs_class == GIMPLE_UNARY_RHS
+			   || rhs_class == GIMPLE_BINARY_RHS
+			   || rhs_class == GIMPLE_TERNARY_RHS)
+			  && valid_gimple_rhs_p (simplified))
+			{
+			  tree result = vn_nary_op_lookup (simplified, NULL);
+			  if (result)
+			    {
+			      changed = set_ssa_val_to (lhs, result);
+			      goto done;
+			    }
+			}
+		    }
+
+		  /* Otherwise visit the original statement.  */
 		  switch (vn_get_stmt_kind (stmt))
 		    {
 		    case VN_NARY:

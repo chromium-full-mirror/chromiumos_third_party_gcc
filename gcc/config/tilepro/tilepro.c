@@ -1,6 +1,5 @@
 /* Subroutines used for code generation on the Tilera TILEPro.
-   Copyright (C) 2011, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 2011-2013 Free Software Foundation, Inc.
    Contributed by Walter Lee (walt@tilera.com)
 
    This file is part of GCC.
@@ -3574,8 +3573,6 @@ tilepro_expand_prologue (void)
          address.  */
       rtx chain_addr = gen_rtx_REG (Pmode, next_scratch_regno--);
       rtx size_rtx = gen_int_si (-(total_size - UNITS_PER_WORD));
-      int cfa_offset =
-	frame_pointer_needed ? UNITS_PER_WORD - total_size : UNITS_PER_WORD;
 
       if (add_operand (size_rtx, Pmode))
 	{

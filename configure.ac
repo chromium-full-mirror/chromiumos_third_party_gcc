@@ -315,7 +315,7 @@ case "${ENABLE_GOLD}" in
     is_elf=no
     case "${target}" in
       *-*-elf* | *-*-sysv4* | *-*-unixware* | *-*-eabi* | hppa*64*-*-hpux* \
-      | *-*-linux* | frv-*-uclinux* | *-*-irix5* | *-*-irix6* \
+      | *-*-linux* | *-*-gnu* | frv-*-uclinux* | *-*-irix5* | *-*-irix6* \
       | *-*-netbsd* | *-*-openbsd* | *-*-freebsd* | *-*-dragonfly* \
       | *-*-solaris2* | *-*-nto* | *-*-nacl*)
         case "${target}" in
@@ -752,12 +752,32 @@ case "${target}" in
     ;; 
 esac
 
+# Disable libgo for some systems where it is known to not work.
+# For testing, you can easily override this with --enable-libgo.
+if test x$enable_libgo = x; then
+    case "${target}" in
+    *-*-darwin*)
+	# PR 46986
+	noconfigdirs="$noconfigdirs target-libgo"
+	;;
+    *-*-cygwin* | *-*-mingw*)
+	noconfigdirs="$noconfigdirs target-libgo"
+	;;
+    *-*-aix*)
+	noconfigdirs="$noconfigdirs target-libgo"
+	;;
+    esac
+fi
+
 # Default libgloss CPU subdirectory.
 libgloss_dir="$target_cpu"
 
 case "${target}" in
   sh*-*-pe|mips*-*-pe|*arm-wince-pe)
     libgloss_dir=wince
+    ;;
+  aarch64*-*-* )
+    libgloss_dir=aarch64
     ;;
   arm*-*-*)
     libgloss_dir=arm
@@ -1609,8 +1629,11 @@ if test "x$with_isl" != "xno" &&
   dnl Provide configure switches and initialize islinc & isllibs
   dnl with user input.
   ISL_INIT_FLAGS
-  dnl The minimal version of ISL required for Graphite.
+  dnl The versions of ISL that work for Graphite
   ISL_CHECK_VERSION(0,10)
+  if test "${gcc_cv_isl}" = no ; then
+    ISL_CHECK_VERSION(0,11)
+  fi
   dnl Only execute fail-action, if ISL has been requested.
   ISL_IF_FAILED([
     AC_MSG_ERROR([Unable to find a usable ISL.  See config.log for details.])])
@@ -1620,11 +1643,11 @@ if test "x$with_isl" != "xno" &&
     dnl Provide configure switches and initialize clooginc & clooglibs
     dnl with user input.
     CLOOG_INIT_FLAGS
-    dnl The minimal version of CLooG required for Graphite.
-    dnl
-    dnl If we use CLooG-Legacy, the provided version information is
-    dnl ignored.
+    dnl The versions of CLooG that work for Graphite.
     CLOOG_CHECK_VERSION(0,17,0)
+    if test "${gcc_cv_cloog}" = no ; then
+      CLOOG_CHECK_VERSION(0,18,0)
+    fi
 
     dnl Only execute fail-action, if CLooG has been requested.
     CLOOG_IF_FAILED([

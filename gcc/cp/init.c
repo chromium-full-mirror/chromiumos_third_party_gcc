@@ -1,7 +1,5 @@
 /* Handle initialization things in C++.
-   Copyright (C) 1987, 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
-   2011, 2012 Free Software Foundation, Inc.
+   Copyright (C) 1987-2013 Free Software Foundation, Inc.
    Contributed by Michael Tiemann (tiemann@cygnus.com)
 
 This file is part of GCC.
@@ -181,7 +179,7 @@ build_zero_init_1 (tree type, tree nelts, bool static_storage_p,
     init = convert (type, nullptr_node);
   else if (SCALAR_TYPE_P (type))
     init = convert (type, integer_zero_node);
-  else if (CLASS_TYPE_P (type))
+  else if (RECORD_OR_UNION_CODE_P (TREE_CODE (type)))
     {
       tree field;
       vec<constructor_elt, va_gc> *v = NULL;
@@ -255,8 +253,6 @@ build_zero_init_1 (tree type, tree nelts, bool static_storage_p,
 	{
 	  constructor_elt ce;
 
-	  vec_alloc (v, 1);
-
 	  /* If this is a one element array, we just use a regular init.  */
 	  if (tree_int_cst_equal (size_zero_node, max_index))
 	    ce.index = size_zero_node;
@@ -267,7 +263,11 @@ build_zero_init_1 (tree type, tree nelts, bool static_storage_p,
 	  ce.value = build_zero_init_1 (TREE_TYPE (type),
 					 /*nelts=*/NULL_TREE,
 					 static_storage_p, NULL_TREE);
-	  v->quick_push (ce);
+	  if (ce.value)
+	    {
+	      vec_alloc (v, 1);
+	      v->quick_push (ce);
+	    }
 	}
 
       /* Build a constructor to contain the initializations.  */
@@ -449,8 +449,6 @@ build_value_init_noctor (tree type, tsubst_flags_t complain)
 	{
 	  constructor_elt ce;
 
-	  vec_alloc (v, 1);
-
 	  /* If this is a one element array, we just use a regular init.  */
 	  if (tree_int_cst_equal (size_zero_node, max_index))
 	    ce.index = size_zero_node;
@@ -458,16 +456,20 @@ build_value_init_noctor (tree type, tsubst_flags_t complain)
 	    ce.index = build2 (RANGE_EXPR, sizetype, size_zero_node, max_index);
 
 	  ce.value = build_value_init (TREE_TYPE (type), complain);
-	  v->quick_push (ce);
+	  if (ce.value)
+	    {
+	      if (ce.value == error_mark_node)
+		return error_mark_node;
 
-	  if (ce.value == error_mark_node)
-	    return error_mark_node;
+	      vec_alloc (v, 1);
+	      v->quick_push (ce);
 
-	  /* We shouldn't have gotten here for anything that would need
-	     non-trivial initialization, and gimplify_init_ctor_preeval
-	     would need to be fixed to allow it.  */
-	  gcc_assert (TREE_CODE (ce.value) != TARGET_EXPR
-		      && TREE_CODE (ce.value) != AGGR_INIT_EXPR);
+	      /* We shouldn't have gotten here for anything that would need
+		 non-trivial initialization, and gimplify_init_ctor_preeval
+		 would need to be fixed to allow it.  */
+	      gcc_assert (TREE_CODE (ce.value) != TARGET_EXPR
+			  && TREE_CODE (ce.value) != AGGR_INIT_EXPR);
+	    }
 	}
 
       /* Build a constructor to contain the initializations.  */
@@ -3476,9 +3478,12 @@ build_vec_init (tree base, tree maxindex, tree init,
 	      else
 		{
 		  if (do_static_init)
-		    CONSTRUCTOR_APPEND_ELT (new_vec, field,
-					    build_zero_init (TREE_TYPE (e),
-							     NULL_TREE, true));
+		    {
+		      tree value = build_zero_init (TREE_TYPE (e), NULL_TREE,
+						    true);
+		      if (value)
+			CONSTRUCTOR_APPEND_ELT (new_vec, field, value);
+		    }
 		  saw_non_const = true;
 		}
 	    }
@@ -3642,7 +3647,9 @@ build_vec_init (tree base, tree maxindex, tree init,
       if (TREE_CODE (type) == ARRAY_TYPE)
 	m = cp_build_binary_op (input_location,
 				MULT_EXPR, m,
-				array_type_nelts_total (type),
+				/* Avoid mixing signed and unsigned.  */
+				convert (TREE_TYPE (m),
+					 array_type_nelts_total (type)),
 				complain);
 
       finish_cleanup_try_block (try_block);

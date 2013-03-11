@@ -1,6 +1,5 @@
 /* coverage.h - Defines data exported from coverage.c
-   Copyright (C) 1998, 1999, 2000, 2001, 2003, 2004, 2005, 2007, 2008
-   Free Software Foundation, Inc.
+   Copyright (C) 1998-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -69,6 +68,8 @@ extern void coverage_dc_end_function (void);
 /* True if a function entry corresponding to the given function identifier
    is present in the coverage internal data structures.  */
 extern bool coverage_function_present (unsigned fn_ident);
+
+extern void emit_function_name (void);
 
 extern tree get_gcov_type (void);
 extern tree get_gcov_unsigned_t (void);

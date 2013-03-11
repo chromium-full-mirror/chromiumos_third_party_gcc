@@ -1,8 +1,5 @@
 /* Command line option handling.
-   Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011,
-   2012
-
-   Free Software Foundation, Inc.
+   Copyright (C) 2002-2013 Free Software Foundation, Inc.
    Contributed by Neil Booth.
 
 This file is part of GCC.
@@ -271,12 +268,48 @@ add_comma_separated_to_vector (void **pvec, const char *arg)
   *pvec = v;
 }
 
+/* Like libiberty concat, but allocate using opts_obstack.  */
+
+char *
+opts_concat (const char *first, ...)
+{
+  char *newstr, *end;
+  size_t length = 0;
+  const char *arg;
+  va_list ap;
+
+  /* First compute the size of the result and get sufficient memory.  */
+  va_start (ap, first);
+  for (arg = first; arg; arg = va_arg (ap, const char *))
+    length += strlen (arg);
+  newstr = XOBNEWVEC (&opts_obstack, char, length + 1);
+  va_end (ap);
+
+  /* Now copy the individual pieces to the result string. */
+  va_start (ap, first);
+  for (arg = first, end = newstr; arg; arg = va_arg (ap, const char *))
+    {
+      length = strlen (arg);
+      memcpy (end, arg, length);
+      end += length;
+    }
+  *end = '\0';
+  va_end (ap);
+  return newstr;
+}
+
+/* Obstack for option strings.  */
+
+struct obstack opts_obstack;
+
 /* Initialize OPTS and OPTS_SET before using them in parsing options.  */
 
 void
 init_options_struct (struct gcc_options *opts, struct gcc_options *opts_set)
 {
   size_t num_params = get_num_compiler_params ();
+
+  gcc_obstack_init (&opts_obstack);
 
   *opts = global_options_init;
   memset (opts_set, 0, sizeof (*opts_set));
@@ -542,9 +575,8 @@ default_options_optimization (struct gcc_options *opts,
 	    {
 	      const int optimize_val = integral_argument (opt->arg);
 	      if (optimize_val == -1)
-		error_at (loc,
-			  "argument to %qs should be a non-negative integer",
-			  "-O");
+		error_at (loc, "argument to %<-O%> should be a non-negative "
+			       "integer, %<g%>, %<s%> or %<fast%>");
 	      else
 		{
 		  opts->x_optimize = optimize_val;
@@ -642,8 +674,8 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
 	 directory, typically the directory to contain the object
 	 file.  */
       if (opts->x_dump_dir_name)
-	opts->x_dump_base_name = concat (opts->x_dump_dir_name,
-					 opts->x_dump_base_name, NULL);
+	opts->x_dump_base_name = opts_concat (opts->x_dump_dir_name,
+					      opts->x_dump_base_name, NULL);
       else if (opts->x_aux_base_name
 	       && strcmp (opts->x_aux_base_name, HOST_BIT_BUCKET) != 0)
 	{
@@ -653,8 +685,9 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
 	  if (opts->x_aux_base_name != aux_base)
 	    {
 	      int dir_len = aux_base - opts->x_aux_base_name;
-	      char *new_dump_base_name =
-		XNEWVEC (char, strlen (opts->x_dump_base_name) + dir_len + 1);
+	      char *new_dump_base_name
+		= XOBNEWVEC (&opts_obstack, char,
+			     strlen (opts->x_dump_base_name) + dir_len + 1);
 
 	      /* Copy directory component from OPTS->X_AUX_BASE_NAME.  */
 	      memcpy (new_dump_base_name, opts->x_aux_base_name, dir_len);
@@ -1448,6 +1481,15 @@ common_handle_option (struct gcc_options *opts,
       opts->x_flag_stack_usage_info = value != -1;
       break;
 
+    case OPT_Wshadow:
+      warn_shadow_local = value;
+      warn_shadow_compatible_local = value;
+      break;
+
+    case OPT_Wshadow_local:
+      warn_shadow_compatible_local = value;
+      break;
+
     case OPT_Wstrict_aliasing:
       set_Wstrict_aliasing (opts, value);
       break;
@@ -1701,8 +1743,13 @@ common_handle_option (struct gcc_options *opts,
       break;
 
     case OPT_g:
-      set_debug_level (NO_DEBUG, DEFAULT_GDB_EXTENSIONS, arg, opts, opts_set,
-		       loc);
+      /* -g by itself should force -g2.  */
+      if (*arg == '\0')
+	set_debug_level (NO_DEBUG, DEFAULT_GDB_EXTENSIONS, "2", opts, opts_set,
+			 loc);
+      else
+	set_debug_level (NO_DEBUG, DEFAULT_GDB_EXTENSIONS, arg, opts, opts_set,
+			 loc);
       break;
 
     case OPT_gcoff:
@@ -1729,6 +1776,12 @@ common_handle_option (struct gcc_options *opts,
     case OPT_gstabs:
     case OPT_gstabs_:
       set_debug_level (DBX_DEBUG, code == OPT_gstabs_, arg, opts, opts_set,
+		       loc);
+      break;
+
+    case OPT_gmlt:
+      /* Synonym for -g1.  */
+      set_debug_level (NO_DEBUG, DEFAULT_GDB_EXTENSIONS, "1", opts, opts_set,
 		       loc);
       break;
 
@@ -1762,8 +1815,20 @@ common_handle_option (struct gcc_options *opts,
       dc->max_errors = value;
       break;
 
+    case OPT_fuse_ld_bfd:
+    case OPT_fuse_ld_gold:
     case OPT_fuse_linker_plugin:
       /* No-op. Used by the driver and passed to us because it starts with f.*/
+      break;
+
+    case OPT_fwrapv:
+      if (value)
+	opts->x_flag_trapv = 0;
+      break;
+
+    case OPT_ftrapv:
+      if (value)
+	opts->x_flag_wrapv = 0;
       break;
 
     default:

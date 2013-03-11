@@ -1,8 +1,5 @@
 /* Language-dependent node constructors for parse phase of GNU compiler.
-   Copyright (C) 1987, 1988, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011,
-   2012
-   Free Software Foundation, Inc.
+   Copyright (C) 1987-2013 Free Software Foundation, Inc.
    Hacked by Michael Tiemann (tiemann@cygnus.com)
 
 This file is part of GCC.
@@ -146,9 +143,7 @@ lvalue_kind (const_tree ref)
     case ARRAY_REF:
     case PARM_DECL:
     case RESULT_DECL:
-      if (TREE_CODE (TREE_TYPE (ref)) != METHOD_TYPE)
-	return clk_ordinary;
-      break;
+      return clk_ordinary;
 
       /* A scope ref in a template, left as SCOPE_REF to support later
 	 access checking.  */
@@ -411,6 +406,10 @@ build_aggr_init_expr (tree type, tree init)
   tree slot;
   tree rval;
   int is_ctor;
+
+  /* Don't build AGGR_INIT_EXPR in a template.  */
+  if (processing_template_decl)
+    return init;
 
   if (TREE_CODE (init) == CALL_EXPR)
     fn = CALL_EXPR_FN (init);
@@ -809,6 +808,15 @@ build_cplus_array_type (tree elt_type, tree index_type)
       t = build_array_type (elt_type, index_type);
     }
 
+  /* Push these needs up so that initialization takes place
+     more easily.  */
+  bool needs_ctor
+    = TYPE_NEEDS_CONSTRUCTING (TYPE_MAIN_VARIANT (elt_type));
+  TYPE_NEEDS_CONSTRUCTING (t) = needs_ctor;
+  bool needs_dtor
+    = TYPE_HAS_NONTRIVIAL_DESTRUCTOR (TYPE_MAIN_VARIANT (elt_type));
+  TYPE_HAS_NONTRIVIAL_DESTRUCTOR (t) = needs_dtor;
+
   /* We want TYPE_MAIN_VARIANT of an array to strip cv-quals from the
      element type as well, so fix it up if needed.  */
   if (elt_type != TYPE_MAIN_VARIANT (elt_type))
@@ -818,6 +826,27 @@ build_cplus_array_type (tree elt_type, tree index_type)
 
       if (TYPE_MAIN_VARIANT (t) != m)
 	{
+	  if (COMPLETE_TYPE_P (t) && !COMPLETE_TYPE_P (m))
+	    {
+	      /* m was built before the element type was complete, so we
+		 also need to copy the layout info from t.  */
+	      tree size = TYPE_SIZE (t);
+	      tree size_unit = TYPE_SIZE_UNIT (t);
+	      unsigned int align = TYPE_ALIGN (t);
+	      unsigned int user_align = TYPE_USER_ALIGN (t);
+	      enum machine_mode mode = TYPE_MODE (t);
+	      for (tree var = m; var; var = TYPE_NEXT_VARIANT (var))
+		{
+		  TYPE_SIZE (var) = size;
+		  TYPE_SIZE_UNIT (var) = size_unit;
+		  TYPE_ALIGN (var) = align;
+		  TYPE_USER_ALIGN (var) = user_align;
+		  SET_TYPE_MODE (var, mode);
+		  TYPE_NEEDS_CONSTRUCTING (var) = needs_ctor;
+		  TYPE_HAS_NONTRIVIAL_DESTRUCTOR (var) = needs_dtor;
+		}
+	    }
+
 	  TYPE_MAIN_VARIANT (t) = m;
 	  TYPE_NEXT_VARIANT (t) = TYPE_NEXT_VARIANT (m);
 	  TYPE_NEXT_VARIANT (m) = t;
@@ -828,12 +857,6 @@ build_cplus_array_type (tree elt_type, tree index_type)
   if (TYPE_SIZE (t) && EXPR_P (TYPE_SIZE (t)))
     TREE_NO_WARNING (TYPE_SIZE (t)) = 1;
 
-  /* Push these needs up so that initialization takes place
-     more easily.  */
-  TYPE_NEEDS_CONSTRUCTING (t)
-    = TYPE_NEEDS_CONSTRUCTING (TYPE_MAIN_VARIANT (elt_type));
-  TYPE_HAS_NONTRIVIAL_DESTRUCTOR (t)
-    = TYPE_HAS_NONTRIVIAL_DESTRUCTOR (TYPE_MAIN_VARIANT (elt_type));
   return t;
 }
 
@@ -1197,9 +1220,34 @@ strip_typedefs (tree t)
       }
       break;
     case TYPENAME_TYPE:
-      result = make_typename_type (strip_typedefs (TYPE_CONTEXT (t)),
-				   TYPENAME_TYPE_FULLNAME (t),
-				   typename_type, tf_none);
+      {
+	tree fullname = TYPENAME_TYPE_FULLNAME (t);
+	if (TREE_CODE (fullname) == TEMPLATE_ID_EXPR)
+	  {
+	    tree args = TREE_OPERAND (fullname, 1);
+	    tree new_args = copy_node (args);
+	    bool changed = false;
+	    for (int i = 0; i < TREE_VEC_LENGTH (args); ++i)
+	      {
+		tree arg = TREE_VEC_ELT (args, i);
+		tree strip_arg;
+		if (TYPE_P (arg))
+		  strip_arg = strip_typedefs (arg);
+		else
+		  strip_arg = strip_typedefs_expr (arg);
+		TREE_VEC_ELT (new_args, i) = strip_arg;
+		if (strip_arg != arg)
+		  changed = true;
+	      }
+	    if (changed)
+	      fullname = lookup_template_function (TREE_OPERAND (fullname, 0),
+						   new_args);
+	    else
+	      ggc_free (new_args);
+	  }
+	result = make_typename_type (strip_typedefs (TYPE_CONTEXT (t)),
+				     fullname, typename_type, tf_none);
+      }
       break;
     case DECLTYPE_TYPE:
       result = strip_typedefs_expr (DECLTYPE_TYPE_EXPR (t));
@@ -1326,6 +1374,8 @@ strip_typedefs_expr (tree t)
 	    r = copy_node (t);
 	    for (i = 0; i < n; ++i)
 	      TREE_VEC_ELT (r, i) = (*vec)[i];
+	    SET_NON_DEFAULT_TEMPLATE_ARGS_COUNT
+	      (r, GET_NON_DEFAULT_TEMPLATE_ARGS_COUNT (t));
 	  }
 	else
 	  r = t;
@@ -2380,7 +2430,7 @@ decl_anon_ns_mem_p (const_tree decl)
       /* Classes and namespaces inside anonymous namespaces have
          TREE_PUBLIC == 0, so we can shortcut the search.  */
       else if (TYPE_P (decl))
-	return (TREE_PUBLIC (TYPE_NAME (decl)) == 0);
+	return (TREE_PUBLIC (TYPE_MAIN_DECL (decl)) == 0);
       else if (TREE_CODE (decl) == NAMESPACE_DECL)
 	return (TREE_PUBLIC (decl) == 0);
       else
@@ -2555,6 +2605,13 @@ cp_tree_equal (tree t1, tree t2)
 	 with an out-of-class definition of the function, but can also come
 	 up for expressions that involve 'this' in a member function
 	 template.  */
+
+      if (comparing_specializations)
+	/* When comparing hash table entries, only an exact match is
+	   good enough; we don't want to replace 'this' with the
+	   version from another function.  */
+	return false;
+
       if (same_type_p (TREE_TYPE (t1), TREE_TYPE (t2)))
 	{
 	  if (DECL_ARTIFICIAL (t1) ^ DECL_ARTIFICIAL (t2))
@@ -3906,6 +3963,21 @@ cp_tree_operand_length (const_tree t)
     default:
       return TREE_OPERAND_LENGTH (t);
     }
+}
+
+/* Implement -Wzero_as_null_pointer_constant.  Return true if the
+   conditions for the warning hold, false otherwise.  */
+bool
+maybe_warn_zero_as_null_pointer_constant (tree expr, location_t loc)
+{
+  if (c_inhibit_evaluation_warnings == 0
+      && !NULLPTR_TYPE_P (TREE_TYPE (expr)))
+    {
+      warning_at (loc, OPT_Wzero_as_null_pointer_constant,
+		  "zero as null pointer constant");
+      return true;
+    }
+  return false;
 }
 
 #if defined ENABLE_TREE_CHECKING && (GCC_VERSION >= 2007)

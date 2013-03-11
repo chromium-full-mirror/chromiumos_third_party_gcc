@@ -1,6 +1,5 @@
 /* Miscellaneous SSA utility functions.
-   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011
-   Free Software Foundation, Inc.
+   Copyright (C) 2001-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -61,16 +60,13 @@ redirect_edge_var_map_add (edge e, tree result, tree def, source_location locus)
   slot = pointer_map_insert (edge_var_maps, e);
   head = (edge_var_map_vector *) *slot;
   if (!head)
-    {
-      head = new edge_var_map_vector;
-      head->create (5);
-      *slot = head;
-    }
+    vec_safe_reserve (head, 5);
   new_node.def = def;
   new_node.result = result;
   new_node.locus = locus;
 
-  head->safe_push (new_node);
+  vec_safe_push (head, new_node);
+  *slot = head;
 }
 
 
@@ -90,7 +86,7 @@ redirect_edge_var_map_clear (edge e)
   if (slot)
     {
       head = (edge_var_map_vector *) *slot;
-      delete head;
+      vec_free (head);
       *slot = NULL;
     }
 }
@@ -117,11 +113,11 @@ redirect_edge_var_map_dup (edge newe, edge olde)
     return;
   head = (edge_var_map_vector *) *old_slot;
 
-  edge_var_map_vector *new_head = new edge_var_map_vector;
+  edge_var_map_vector *new_head = NULL;
   if (head)
-    *new_head = head->copy ();
+    new_head = vec_safe_copy (head);
   else
-    new_head->create (5);
+    vec_safe_reserve (new_head, 5);
   *new_slot = new_head;
 }
 
@@ -153,7 +149,7 @@ free_var_map_entry (const void *key ATTRIBUTE_UNUSED,
 		    void *data ATTRIBUTE_UNUSED)
 {
   edge_var_map_vector *head = (edge_var_map_vector *) *value;
-  delete head;
+  vec_free (head);
   return true;
 }
 
@@ -429,7 +425,7 @@ insert_debug_temp_for_var_def (gimple_stmt_iterator *gsi, tree var)
 	      && (!gimple_assign_single_p (def_stmt)
 		  || is_gimple_min_invariant (value)))
 	  || is_gimple_reg (value))
-	value = unshare_expr (value);
+	;
       else
 	{
 	  gimple def_temp;
@@ -471,7 +467,7 @@ insert_debug_temp_for_var_def (gimple_stmt_iterator *gsi, tree var)
 	       that was unshared when we found it had a single debug
 	       use, or a DEBUG_EXPR_DECL, that can be safely
 	       shared.  */
-	    SET_USE (use_p, value);
+	    SET_USE (use_p, unshare_expr (value));
 	  /* If we didn't replace uses with a debug decl fold the
 	     resulting expression.  Otherwise we end up with invalid IL.  */
 	  if (TREE_CODE (value) != DEBUG_EXPR_DECL)
@@ -628,16 +624,16 @@ verify_ssa_name (tree ssa_name, bool is_virtual)
       return true;
     }
 
-  if (SSA_NAME_VAR (ssa_name) != NULL_TREE
-      && TREE_TYPE (ssa_name) != TREE_TYPE (ssa_name))
-    {
-      error ("type mismatch between an SSA_NAME and its symbol");
-      return true;
-    }
-
   if (SSA_NAME_IN_FREE_LIST (ssa_name))
     {
       error ("found an SSA_NAME that had been released into the free pool");
+      return true;
+    }
+
+  if (SSA_NAME_VAR (ssa_name) != NULL_TREE
+      && TREE_TYPE (ssa_name) != TREE_TYPE (SSA_NAME_VAR (ssa_name)))
+    {
+      error ("type mismatch between an SSA_NAME and its symbol");
       return true;
     }
 

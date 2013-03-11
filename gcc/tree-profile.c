@@ -1,7 +1,5 @@
 /* Calculate branch probabilities, and basic block execution counts.
-   Copyright (C) 1990, 1991, 1992, 1993, 1994, 1996, 1997, 1998, 1999,
-   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2010
-   Free Software Foundation, Inc.
+   Copyright (C) 1990-2013 Free Software Foundation, Inc.
    Contributed by James E. Wilson, UC Berkeley/Cygnus Support;
    based on some ideas from Dain Samples of UC Berkeley.
    Further mangling by Bob Manson, Cygnus Support.
@@ -169,6 +167,12 @@ static tree GTY(()) gcov_lipo_random_seed_decl = NULL_TREE;
 /* extern gcov_unsigned_t __gcov_lipo_random_group_size  */
 static tree GTY(()) gcov_lipo_random_group_size_decl = NULL_TREE;
 
+/* extern gcov_unsigned_t __gcov_lipo_propagate_scale  */
+static tree GTY(()) gcov_lipo_propagate_scale_decl = NULL_TREE;
+
+/* extern gcov_unsigned_t __gcov_lipo_dump_cgraph  */
+static tree GTY(()) gcov_lipo_dump_cgraph_decl = NULL_TREE;
+
 /* Insert STMT_IF around given sequence of consecutive statements in the
    same basic block starting with STMT_START, ending with STMT_END.  */
 
@@ -323,6 +327,18 @@ tree_init_dyn_ipa_parameters (void)
           get_identifier ("__gcov_lipo_random_group_size"),
           get_gcov_unsigned_t ());
       init_comdat_decl (gcov_lipo_random_group_size_decl, PARAM_LIPO_RANDOM_GROUP_SIZE);
+      gcov_lipo_propagate_scale_decl = build_decl (
+          UNKNOWN_LOCATION,
+          VAR_DECL,
+          get_identifier ("__gcov_lipo_propagate_scale"),
+          get_gcov_unsigned_t ());
+      init_comdat_decl (gcov_lipo_propagate_scale_decl, PARAM_LIPO_PROPAGATE_SCALE);
+      gcov_lipo_dump_cgraph_decl = build_decl (
+          UNKNOWN_LOCATION,
+          VAR_DECL,
+          get_identifier ("__gcov_lipo_dump_cgraph"),
+          get_gcov_unsigned_t ());
+      init_comdat_decl (gcov_lipo_dump_cgraph_decl, PARAM_LIPO_DUMP_CGRAPH);
     }
 }
 
@@ -929,6 +945,9 @@ tree_profiling (void)
 	continue;
 
       push_cfun (DECL_STRUCT_FUNCTION (node->symbol.decl));
+
+      if (flag_emit_function_names)
+        emit_function_name ();
 
       /* Local pure-const may imply need to fixup the cfg.  */
       if (execute_fixup_cfg () & TODO_cleanup_cfg)

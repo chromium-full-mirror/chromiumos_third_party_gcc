@@ -1,7 +1,5 @@
 /* Read and write coverage files, and associated functionality.
-   Copyright (C) 1990, 1991, 1992, 1993, 1994, 1996, 1997, 1998, 1999,
-   2000, 2001, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 1990-2013 Free Software Foundation, Inc.
    Contributed by James E. Wilson, UC Berkeley/Cygnus Support;
    based on some ideas from Dain Samples of UC Berkeley.
    Further mangling by Bob Manson, Cygnus Support.
@@ -1399,12 +1397,6 @@ build_info_type (tree type, tree fn_info_ptr_type)
   DECL_CHAIN (field) = fields;
   fields = field;
 
-  /* eof_pos */
-  field = build_decl (BUILTINS_LOCATION, FIELD_DECL,
-                      NULL_TREE, get_gcov_unsigned_t ());
-  DECL_CHAIN (field) = fields;
-  fields = field;
-
   /* merge fn array */
   merge_fn_type
     = build_function_type_list (void_type_node,
@@ -1511,6 +1503,19 @@ build_cl_args_array_value (tree string_type, vec<constructor_elt, va_gc> **v)
 			       build1 (ADDR_EXPR, string_type, arg_string));
     }
   return;
+}
+
+/* Emit mapping between module name and function id to the function's
+   assembler name, for use in correlating function idents in the gcda file
+   with the function name.  */
+
+void
+emit_function_name (void)
+{
+  fprintf (stderr, "Module %s FuncId %u Name %s\n",
+           main_input_file_name,
+           FUNC_DECL_FUNC_ID (cfun),
+           IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (current_function_decl)));
 }
 
 /* Returns the type of the module info associated with the
@@ -1825,11 +1830,6 @@ build_info (tree info_type, tree fn_ary)
   CONSTRUCTOR_APPEND_ELT (v1, info_fields,
 			  build1 (ADDR_EXPR, TREE_TYPE (info_fields),
 				  filename_string));
-  info_fields = DECL_CHAIN (info_fields);
-
-  /* eof_pos */
-  CONSTRUCTOR_APPEND_ELT (v1, info_fields,
-                          build_int_cstu (TREE_TYPE (info_fields), 0));
   info_fields = DECL_CHAIN (info_fields);
 
   /* merge fn array -- NULL slots indicate unmeasured counters */
@@ -2274,25 +2274,6 @@ coverage_init (const char *filename, const char* source_name)
   da_base_file_name = XNEWVEC (char, strlen (filename) + 1);
   strcpy (da_base_file_name, filename);
 
-  /* Name of bbg file.  */
-  if (flag_test_coverage && !flag_compare_debug)
-    {
-      bbg_file_name = XNEWVEC (char, len + strlen (GCOV_NOTE_SUFFIX) + 1);
-      memcpy (bbg_file_name, filename, len);
-      strcpy (bbg_file_name + len, GCOV_NOTE_SUFFIX);
-      if (!gcov_open (bbg_file_name, -1))
-	{
-	  error ("cannot open %s", bbg_file_name);
-	  bbg_file_name = NULL;
-	}
-      else
-	{
-	  gcov_write_unsigned (GCOV_NOTE_MAGIC);
-	  gcov_write_unsigned (GCOV_VERSION);
-	  gcov_write_unsigned (bbg_file_stamp);
-	}
-    }
-
   if (profile_data_prefix == 0 && !IS_ABSOLUTE_PATH (source_name))
     {
       src_name_prefix = getpwd ();
@@ -2308,6 +2289,8 @@ coverage_init (const char *filename, const char* source_name)
       strcat (main_input_file_name, "/");
       strcat (main_input_file_name, source_name);
     }
+
+  bbg_file_stamp = local_tick;
 
   if (flag_branch_probabilities)
     read_counts_file (da_file_name, 0);
@@ -2328,6 +2311,25 @@ coverage_init (const char *filename, const char* source_name)
     {
       tree_init_dyn_ipa_parameters ();
       tree_init_instrumentation_sampling ();
+    }
+
+  /* Name of bbg file.  */
+  if (flag_test_coverage && !flag_compare_debug)
+    {
+      bbg_file_name = XNEWVEC (char, len + strlen (GCOV_NOTE_SUFFIX) + 1);
+      memcpy (bbg_file_name, filename, len);
+      strcpy (bbg_file_name + len, GCOV_NOTE_SUFFIX);
+      if (!gcov_open (bbg_file_name, -1))
+	{
+	  error ("cannot open %s", bbg_file_name);
+	  bbg_file_name = NULL;
+	}
+      else
+	{
+	  gcov_write_unsigned (GCOV_NOTE_MAGIC);
+	  gcov_write_unsigned (GCOV_VERSION);
+	  gcov_write_unsigned (bbg_file_stamp);
+	}
     }
 }
 

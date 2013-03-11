@@ -1761,12 +1761,16 @@ promote_static_var_func (unsigned module_id, tree decl, bool is_extern)
   /* Function decls in C++ may contain characters not taken by assembler.
      Similarly, function scope static variable has UID as the assembler name
      suffix which is not consistent across modules.  */
-
-  if (DECL_ASSEMBLER_NAME_SET_P (decl)
-      && TREE_CODE (decl) == FUNCTION_DECL)
-    unlink_from_assembler_name_hash ((symtab_node) cgraph_get_create_node (decl));
-
   assemb_id = create_unique_name (decl, module_id);
+
+  if (DECL_ASSEMBLER_NAME_SET_P (decl))
+    {
+      if (TREE_CODE (decl) == FUNCTION_DECL)
+        unlink_from_assembler_name_hash ((symtab_node) cgraph_get_create_node (decl));
+      else
+        unlink_from_assembler_name_hash ((symtab_node) varpool_get_node (decl));
+    }
+
   SET_DECL_ASSEMBLER_NAME (decl, assemb_id);
   TREE_PUBLIC (decl) = 1;
   DECL_VISIBILITY (decl) = VISIBILITY_HIDDEN;
@@ -1794,6 +1798,7 @@ promote_static_var_func (unsigned module_id, tree decl, bool is_extern)
           node->symbol.externally_visible = true;
         }
       varpool_link_node (node);
+      insert_to_assembler_name_hash ((symtab_node) node);
     }
 
   if (is_extern)
@@ -1923,6 +1928,7 @@ process_module_scope_static_func (struct cgraph_node *cnode)
       if (DECL_ASSEMBLER_NAME_SET_P (decl))
         unlink_from_assembler_name_hash ((symtab_node) cnode);
       SET_DECL_ASSEMBLER_NAME (decl, assemb_id);
+      insert_to_assembler_name_hash ((symtab_node) cnode);
       return;
     }
 
@@ -2044,8 +2050,8 @@ varpool_is_auxiliary (struct varpool_node *node)
 /* Return the varpool_node to which DECL is resolved to during linking.
    This method can not be used after static to global promotion happens.  */
 
-struct varpool_node *
-real_varpool_node (tree decl)
+static struct varpool_node *
+real_varpool_node_1 (tree decl, bool assert)
 {
   void **slot;
   tree name;
@@ -2060,8 +2066,20 @@ real_varpool_node (tree decl)
   slot = htab_find_slot_with_hash (varpool_symtab, name,
                                    decl_assembler_name_hash (name),
                                    NO_INSERT);
+  if (!slot)
+    {
+      gcc_assert (!assert);
+      return NULL;
+    }
+
   gcc_assert (slot && *slot);
   return (struct varpool_node *)*slot;
+}
+
+struct varpool_node *
+real_varpool_node (tree decl)
+{
+  return real_varpool_node_1 (decl, true);
 }
 
 /* Remove NODE from the link table.  */
@@ -2080,7 +2098,7 @@ varpool_remove_link_node (struct varpool_node *node)
   if (!TREE_PUBLIC (decl) || DECL_ARTIFICIAL (decl))
     return;
 
-  if (real_varpool_node (decl) != node)
+  if (real_varpool_node_1 (decl, false) != node)
     return;
 
   name = DECL_ASSEMBLER_NAME (decl);

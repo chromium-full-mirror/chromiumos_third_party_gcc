@@ -1,7 +1,5 @@
 /* Language-level data type conversion for GNU C++.
-   Copyright (C) 1987, 1988, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
-   2011, 2012 Free Software Foundation, Inc.
+   Copyright (C) 1987-2013 Free Software Foundation, Inc.
    Hacked by Michael Tiemann (tiemann@cygnus.com)
 
 This file is part of GCC.
@@ -205,11 +203,8 @@ cp_convert_to_pointer (tree type, tree expr, tsubst_flags_t complain)
 
   if (null_ptr_cst_p (expr))
     {
-      if ((complain & tf_warning)
-	  && c_inhibit_evaluation_warnings == 0
-	  && !NULLPTR_TYPE_P (TREE_TYPE (expr)))
-	warning_at (loc, OPT_Wzero_as_null_pointer_constant,
-		    "zero as null pointer constant");
+      if (complain & tf_warning)
+	maybe_warn_zero_as_null_pointer_constant (expr, loc);
 
       if (TYPE_PTRMEMFUNC_P (type))
 	return build_ptrmemfunc (TYPE_PTRMEMFUNC_FN_TYPE (type), expr, 0,
@@ -785,7 +780,11 @@ ocp_convert (tree type, tree expr, int convtype, int flags,
       return ignore_overflows (converted, e);
     }
   if (NULLPTR_TYPE_P (type) && e && null_ptr_cst_p (e))
-    return nullptr_node;
+    {
+      if (complain & tf_warning)
+	maybe_warn_zero_as_null_pointer_constant (e, loc);
+      return nullptr_node;
+    }
   if (POINTER_TYPE_P (type) || TYPE_PTRMEM_P (type))
     return fold_if_not_in_template (cp_convert_to_pointer (type, e, complain));
   if (code == VECTOR_TYPE)
