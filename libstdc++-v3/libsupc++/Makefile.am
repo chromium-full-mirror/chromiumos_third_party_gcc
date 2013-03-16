@@ -27,7 +27,11 @@ include $(top_srcdir)/fragment.am
 # Need this library to both be part of libstdc++.a, and installed
 # separately too.
 # 1) separate libsupc++.la
+if ENABLE_VTABLE_VERIFY
+toolexeclib_LTLIBRARIES = libsupc++.la libvtv_init.la libvtv_stubs.la
+else
 toolexeclib_LTLIBRARIES = libsupc++.la
+endif
 # 2) integrated libsupc++convenience.la that is to be a part of libstdc++.a
 noinst_LTLIBRARIES = libsupc++convenience.la
 
@@ -45,7 +49,8 @@ if GLIBCXX_HOSTED
 	cp-demangle.c
 endif
 
-sources = \
+if ENABLE_VTABLE_VERIFY
+    sources = \
 	array_type_info.cc \
 	atexit_arm.cc \
 	bad_alloc.cc \
@@ -53,6 +58,72 @@ sources = \
 	bad_typeid.cc \
 	class_type_info.cc \
 	del_op.cc \
+	del_opsz.cc \
+	del_opnt.cc \
+	del_opv.cc \
+	del_opvnt.cc \
+	dyncast.cc \
+	eh_alloc.cc \
+	eh_arm.cc \
+	eh_aux_runtime.cc \
+	eh_call.cc \
+	eh_catch.cc \
+	eh_exception.cc \
+	eh_globals.cc \
+	eh_personality.cc \
+	eh_ptr.cc \
+	eh_term_handler.cc \
+	eh_terminate.cc \
+	eh_tm.cc \
+	eh_throw.cc \
+	eh_type.cc \
+	eh_unex_handler.cc \
+	enum_type_info.cc \
+	function_type_info.cc \
+	fundamental_type_info.cc \
+	guard.cc \
+	guard_error.cc \
+	hash_bytes.cc \
+	nested_exception.cc \
+	new_handler.cc \
+	new_op.cc \
+	new_opnt.cc \
+	new_opv.cc \
+	new_opvnt.cc \
+	pbase_type_info.cc \
+	pmem_type_info.cc \
+	pointer_type_info.cc \
+	pure.cc \
+	si_class_type_info.cc \
+	tinfo.cc \
+	tinfo2.cc \
+	vec.cc \
+	vmi_class_type_info.cc \
+	vterminate.cc \
+        vtv_rts.cc \
+        vtv_malloc.cc \
+        vtv_utils.cc
+
+    vtv_init_sources = \
+        vtv_init.cc
+
+    vtv_stubs_sources = \
+        vtv_stubs.cc
+
+    libsupc___la_SOURCES = $(sources) $(c_sources)
+    libsupc__convenience_la_SOURCES = $(sources) $(c_sources)
+    libvtv_init_la_SOURCES = $(vtv_init_sources)
+    libvtv_stubs_la_SOURCES = $(vtv_stubs_sources)
+else
+    sources = \
+	array_type_info.cc \
+	atexit_arm.cc \
+	bad_alloc.cc \
+	bad_cast.cc \
+	bad_typeid.cc \
+	class_type_info.cc \
+	del_op.cc \
+	del_opsz.cc \
 	del_opnt.cc \
 	del_opv.cc \
 	del_opvnt.cc \
@@ -95,38 +166,9 @@ sources = \
 	vmi_class_type_info.cc \
 	vterminate.cc
 
-libsupc___la_SOURCES = $(sources) $(c_sources)
-libsupc__convenience_la_SOURCES = $(sources) $(c_sources)
-
-# AM_CXXFLAGS needs to be in each subdirectory so that it can be
-# modified in a per-library or per-sub-library way.  Need to manually
-# set this option because CONFIG_CXXFLAGS has to be after
-# OPTIMIZE_CXXFLAGS on the compile line so that -O2 can be overridden
-# as the occasion call for it.
-AM_CXXFLAGS = \
-	$(PIC_CXXFLAGS) \
-	$(XTEMPLATE_FLAGS) \
-	$(WARN_CXXFLAGS) \
-	$(OPTIMIZE_CXXFLAGS) \
-	$(CONFIG_CXXFLAGS) \
-	$($(@)_no_omit_frame_pointer)
-
-AM_MAKEFLAGS = \
-	"gxx_include_dir=$(gxx_include_dir)"
-
-
-# Use special rules for pulling things out of libiberty.  These
-# objects should be compiled with the "C" compiler, not the C++
-# compiler, and also should not use the C++ includes.
-C_INCLUDES = -I.. -I$(toplevel_srcdir)/libiberty -I$(toplevel_srcdir)/include
-C_COMPILE = \
-	$(CC) $(DEFS) $(C_INCLUDES) \
-	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
-
-# LTCOMPILE is copied from LTCXXCOMPILE below.
-LTCOMPILE = $(LIBTOOL) --tag CC --tag disable-shared $(LIBTOOLFLAGS) --mode=compile \
-	    $(CC) $(DEFS) $(C_INCLUDES) $(PIC_CXXFLAGS) \
-	    $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
+    libsupc___la_SOURCES = $(sources) $(c_sources)
+    libsupc__convenience_la_SOURCES = $(sources) $(c_sources)
+endif
 
 cp-demangle.c:
 	rm -f $@
@@ -158,13 +200,40 @@ nested_exception.lo: nested_exception.cc
 nested_exception.o: nested_exception.cc
 	$(CXXCOMPILE) -std=gnu++0x -c $<
 
+# AM_CXXFLAGS needs to be in each subdirectory so that it can be
+# modified in a per-library or per-sub-library way.  Need to manually
+# set this option because CONFIG_CXXFLAGS has to be after
+# OPTIMIZE_CXXFLAGS on the compile line so that -O2 can be overridden
+# as the occasion call for it.
+AM_CXXFLAGS = \
+	$(glibcxx_lt_pic_flag) $(glibcxx_compiler_shared_flag) \
+	$(XTEMPLATE_FLAGS) \
+	$(WARN_CXXFLAGS) \
+	$(OPTIMIZE_CXXFLAGS) \
+	$(CONFIG_CXXFLAGS) \
+	$($(@)_no_omit_frame_pointer)
+
+AM_MAKEFLAGS = \
+	"gxx_include_dir=$(gxx_include_dir)"
+
+
+# Use special rules for pulling things out of libiberty.  These
+# objects should be compiled with the "C" compiler, not the C++
+# compiler, and also should not use the C++ includes.
+C_INCLUDES = -I.. -I$(toplevel_srcdir)/libiberty -I$(toplevel_srcdir)/include
+C_COMPILE = \
+	$(CC) $(DEFS) $(C_INCLUDES) \
+	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
+
+# LTCOMPILE is copied from LTCXXCOMPILE below.
+LTCOMPILE = $(LIBTOOL) --tag CC --tag disable-shared $(LIBTOOLFLAGS) --mode=compile \
+	    $(CC) $(DEFS) $(C_INCLUDES) \
+	    $(glibcxx_lt_pic_flag) $(glibcxx_compiler_shared_flag) \
+	    $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
+
 # Libtool notes
 
-# 1) Need to explicitly set LTCXXCOMPILE so that AM_CXXFLAGS is
-# last. (That way, things like -O2 passed down from the toplevel can
-# be overridden by --enable-debug.)
-
-# 2) In general, libtool expects an argument such as `--tag=CXX' when
+# 1) In general, libtool expects an argument such as `--tag=CXX' when
 # using the C++ compiler, because that will enable the settings
 # detected when C++ support was being configured.  However, when no
 # such flag is given in the command line, libtool attempts to figure
@@ -176,9 +245,18 @@ nested_exception.o: nested_exception.cc
 # correct solution is to add `--tag CXX' to LTCXXCOMPILE and maybe
 # CXXLINK, just after $(LIBTOOL), so that libtool doesn't have to
 # attempt to infer which configuration to use.
-#
-# We have to put --tag disable-shared after --tag CXX lest things
-# CXX undo the affect of disable-shared.
+# 
+# The second tag argument, `--tag disable-shared` means that libtool
+# only compiles each source once, for static objects. In actuality,
+# glibcxx_lt_pic_flag and glibcxx_compiler_shared_flag are added to
+# the libtool command that is used create the object, which is
+# suitable for shared libraries.  The `--tag disable-shared` must be
+# placed after --tag CXX lest things CXX undo the affect of
+# disable-shared.
+
+# 2) Need to explicitly set LTCXXCOMPILE so that AM_CXXFLAGS is
+# last. (That way, things like -O2 passed down from the toplevel can
+# be overridden by --enable-debug.)
 LTCXXCOMPILE = \
 	$(LIBTOOL) --tag CXX --tag disable-shared \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \

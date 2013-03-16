@@ -40,6 +40,7 @@ double_type_size = @double_type_size@
 long_double_type_size = @long_double_type_size@
 decimal_float = @decimal_float@
 enable_decimal_float = @enable_decimal_float@
+enable_vtable_verify = @enable_vtable_verify@
 fixed_point = @fixed_point@
 
 host_noncanonical = @host_noncanonical@
@@ -121,7 +122,7 @@ installcheck:
 .PHONY: all clean
 
 clean:
-	-rm -f config.h libgcc_tm.h stamp-h stmp-ldirs libgcc.map
+	-rm -f auto-target.h libgcc_tm.h stamp-h stmp-ldirs libgcc.map
 	-rm -f *$(objext)
 	-rm -f *.dep
 	-rm -f *.a
@@ -139,9 +140,9 @@ Makefile: $(srcdir)/Makefile.in config.status
 
 # Depending on Makefile makes sure that config.status has been re-run
 # if needed.  This prevents problems with parallel builds.
-config.h: stamp-h ; @true
+auto-target.h: stamp-h ; @true
 stamp-h: $(srcdir)/config.in config.status Makefile
-	CONFIG_FILES= CONFIG_HEADERS=config.h:$(srcdir)/config.in $(SHELL) ./config.status
+	CONFIG_FILES= CONFIG_HEADERS=auto-target.h:$(srcdir)/config.in $(SHELL) ./config.status
 
 config.status: $(srcdir)/configure $(srcdir)/config.host
 	$(SHELL) ./config.status --recheck
@@ -517,6 +518,10 @@ ifeq ($(TPBIT),)
 FPBIT_FUNCS := $(filter-out _sf_to_tf,$(FPBIT_FUNCS))
 DPBIT_FUNCS := $(filter-out _df_to_tf,$(DPBIT_FUNCS))
 endif
+
+FPBIT_FUNCS := $(filter-out $(LIB2FUNCS_EXCLUDE),$(FPBIT_FUNCS))
+DPBIT_FUNCS := $(filter-out $(LIB2FUNCS_EXCLUDE),$(DPBIT_FUNCS))
+TPBIT_FUNCS := $(filter-out $(LIB2FUNCS_EXCLUDE),$(TPBIT_FUNCS))
 
 fpbit-src := $(srcdir)/fp-bit.c
 
@@ -924,7 +929,7 @@ libgcc-std.ver: $(srcdir)/libgcc-std.ver.in
 	sed -e 's/__PFX__/$(LIBGCC_VER_GNU_PREFIX)/g' \
 	    -e 's/__FIXPTPFX__/$(LIBGCC_VER_FIXEDPOINT_GNU_PREFIX)/g' < $< > $@
 
-libgcc_s$(SHLIB_EXT): $(libgcc-s-objects) $(extra-parts)
+libgcc_s$(SHLIB_EXT): $(libgcc-s-objects) $(extra-parts) libgcc.a
 	# @multilib_flags@ is still needed because this may use
 	# $(GCC_FOR_TARGET) and $(LIBGCC2_CFLAGS) directly.
 	# @multilib_dir@ is not really necessary, but sometimes it has
@@ -932,7 +937,7 @@ libgcc_s$(SHLIB_EXT): $(libgcc-s-objects) $(extra-parts)
 	$(mkinstalldirs) $(MULTIDIR)
 	$(subst @multilib_flags@,$(CFLAGS) -B./,$(subst \
 		@multilib_dir@,$(MULTIDIR),$(subst \
-		@shlib_objs@,$(objects),$(subst \
+		@shlib_objs@,$(objects) libgcc.a,$(subst \
 		@shlib_base_name@,libgcc_s,$(subst \
 		@shlib_map_file@,$(mapfile),$(subst \
 		@shlib_slibdir_qual@,$(MULTIOSSUBDIR),$(subst \
@@ -976,6 +981,16 @@ crtendS$(objext): $(srcdir)/crtstuff.c
 # This is a version of crtbegin for -static links.
 crtbeginT$(objext): $(srcdir)/crtstuff.c
 	$(crt_compile) $(CRTSTUFF_T_CFLAGS) -c $< -DCRT_BEGIN -DCRTSTUFFT_O
+
+ifeq ($(enable_vtable_verify),yes)
+# These are used in vtable verification; see comments in source files for
+# more details.
+vtv_start$(objext): $(srcdir)/vtv_start.c
+	$(crt_compile) $(CRTSTUFF_T_CFLAGS_S) -c $(srcdir)/vtv_start.c
+
+vtv_end$(objext): $(srcdir)/vtv_end.c
+	$(crt_compile) $(CRTSTUFF_T_CFLAGS_S) -c $(srcdir)/vtv_end.c
+endif
 endif
 
 ifeq ($(CUSTOM_CRTIN),)

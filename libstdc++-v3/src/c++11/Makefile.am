@@ -61,6 +61,18 @@ vpath % $(top_srcdir)/src/c++11
 
 libc__11convenience_la_SOURCES = $(sources)  $(inst_sources)
 
+if ENABLE_VTABLE_VERIFY
+EXTRA_VTV_LDFLAGS = \
+        -Wl,-u_vtable_map_vars_start,-u_vtable_map_vars_end
+LIBVTV_FLAGS = \
+        -L$(top_builddir)/libsupc++/.libs --whole-archive -lvtv_init --no-whole-archive
+VTV_CXXFLAGS = -fvtable-verify=std $(EXTRA_VTV_LDFLAGS)
+else
+EXTRA_VTV_LDFLAGS =
+LIBVTV_FLAGS =
+VTV_CXXFLAGS =
+endif
+
 # AM_CXXFLAGS needs to be in each subdirectory so that it can be
 # modified in a per-library or per-sub-library way.  Need to manually
 # set this option because CONFIG_CXXFLAGS has to be after
@@ -68,8 +80,8 @@ libc__11convenience_la_SOURCES = $(sources)  $(inst_sources)
 # as the occasion calls for it.
 AM_CXXFLAGS = \
 	-std=gnu++11 \
-	$(PIC_CXXFLAGS) \
-	$(XTEMPLATE_FLAGS) \
+	$(glibcxx_lt_pic_flag) $(glibcxx_compiler_shared_flag) \
+	$(XTEMPLATE_FLAGS) $(VTV_CXXFLAGS) \
 	$(WARN_CXXFLAGS) $(OPTIMIZE_CXXFLAGS) $(CONFIG_CXXFLAGS) \
 	$($(@)_no_omit_frame_pointer)
 
@@ -78,11 +90,7 @@ AM_MAKEFLAGS = \
 
 # Libtool notes
 
-# 1) Need to explicitly set LTCXXCOMPILE so that AM_CXXFLAGS is
-# last. (That way, things like -O2 passed down from the toplevel can
-# be overridden by --enable-debug.)
-
-# 2) In general, libtool expects an argument such as `--tag=CXX' when
+# 1) In general, libtool expects an argument such as `--tag=CXX' when
 # using the C++ compiler, because that will enable the settings
 # detected when C++ support was being configured.  However, when no
 # such flag is given in the command line, libtool attempts to figure
@@ -94,8 +102,18 @@ AM_MAKEFLAGS = \
 # correct solution is to add `--tag CXX' to LTCXXCOMPILE and maybe
 # CXXLINK, just after $(LIBTOOL), so that libtool doesn't have to
 # attempt to infer which configuration to use.
-# We have to put --tag disable-shared after --tag CXX lest things
-# CXX undo the affect of disable-shared.
+# 
+# The second tag argument, `--tag disable-shared` means that libtool
+# only compiles each source once, for static objects. In actuality,
+# glibcxx_lt_pic_flag and glibcxx_compiler_shared_flag are added to
+# the libtool command that is used create the object, which is
+# suitable for shared libraries.  The `--tag disable-shared` must be
+# placed after --tag CXX lest things CXX undo the affect of
+# disable-shared.
+
+# 2) Need to explicitly set LTCXXCOMPILE so that AM_CXXFLAGS is
+# last. (That way, things like -O2 passed down from the toplevel can
+# be overridden by --enable-debug.)
 LTCXXCOMPILE = \
 	$(LIBTOOL) --tag CXX --tag disable-shared \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
@@ -114,6 +132,7 @@ CXXLINK = \
 	$(LIBTOOL) --tag CXX --tag disable-shared \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CXX) \
+	$(LIBVTV_FLAGS) \
 	$(OPT_LDFLAGS) $(SECTION_LDFLAGS) $(AM_CXXFLAGS) $(LTLDFLAGS) -o $@
 
 # Google-specific pessimization
