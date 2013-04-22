@@ -21,6 +21,9 @@ along with GCC; see the file COPYING3.  If not see
 #ifndef GCC_L_IPO_H
 #define GCC_L_IPO_H
 
+/* Used in profile-gen  */
+extern unsigned ggc_total_memory; /* in KB */
+
 /* Primary module's id (non-zero). If no module-info was read in, this will
    be zero.  */
 extern unsigned primary_module_id;
@@ -58,6 +61,5 @@ tree get_type_or_decl_name (tree);
 int equivalent_struct_types_for_tbaa (const_tree t1, const_tree t2);
 extern void copy_defined_module_set (tree, tree);
 extern bool is_parsing_done_p (void);
-extern const char* get_module_name (unsigned int);
 
 #endif

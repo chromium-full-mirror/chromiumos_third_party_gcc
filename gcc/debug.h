@@ -1,6 +1,5 @@
 /* Debug hooks for GCC.
-   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2010, 2011
-   Free Software Foundation, Inc.
+   Copyright (C) 2001-2013 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published by the
@@ -171,7 +170,6 @@ extern const struct gcc_debug_hooks sdb_debug_hooks;
 extern const struct gcc_debug_hooks xcoff_debug_hooks;
 extern const struct gcc_debug_hooks dwarf2_debug_hooks;
 extern const struct gcc_debug_hooks vmsdbg_debug_hooks;
-extern const struct gcc_debug_hooks auto_profile_debug_hooks;
 
 /* Dwarf2 frame information.  */
 

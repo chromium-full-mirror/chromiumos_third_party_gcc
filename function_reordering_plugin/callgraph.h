@@ -1,3 +1,5 @@
+#if 0
+
 /* Callgraph implementation.
    Copyright (C) 2011 Free Software Foundation, Inc.
    Contributed by Sriraman Tallam (tmsriram@google.com)
@@ -285,4 +287,6 @@ unsigned int get_layout (FILE *fp, void*** handles,
 void cleanup ();
 /* Returns 1 if callgraph is empty.  */
 unsigned int is_callgraph_empty ();
+#endif
+
 #endif

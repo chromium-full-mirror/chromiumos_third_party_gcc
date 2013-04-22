@@ -1,7 +1,5 @@
 /* Calculate branch probabilities, and basic block execution counts.
-   Copyright (C) 1990, 1991, 1992, 1993, 1994, 1996, 1997, 1998, 1999,
-   2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 1990-2013 Free Software Foundation, Inc.
    Contributed by James E. Wilson, UC Berkeley/Cygnus Support;
    based on some ideas from Dain Samples of UC Berkeley.
    Further mangling by Bob Manson, Cygnus Support.
@@ -55,7 +53,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm.h"
 #include "rtl.h"
 #include "flags.h"
-#include "output.h"
 #include "regs.h"
 #include "expr.h"
 #include "function.h"
@@ -64,11 +61,9 @@ along with GCC; see the file COPYING3.  If not see
 #include "coverage.h"
 #include "value-prof.h"
 #include "tree.h"
-#include "cfghooks.h"
 #include "tree-flow.h"
-#include "timevar.h"
 #include "cfgloop.h"
-#include "tree-pass.h"
+#include "dumpfile.h"
 
 #include "profile.h"
 
@@ -108,12 +103,6 @@ static int total_num_passes;
 static int total_num_times_called;
 static int total_hist_br_prob[20];
 static int total_num_branches;
-
-void add_working_set (gcov_working_set_t *set) {
-  int i = 0;
-  for (; i < NUM_GCOV_WORKING_SETS; i++)
-    gcov_working_sets[i] = set[i];
-}
 
 /* Forward declarations.  */
 static void find_spanning_tree (struct edge_list *);
@@ -161,50 +150,15 @@ instrument_edges (struct edge_list *el)
 static void
 instrument_values (histogram_values values)
 {
-  unsigned i, t;
+  unsigned i;
 
   /* Emit code to generate the histograms before the insns.  */
 
-  for (i = 0; i < VEC_length (histogram_value, values); i++)
+  for (i = 0; i < values.length (); i++)
     {
-      histogram_value hist = VEC_index (histogram_value, values, i);
-      switch (hist->type)
-	{
-	case HIST_TYPE_INTERVAL:
-	  t = GCOV_COUNTER_V_INTERVAL;
-	  break;
+      histogram_value hist = values[i];
+      unsigned t = COUNTER_FOR_HIST_TYPE (hist->type);
 
-	case HIST_TYPE_POW2:
-	  t = GCOV_COUNTER_V_POW2;
-	  break;
-
-	case HIST_TYPE_SINGLE_VALUE:
-	  t = GCOV_COUNTER_V_SINGLE;
-	  break;
-
-	case HIST_TYPE_CONST_DELTA:
-	  t = GCOV_COUNTER_V_DELTA;
-	  break;
-
- 	case HIST_TYPE_INDIR_CALL:
- 	  t = GCOV_COUNTER_V_INDIR;
- 	  break;
-
- 	case HIST_TYPE_AVERAGE:
- 	  t = GCOV_COUNTER_AVERAGE;
- 	  break;
-
- 	case HIST_TYPE_IOR:
- 	  t = GCOV_COUNTER_IOR;
- 	  break;
-
- 	case HIST_TYPE_INDIR_CALL_TOPN:
-          t = GCOV_COUNTER_ICALL_TOPNV;
- 	  break;
-
-	default:
-	  gcc_unreachable ();
-	}
       /* See condition in gimple_gen_ic_func_topn_profiler  */
       if (t == GCOV_COUNTER_ICALL_TOPNV
           && (DECL_STATIC_CONSTRUCTOR (current_function_decl)
@@ -260,7 +214,7 @@ instrument_values (histogram_values values)
    the number of counters required to cover that working set percentage and
    the minimum counter value in that working set.  */
 
-static void
+void
 compute_working_sets (void)
 {
   gcov_type working_set_cum_values[NUM_GCOV_WORKING_SETS];
@@ -341,11 +295,11 @@ compute_working_sets (void)
           else
             tmp_cum = cum + histo_bucket->cum_value;
 
-          /* Next walk through successive working set entries and fill in
-            the statistics for any whose size we have reached by accumulating
-            this histogram counter.  */
-          while (tmp_cum >= working_set_cum_values[ws_ix]
-                 && ws_ix < NUM_GCOV_WORKING_SETS)
+	  /* Next walk through successive working set entries and fill in
+	     the statistics for any whose size we have reached by accumulating
+	     this histogram counter.  */
+	  while (ws_ix < NUM_GCOV_WORKING_SETS
+		 && tmp_cum >= working_set_cum_values[ws_ix])
             {
               gcov_working_sets[ws_ix].num_counters = count;
               gcov_working_sets[ws_ix].min_counter
@@ -438,7 +392,7 @@ get_exec_counts (unsigned cfg_checksum, unsigned lineno_checksum)
 
 
 static bool
-is_edge_inconsistent (VEC(edge,gc) *edges)
+is_edge_inconsistent (vec<edge, va_gc> *edges)
 {
   edge e;
   edge_iterator ei;
@@ -456,8 +410,8 @@ is_edge_inconsistent (VEC(edge,gc) *edges)
 		  fprintf (dump_file,
 		  	   "Edge %i->%i is inconsistent, count"HOST_WIDEST_INT_PRINT_DEC,
 			   e->src->index, e->dest->index, e->count);
-		  dump_bb (e->src, dump_file, 0);
-		  dump_bb (e->dest, dump_file, 0);
+		  dump_bb (dump_file, e->src, 0, TDF_DETAILS);
+		  dump_bb (dump_file, e->dest, 0, TDF_DETAILS);
 		}
               return true;
 	    }
@@ -506,7 +460,7 @@ is_inconsistent (void)
 		       HOST_WIDEST_INT_PRINT_DEC,
 		       bb->index,
 		       bb->count);
-	      dump_bb (bb, dump_file, 0);
+	      dump_bb (dump_file, bb, 0, TDF_DETAILS);
 	    }
 	  inconsistent = true;
 	}
@@ -519,7 +473,7 @@ is_inconsistent (void)
 		       bb->index,
 		       bb->count,
 		       sum_edge_counts (bb->preds));
-	      dump_bb (bb, dump_file, 0);
+	      dump_bb (dump_file, bb, 0, TDF_DETAILS);
 	    }
 	  inconsistent = true;
 	}
@@ -533,7 +487,7 @@ is_inconsistent (void)
 		       bb->index,
 		       bb->count,
 		       sum_edge_counts (bb->succs));
-	      dump_bb (bb, dump_file, 0);
+	      dump_bb (dump_file, bb, 0, TDF_DETAILS);
 	    }
 	  inconsistent = true;
 	}
@@ -585,7 +539,7 @@ read_profile_edge_counts (gcov_type *exec_counts)
 		    if (flag_profile_correction)
 		      {
 			static bool informed = 0;
-			if ((flag_opt_info >= OPT_INFO_MAX) && !informed)
+			if (!informed)
 		          inform (input_location,
 			          "corrupted profile info: edge count exceeds maximal count");
 			informed = 1;
@@ -819,7 +773,7 @@ compute_branch_probabilities (unsigned cfg_checksum, unsigned lineno_checksum)
   if (dump_file)
     {
       int overlap = compute_frequency_overlap ();
-      dump_flow_info (dump_file, dump_flags);
+      gimple_dump_cfg (dump_file, dump_flags);
       fprintf (dump_file, "Static profile overlap: %d.%d%%\n",
 	       overlap / (OVERLAP_BASE / 100),
 	       overlap % (OVERLAP_BASE / 100));
@@ -845,7 +799,7 @@ compute_branch_probabilities (unsigned cfg_checksum, unsigned lineno_checksum)
        {
          /* Inconsistency detected. Make it flow-consistent. */
          static int informed = 0;
-         if ((flag_opt_info >= OPT_INFO_MAX) && informed == 0)
+         if (informed == 0)
            {
              informed = 1;
              inform (input_location, "correcting inconsistent profile data");
@@ -1009,9 +963,9 @@ compute_value_histograms (histogram_values values, unsigned cfg_checksum,
       warned[t] = 0;
     }
 
-  for (i = 0; i < VEC_length (histogram_value, values); i++)
+  for (i = 0; i < values.length (); i++)
     {
-      histogram_value hist = VEC_index (histogram_value, values, i);
+      histogram_value hist = values[i];
       n_histogram_counters[(int) hist->type] += hist->n_counters;
     }
 
@@ -1035,9 +989,9 @@ compute_value_histograms (histogram_values values, unsigned cfg_checksum,
   if (!any)
     return;
 
-  for (i = 0; i < VEC_length (histogram_value, values); i++)
+  for (i = 0; i < values.length (); i++)
     {
-      histogram_value hist = VEC_index (histogram_value, values, i);
+      histogram_value hist = values[i];
       gimple stmt = hist->hvalue.stmt;
 
       t = (int) hist->type;
@@ -1047,7 +1001,7 @@ compute_value_histograms (histogram_values values, unsigned cfg_checksum,
          histogram and give a warning.  */
       if (aact_count == 0)
         {
-          if (!warned[t] && flag_opt_info >= OPT_INFO_MIN)
+          if (!warned[t])
             warning (0, "cannot find %s counters in function %s.",
                      ctr_names[COUNTER_FOR_HIST_TYPE(t)],
                      IDENTIFIER_POINTER (
@@ -1068,9 +1022,6 @@ compute_value_histograms (histogram_values values, unsigned cfg_checksum,
     free (histogram_counts[t]);
 }
 
-/* The entry basic block will be moved around so that it has index=1,
-   there is nothing at index 0 and the exit is at n_basic_block.  */
-#define BB_TO_GCOV_INDEX(bb)  ((bb)->index - 1)
 /* When passed NULL as file_name, initialize.
    When passed something else, output the necessary commands to change
    line to LINE and offset to FILE_NAME.  */
@@ -1097,7 +1048,7 @@ output_location (char const *file_name, int line,
       if (!*offset)
 	{
 	  *offset = gcov_write_tag (GCOV_TAG_LINES);
-	  gcov_write_unsigned (BB_TO_GCOV_INDEX (bb));
+	  gcov_write_unsigned (bb->index);
 	  name_differs = line_differs=true;
 	}
 
@@ -1117,19 +1068,22 @@ output_location (char const *file_name, int line,
      }
 }
 
-/* Instrument and/or analyze program behavior based on program flow graph.
-   In either case, this function builds a flow graph for the function being
-   compiled.  The flow graph is stored in BB_GRAPH.
+/* Instrument and/or analyze program behavior based on program the CFG.
+
+   This function creates a representation of the control flow graph (of
+   the function being compiled) that is suitable for the instrumentation
+   of edges and/or converting measured edge counts to counts on the
+   complete CFG.
 
    When FLAG_PROFILE_ARCS is nonzero, this function instruments the edges in
    the flow graph that are needed to reconstruct the dynamic behavior of the
-   flow graph.
+   flow graph.  This data is written to the gcno file for gcov.
 
    When FLAG_BRANCH_PROBABILITIES is nonzero, this function reads auxiliary
-   information from a data file containing edge count information from previous
-   executions of the function being compiled.  In this case, the flow graph is
-   annotated with actual execution counts, which are later propagated into the
-   rtl for optimization purposes.
+   information from the gcda file containing edge count information from
+   previous executions of the function being compiled.  In this case, the
+   control flow graph is annotated with actual execution counts by
+   compute_branch_probabilities().
 
    Main entry point of this file.  */
 
@@ -1141,7 +1095,7 @@ branch_prob (void)
   unsigned num_edges, ignored_edges;
   unsigned num_instrumented;
   struct edge_list *el;
-  histogram_values values = NULL;
+  histogram_values values = histogram_values();
   unsigned cfg_checksum, lineno_checksum;
 
   total_num_times_called++;
@@ -1330,6 +1284,9 @@ branch_prob (void)
   if (dump_file)
     fprintf (dump_file, "%d ignored edges\n", ignored_edges);
 
+  total_num_edges_instrumented += num_instrumented;
+  if (dump_file)
+    fprintf (dump_file, "%d instrumentation edges\n", num_instrumented);
 
   /* Compute two different checksums. Note that we want to compute
      the checksum in only once place, since it depends on the shape
@@ -1339,8 +1296,7 @@ branch_prob (void)
   lineno_checksum = coverage_compute_lineno_checksum ();
 
   /* Write the data from which gcov can reconstruct the basic block
-     graph and function line numbers  */
-
+     graph and function line numbers (the gcno file).  */
   if (coverage_begin_function (lineno_checksum, cfg_checksum))
     {
       gcov_position_t offset;
@@ -1351,12 +1307,6 @@ branch_prob (void)
 	gcov_write_unsigned (0);
       gcov_write_length (offset);
 
-      /* Keep all basic block indexes nonnegative in the gcov output.
-	 Index 0 is used for entry block, last index is for exit
-	 block.    */
-      ENTRY_BLOCK_PTR->index = 1;
-      EXIT_BLOCK_PTR->index = last_basic_block;
-
       /* Arcs */
       FOR_BB_BETWEEN (bb, ENTRY_BLOCK_PTR, EXIT_BLOCK_PTR, next_bb)
 	{
@@ -1364,7 +1314,7 @@ branch_prob (void)
 	  edge_iterator ei;
 
 	  offset = gcov_write_tag (GCOV_TAG_ARCS);
-	  gcov_write_unsigned (BB_TO_GCOV_INDEX (bb));
+	  gcov_write_unsigned (bb->index);
 
 	  FOR_EACH_EDGE (e, ei, bb->succs)
 	    {
@@ -1385,16 +1335,13 @@ branch_prob (void)
 		      && e->src->next_bb == e->dest)
 		    flag_bits |= GCOV_ARC_FALLTHROUGH;
 
-		  gcov_write_unsigned (BB_TO_GCOV_INDEX (e->dest));
+		  gcov_write_unsigned (e->dest->index);
 		  gcov_write_unsigned (flag_bits);
 	        }
 	    }
 
 	  gcov_write_length (offset);
 	}
-
-      ENTRY_BLOCK_PTR->index = ENTRY_BLOCK;
-      EXIT_BLOCK_PTR->index = EXIT_BLOCK;
 
       /* Line numbers.  */
       /* Initialize the output.  */
@@ -1442,18 +1389,10 @@ branch_prob (void)
 	}
     }
 
-#undef BB_TO_GCOV_INDEX
-
-  if (flag_profile_reusedist)
-    gimple_gen_reusedist ();
-
-  if (flag_optimize_locality)
-    optimize_reusedist ();
-
   if (flag_profile_values)
     gimple_find_values_to_profile (&values);
 
-  if (flag_branch_probabilities && !flag_auto_profile)
+  if (flag_branch_probabilities)
     {
       compute_branch_probabilities (cfg_checksum, lineno_checksum);
       if (flag_profile_values)
@@ -1486,7 +1425,7 @@ branch_prob (void)
 
   free_aux_for_edges ();
 
-  VEC_free (histogram_value, heap, values);
+  values.release ();
   free_edge_list (el);
   coverage_end_function (lineno_checksum, cfg_checksum);
 }
@@ -1595,8 +1534,7 @@ find_spanning_tree (struct edge_list *el)
 	}
     }
 
-  FOR_BB_BETWEEN (bb, ENTRY_BLOCK_PTR, NULL, next_bb)
-    bb->aux = NULL;
+  clear_aux_for_blocks ();
 }
 
 /* Perform file-level initialization for branch-prob processing.  */

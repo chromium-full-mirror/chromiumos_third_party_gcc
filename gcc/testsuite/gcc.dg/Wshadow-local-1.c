@@ -20,3 +20,4 @@ void foo3 ()
     int local;			/* { dg-warning "shadows a previous local" } */
   }
 }
+/* { dg-do compile } */

@@ -1,3 +1,5 @@
+#if 0
+
 /* Callgraph implementation.
    Copyright (C) 2011 Free Software Foundation, Inc.
    Contributed by Sriraman Tallam (tmsriram@google.com)
@@ -761,3 +763,5 @@ is_callgraph_empty ()
     return 1;
   return 0;
 }
+
+#endif

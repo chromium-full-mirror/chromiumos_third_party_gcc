@@ -1,8 +1,5 @@
 /* Emit RTL for the GCC expander.
-   Copyright (C) 1987, 1988, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
-   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
-   2010, 2011
-   Free Software Foundation, Inc.
+   Copyright (C) 1987-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -55,11 +52,9 @@ along with GCC; see the file COPYING3.  If not see
 #include "ggc.h"
 #include "debug.h"
 #include "langhooks.h"
-#include "tree-pass.h"
 #include "df.h"
 #include "params.h"
 #include "target.h"
-#include "tree-flow.h"
 
 struct target_rtl default_target_rtl;
 #if SWITCHABLE_TARGET
@@ -117,6 +112,12 @@ FIXED_VALUE_TYPE fconst1[MAX_FCONST1];
 
 rtx const_int_rtx[MAX_SAVED_CONST_INT * 2 + 1];
 
+/* Standard pieces of rtx, to be substituted directly into things.  */
+rtx pc_rtx;
+rtx ret_rtx;
+rtx simple_return_rtx;
+rtx cc0_rtx;
+
 /* A hash table storing CONST_INTs whose absolute value is greater
    than MAX_SAVED_CONST_INT.  */
 
@@ -141,10 +142,8 @@ static GTY ((if_marked ("ggc_marked_p"), param_is (struct rtx_def)))
 
 #define cur_insn_uid (crtl->emit.x_cur_insn_uid)
 #define cur_debug_insn_uid (crtl->emit.x_cur_debug_insn_uid)
-#define last_location (crtl->emit.x_last_location)
 #define first_label_num (crtl->emit.x_first_label_num)
 
-static rtx make_call_insn_raw (rtx);
 static rtx change_address_1 (rtx, enum machine_mode, rtx, int);
 static void set_used_decls (tree);
 static void mark_label_nuses (rtx);
@@ -364,8 +363,8 @@ get_reg_attrs (tree decl, int offset)
 
 
 #if !HAVE_blockage
-/* Generate an empty ASM_INPUT, which is used to block attempts to schedule
-   across this insn. */
+/* Generate an empty ASM_INPUT, which is used to block attempts to schedule,
+   and to block register equivalences to be seen across this insn.  */
 
 rtx
 gen_blockage (void)
@@ -487,8 +486,8 @@ rtx_to_double_int (const_rtx cst)
   double_int r;
 
   if (CONST_INT_P (cst))
-      r = shwi_to_double_int (INTVAL (cst));
-  else if (CONST_DOUBLE_P (cst) && GET_MODE (cst) == VOIDmode)
+      r = double_int::from_shwi (INTVAL (cst));
+  else if (CONST_DOUBLE_AS_INT_P (cst))
     {
       r.low = CONST_DOUBLE_LOW (cst);
       r.high = CONST_DOUBLE_HIGH (cst);
@@ -511,8 +510,11 @@ immed_double_int_const (double_int i, enum machine_mode mode)
 
 /* Return a CONST_DOUBLE or CONST_INT for a value specified as a pair
    of ints: I0 is the low-order word and I1 is the high-order word.
-   Do not use this routine for non-integer modes; convert to
-   REAL_VALUE_TYPE and use CONST_DOUBLE_FROM_REAL_VALUE.  */
+   For values that are larger than HOST_BITS_PER_DOUBLE_INT, the
+   implied upper bits are copies of the high bit of i1.  The value
+   itself is neither signed nor unsigned.  Do not use this routine for
+   non-integer modes; convert to REAL_VALUE_TYPE and use
+   CONST_DOUBLE_FROM_REAL_VALUE.  */
 
 rtx
 immed_double_const (HOST_WIDE_INT i0, HOST_WIDE_INT i1, enum machine_mode mode)
@@ -521,14 +523,13 @@ immed_double_const (HOST_WIDE_INT i0, HOST_WIDE_INT i1, enum machine_mode mode)
   unsigned int i;
 
   /* There are the following cases (note that there are no modes with
-     HOST_BITS_PER_WIDE_INT < GET_MODE_BITSIZE (mode) < 2 * HOST_BITS_PER_WIDE_INT):
+     HOST_BITS_PER_WIDE_INT < GET_MODE_BITSIZE (mode) < HOST_BITS_PER_DOUBLE_INT):
 
      1) If GET_MODE_BITSIZE (mode) <= HOST_BITS_PER_WIDE_INT, then we use
 	gen_int_mode.
-     2) GET_MODE_BITSIZE (mode) == 2 * HOST_BITS_PER_WIDE_INT, but the value of
-	the integer fits into HOST_WIDE_INT anyway (i.e., i1 consists only
-	from copies of the sign bit, and sign of i0 and i1 are the same),  then
-	we return a CONST_INT for i0.
+     2) If the value of the integer fits into HOST_WIDE_INT anyway
+        (i.e., i1 consists only from copies of the sign bit, and sign
+	of i0 and i1 are the same), then we return a CONST_INT for i0.
      3) Otherwise, we create a CONST_DOUBLE for i0 and i1.  */
   if (mode != VOIDmode)
     {
@@ -540,8 +541,6 @@ immed_double_const (HOST_WIDE_INT i0, HOST_WIDE_INT i1, enum machine_mode mode)
 
       if (GET_MODE_BITSIZE (mode) <= HOST_BITS_PER_WIDE_INT)
 	return gen_int_mode (i0, mode);
-
-      gcc_assert (GET_MODE_BITSIZE (mode) == 2 * HOST_BITS_PER_WIDE_INT);
     }
 
   /* If this integer fits in one word, return a CONST_INT.  */
@@ -578,7 +577,7 @@ gen_rtx_REG (enum machine_mode mode, unsigned int regno)
      Also don't do this when we are making new REGs in reload, since
      we don't want to get confused with the real pointers.  */
 
-  if (mode == Pmode && !reload_in_progress)
+  if (mode == Pmode && !reload_in_progress && !lra_in_progress)
     {
       if (regno == FRAME_POINTER_REGNUM
 	  && (!reload_completed || frame_pointer_needed))
@@ -720,7 +719,14 @@ validate_subreg (enum machine_mode omode, enum machine_mode imode,
      (subreg:SI (reg:DF) 0) isn't.  */
   else if (FLOAT_MODE_P (imode) || FLOAT_MODE_P (omode))
     {
-      if (isize != osize)
+      if (! (isize == osize
+	     /* LRA can use subreg to store a floating point value in
+		an integer mode.  Although the floating point and the
+		integer modes need the same number of hard registers,
+		the size of floating point mode can be less than the
+		integer mode.  LRA also uses subregs for a register
+		should be used in different mode in on insn.  */
+	     || lra_in_progress))
 	return false;
     }
 
@@ -753,7 +759,8 @@ validate_subreg (enum machine_mode omode, enum machine_mode imode,
      of a subword.  A subreg does *not* perform arbitrary bit extraction.
      Given that we've already checked mode/offset alignment, we only have
      to check subword subregs here.  */
-  if (osize < UNITS_PER_WORD)
+  if (osize < UNITS_PER_WORD
+      && ! (lra_in_progress && (FLOAT_MODE_P (imode) || FLOAT_MODE_P (omode))))
     {
       enum machine_mode wmode = isize > UNITS_PER_WORD ? word_mode : imode;
       unsigned int low_off = subreg_lowpart_offset (omode, wmode);
@@ -912,6 +919,18 @@ gen_reg_rtx (enum machine_mode mode)
   return val;
 }
 
+/* Return TRUE if REG is a PARM_DECL, FALSE otherwise.  */
+
+bool
+reg_is_parm_p (rtx reg)
+{
+  tree decl;
+
+  gcc_assert (REG_P (reg));
+  decl = REG_EXPR (reg);
+  return (decl && TREE_CODE (decl) == PARM_DECL);
+}
+
 /* Update NEW with the same attributes as REG, but with OFFSET added
    to the REG_OFFSET.  */
 
@@ -964,6 +983,22 @@ void
 set_reg_attrs_from_value (rtx reg, rtx x)
 {
   int offset;
+  bool can_be_reg_pointer = true;
+
+  /* Don't call mark_reg_pointer for incompatible pointer sign
+     extension.  */
+  while (GET_CODE (x) == SIGN_EXTEND
+	 || GET_CODE (x) == ZERO_EXTEND
+	 || GET_CODE (x) == TRUNCATE
+	 || (GET_CODE (x) == SUBREG && subreg_lowpart_p (x)))
+    {
+#if defined(POINTERS_EXTEND_UNSIGNED) && !defined(HAVE_ptr_extend)
+      if ((GET_CODE (x) == SIGN_EXTEND && POINTERS_EXTEND_UNSIGNED)
+	  || (GET_CODE (x) != SIGN_EXTEND && ! POINTERS_EXTEND_UNSIGNED))
+	can_be_reg_pointer = false;
+#endif
+      x = XEXP (x, 0);
+    }
 
   /* Hard registers can be reused for multiple purposes within the same
      function, so setting REG_ATTRS, REG_POINTER and REG_POINTER_ALIGN
@@ -977,14 +1012,14 @@ set_reg_attrs_from_value (rtx reg, rtx x)
       if (MEM_OFFSET_KNOWN_P (x))
 	REG_ATTRS (reg) = get_reg_attrs (MEM_EXPR (x),
 					 MEM_OFFSET (x) + offset);
-      if (MEM_POINTER (x))
+      if (can_be_reg_pointer && MEM_POINTER (x))
 	mark_reg_pointer (reg, 0);
     }
   else if (REG_P (x))
     {
       if (REG_ATTRS (x))
 	update_reg_offset (reg, x, offset);
-      if (REG_POINTER (x))
+      if (can_be_reg_pointer && REG_POINTER (x))
 	mark_reg_pointer (reg, REGNO_POINTER_ALIGN (REGNO (x)));
     }
 }
@@ -1184,7 +1219,7 @@ gen_lowpart_common (enum machine_mode mode, rtx x)
       && msize * BITS_PER_UNIT <= HOST_BITS_PER_WIDE_INT)
     innermode = mode_for_size (HOST_BITS_PER_WIDE_INT, MODE_INT, 0);
   else if (innermode == VOIDmode)
-    innermode = mode_for_size (HOST_BITS_PER_WIDE_INT * 2, MODE_INT, 0);
+    innermode = mode_for_size (HOST_BITS_PER_DOUBLE_INT, MODE_INT, 0);
 
   xsize = GET_MODE_SIZE (innermode);
 
@@ -1225,7 +1260,7 @@ gen_lowpart_common (enum machine_mode mode, rtx x)
     }
   else if (GET_CODE (x) == SUBREG || REG_P (x)
 	   || GET_CODE (x) == CONCAT || GET_CODE (x) == CONST_VECTOR
-	   || GET_CODE (x) == CONST_DOUBLE || CONST_INT_P (x))
+	   || CONST_DOUBLE_AS_FLOAT_P (x) || CONST_SCALAR_INT_P (x))
     return simplify_gen_subreg (mode, x, innermode, offset);
 
   /* Otherwise, we can't do this.  */
@@ -1655,11 +1690,7 @@ set_mem_attributes_minus_bitpos (rtx ref, tree t, int objectp,
     attrs.align = MAX (attrs.align, TYPE_ALIGN (type));
 
   /* If the size is known, we can set that.  */
-  if (TYPE_SIZE_UNIT (type) && host_integerp (TYPE_SIZE_UNIT (type), 1))
-    {
-      attrs.size_known_p = true;
-      attrs.size = tree_low_cst (TYPE_SIZE_UNIT (type), 1);
-    }
+  tree new_size = TYPE_SIZE_UNIT (type);
 
   /* If T is not a type, we may be able to deduce some more information about
      the expression.  */
@@ -1718,13 +1749,7 @@ set_mem_attributes_minus_bitpos (rtx ref, tree t, int objectp,
 	  attrs.offset_known_p = true;
 	  attrs.offset = 0;
 	  apply_bitpos = bitpos;
-	  if (DECL_SIZE_UNIT (t) && host_integerp (DECL_SIZE_UNIT (t), 1))
-	    {
-	      attrs.size_known_p = true;
-	      attrs.size = tree_low_cst (DECL_SIZE_UNIT (t), 1);
-	    }
-	  else
-	    attrs.size_known_p = false;
+	  new_size = DECL_SIZE_UNIT (t);
 	  attrs.align = DECL_ALIGN (t);
 	  align_computed = true;
 	}
@@ -1739,19 +1764,15 @@ set_mem_attributes_minus_bitpos (rtx ref, tree t, int objectp,
 	  align_computed = true;
 	}
 
-      /* If this is a field reference and not a bit-field, record it.  */
-      /* ??? There is some information that can be gleaned from bit-fields,
-	 such as the word offset in the structure that might be modified.
-	 But skip it for now.  */
-      else if (TREE_CODE (t) == COMPONENT_REF
-	       && ! DECL_BIT_FIELD (TREE_OPERAND (t, 1)))
+      /* If this is a field reference, record it.  */
+      else if (TREE_CODE (t) == COMPONENT_REF)
 	{
 	  attrs.expr = t;
 	  attrs.offset_known_p = true;
 	  attrs.offset = 0;
 	  apply_bitpos = bitpos;
-	  /* ??? Any reason the field size would be different than
-	     the size we got from the type?  */
+	  if (DECL_BIT_FIELD (TREE_OPERAND (t, 1)))
+	    new_size = DECL_SIZE_UNIT (TREE_OPERAND (t, 1));
 	}
 
       /* If this is an array reference, look for an outer field reference.  */
@@ -1816,15 +1837,6 @@ set_mem_attributes_minus_bitpos (rtx ref, tree t, int objectp,
 	      /* ??? Any reason the field size would be different than
 		 the size we got from the type?  */
 	    }
-
-	  /* If this is an indirect reference, record it.  */
-	  else if (TREE_CODE (t) == MEM_REF)
-	    {
-	      attrs.expr = t;
-	      attrs.offset_known_p = true;
-	      attrs.offset = 0;
-	      apply_bitpos = bitpos;
-	    }
 	}
 
       /* If this is an indirect reference, record it.  */
@@ -1839,12 +1851,23 @@ set_mem_attributes_minus_bitpos (rtx ref, tree t, int objectp,
 
       if (!align_computed)
 	{
-	  unsigned int obj_align = get_object_alignment (t);
+	  unsigned int obj_align;
+	  unsigned HOST_WIDE_INT obj_bitpos;
+	  get_object_alignment_1 (t, &obj_align, &obj_bitpos);
+	  obj_bitpos = (obj_bitpos - bitpos) & (obj_align - 1);
+	  if (obj_bitpos != 0)
+	    obj_align = (obj_bitpos & -obj_bitpos);
 	  attrs.align = MAX (attrs.align, obj_align);
 	}
     }
   else
     as = TYPE_ADDR_SPACE (type);
+
+  if (host_integerp (new_size, 1))
+    {
+      attrs.size_known_p = true;
+      attrs.size = tree_low_cst (new_size, 1);
+    }
 
   /* If we modified OFFSET based on T, then subtract the outstanding
      bit position offset.  Similarly, increase the size of the accessed
@@ -2046,23 +2069,38 @@ change_address (rtx memref, enum machine_mode mode, rtx addr)
    If ADJUST_OBJECT is zero, the underlying object associated with the
    memory reference is left unchanged and the caller is responsible for
    dealing with it.  Otherwise, if the new memory reference is outside
-   the underlying object, even partially, then the object is dropped.  */
+   the underlying object, even partially, then the object is dropped.
+   SIZE, if nonzero, is the size of an access in cases where MODE
+   has no inherent size.  */
 
 rtx
 adjust_address_1 (rtx memref, enum machine_mode mode, HOST_WIDE_INT offset,
-		  int validate, int adjust_address, int adjust_object)
+		  int validate, int adjust_address, int adjust_object,
+		  HOST_WIDE_INT size)
 {
   rtx addr = XEXP (memref, 0);
   rtx new_rtx;
   enum machine_mode address_mode;
   int pbits;
-  struct mem_attrs attrs, *defattrs;
+  struct mem_attrs attrs = *get_mem_attrs (memref), *defattrs;
   unsigned HOST_WIDE_INT max_align;
+#ifdef POINTERS_EXTEND_UNSIGNED
+  enum machine_mode pointer_mode
+    = targetm.addr_space.pointer_mode (attrs.addrspace);
+#endif
 
-  attrs = *get_mem_attrs (memref);
+  /* VOIDmode means no mode change for change_address_1.  */
+  if (mode == VOIDmode)
+    mode = GET_MODE (memref);
+
+  /* Take the size of non-BLKmode accesses from the mode.  */
+  defattrs = mode_mem_attrs[(int) mode];
+  if (defattrs->size_known_p)
+    size = defattrs->size;
 
   /* If there are no changes, just return the original memory reference.  */
   if (mode == GET_MODE (memref) && !offset
+      && (size == 0 || (attrs.size_known_p && attrs.size == size))
       && (!validate || memory_address_addr_space_p (mode, addr,
 						    attrs.addrspace)))
     return memref;
@@ -2074,7 +2112,7 @@ adjust_address_1 (rtx memref, enum machine_mode mode, HOST_WIDE_INT offset,
 
   /* Convert a possibly large offset to a signed value within the
      range of the target address space.  */
-  address_mode = targetm.addr_space.address_mode (attrs.addrspace);
+  address_mode = get_address_mode (memref);
   pbits = GET_MODE_BITSIZE (address_mode);
   if (HOST_BITS_PER_WIDE_INT > pbits)
     {
@@ -2092,9 +2130,22 @@ adjust_address_1 (rtx memref, enum machine_mode mode, HOST_WIDE_INT offset,
 	  && (unsigned HOST_WIDE_INT) offset
 	      < GET_MODE_ALIGNMENT (GET_MODE (memref)) / BITS_PER_UNIT)
 	addr = gen_rtx_LO_SUM (address_mode, XEXP (addr, 0),
-			       plus_constant (XEXP (addr, 1), offset));
+			       plus_constant (address_mode,
+					      XEXP (addr, 1), offset));
+#ifdef POINTERS_EXTEND_UNSIGNED
+      /* If MEMREF is a ZERO_EXTEND from pointer_mode and the offset is valid
+	 in that mode, we merge it into the ZERO_EXTEND.  We take advantage of
+	 the fact that pointers are not allowed to overflow.  */
+      else if (POINTERS_EXTEND_UNSIGNED > 0
+	       && GET_CODE (addr) == ZERO_EXTEND
+	       && GET_MODE (XEXP (addr, 0)) == pointer_mode
+	       && trunc_int_for_mode (offset, pointer_mode) == offset)
+	addr = gen_rtx_ZERO_EXTEND (address_mode,
+				    plus_constant (pointer_mode,
+						   XEXP (addr, 0), offset));
+#endif
       else
-	addr = plus_constant (addr, offset);
+	addr = plus_constant (address_mode, addr, offset);
     }
 
   new_rtx = change_address_1 (memref, mode, addr, validate);
@@ -2134,24 +2185,23 @@ adjust_address_1 (rtx memref, enum machine_mode mode, HOST_WIDE_INT offset,
       attrs.align = MIN (attrs.align, max_align);
     }
 
-  /* We can compute the size in a number of ways.  */
-  defattrs = mode_mem_attrs[(int) GET_MODE (new_rtx)];
-  if (defattrs->size_known_p)
+  if (size)
     {
       /* Drop the object if the new right end is not within its bounds.  */
-      if (adjust_object && (offset + defattrs->size) > attrs.size)
+      if (adjust_object && (offset + size) > attrs.size)
 	{
 	  attrs.expr = NULL_TREE;
 	  attrs.alias = 0;
 	}
       attrs.size_known_p = true;
-      attrs.size = defattrs->size;
+      attrs.size = size;
     }
   else if (attrs.size_known_p)
     {
+      gcc_assert (!adjust_object);
       attrs.size -= offset;
-      /* ??? The store_by_pieces machinery generates negative sizes.  */
-      gcc_assert (!(adjust_object && attrs.size < 0));
+      /* ??? The store_by_pieces machinery generates negative sizes,
+	 so don't assert for that here.  */
     }
 
   set_mem_attrs (new_rtx, &attrs);
@@ -2169,7 +2219,7 @@ adjust_automodify_address_1 (rtx memref, enum machine_mode mode, rtx addr,
 			     HOST_WIDE_INT offset, int validate)
 {
   memref = change_address_1 (memref, VOIDmode, addr, validate);
-  return adjust_address_1 (memref, mode, offset, validate, 0, 0);
+  return adjust_address_1 (memref, mode, offset, validate, 0, 0, 0);
 }
 
 /* Return a memory reference like MEMREF, but whose address is changed by
@@ -2184,7 +2234,7 @@ offset_address (rtx memref, rtx offset, unsigned HOST_WIDE_INT pow2)
   struct mem_attrs attrs, *defattrs;
 
   attrs = *get_mem_attrs (memref);
-  address_mode = targetm.addr_space.address_mode (attrs.addrspace);
+  address_mode = get_address_mode (memref);
   new_rtx = simplify_gen_binary (PLUS, address_mode, addr, offset);
 
   /* At this point we don't know _why_ the address is invalid.  It
@@ -2251,7 +2301,7 @@ replace_equiv_address_nv (rtx memref, rtx addr)
 rtx
 widen_memory_access (rtx memref, enum machine_mode mode, HOST_WIDE_INT offset)
 {
-  rtx new_rtx = adjust_address_1 (memref, mode, offset, 1, 1, 0);
+  rtx new_rtx = adjust_address_1 (memref, mode, offset, 1, 1, 0, 0);
   struct mem_attrs attrs;
   unsigned int size = GET_MODE_SIZE (mode);
 
@@ -2497,25 +2547,6 @@ unshare_all_rtl (void)
   return 0;
 }
 
-struct rtl_opt_pass pass_unshare_all_rtl =
-{
- {
-  RTL_PASS,
-  "unshare",                            /* name */
-  NULL,                                 /* gate */
-  unshare_all_rtl,                      /* execute */
-  NULL,                                 /* sub */
-  NULL,                                 /* next */
-  0,                                    /* static_pass_number */
-  TV_NONE,                              /* tv_id */
-  0,                                    /* properties_required */
-  0,                                    /* properties_provided */
-  0,                                    /* properties_destroyed */
-  0,                                    /* todo_flags_start */
-  TODO_verify_rtl_sharing               /* todo_flags_finish */
- }
-};
-
 
 /* Check that ORIG is not marked when it should not be and mark ORIG as in use,
    Recursively does the same for subexpressions.  */
@@ -2540,10 +2571,7 @@ verify_rtx_sharing (rtx orig, rtx insn)
     case REG:
     case DEBUG_EXPR:
     case VALUE:
-    case CONST_INT:
-    case CONST_DOUBLE:
-    case CONST_FIXED:
-    case CONST_VECTOR:
+    CASE_CONST_ANY:
     case SYMBOL_REF:
     case LABEL_REF:
     case CODE_LABEL:
@@ -2552,10 +2580,14 @@ verify_rtx_sharing (rtx orig, rtx insn)
     case RETURN:
     case SIMPLE_RETURN:
     case SCRATCH:
-      return;
       /* SCRATCH must be shared because they represent distinct values.  */
+      return;
     case CLOBBER:
-      if (REG_P (XEXP (x, 0)) && REGNO (XEXP (x, 0)) < FIRST_PSEUDO_REGISTER)
+      /* Share clobbers of hard registers (like cc0), but do not share pseudo reg
+         clobbers or clobbers of hard registers that originated as pseudos.
+         This is needed to allow safe register renaming.  */
+      if (REG_P (XEXP (x, 0)) && REGNO (XEXP (x, 0)) < FIRST_PSEUDO_REGISTER
+	  && ORIGINAL_REGNO (XEXP (x, 0)) == REGNO (XEXP (x, 0)))
 	return;
       break;
 
@@ -2757,10 +2789,7 @@ repeat:
     case REG:
     case DEBUG_EXPR:
     case VALUE:
-    case CONST_INT:
-    case CONST_DOUBLE:
-    case CONST_FIXED:
-    case CONST_VECTOR:
+    CASE_CONST_ANY:
     case SYMBOL_REF:
     case LABEL_REF:
     case CODE_LABEL:
@@ -2772,7 +2801,11 @@ repeat:
       /* SCRATCH must be shared because they represent distinct values.  */
       return;
     case CLOBBER:
-      if (REG_P (XEXP (x, 0)) && REGNO (XEXP (x, 0)) < FIRST_PSEUDO_REGISTER)
+      /* Share clobbers of hard registers (like cc0), but do not share pseudo reg
+         clobbers or clobbers of hard registers that originated as pseudos.
+         This is needed to allow safe register renaming.  */
+      if (REG_P (XEXP (x, 0)) && REGNO (XEXP (x, 0)) < FIRST_PSEUDO_REGISTER
+	  && ORIGINAL_REGNO (XEXP (x, 0)) == REGNO (XEXP (x, 0)))
 	return;
       break;
 
@@ -2879,10 +2912,7 @@ repeat:
     case REG:
     case DEBUG_EXPR:
     case VALUE:
-    case CONST_INT:
-    case CONST_DOUBLE:
-    case CONST_FIXED:
-    case CONST_VECTOR:
+    CASE_CONST_ANY:
     case SYMBOL_REF:
     case CODE_LABEL:
     case PC:
@@ -3726,7 +3756,7 @@ make_insn_raw (rtx pattern)
 
 /* Like `make_insn_raw' but make a DEBUG_INSN instead of an insn.  */
 
-rtx
+static rtx
 make_debug_insn_raw (rtx pattern)
 {
   rtx insn;
@@ -3747,7 +3777,7 @@ make_debug_insn_raw (rtx pattern)
 
 /* Like `make_insn_raw' but make a JUMP_INSN instead of an insn.  */
 
-rtx
+static rtx
 make_jump_insn_raw (rtx pattern)
 {
   rtx insn;
@@ -4256,14 +4286,9 @@ emit_barrier_before (rtx before)
 rtx
 emit_label_before (rtx label, rtx before)
 {
-  /* This can be called twice for the same label as a result of the
-     confusion that follows a syntax error!  So make it harmless.  */
-  if (INSN_UID (label) == 0)
-    {
-      INSN_UID (label) = cur_insn_uid++;
-      add_insn_before (label, before, NULL);
-    }
-
+  gcc_checking_assert (INSN_UID (label) == 0);
+  INSN_UID (label) = cur_insn_uid++;
+  add_insn_before (label, before, NULL);
   return label;
 }
 
@@ -4422,15 +4447,9 @@ emit_barrier_after (rtx after)
 rtx
 emit_label_after (rtx label, rtx after)
 {
-  /* This can be called twice for the same label
-     as a result of the confusion that follows a syntax error!
-     So make it harmless.  */
-  if (INSN_UID (label) == 0)
-    {
-      INSN_UID (label) = cur_insn_uid++;
-      add_insn_after (label, after, NULL);
-    }
-
+  gcc_checking_assert (INSN_UID (label) == 0);
+  INSN_UID (label) = cur_insn_uid++;
+  add_insn_after (label, after, NULL);
   return label;
 }
 
@@ -4846,14 +4865,9 @@ emit_call_insn (rtx x)
 rtx
 emit_label (rtx label)
 {
-  /* This can be called twice for the same label
-     as a result of the confusion that follows a syntax error!
-     So make it harmless.  */
-  if (INSN_UID (label) == 0)
-    {
-      INSN_UID (label) = cur_insn_uid++;
-      add_insn (label);
-    }
+  gcc_checking_assert (INSN_UID (label) == 0);
+  INSN_UID (label) = cur_insn_uid++;
+  add_insn (label);
   return label;
 }
 
@@ -4958,15 +4972,6 @@ gen_use (rtx x)
   seq = get_insns ();
   end_sequence ();
   return seq;
-}
-
-/* Cause next statement to emit a line note even if the line number
-   has not changed.  */
-
-void
-force_next_line_note (void)
-{
-  last_location = -1;
 }
 
 /* Place a note of KIND on insn INSN with DATUM as the datum. If a
@@ -5297,10 +5302,7 @@ copy_insn_1 (rtx orig)
     {
     case REG:
     case DEBUG_EXPR:
-    case CONST_INT:
-    case CONST_DOUBLE:
-    case CONST_FIXED:
-    case CONST_VECTOR:
+    CASE_CONST_ANY:
     case SYMBOL_REF:
     case CODE_LABEL:
     case PC:
@@ -5309,7 +5311,11 @@ copy_insn_1 (rtx orig)
     case SIMPLE_RETURN:
       return orig;
     case CLOBBER:
-      if (REG_P (XEXP (orig, 0)) && REGNO (XEXP (orig, 0)) < FIRST_PSEUDO_REGISTER)
+      /* Share clobbers of hard registers (like cc0), but do not share pseudo reg
+         clobbers or clobbers of hard registers that originated as pseudos.
+         This is needed to allow safe register renaming.  */
+      if (REG_P (XEXP (orig, 0)) && REGNO (XEXP (orig, 0)) < FIRST_PSEUDO_REGISTER
+	  && ORIGINAL_REGNO (XEXP (orig, 0)) == REGNO (XEXP (orig, 0)))
 	return orig;
       break;
 
@@ -5423,6 +5429,18 @@ copy_insn (rtx insn)
   return copy_insn_1 (insn);
 }
 
+/* Return a copy of INSN that can be used in a SEQUENCE delay slot,
+   on that assumption that INSN itself remains in its original place.  */
+
+rtx
+copy_delay_slot_insn (rtx insn)
+{
+  /* Copy INSN with its rtx_code, all its notes, location etc.  */
+  insn = copy_rtx (insn);
+  INSN_UID (insn) = cur_insn_uid++;
+  return insn;
+}
+
 /* Initialize data structures and variables in this file
    before generating rtl for each function.  */
 
@@ -5437,7 +5455,6 @@ init_emit (void)
     cur_insn_uid = 1;
   cur_debug_insn_uid = 1;
   reg_rtx_no = LAST_VIRTUAL_REGISTER + 1;
-  last_location = UNKNOWN_LOCATION;
   first_label_num = label_num;
   seq_stack = NULL;
 
@@ -5564,10 +5581,6 @@ init_emit_regs (void)
   init_reg_modes_target ();
 
   /* Assign register numbers to the globally defined register rtx.  */
-  pc_rtx = gen_rtx_fmt_ (PC, VOIDmode);
-  ret_rtx = gen_rtx_fmt_ (RETURN, VOIDmode);
-  simple_return_rtx = gen_rtx_fmt_ (SIMPLE_RETURN, VOIDmode);
-  cc0_rtx = gen_rtx_fmt_ (CC0, VOIDmode);
   stack_pointer_rtx = gen_raw_REG (Pmode, STACK_POINTER_REGNUM);
   frame_pointer_rtx = gen_raw_REG (Pmode, FRAME_POINTER_REGNUM);
   hard_frame_pointer_rtx = gen_raw_REG (Pmode, HARD_FRAME_POINTER_REGNUM);
@@ -5727,9 +5740,9 @@ init_emit_once (void)
 	   mode = GET_MODE_WIDER_MODE (mode))
 	const_tiny_rtx[i][(int) mode] = GEN_INT (i);
 
-      for (mode = GET_CLASS_NARROWEST_MODE (MODE_PARTIAL_INT);
-	   mode != VOIDmode;
-	   mode = GET_MODE_WIDER_MODE (mode))
+      for (mode = MIN_MODE_PARTIAL_INT;
+	   mode <= MAX_MODE_PARTIAL_INT;
+	   mode = (enum machine_mode)((int)(mode) + 1))
 	const_tiny_rtx[i][(int) mode] = GEN_INT (i);
     }
 
@@ -5740,9 +5753,9 @@ init_emit_once (void)
        mode = GET_MODE_WIDER_MODE (mode))
     const_tiny_rtx[3][(int) mode] = constm1_rtx;
 
-  for (mode = GET_CLASS_NARROWEST_MODE (MODE_PARTIAL_INT);
-       mode != VOIDmode;
-       mode = GET_MODE_WIDER_MODE (mode))
+  for (mode = MIN_MODE_PARTIAL_INT;
+       mode <= MAX_MODE_PARTIAL_INT;
+       mode = (enum machine_mode)((int)(mode) + 1))
     const_tiny_rtx[3][(int) mode] = constm1_rtx;
       
   for (mode = GET_CLASS_NARROWEST_MODE (MODE_COMPLEX_INT);
@@ -5814,11 +5827,10 @@ init_emit_once (void)
       FCONST1(mode).data.high = 0;
       FCONST1(mode).data.low = 0;
       FCONST1(mode).mode = mode;
-      lshift_double (1, 0, GET_MODE_FBIT (mode),
-                     2 * HOST_BITS_PER_WIDE_INT,
-                     &FCONST1(mode).data.low,
-		     &FCONST1(mode).data.high,
-                     SIGNED_FIXED_POINT_MODE_P (mode));
+      FCONST1(mode).data
+	= double_int_one.lshift (GET_MODE_FBIT (mode),
+				 HOST_BITS_PER_DOUBLE_INT,
+				 SIGNED_FIXED_POINT_MODE_P (mode));
       const_tiny_rtx[1][(int) mode] = CONST_FIXED_FROM_FIXED_VALUE (
 				      FCONST1 (mode), mode);
     }
@@ -5837,11 +5849,10 @@ init_emit_once (void)
       FCONST1(mode).data.high = 0;
       FCONST1(mode).data.low = 0;
       FCONST1(mode).mode = mode;
-      lshift_double (1, 0, GET_MODE_FBIT (mode),
-                     2 * HOST_BITS_PER_WIDE_INT,
-                     &FCONST1(mode).data.low,
-		     &FCONST1(mode).data.high,
-                     SIGNED_FIXED_POINT_MODE_P (mode));
+      FCONST1(mode).data
+	= double_int_one.lshift (GET_MODE_FBIT (mode),
+				 HOST_BITS_PER_DOUBLE_INT,
+				 SIGNED_FIXED_POINT_MODE_P (mode));
       const_tiny_rtx[1][(int) mode] = CONST_FIXED_FROM_FIXED_VALUE (
 				      FCONST1 (mode), mode);
     }
@@ -5883,6 +5894,11 @@ init_emit_once (void)
   const_tiny_rtx[0][(int) BImode] = const0_rtx;
   if (STORE_FLAG_VALUE == 1)
     const_tiny_rtx[1][(int) BImode] = const1_rtx;
+
+  pc_rtx = gen_rtx_fmt_ (PC, VOIDmode);
+  ret_rtx = gen_rtx_fmt_ (RETURN, VOIDmode);
+  simple_return_rtx = gen_rtx_fmt_ (SIMPLE_RETURN, VOIDmode);
+  cc0_rtx = gen_rtx_fmt_ (CC0, VOIDmode);
 }
 
 /* Produce exact duplicate of insn INSN after AFTER.
@@ -5961,4 +5977,87 @@ gen_hard_reg_clobber (enum machine_mode mode, unsigned int regno)
 	    gen_rtx_CLOBBER (VOIDmode, gen_rtx_REG (mode, regno)));
 }
 
+location_t prologue_location;
+location_t epilogue_location;
+
+/* Hold current location information and last location information, so the
+   datastructures are built lazily only when some instructions in given
+   place are needed.  */
+static location_t curr_location;
+
+/* Allocate insn location datastructure.  */
+void
+insn_locations_init (void)
+{
+  prologue_location = epilogue_location = 0;
+  curr_location = UNKNOWN_LOCATION;
+}
+
+/* At the end of emit stage, clear current location.  */
+void
+insn_locations_finalize (void)
+{
+  epilogue_location = curr_location;
+  curr_location = UNKNOWN_LOCATION;
+}
+
+/* Set current location.  */
+void
+set_curr_insn_location (location_t location)
+{
+  curr_location = location;
+}
+
+/* Get current location.  */
+location_t
+curr_insn_location (void)
+{
+  return curr_location;
+}
+
+/* Return lexical scope block insn belongs to.  */
+tree
+insn_scope (const_rtx insn)
+{
+  return LOCATION_BLOCK (INSN_LOCATION (insn));
+}
+
+/* Return line number of the statement that produced this insn.  */
+int
+insn_line (const_rtx insn)
+{
+  return LOCATION_LINE (INSN_LOCATION (insn));
+}
+
+/* Return source file of the statement that produced this insn.  */
+const char *
+insn_file (const_rtx insn)
+{
+  return LOCATION_FILE (INSN_LOCATION (insn));
+}
+
+/* Return true if memory model MODEL requires a pre-operation (release-style)
+   barrier or a post-operation (acquire-style) barrier.  While not universal,
+   this function matches behavior of several targets.  */
+
+bool
+need_atomic_barrier_p (enum memmodel model, bool pre)
+{
+  switch (model & MEMMODEL_MASK)
+    {
+    case MEMMODEL_RELAXED:
+    case MEMMODEL_CONSUME:
+      return false;
+    case MEMMODEL_RELEASE:
+      return pre;
+    case MEMMODEL_ACQUIRE:
+      return !pre;
+    case MEMMODEL_ACQ_REL:
+    case MEMMODEL_SEQ_CST:
+      return true;
+    default:
+      gcc_unreachable ();
+    }
+}
+
 #include "gt-emit-rtl.h"

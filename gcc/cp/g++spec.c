@@ -1,6 +1,5 @@
 /* Specific flags and argument handling of the C++ front end.
-   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
-   2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
+   Copyright (C) 1996-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -50,8 +49,6 @@ along with GCC; see the file COPYING3.  If not see
 #ifndef LIBSTDCXX_STATIC
 #define LIBSTDCXX_STATIC NULL
 #endif
-
-#define VTABLE_LOAD_MODULE_INIT "--whole-archive,-lvtv_init,--no-whole-archive"
 
 void
 lang_specific_driver (struct cl_decoded_option **in_decoded_options,
@@ -113,11 +110,6 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
 
   /* The total number of arguments with the new stuff.  */
   unsigned int num_args = 1;
-
-  /* The command line contains a -fvtable_verify. We need to add the
-     init library if we are linking and if we are adding the stdc++
-     library.  */
-  int saw_vtable_verify = 0;
 
   argc = *in_decoded_options_count;
   decoded_options = *in_decoded_options;
@@ -244,13 +236,6 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
 	      }
 	  }
 	  break;
-
-	case OPT_fvtable_verify_:
-          if (strcmp (arg, "std") == 0)
-            saw_vtable_verify = 1;
-          else if (strcmp (arg, "preinit") == 0)
-            saw_vtable_verify = 2;
-          break;
 	}
     }
 
@@ -262,12 +247,6 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
 
   /* Add one for shared_libgcc or extra static library.  */
   num_args = argc + added + need_math + (library > 0) * 4 + 1;
-
-  /* Add two more linker args, '-Wl,-u_vtable_map_vars_start and
-     '-Wl,-u_vtable_map_vars_end.  */
-  if (saw_vtable_verify && library > 0)
-    num_args += 2;
-
   new_decoded_options = XNEWVEC (struct cl_decoded_option, num_args);
 
   i = 0;
@@ -327,33 +306,6 @@ lang_specific_driver (struct cl_decoded_option **in_decoded_options,
 	--j;
 
       i++;
-      j++;
-    }
-
-  /* Add option to make sure that if we are doing 'std' vtable
-     verification then we link with the libvtv_init library.  */
-
-  if (saw_vtable_verify == 1 && library > 0)
-    {
-      generate_option(OPT_Wl_, VTABLE_LOAD_MODULE_INIT, 1,
-                      CL_DRIVER, &new_decoded_options[j]);
-      added_libraries++;
-      j++;
-    }
-
-  /* If we are doing vtable verification, make sure the linker does
-     not garbage-collect the special symbols that mark the start and
-     end of the ".vtable_map_vars" section in the binary.  (See
-     comments in vtv_start.c and vtv_end.c for more details).  */
-
-  if (saw_vtable_verify > 0 && library > 0)
-    {
-      generate_option (OPT_Wl_,"-u_vtable_map_vars_start", 1,
-                       CL_DRIVER, &new_decoded_options[j]);
-      j++;
-
-      generate_option (OPT_Wl_,"-u_vtable_map_vars_end", 1,
-                       CL_DRIVER, &new_decoded_options[j]);
       j++;
     }
 

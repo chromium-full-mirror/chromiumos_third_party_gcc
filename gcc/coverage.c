@@ -1,7 +1,5 @@
 /* Read and write coverage files, and associated functionality.
-   Copyright (C) 1990, 1991, 1992, 1993, 1994, 1996, 1997, 1998, 1999,
-   2000, 2001, 2003, 2004, 2005, 2007, 2008, 2009, 2010, 2011, 2012
-   Free Software Foundation, Inc.
+   Copyright (C) 1990-2013 Free Software Foundation, Inc.
    Contributed by James E. Wilson, UC Berkeley/Cygnus Support;
    based on some ideas from Dain Samples of UC Berkeley.
    Further mangling by Bob Manson, Cygnus Support.
@@ -43,10 +41,10 @@ along with GCC; see the file COPYING3.  If not see
 #include "ggc.h"
 #include "coverage.h"
 #include "langhooks.h"
-#include "hashtab.h"
+#include "hash-table.h"
 #include "tree-iterator.h"
 #include "cgraph.h"
-#include "tree-pass.h"
+#include "dumpfile.h"
 #include "opts.h"
 #include "gcov-io.h"
 #include "tree-flow.h"
@@ -58,7 +56,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "filenames.h"
 #include "dwarf2asm.h"
 #include "target.h"
-#include "auto-profile.h"
 
 #include "gcov-io.h"
 #include "gcov-io.c"
@@ -75,6 +72,8 @@ struct GTY((chain_next ("%h.next"))) coverage_data
   tree fn_decl;			 /* the function decl */
   tree ctr_vars[GCOV_COUNTERS];	 /* counter variables.  */
 };
+
+static bool profiling_enabled_p (void);
 
 /* Linked list of -D/-U/-imacro/-include strings for a source module.  */
 struct str_list
@@ -95,18 +94,14 @@ typedef struct counts_entry
   unsigned cfg_checksum;
   gcov_type *counts;
   struct gcov_ctr_summary summary;
+
+  /* hash_table support.  */
+  typedef counts_entry value_type;
+  typedef counts_entry compare_type;
+  static inline hashval_t hash (const value_type *);
+  static int equal (const value_type *, const compare_type *);
+  static void remove (value_type *);
 } counts_entry_t;
-
-typedef struct pmu_entry
-{
-  /* We hash by  */
-  gcov_unsigned_t lineno;
-  char *filename;
-
-  /* Store  */
-  gcov_pmu_ll_info_t *ll_info;
-  gcov_pmu_brm_info_t *brm_info;
-} pmu_entry_t;
 
 static GTY(()) struct coverage_data *functions_head = 0;
 static struct coverage_data **functions_tail = &functions_head;
@@ -126,23 +121,19 @@ static GTY(()) tree gcov_info_var;
 static GTY(()) tree gcov_fn_info_type;
 static GTY(()) tree gcov_fn_info_ptr_type;
 
-/* Name of the output file for coverage output file.  If this is NULL
-   we're not writing to the notes file.  */
+/* Name of the notes (gcno) output file.  The "bbg" prefix is for
+   historical reasons, when the notes file contained only the
+   basic block graph notes.
+   If this is NULL we're not writing to the notes file.  */
 static char *bbg_file_name;
 
-/* Name of the count data file.  */
+/* File stamp for notes file.  */
+static unsigned bbg_file_stamp;
+
+/* Name of the count data (gcda) file.  */
 static char *da_file_name;
 static char *da_base_file_name;
 static char *main_input_file_name;
-
-/* Filename for the global pmu profile */
-static char pmu_profile_filename[] = "pmuprofile";
-
-/* Hash table of count data.  */
-static htab_t counts_hash = NULL;
-
-/* Hash table of pmu data, */
-static htab_t pmu_hash = NULL;
 
 /* The names of merge functions for counters.  */
 static const char *const ctr_merge_functions[GCOV_COUNTERS] = GCOV_MERGE_FUNCTIONS;
@@ -164,49 +155,18 @@ static unsigned num_cpp_includes = 0;
 /* True if the current module has any asm statements.  */
 static bool has_asm_statement;
 
-/* extern const char * __gcov_pmu_profile_filename */
-static tree gcov_pmu_filename_decl = NULL_TREE;
-/* extern const char * __gcov_pmu_profile_options */
-static tree gcov_pmu_options_decl = NULL_TREE;
-/* extern gcov_unsigned_t  __gcov_pmu_top_n_address */
-static tree gcov_pmu_top_n_address_decl = NULL_TREE;
-
-/* To ensure that the above variables are initialized only once.  */
-static int pmu_profiling_initialized = 0;
-
-/* Cumulative pmu data */
-struct gcov_pmu_summary
-{
-  ll_infos_t ll_infos;         /* load latency infos. */
-  brm_infos_t brm_infos;       /* branch misprediction infos */
-  string_table_t string_table; /* string table entries */
-};
-
-struct gcov_pmu_summary pmu_global_summary;
-
 /* Forward declarations.  */
-static hashval_t htab_counts_entry_hash (const void *);
-static hashval_t htab_pmu_entry_hash (const void *);
-static int htab_counts_entry_eq (const void *, const void *);
-static int htab_pmu_entry_eq (const void *, const void *);
-static void htab_counts_entry_del (void *);
-static void htab_pmu_entry_del (void *);
 static void read_counts_file (const char *, unsigned);
-static void read_pmu_file (const char*);
-static pmu_entry_t *get_pmu_hash_entry (gcov_unsigned_t, gcov_unsigned_t);
-static void process_pmu_data (void);
 static tree build_var (tree, tree, int);
 static void build_fn_info_type (tree, unsigned, tree);
 static void build_info_type (tree, tree);
 static tree build_fn_info (const struct coverage_data *, tree, tree);
 static tree build_info (tree, tree);
 static bool coverage_obj_init (void);
-static VEC(constructor_elt,gc) *coverage_obj_fn
-(VEC(constructor_elt,gc) *, tree, struct coverage_data const *);
-static void coverage_obj_finish (VEC(constructor_elt,gc) *);
+static vec<constructor_elt, va_gc> *coverage_obj_fn
+(vec<constructor_elt, va_gc> *, tree, struct coverage_data const *);
+static void coverage_obj_finish (vec<constructor_elt, va_gc> *);
 static char * get_da_file_name (const char *);
-static void init_pmu_profiling (void);
-static bool profiling_enabled_p (void);
 static tree build_gcov_module_info_type (void);
 
 /* Return the type node for gcov_type.  */
@@ -214,7 +174,8 @@ static tree build_gcov_module_info_type (void);
 tree
 get_gcov_type (void)
 {
-  return lang_hooks.types.type_for_size (GCOV_TYPE_SIZE, false);
+  enum machine_mode mode = smallest_mode_for_size (GCOV_TYPE_SIZE, MODE_INT);
+  return lang_hooks.types.type_for_mode (mode, false);
 }
 
 /* Return the type node for gcov_unsigned_t.  */
@@ -222,58 +183,26 @@ get_gcov_type (void)
 tree
 get_gcov_unsigned_t (void)
 {
-  return lang_hooks.types.type_for_size (32, true);
+  enum machine_mode mode = smallest_mode_for_size (32, MODE_INT);
+  return lang_hooks.types.type_for_mode (mode, true);
 }
 
-/* Return the type node for const char *.  */
-
-static tree
-get_const_string_type (void)
+inline hashval_t
+counts_entry::hash (const value_type *entry)
 {
-  return build_pointer_type
-    (build_qualified_type (char_type_node, TYPE_QUAL_CONST));
-}
-
-static hashval_t
-htab_counts_entry_hash (const void *of)
-{
-  const counts_entry_t *const entry = (const counts_entry_t *) of;
-
   return entry->ident * GCOV_COUNTERS + entry->ctr;
 }
 
-static hashval_t
-htab_pmu_entry_hash (const void *of)
+inline int
+counts_entry::equal (const value_type *entry1,
+		     const compare_type *entry2)
 {
-  const pmu_entry_t *const entry = (const pmu_entry_t *) of;
-
-  return htab_hash_string (entry->filename) + entry->lineno;
-}
-
-static int
-htab_counts_entry_eq (const void *of1, const void *of2)
-{
-  const counts_entry_t *const entry1 = (const counts_entry_t *) of1;
-  const counts_entry_t *const entry2 = (const counts_entry_t *) of2;
-
   return entry1->ident == entry2->ident && entry1->ctr == entry2->ctr;
 }
 
-static int
-htab_pmu_entry_eq (const void *of1, const void *of2)
+inline void
+counts_entry::remove (value_type *entry)
 {
-  const pmu_entry_t *const entry1 = (const pmu_entry_t *) of1;
-  const pmu_entry_t *const entry2 = (const pmu_entry_t *) of2;
-
-  return strcmp (entry1->filename, entry2->filename) == 0 &&
-      entry1->lineno == entry2->lineno;
-}
-
-static void
-htab_counts_entry_del (void *of)
-{
-  counts_entry_t *const entry = (counts_entry_t *) of;
-
   /* When rebuilding counts_hash, we will reuse the entry.  */
   if (!rebuilding_counts_hash)
     {
@@ -282,19 +211,10 @@ htab_counts_entry_del (void *of)
     }
 }
 
-static void
-htab_pmu_entry_del (void *of)
-{
-  pmu_entry_t *const entry = (pmu_entry_t *) of;
-
-  free (entry->filename);
-  free (entry->ll_info);
-  free (entry->brm_info);
-  free (entry);
-}
+/* Hash table of count data.  */
+static hash_table <counts_entry> counts_hash;
 
 /* Returns true if MOD_ID is the id of the last source module.  */
-
 int
 is_last_module (unsigned mod_id)
 {
@@ -303,21 +223,27 @@ is_last_module (unsigned mod_id)
 
 /* String hash function  */
 
-static hashval_t
-str_hash (const void *p)
+struct string_hasher
 {
-  const char *s = (const char *)p;
+  /* hash_table support.  */
+  typedef  char value_type;
+  typedef  char compare_type;
+  static inline hashval_t hash (const value_type *);
+  static int equal (const value_type *, const compare_type *);
+  static void remove (value_type *) {};
+};
+
+hashval_t
+string_hasher::hash (const char* s)
+{
   return htab_hash_string (s);
 }
 
 /* String equal function  */
 
-static int
-str_eq (const void *p1, const void *p2)
+int
+string_hasher::equal (const char *s1, const char *s2)
 {
-  const char *s1 = (const char *)p1;
-  const char *s2 = (const char *)p2;
-
   return !strcmp (s1, s2);
 }
 
@@ -388,7 +314,7 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
   unsigned int num_non_warning_opts1 = 0, num_non_warning_opts2 = 0;
   bool warning_mismatch = false;
   bool non_warning_mismatch = false;
-  htab_t option_tab1, option_tab2;
+  hash_table <string_hasher> option_tab1, option_tab2;
   unsigned int start_index1 = mod_info1->num_quote_paths +
     mod_info1->num_bracket_paths + mod_info1->num_cpp_defines +
     mod_info1->num_cpp_includes;
@@ -412,8 +338,8 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
       cg_opts2[i] = force_matching_cg_opts[i].default_val;
     }
 
-  option_tab1 = htab_create (10, str_hash, str_eq, NULL);
-  option_tab2 = htab_create (10, str_hash, str_eq, NULL);
+  option_tab1.create (10);
+  option_tab2.create (10);
 
   /* First, separate the warning and non-warning options.  */
   for (i = 0; i < mod_info1->num_cl_args; i++)
@@ -422,12 +348,12 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
 	mod_info1->string_array[start_index1 + i];
     else
       {
-        void **slot;
+        char **slot;
         char *option_string = mod_info1->string_array[start_index1 + i];
 
         check_cg_opts (cg_opts1, option_string);
 
-        slot = htab_find_slot (option_tab1, option_string, INSERT);
+        slot = option_tab1.find_slot (option_string, INSERT);
         if (!*slot)
           {
             *slot = option_string;
@@ -441,12 +367,12 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
 	mod_info2->string_array[start_index2 + i];
     else
       {
-        void **slot;
+        char **slot;
         char *option_string = mod_info2->string_array[start_index2 + i];
 
         check_cg_opts (cg_opts2, option_string);
 
-        slot = htab_find_slot (option_tab2, option_string, INSERT);
+        slot = option_tab2.find_slot (option_string, INSERT);
         if (!*slot)
           {
             *slot = option_string;
@@ -475,8 +401,7 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
     warning (OPT_Wripa_opt_mismatch, "command line arguments mismatch for %s "
 	     "and %s", mod_info1->source_filename, mod_info2->source_filename);
 
-   if (warn_ripa_opt_mismatch && non_warning_mismatch
-       && (flag_opt_info >= OPT_INFO_MED))
+   if (warn_ripa_opt_mismatch && non_warning_mismatch && flag_ripa_verbose)
      {
        inform (UNKNOWN_LOCATION, "Options for %s", mod_info1->source_filename);
        for (i = 0; i < num_non_warning_opts1; i++)
@@ -495,20 +420,179 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
    XDELETEVEC (non_warning_opts2);
    XDELETEVEC (cg_opts1);
    XDELETEVEC (cg_opts2);
-   htab_delete (option_tab1);
-   htab_delete (option_tab2);
+   option_tab1.dispose ();
+   option_tab2.dispose ();
    return ((flag_ripa_disallow_opt_mismatch && non_warning_mismatch)
            || has_any_incompatible_cg_opts);
+}
+
+
+/* Support for module sorting based on user specfication.  */
+struct module_name_entry
+{
+  typedef module_name_entry value_type;
+  typedef module_name_entry compare_type;
+  static inline hashval_t hash (const value_type *entry);
+  static inline int equal (const value_type *entry1, const compare_type *entry2);
+  static inline void remove (value_type *v);
+
+  const char *source_name;
+  int order;
+};
+
+/* Hash function for module name  */
+
+hashval_t
+module_name_entry::hash (const value_type *s)
+{
+  return htab_hash_string (s->source_name);
+}
+
+/* Delete function for module name  */
+
+void
+module_name_entry::remove (value_type  *entry)
+{
+  /* XDELETE (entry->source_name); */
+  XDELETE (entry);
+}
+
+/* Equal function for module name  */
+
+int
+module_name_entry::equal (const value_type *s1, const compare_type *s2)
+{
+  return !strcmp (s1->source_name, s2->source_name);
+}
+
+static  hash_table<module_name_entry> module_name_tab;
+
+/* Comparison function for sorting module_infos array.  */
+
+static int
+cmp_module_name_entry (const void *p1, const void *p2)
+{
+  module_name_entry **slot1, **slot2;
+  module_name_entry *m_e1, *m_e2;
+
+  struct gcov_module_info *const *e1 = (struct gcov_module_info *const *) p1;
+  struct gcov_module_info *const *e2 = (struct gcov_module_info *const *) p2;
+
+  module_name_entry e;
+  e.source_name = (*e1)->source_filename;
+  slot1 = module_name_tab.find_slot (&e, NO_INSERT);
+  e.source_name = (*e2)->source_filename;
+  slot2 = module_name_tab.find_slot (&e, NO_INSERT);
+
+  if (!slot1 || !*slot1)
+    return 1;
+
+  if (!slot2 || !*slot2)
+    return -1;
+
+  gcc_assert (slot1 && *slot1 && slot2 && *slot2);
+  m_e1 = *slot1;
+  m_e2 = *slot2;
+
+  return m_e1->order - m_e2->order;
+}
+
+/* Comparison function for sorting fname array  */
+
+static int
+cmp_fname_entry (const void *p1, const void *p2)
+{
+  module_name_entry **slot1, **slot2;
+  module_name_entry *m_e1, *m_e2;
+
+  const char *const *e1 = (const char *const *) p1;
+  const char *const *e2 = (const char *const *) p2;
+
+  module_name_entry e;
+
+  e.source_name = *e1;
+  slot1 = module_name_tab.find_slot (&e, NO_INSERT);
+  e.source_name = *e2;
+  slot2 = module_name_tab.find_slot (&e, NO_INSERT);
+
+  if (!slot1 || !*slot1)
+    return 1;
+
+  if (!slot2 || !*slot2)
+    return -1;
+
+  gcc_assert (slot1 && *slot1 && slot2 && *slot2);
+  m_e1 = *slot1;
+  m_e2 = *slot2;
+
+  return m_e1->order - m_e2->order;
+}
+
+/* Reorder module group according to file IMPORTS_FILE  */
+
+static void
+reorder_module_groups (const char *imports_file, unsigned max_group)
+{
+  FILE *f;
+  int n, order = 0;
+  size_t len;
+  char *line = NULL;
+
+  module_name_tab.create (20);
+
+  f = fopen (imports_file, "r");
+  if (!f)
+    error ("Can't open file %s", imports_file);
+
+  while ((n = getline (&line, &len, f)) != -1)
+    {
+      module_name_entry **slot;
+      module_name_entry *m_e = XCNEW (module_name_entry);
+
+      line[n - 1] = '\0';
+      m_e->source_name = line;
+      m_e->order = order;
+
+      slot = module_name_tab.find_slot (m_e, INSERT);
+      gcc_assert (!*slot);
+      *slot = m_e;
+
+      line = NULL;
+      order++;
+    }
+
+  /* Now do the sorting  */
+
+  qsort (&module_infos[1], num_in_fnames - 1, sizeof (void *),
+         cmp_module_name_entry);
+  qsort (&in_fnames[1], num_in_fnames - 1, sizeof (void *),
+         cmp_fname_entry);
+
+  {
+    unsigned i;
+
+    for (i = 0; i < num_in_fnames; i++)
+      fprintf (stderr, "*** %s (%s)\n", in_fnames[i],
+	       i < max_group ? "Kept":"Skipped");
+
+    for (i = 0; i < num_in_fnames; i++)
+      fprintf (stderr, "### %s (%s)\n", module_infos[i]->source_filename,
+	       i < max_group ? "Kept":"Skipped");
+
+  }
+
+  if (num_in_fnames > max_group)
+    num_in_fnames = max_group;
+
+  module_name_tab.dispose ();
 }
 
 typedef struct {
   unsigned int mod_id;
   const char *mod_name;
-}mod_id_to_name_t;
+} mod_id_to_name_t;
 
-DEF_VEC_O (mod_id_to_name_t);
-DEF_VEC_ALLOC_O (mod_id_to_name_t, heap);
-static VEC (mod_id_to_name_t, heap) *mod_names;
+static vec<mod_id_to_name_t> *mod_names;
 
 static void
 record_module_name (unsigned int mod_id, const char *name)
@@ -517,7 +601,9 @@ record_module_name (unsigned int mod_id, const char *name)
 
   t.mod_id = mod_id;
   t.mod_name = xstrdup (name);
-  VEC_safe_push (mod_id_to_name_t, heap, mod_names, &t);
+  if (!mod_names)
+    vec_alloc (mod_names, 10);
+  mod_names->safe_push (t);
 }
 
 /* Return the module name for module with MOD_ID.  */
@@ -528,11 +614,11 @@ get_module_name (unsigned int mod_id)
   size_t i;
   mod_id_to_name_t *elt;
 
-  for (i = 0; VEC_iterate (mod_id_to_name_t, mod_names, i, elt); i++)
+  for (i = 0; mod_names->iterate (i, &elt); i++)
     {
       if (elt->mod_id == mod_id)
         return elt->mod_name;
-    }   
+    }
 
   gcc_assert (0);
   return NULL;
@@ -555,6 +641,7 @@ read_counts_file (const char *da_file_name, unsigned module_id)
   unsigned max_group = PARAM_VALUE (PARAM_MAX_LIPO_GROUP);
   unsigned lineno_checksum = 0;
   unsigned cfg_checksum = 0;
+  const char *imports_filename;
 
   if (max_group == 0)
     max_group = (unsigned) -1;
@@ -591,13 +678,13 @@ read_counts_file (const char *da_file_name, unsigned module_id)
       return;
     }
 
-  /* Read and discard the stamp.  */
-  gcov_read_unsigned ();
+  /* Read the stamp, used for creating a generation count.  */
+  tag = gcov_read_unsigned ();
+  bbg_file_stamp = crc32_unsigned (bbg_file_stamp, tag);
 
-  if (!counts_hash)
-    counts_hash = htab_create (10,
-			       htab_counts_entry_hash, htab_counts_entry_eq,
-			       htab_counts_entry_del);
+  if (!counts_hash.is_created ())
+    counts_hash.create (10);
+
   while ((tag = gcov_read_unsigned ()))
     {
       gcov_unsigned_t length;
@@ -652,8 +739,7 @@ read_counts_file (const char *da_file_name, unsigned module_id)
 	  elt.ident = GEN_FUNC_GLOBAL_ID (module_id, fn_ident);
 	  elt.ctr = GCOV_COUNTER_FOR_TAG (tag);
 
-	  slot = (counts_entry_t **) htab_find_slot
-	    (counts_hash, &elt, INSERT);
+	  slot = counts_hash.find_slot (&elt, INSERT);
 	  entry = *slot;
 	  if (!entry)
 	    {
@@ -674,14 +760,14 @@ read_counts_file (const char *da_file_name, unsigned module_id)
 	      error ("checksum is (%x,%x) instead of (%x,%x)",
 		     entry->lineno_checksum, entry->cfg_checksum,
 		     lineno_checksum, cfg_checksum);
-	      htab_delete (counts_hash);
+	      counts_hash.dispose ();
 	      break;
 	    }
 	  else if (entry->summary.num != n_counts)
 	    {
 	      error ("Profile data for function %u is corrupted", fn_ident);
 	      error ("number of counters is %d instead of %d", entry->summary.num, n_counts);
-	      htab_delete (counts_hash);
+	      counts_hash.dispose ();
 	      break;
 	    }
 	  else if (elt.ctr >= GCOV_COUNTERS_SUMMABLE)
@@ -737,47 +823,32 @@ read_counts_file (const char *da_file_name, unsigned module_id)
 	      int fd;
 	      char *aux_da_filename = get_da_file_name (mod_info->da_filename);
               gcc_assert (!mod_info->is_primary);
-              if (pointer_set_insert (modset, (void *)(size_t)mod_info->ident))
-                {
-                  if (flag_opt_info >= OPT_INFO_MIN)
-                    inform (input_location, "Not importing %s: already imported",
-                            mod_info->source_filename);
-                }
-              else if ((module_infos[0]->lang & GCOV_MODULE_LANG_MASK) !=
-                       (mod_info->lang & GCOV_MODULE_LANG_MASK))
-                {
-                  if (flag_opt_info >= OPT_INFO_MIN)
-                    inform (input_location, "Not importing %s: source language"
-                            " different from primary module's source language",
-                            mod_info->source_filename);
-                }
-              else if (module_infos_read == max_group)
-                {
-                  if (flag_opt_info >= OPT_INFO_MIN)
-                    inform (input_location, "Not importing %s: maximum group"
-                            " size reached", mod_info->source_filename);
-                }
-              else if (incompatible_cl_args (module_infos[0], mod_info))
-                {
-                  if (flag_opt_info >= OPT_INFO_MIN)
-                    inform (input_location, "Not importing %s: command-line"
-                            " arguments not compatible with primary module",
-                            mod_info->source_filename);
-                }
-              else if ((fd = open (aux_da_filename, O_RDONLY)) < 0)
-                {
-                  if (flag_opt_info >= OPT_INFO_MIN)
-                    inform (input_location, "Not importing %s: couldn't open %s",
-                            mod_info->source_filename, aux_da_filename);
-                }
-              else if ((mod_info->lang & GCOV_MODULE_ASM_STMTS)
-                       && flag_ripa_disallow_asm_modules)
-                {
-                  if (flag_opt_info >= OPT_INFO_MIN)
-                    inform (input_location, "Not importing %s: contains "
-                            "assembler statements", mod_info->source_filename);
-                }
-              else
+	      if (pointer_set_insert (modset, (void *)(size_t)mod_info->ident))
+		inform (input_location, "Not importing %s: already imported",
+			mod_info->source_filename);
+	      else if ((module_infos[0]->lang & GCOV_MODULE_LANG_MASK) !=
+		       (mod_info->lang & GCOV_MODULE_LANG_MASK))
+		inform (input_location, "Not importing %s: source language"
+			" different from primary module's source language",
+			mod_info->source_filename);
+	      else if (module_infos_read == max_group
+                       /* If reordering is specified, delay the cutoff
+			  until after sorting.  */
+		       && !getenv ("LIPO_REORDER_GROUP"))
+		inform (input_location, "Not importing %s: maximum group size"
+			" reached", mod_info->source_filename);
+	      else if (incompatible_cl_args (module_infos[0], mod_info))
+		inform (input_location, "Not importing %s: command-line"
+			" arguments not compatible with primary module",
+			mod_info->source_filename);
+	      else if ((fd = open (aux_da_filename, O_RDONLY)) < 0)
+		inform (input_location, "Not importing %s: couldn't open %s",
+			mod_info->source_filename, aux_da_filename);
+	      else if ((mod_info->lang & GCOV_MODULE_ASM_STMTS)
+		       && flag_ripa_disallow_asm_modules)
+		inform (input_location, "Not importing %s: contains assembler"
+			" statements", mod_info->source_filename);
+	      else
 		{
 		  close (fd);
 		  module_infos_read++;
@@ -792,10 +863,10 @@ read_counts_file (const char *da_file_name, unsigned module_id)
 		}
             }
 
-	  record_module_name (mod_info->ident,
-	      lbasename (mod_info->source_filename));
+          record_module_name (mod_info->ident,
+                              lbasename (mod_info->source_filename));
 
-          if (flag_opt_info >= OPT_INFO_MIN)
+          if (flag_ripa_verbose)
             {
               inform (input_location,
                       "MODULE Id=%d, Is_Primary=%s,"
@@ -810,9 +881,17 @@ read_counts_file (const char *da_file_name, unsigned module_id)
 	{
 	  error (is_error < 0 ? "%qs has overflowed" : "%qs is corrupted",
 		 da_file_name);
-	  htab_delete (counts_hash);
+	  counts_hash.dispose ();
 	  break;
 	}
+    }
+
+  if ((imports_filename = getenv ("LIPO_REORDER_GROUP"))
+      && flag_dyn_ipa && !module_id)
+    {
+      reorder_module_groups (imports_filename, max_group);
+      if (module_infos_read != num_in_fnames)
+	module_infos_read = num_in_fnames;
     }
 
   /* TODO: profile based multiple module compilation does not work
@@ -830,252 +909,6 @@ read_counts_file (const char *da_file_name, unsigned module_id)
   gcov_close ();
 }
 
-/* Read in the pmu profiling file, if available. DA_FILE_NAME is the
-   name of the gcda file. */
-
-static void
-read_pmu_file (const char* da_file_name)
-{
-  gcov_unsigned_t tag;
-  ll_infos_t *ll_infos = &pmu_global_summary.ll_infos;
-  brm_infos_t *brm_infos = &pmu_global_summary.brm_infos;
-  string_table_t *string_table = &pmu_global_summary.string_table;
-  int is_error = 0;
-
-  if (!gcov_open (da_file_name, 1))
-    {
-      if (PARAM_VALUE (PARAM_GCOV_DEBUG))
-        {
-          /* Try to find .gcda file in the current working dir.  */
-          da_file_name = lbasename (da_file_name);
-          if (!gcov_open (da_file_name, 1))
-            return;
-        }
-      else
-        return;
-    }
-
-  if (!gcov_magic (gcov_read_unsigned (), GCOV_DATA_MAGIC))
-    {
-      warning (0, "%qs is not a gcov data file", da_file_name);
-      gcov_close ();
-      return;
-    }
-  else if ((tag = gcov_read_unsigned ()) != GCOV_VERSION)
-    {
-      char v[4], e[4];
-
-      GCOV_UNSIGNED2STRING (v, tag);
-      GCOV_UNSIGNED2STRING (e, GCOV_VERSION);
-
-      warning (0, "%qs is version %q.*s, expected version %q.*s",
-               da_file_name, 4, v, 4, e);
-      gcov_close ();
-      return;
-    }
-
-  /* Read and discard the version. */
-  tag = gcov_read_unsigned ();
-
-  /* Read and discard the stamp.  */
-  tag = gcov_read_unsigned ();
-
-  /* Initialize PMU data fields. */
-  ll_infos->ll_count = 0;
-  ll_infos->alloc_ll_count = 64;
-  ll_infos->ll_array = XCNEWVEC (gcov_pmu_ll_info_t *, ll_infos->alloc_ll_count);
-
-  brm_infos->brm_count = 0;
-  brm_infos->alloc_brm_count = 64;
-  brm_infos->brm_array = XCNEWVEC (gcov_pmu_brm_info_t *,
-                                   brm_infos->alloc_brm_count);
-
-  string_table->st_count = 0;
-  string_table->alloc_st_count = 64;
-  string_table->st_array = XCNEWVEC (gcov_pmu_st_entry_t *,
-                                     string_table->alloc_st_count);
-
-  while ((tag = gcov_read_unsigned ()))
-    {
-      gcov_unsigned_t length = gcov_read_unsigned ();
-      gcov_position_t base = gcov_position ();
-
-      if (tag == GCOV_TAG_PMU_LOAD_LATENCY_INFO)
-        {
-          gcov_pmu_ll_info_t *ll_info = XCNEW (gcov_pmu_ll_info_t);
-          gcov_read_pmu_load_latency_info (ll_info, length);
-          ll_infos->ll_count++;
-          if (ll_infos->ll_count >= ll_infos->alloc_ll_count)
-            {
-              /* need to realloc */
-              ll_infos->ll_array = (gcov_pmu_ll_info_t **)
-                xrealloc (ll_infos->ll_array, 2 * ll_infos->alloc_ll_count);
-            }
-          ll_infos->ll_array[ll_infos->ll_count - 1] = ll_info;
-        }
-      else if (tag == GCOV_TAG_PMU_BRANCH_MISPREDICT_INFO)
-        {
-          gcov_pmu_brm_info_t *brm_info = XCNEW (gcov_pmu_brm_info_t);
-          gcov_read_pmu_branch_mispredict_info (brm_info, length);
-          brm_infos->brm_count++;
-          if (brm_infos->brm_count >= brm_infos->alloc_brm_count)
-            {
-              /* need to realloc */
-              brm_infos->brm_array = (gcov_pmu_brm_info_t **)
-                xrealloc (brm_infos->brm_array, 2 * brm_infos->alloc_brm_count);
-            }
-          brm_infos->brm_array[brm_infos->brm_count - 1] = brm_info;
-        }
-      else if (tag == GCOV_TAG_PMU_TOOL_HEADER)
-        {
-          gcov_pmu_tool_header_t *tool_header = XCNEW (gcov_pmu_tool_header_t);
-          gcov_read_pmu_tool_header (tool_header, length);
-          ll_infos->pmu_tool_header = tool_header;
-          brm_infos->pmu_tool_header = tool_header;
-        }
-      else if (tag == GCOV_TAG_PMU_STRING_TABLE_ENTRY)
-       {
-         gcov_pmu_st_entry_t *st_entry = XCNEW (gcov_pmu_st_entry_t);
-         gcov_read_pmu_string_table_entry (st_entry, length);
-         string_table->st_count++;
-         if (string_table->st_count >= string_table->alloc_st_count)
-           {
-             string_table->alloc_st_count *= 2;
-             string_table->st_array = (gcov_pmu_st_entry_t **)
-                 xrealloc (string_table->st_array,
-                           string_table->alloc_st_count);
-           }
-
-         string_table->st_array[string_table->st_count - 1] = st_entry;
-       }
-
-      gcov_sync (base, length);
-      if ((is_error = gcov_is_error ()))
-       {
-         error (is_error < 0 ? "%qs has overflowed" : "%qs is corrupted",
-                da_file_name);
-          gcov_close ();
-         break;
-       }
-    }
-
-  gcov_close ();
-
-  /* Store pmu data in a global hash table keyed by source position.  */
-  process_pmu_data ();
-}
-
-/* Return a pmu hash table entry for the given FILETAG and LINE, creating
-   a new entry if necessary.  */
-
-static pmu_entry_t *
-get_pmu_hash_entry (gcov_unsigned_t filetag, gcov_unsigned_t line)
-{
-  string_table_t *string_table = &pmu_global_summary.string_table;
-  gcov_pmu_st_entry_t *st_entry;
-  pmu_entry_t **slot, *entry, elt;
-
-  st_entry = string_table->st_array[filetag - 1];
-  elt.lineno = line;
-  elt.filename = xstrdup (st_entry->str);
-  slot = (pmu_entry_t **) htab_find_slot
-      (pmu_hash, &elt, INSERT);
-  entry = *slot;
-  XDELETE (elt.filename);
-  if (!entry)
-    {
-      *slot = entry = XCNEW (pmu_entry_t);
-      entry->lineno = elt.lineno;
-      entry->filename = xstrdup (st_entry->str);
-    }
-  return entry;
-}
-
-/* Process the pmu profiling data, storing it in a global hash table
-   keyed by source position.  */
-
-static void
-process_pmu_data (void)
-{
-  ll_infos_t *ll_infos = &pmu_global_summary.ll_infos;
-  brm_infos_t *brm_infos = &pmu_global_summary.brm_infos;
-  unsigned i;
-  pmu_entry_t *entry;
-  gcov_pmu_ll_info_t *ll_info;
-  gcov_pmu_brm_info_t *brm_info;
-
-  /* Construct hash table with information from gcda file. Entry keys are a
-     unique combination of the filename and the line number for easy access */
-  if (!pmu_hash)
-    pmu_hash = htab_create (10,
-                            htab_pmu_entry_hash, htab_pmu_entry_eq,
-                            htab_pmu_entry_del);
-
-  gcc_assert (pmu_hash != NULL);
-  gcc_assert (ll_infos->ll_count > 0);
-  gcc_assert (brm_infos->brm_count > 0);
-
-  for (i = 0; i < ll_infos->ll_count; ++i)
-    {
-      ll_info = ll_infos->ll_array[i];
-      entry = get_pmu_hash_entry (ll_info->filetag, ll_info->line);
-      entry->ll_info = ll_info;
-    }
-
-  for (i = 0; i < brm_infos->brm_count; ++i)
-    {
-      brm_info = brm_infos->brm_array[i];
-      entry = get_pmu_hash_entry (brm_info->filetag, brm_info->line);
-      entry->brm_info = brm_info;
-    }
-}
-
-/* Returns the load latency info for line number LINENO of source file
-   FILENAME. */
-
-gcov_pmu_ll_info_t *
-get_coverage_pmu_latency (const char* filename, gcov_unsigned_t lineno)
-{
-  pmu_entry_t *entry, elt;
-
-  /* No hash table, no pmu data */
-  if (pmu_hash == NULL)
-    return NULL;
-
-  elt.filename = xstrdup (filename);
-  elt.lineno = lineno;
-
-  entry = (pmu_entry_t *) htab_find (pmu_hash, &elt);
-  XDELETE (elt.filename);
-  if (entry)
-    return entry->ll_info;
-
-  return NULL;
-}
-
-/* Returns the branch misprediction info for line number LINENO of source file
-   FILENAME. */
-
-gcov_pmu_brm_info_t *
-get_coverage_pmu_branch_mispredict (const char* filename, gcov_unsigned_t lineno)
-{
-  pmu_entry_t *entry, elt;
-
-  /* No hash table, no pmu data */
-  if (pmu_hash == NULL)
-    return NULL;
-
-  elt.filename = xstrdup (filename);
-  elt.lineno = lineno;
-
-  entry = (pmu_entry_t *) htab_find (pmu_hash, &elt);
-  XDELETE (elt.filename);
-  if (entry)
-    return entry->brm_info;
-
-  return NULL;
-}
-
 /* Returns the coverage data entry for counter type COUNTER of function
    FUNC. EXPECTED is the number of expected counter entries.  */
 
@@ -1086,7 +919,7 @@ get_coverage_counts_entry (struct function *func, unsigned counter)
 
   elt.ident = FUNC_DECL_GLOBAL_ID (func);
   elt.ctr = counter;
-  entry = (counts_entry_t *) htab_find (counts_hash, &elt);
+  entry = counts_hash.find (&elt);
 
   return entry;
 }
@@ -1101,11 +934,11 @@ get_coverage_counts (unsigned counter, unsigned expected,
   counts_entry_t *entry;
 
   /* No hash table, no counts.  */
-  if (!counts_hash)
+  if (!counts_hash.is_created ())
     {
       static int warned = 0;
 
-      if ((flag_opt_info >= OPT_INFO_MIN) && !warned++)
+      if (!warned++)
 	inform (input_location, (flag_guess_branch_prob
 		 ? "file %s not found, execution counts estimated"
 		 : "file %s not found, execution counts assumed to be zero"),
@@ -1117,7 +950,7 @@ get_coverage_counts (unsigned counter, unsigned expected,
 
   if (!entry || !entry->summary.num)
     {
-      if ((flag_opt_info >= OPT_INFO_MIN) && !flag_dyn_ipa)
+      if (!flag_dyn_ipa && 0 /*TODO reenable with opt-info */)
 	warning (0, "no coverage for function %qE found",
 		 DECL_ASSEMBLER_NAME (current_function_decl));
       return NULL;
@@ -1134,7 +967,7 @@ get_coverage_counts (unsigned counter, unsigned expected,
 	warning_at (input_location, OPT_Wcoverage_mismatch,
 		    "the control flow of function %qE does not match "
 		    "its profile data (counter %qs)", id, ctr_names[counter]);
-      if ((flag_opt_info >= OPT_INFO_MIN) && warning_printed)
+      if (warning_printed)
 	{
 	 inform (input_location, "use -Wno-error=coverage-mismatch to tolerate "
 	 	 "the mismatch but performance may drop if the function is hot");
@@ -1156,8 +989,7 @@ get_coverage_counts (unsigned counter, unsigned expected,
     }
     else if (entry->lineno_checksum != lineno_checksum)
       {
-        warning (OPT_Wcoverage_mismatch,
-                 "Source location for function %qE have changed,"
+        warning (0, "Source location for function %qE have changed,"
                  " the profile data may be out of date",
                  DECL_ASSEMBLER_NAME (current_function_decl));
       }
@@ -1177,12 +1009,12 @@ get_coverage_counts_no_warn (struct function *f, unsigned counter, unsigned *n_c
   counts_entry_t *entry, elt;
 
   /* No hash table, no counts.  */
-  if (!counts_hash || !f)
+  if (!counts_hash.is_created () || !f)
     return NULL;
 
   elt.ident = FUNC_DECL_GLOBAL_ID (f);
   elt.ctr = counter;
-  entry = (counts_entry_t *) htab_find (counts_hash, &elt);
+  entry = counts_hash.find (&elt);
   if (!entry)
     return NULL;
 
@@ -1416,7 +1248,7 @@ coverage_compute_cfg_checksum (void)
   return chksum;
 }
 
-/* Begin output to the graph file for the current function.
+/* Begin output to the notes file for the current function.
    Writes the function header. Returns nonzero if data should be output.  */
 
 int
@@ -1516,14 +1348,6 @@ coverage_function_present (unsigned fn_ident)
   while (item && item->ident != fn_ident)
     item = item->next;
   return item != NULL;
-}
-
-/* True if there is PMU data present in this compilation */
-
-bool
-pmu_data_present (void)
-{
-  return (pmu_hash != NULL);
 }
 
 /* Update function and program direct-call coverage counts.  */
@@ -1681,8 +1505,8 @@ build_fn_info (const struct coverage_data *data, tree type, tree key)
   tree fields = TYPE_FIELDS (type);
   tree ctr_type;
   unsigned ix;
-  VEC(constructor_elt,gc) *v1 = NULL;
-  VEC(constructor_elt,gc) *v2 = NULL;
+  vec<constructor_elt, va_gc> *v1 = NULL;
+  vec<constructor_elt, va_gc> *v2 = NULL;
 
   /* key */
   CONSTRUCTOR_APPEND_ELT (v1, fields,
@@ -1712,7 +1536,7 @@ build_fn_info (const struct coverage_data *data, tree type, tree key)
   for (ix = 0; ix != GCOV_COUNTERS; ix++)
     if (prg_ctr_mask & (1 << ix))
       {
-	VEC(constructor_elt,gc) *ctr = NULL;
+	vec<constructor_elt, va_gc> *ctr = NULL;
 	tree var = data->ctr_vars[ix];
 	unsigned count = 0;
 
@@ -1731,14 +1555,11 @@ build_fn_info (const struct coverage_data *data, tree type, tree key)
 	
 	CONSTRUCTOR_APPEND_ELT (v2, NULL, build_constructor (ctr_type, ctr));
 
-        /* In LIPO mode, coverage_finish is called late when pruning can not be done,
-           so we need to force emitting counter variables even for eliminated functions
-           to avoid unsat.  */
+        /* In LIPO mode, coverage_finish is called late when pruning can not be
+         * done, so we need to force emitting counter variables even for
+         * eliminated functions to avoid unsat.  */
         if (flag_dyn_ipa && var)
-          {
-            varpool_mark_needed_node (varpool_node (var));
-            varpool_finalize_decl (var);
-          }
+          varpool_finalize_decl (var);
       }
   
   CONSTRUCTOR_APPEND_ELT (v1, fields,
@@ -1831,7 +1652,7 @@ build_info_type (tree type, tree fn_info_ptr_type)
    number of paths.  */
 
 static void
-build_inc_path_array_value (tree string_type, VEC(constructor_elt, gc) **v,
+build_inc_path_array_value (tree string_type, vec<constructor_elt, va_gc> **v,
                             cpp_dir *paths, int num)
 {
   int i;
@@ -1858,7 +1679,7 @@ build_inc_path_array_value (tree string_type, VEC(constructor_elt, gc) **v,
    the list of raw strings.  */
 
 static void
-build_str_array_value (tree str_type, VEC(constructor_elt, gc) **v,
+build_str_array_value (tree str_type, vec<constructor_elt, va_gc> **v,
                        struct str_list *head)
 {
   const char *raw_str;
@@ -1885,7 +1706,7 @@ build_str_array_value (tree str_type, VEC(constructor_elt, gc) **v,
    args array. */
 
 static void
-build_cl_args_array_value (tree string_type, VEC(constructor_elt, gc) **v)
+build_cl_args_array_value (tree string_type, vec<constructor_elt, va_gc> **v)
 {
   unsigned int i;
 
@@ -1944,6 +1765,12 @@ build_gcov_module_info_type (void)
   fields = field;
 
   /* lang field */
+  field = build_decl (BUILTINS_LOCATION, FIELD_DECL,
+                      NULL_TREE, get_gcov_unsigned_t ());
+  DECL_CHAIN (field) = fields;
+  fields = field;
+
+  /* ggc_memory field */
   field = build_decl (BUILTINS_LOCATION, FIELD_DECL,
                       NULL_TREE, get_gcov_unsigned_t ());
   DECL_CHAIN (field) = fields;
@@ -2033,7 +1860,7 @@ build_gcov_module_info_value (tree mod_type)
   int num_quote_paths = 0, num_bracket_paths = 0;
   unsigned lang;
   char name_buf[50];
-  VEC(constructor_elt,gc) *v = NULL, *path_v = NULL;
+  vec<constructor_elt,va_gc> *v = NULL, *path_v = NULL;
 
   info_fields = TYPE_FIELDS (mod_type);
 
@@ -2071,6 +1898,11 @@ build_gcov_module_info_value (tree mod_type)
 
   CONSTRUCTOR_APPEND_ELT (v, info_fields,
                           build_int_cstu (get_gcov_unsigned_t (), lang));
+  info_fields = DECL_CHAIN (info_fields);
+
+  /* ggc_memory field */
+  CONSTRUCTOR_APPEND_ELT (v, info_fields,
+                          build_int_cstu (get_gcov_unsigned_t (), ggc_total_memory));
   info_fields = DECL_CHAIN (info_fields);
 
   /* da_filename */
@@ -2180,8 +2012,8 @@ build_info (tree info_type, tree fn_ary)
   tree mod_value = NULL_TREE;
   tree filename_string;
   int da_file_name_len;
-  VEC(constructor_elt,gc) *v1 = NULL;
-  VEC(constructor_elt,gc) *v2 = NULL;
+  vec<constructor_elt, va_gc> *v1 = NULL;
+  vec<constructor_elt, va_gc> *v2 = NULL;
 
   /* Version ident */
   CONSTRUCTOR_APPEND_ELT (v1, info_fields,
@@ -2191,8 +2023,9 @@ build_info (tree info_type, tree fn_ary)
 
   /* mod_info */
   mod_value = build_gcov_module_info_value (TREE_TYPE (TREE_TYPE (info_fields)));
-  mod_value = build1 (ADDR_EXPR, build_pointer_type (TREE_TYPE (mod_value)),
-                      mod_value);
+  mod_value = build1 (ADDR_EXPR,
+          build_pointer_type (TREE_TYPE (mod_value)),
+          mod_value);
   CONSTRUCTOR_APPEND_ELT (v1, info_fields, mod_value);
   info_fields = DECL_CHAIN (info_fields);
 
@@ -2203,7 +2036,7 @@ build_info (tree info_type, tree fn_ary)
   /* stamp */
   CONSTRUCTOR_APPEND_ELT (v1, info_fields,
 			  build_int_cstu (TREE_TYPE (info_fields),
-					  local_tick));
+					  bbg_file_stamp));
   info_fields = DECL_CHAIN (info_fields);
 
   /* Filename */
@@ -2279,7 +2112,7 @@ coverage_obj_init (void)
 
   no_coverage = 1; /* Disable any further coverage.  */
 
-  if (!prg_ctr_mask && !flag_pmu_profile_generate)
+  if (!prg_ctr_mask)
     return false;
 
   if (cgraph_dump_file)
@@ -2295,6 +2128,9 @@ coverage_obj_init (void)
       else
         /* The function is not being emitted, remove from list.  */
         *fn_prev = fn->next;
+
+  if (functions_head == NULL)
+    return false;
 
   for (ix = 0; ix != GCOV_COUNTERS; ix++)
     if ((1u << ix) & prg_ctr_mask)
@@ -2340,8 +2176,8 @@ coverage_obj_init (void)
 /* Generate the coverage function info for FN and DATA.  Append a
    pointer to that object to CTOR and return the appended CTOR.  */
 
-static VEC(constructor_elt,gc) *
-coverage_obj_fn (VEC(constructor_elt,gc) *ctor, tree fn,
+static vec<constructor_elt, va_gc> *
+coverage_obj_fn (vec<constructor_elt, va_gc> *ctor, tree fn,
 		 struct coverage_data const *data)
 {
   tree init = build_fn_info (data, gcov_fn_info_type, gcov_info_var);
@@ -2359,9 +2195,9 @@ coverage_obj_fn (VEC(constructor_elt,gc) *ctor, tree fn,
    function objects from CTOR.  Generate the gcov_info initializer.  */
 
 static void
-coverage_obj_finish (VEC(constructor_elt,gc) *ctor)
+coverage_obj_finish (vec<constructor_elt, va_gc> *ctor)
 {
-  unsigned n_functions = VEC_length(constructor_elt, ctor);
+  unsigned n_functions = vec_safe_length (ctor);
   tree fn_info_ary_type = build_array_type
     (build_qualified_type (gcov_fn_info_ptr_type, TYPE_QUAL_CONST),
      build_index_type (size_int (n_functions - 1)));
@@ -2426,18 +2262,33 @@ get_da_file_name (const char *base_file_name)
   return da_file_name;
 }
 
+/* Callback to move counts_entry from one hash table to
+   the target hashtable  */
+
+int
+move_hash_entry_callback (counts_entry **x, 
+                          hash_table <counts_entry> *target_counts_hash)
+{
+  counts_entry *entry = *x;
+  counts_entry **slot;
+  slot = target_counts_hash->find_slot (entry, INSERT);
+  *slot = entry;
+  return 1;
+}
+
 /* Rebuild counts_hash already built the primary module. This hashtable
    was built with a module-id of zero. It needs to be rebuilt taking the
    correct primary module-id into account.  */
 
-static int
-rebuild_counts_hash_entry (void **x, void *y)
+int
+rehash_callback (counts_entry **x,
+                 hash_table <counts_entry> *target_counts_hash)
 {
-  counts_entry_t *entry = (counts_entry_t *) *x;
-  htab_t *new_counts_hash = (htab_t *) y;
-  counts_entry_t **slot;
+  counts_entry *entry = *x;
+  counts_entry **slot;
+
   entry->ident = GEN_FUNC_GLOBAL_ID (primary_module_id, entry->ident);
-  slot = (counts_entry_t **) htab_find_slot (*new_counts_hash, entry, INSERT);
+  slot = target_counts_hash->find_slot (entry, INSERT);
   *slot = entry;
   return 1;
 }
@@ -2449,15 +2300,25 @@ rebuild_counts_hash_entry (void **x, void *y)
 static void
 rebuild_counts_hash (void)
 {
-  htab_t new_counts_hash =
-    htab_create (10, htab_counts_entry_hash, htab_counts_entry_eq,
-		 htab_counts_entry_del);
+  hash_table <counts_entry> tmp_counts_hash;
+  tmp_counts_hash.create (10);
   gcc_assert (primary_module_id);
+
   rebuilding_counts_hash = true;
-  htab_traverse_noresize (counts_hash, rebuild_counts_hash_entry, &new_counts_hash);
-  htab_delete (counts_hash);
+
+  /* Move the counts entries to the temporary hashtable. */
+  counts_hash.traverse_noresize <
+    hash_table <counts_entry> *,
+    move_hash_entry_callback> (&tmp_counts_hash);
+  counts_hash.empty ();
+
+  /* Now rehash and copy back.  */
+  tmp_counts_hash.traverse_noresize <
+    hash_table <counts_entry> *,
+    rehash_callback> (&counts_hash);
+  tmp_counts_hash.dispose();
+
   rebuilding_counts_hash = false;
-  counts_hash = new_counts_hash;
 }
 
 /* Add the module information record for the module with id
@@ -2635,25 +2496,6 @@ coverage_init (const char *filename, const char* source_name)
   da_base_file_name = XNEWVEC (char, strlen (filename) + 1);
   strcpy (da_base_file_name, filename);
 
-  /* Name of bbg file.  */
-  if (flag_test_coverage && !flag_compare_debug)
-    {
-      bbg_file_name = XNEWVEC (char, len + strlen (GCOV_NOTE_SUFFIX) + 1);
-      memcpy (bbg_file_name, filename, len);
-      strcpy (bbg_file_name + len, GCOV_NOTE_SUFFIX);
-      if (!gcov_open (bbg_file_name, -1))
-	{
-	  error ("cannot open %s", bbg_file_name);
-	  bbg_file_name = NULL;
-	}
-      else
-	{
-	  gcov_write_unsigned (GCOV_NOTE_MAGIC);
-	  gcov_write_unsigned (GCOV_VERSION);
-	  gcov_write_unsigned (local_tick);
-	}
-    }
-
   if (profile_data_prefix == 0 && !IS_ABSOLUTE_PATH (source_name))
     {
       src_name_prefix = getpwd ();
@@ -2670,13 +2512,10 @@ coverage_init (const char *filename, const char* source_name)
       strcat (main_input_file_name, source_name);
     }
 
+  bbg_file_stamp = local_tick;
+
   if (flag_branch_probabilities)
     read_counts_file (da_file_name, 0);
-
-  /* Reads at most one auxiliary GCDA file since we don't support merging */
-  if (flag_pmu_profile_use)
-    read_pmu_file (pmu_profile_data ? pmu_profile_data
-                   : get_da_file_name (pmu_profile_filename));
 
   /* Rebuild counts_hash and read the auxiliary GCDA files.  */
   if (flag_profile_use && L_IPO_COMP_MODE)
@@ -2693,11 +2532,27 @@ coverage_init (const char *filename, const char* source_name)
   if (profiling_enabled_p ())
     {
       tree_init_dyn_ipa_parameters ();
-      init_pmu_profiling ();
       tree_init_instrumentation_sampling ();
     }
-  if (flag_auto_profile)
-    init_auto_profile ();
+
+  /* Name of bbg file.  */
+  if (flag_test_coverage && !flag_compare_debug)
+    {
+      bbg_file_name = XNEWVEC (char, len + strlen (GCOV_NOTE_SUFFIX) + 1);
+      memcpy (bbg_file_name, filename, len);
+      strcpy (bbg_file_name + len, GCOV_NOTE_SUFFIX);
+      if (!gcov_open (bbg_file_name, -1))
+	{
+	  error ("cannot open %s", bbg_file_name);
+	  bbg_file_name = NULL;
+	}
+      else
+	{
+	  gcov_write_unsigned (GCOV_NOTE_MAGIC);
+	  gcov_write_unsigned (GCOV_VERSION);
+	  gcov_write_unsigned (bbg_file_stamp);
+	}
+    }
 }
 
 /* Return True if any type of profiling is enabled which requires linking
@@ -2706,106 +2561,8 @@ coverage_init (const char *filename, const char* source_name)
 static bool
 profiling_enabled_p (void)
 {
-  return flag_pmu_profile_generate
-   || profile_arc_flag
-   || flag_profile_generate_sampling
-   || flag_profile_reusedist;
-}
-
-/* Construct variables for PMU profiling.
-   1) __gcov_pmu_profile_filename,
-   2) __gcov_pmu_profile_options,
-   3) __gcov_pmu_top_n_address.  */
-
-static void
-init_pmu_profiling (void)
-{
-  if (!pmu_profiling_initialized)
-    {
-      unsigned top_n_addr = PARAM_VALUE (PARAM_PMU_PROFILE_N_ADDRESS);
-      tree filename_ptr, options_ptr;
-
-      /* Construct an initializer for __gcov_pmu_profile_filename.  */
-      gcov_pmu_filename_decl =
-        build_decl (UNKNOWN_LOCATION, VAR_DECL,
-                    get_identifier ("__gcov_pmu_profile_filename"),
-                    get_const_string_type ());
-      TREE_PUBLIC (gcov_pmu_filename_decl) = 1;
-      DECL_ARTIFICIAL (gcov_pmu_filename_decl) = 1;
-      make_decl_one_only (gcov_pmu_filename_decl,
-                          DECL_ASSEMBLER_NAME (gcov_pmu_filename_decl));
-      TREE_STATIC (gcov_pmu_filename_decl) = 1;
-
-      if (flag_pmu_profile_generate)
-        {
-          const char *filename = get_da_file_name (pmu_profile_filename);
-          int file_name_len;
-          tree filename_string;
-          file_name_len = strlen (filename);
-          filename_string = build_string (file_name_len + 1, filename);
-          TREE_TYPE (filename_string) = build_array_type
-            (char_type_node, build_index_type
-             (build_int_cst (NULL_TREE, file_name_len)));
-          filename_ptr = build1 (ADDR_EXPR, get_const_string_type (),
-                                 filename_string);
-        }
-      else
-        filename_ptr = null_pointer_node;
-
-      DECL_INITIAL (gcov_pmu_filename_decl) = filename_ptr;
-      varpool_finalize_decl (gcov_pmu_filename_decl);
-
-      /* Construct an initializer for __gcov_pmu_profile_options.  */
-      gcov_pmu_options_decl =
-        build_decl (UNKNOWN_LOCATION, VAR_DECL,
-                    get_identifier ("__gcov_pmu_profile_options"),
-                    get_const_string_type ());
-      TREE_PUBLIC (gcov_pmu_options_decl) = 1;
-      DECL_ARTIFICIAL (gcov_pmu_options_decl) = 1;
-      make_decl_one_only (gcov_pmu_options_decl,
-                          DECL_ASSEMBLER_NAME (gcov_pmu_options_decl));
-      TREE_STATIC (gcov_pmu_options_decl) = 1;
-
-      /* If the flag is false we generate a null pointer to indicate
-         that we are not doing the pmu profiling.  */
-      if (flag_pmu_profile_generate)
-        {
-          const char *pmu_options = flag_pmu_profile_generate;
-          int pmu_options_len;
-          tree pmu_options_string;
-
-          pmu_options_len = strlen (pmu_options);
-          pmu_options_string = build_string (pmu_options_len + 1, pmu_options);
-          TREE_TYPE (pmu_options_string) = build_array_type
-            (char_type_node, build_index_type (build_int_cst
-                                               (NULL_TREE, pmu_options_len)));
-          options_ptr = build1 (ADDR_EXPR, get_const_string_type (),
-                                pmu_options_string);
-        }
-      else
-        options_ptr = null_pointer_node;
-
-      DECL_INITIAL (gcov_pmu_options_decl) = options_ptr;
-      varpool_finalize_decl (gcov_pmu_options_decl);
-
-      /* Construct an initializer for __gcov_pmu_top_n_address.  We
-         don't need to guard this with the flag_pmu_profile generate
-         because the value of __gcov_pmu_top_n_address is ignored when
-         not doing profiling.  */
-      gcov_pmu_top_n_address_decl =
-        build_decl (UNKNOWN_LOCATION, VAR_DECL,
-                    get_identifier ("__gcov_pmu_top_n_address"),
-                    get_gcov_unsigned_t ());
-      TREE_PUBLIC (gcov_pmu_top_n_address_decl) = 1;
-      DECL_ARTIFICIAL (gcov_pmu_top_n_address_decl) = 1;
-      make_decl_one_only (gcov_pmu_top_n_address_decl,
-                          DECL_ASSEMBLER_NAME (gcov_pmu_top_n_address_decl));
-      TREE_STATIC (gcov_pmu_top_n_address_decl) = 1;
-      DECL_INITIAL (gcov_pmu_top_n_address_decl) =
-        build_int_cstu (get_gcov_unsigned_t (), top_n_addr);
-      varpool_finalize_decl (gcov_pmu_top_n_address_decl);
-    }
-  pmu_profiling_initialized = 1;
+  return  profile_arc_flag
+   || flag_profile_generate_sampling;
 }
 
 /* Performs file-level cleanup.  Close graph file, generate coverage
@@ -2816,15 +2573,16 @@ coverage_finish (void)
 {
   if (bbg_file_name && gcov_close ())
     unlink (bbg_file_name);
-  
-  if (!local_tick)
-    /* Only remove the da file, if we cannot stamp it.  If we can
-       stamp it, libgcov will DTRT.  */
+
+  if (!flag_branch_probabilities && flag_test_coverage
+      && (!local_tick || local_tick == (unsigned)-1))
+    /* Only remove the da file, if we're emitting coverage code and
+       cannot uniquely stamp it.  If we can stamp it, libgcov will DTRT.  */
     unlink (da_file_name);
 
   if (coverage_obj_init ())
     {
-      VEC(constructor_elt,gc) *fn_ctor = NULL;
+      vec<constructor_elt, va_gc> *fn_ctor = NULL;
       struct coverage_data *fn;
       
       for (fn = functions_head; fn; fn = fn->next)
@@ -2850,10 +2608,6 @@ str_list_append (struct str_list **head, struct str_list **tail, const char *s)
   *tail = e;
 }
 
-extern bool is_kernel_build;
-
-#define KERNEL_BUILD_PREDEF_STRING "__KERNEL__"
-
 /* Copies the macro def or undef CPP_DEF and saves the copy
    in a list. IS_DEF is a flag indicating if CPP_DEF represents
    a -D or -U.  */
@@ -2866,11 +2620,6 @@ coverage_note_define (const char *cpp_def, bool is_def)
   strcpy (s + 1, cpp_def);
   str_list_append (&cpp_defines_head, &cpp_defines_tail, s);
   num_cpp_defines++;
-
-  /* When -D__KERNEL__ is in the option list, we assume this is
-     compilation for Linux Kernel.  */
-  if (!strcmp(cpp_def, KERNEL_BUILD_PREDEF_STRING))
-    is_kernel_build = is_def;
 }
 
 /* Copies the -imacro/-include FILENAME and saves the copy in a list.  */
