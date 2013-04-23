@@ -126,7 +126,6 @@ diagnostic_initialize (diagnostic_context *context, int n_opts)
   memset (context->diagnostic_count, 0, sizeof context->diagnostic_count);
   context->some_warnings_are_errors = false;
   context->warning_as_error_requested = false;
-  context->force_warnings_requested = false;
   context->n_opts = n_opts;
   context->classify_diagnostic = XNEWVEC (diagnostic_t, n_opts);
   for (i = 0; i < n_opts; i++)
@@ -648,8 +647,7 @@ diagnostic_report_diagnostic (diagnostic_context *context,
      individual warnings can be overridden back to warnings with
      -Wno-error=*.  */
   if (context->warning_as_error_requested
-      && diagnostic->kind == DK_WARNING
-      && !context->force_warnings_requested)
+      && diagnostic->kind == DK_WARNING)
     {
       diagnostic->kind = DK_ERROR;
     }
@@ -695,9 +693,7 @@ diagnostic_report_diagnostic (diagnostic_context *context,
       /* This tests if the user provided the appropriate -Werror=foo
 	 option.  */
       if (diag_class == DK_UNSPECIFIED
-	  && context->classify_diagnostic[diagnostic->option_index] != DK_UNSPECIFIED
-	  && (context->classify_diagnostic[diagnostic->option_index] != DK_ERROR
-	      || !context->force_warnings_requested))
+	  && context->classify_diagnostic[diagnostic->option_index] != DK_UNSPECIFIED)
 	{
 	  diagnostic->kind = context->classify_diagnostic[diagnostic->option_index];
 	}

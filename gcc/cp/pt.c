@@ -39,10 +39,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree-inline.h"
 #include "decl.h"
 #include "toplev.h"
-#include "opts.h"
 #include "timevar.h"
 #include "tree-iterator.h"
-#include "cgraph.h"
 
 /* The type of functions taking a tree, and some additional data, and
    returning an int.  */
@@ -13481,7 +13479,11 @@ tsubst_copy_and_build (tree t,
 	if (error_msg)
 	  error (error_msg);
 	if (!function_p && TREE_CODE (decl) == IDENTIFIER_NODE)
-	  decl = unqualified_name_lookup_error (decl);
+	  {
+	    if (complain & tf_error)
+	      unqualified_name_lookup_error (decl);
+	    decl = error_mark_node;
+	  }
 	RETURN (decl);
       }
 
@@ -18782,13 +18784,7 @@ instantiate_decl (tree d, int defer_ok,
 	 when marked as "extern template".  */
       if (!(external_p && TREE_CODE (d) == VAR_DECL))
 	add_pending_template (d);
-      {
-        if (L_IPO_COMP_MODE)
-          /* Capture module info.  */
-          if (TREE_CODE (d) == VAR_DECL)
-            varpool_node_for_decl (d);
-        goto out;
-      }
+      goto out;
     }
   /* Tell the repository that D is available in this translation unit
      -- and see if it is supposed to be instantiated here.  */

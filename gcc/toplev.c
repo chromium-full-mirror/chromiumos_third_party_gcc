@@ -176,19 +176,6 @@ FILE *stack_usage_file = NULL;
 
 static const char *src_pwd;
 
-/* Primary module's id (non-zero). If no module-info was read in, this will
-   be zero.  */
-
-unsigned primary_module_id = 0;
-
-/* Current module id.  */
-
-unsigned current_module_id = 0;
-
-/* Include all auxiliary modules specified in the profile. This
-   will bypass the ggc_memory limit check.  */
-bool include_all_aux = 0;
-
 /* Initialize src_pwd with the given string, and return true.  If it
    was already initialized, return false.  As a special case, it may
    be called with a NULL argument to test whether src_pwd has NOT been
@@ -571,9 +558,6 @@ compile_file (void)
 
   if (seen_error ())
     return;
-
-  if (flag_dyn_ipa)
-    coverage_finish ();
 
   timevar_start (TV_PHASE_LATE_ASM);
 
@@ -1871,7 +1855,7 @@ do_compile (void)
 
           init_cgraph ();
           init_final (main_input_filename);
-          coverage_init (aux_base_name, main_input_filename);
+          coverage_init (aux_base_name);
           statistics_init ();
           invoke_plugin_callbacks (PLUGIN_START_UNIT, NULL);
 
