@@ -337,39 +337,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   // count_if
   // search
 
-// Local modification: if __google_stl_debug_compare is defined to
-// non-zero value, check sort predicate for strict weak ordering.
-// Google ref b/1731200.
-#if __google_stl_debug_compare
-  template<typename _Compare>
-  struct _CheckedCompare {
-    _Compare _M_compare;
-
-    _CheckedCompare(const _Compare & __comp): _M_compare(__comp) { }
-
-    template <typename _Tp>
-    bool operator()(const _Tp& __x, const _Tp& __y) {
-      if (_M_compare(__x, __x))
-        __throw_runtime_error("strict weak ordering: (__x LT __x) != false");
-      if (_M_compare(__y, __y))
-        __throw_runtime_error("strict weak ordering: (__y LT __y) != false");
-      bool lt = _M_compare(__x, __y);
-      if (lt && _M_compare(__y, __x))
-        __throw_runtime_error("strict weak ordering: ((__x LT __y) && (__y LT __x)) != false");
-      return lt;
-    }
-
-    // Different types; can't perform any checks.
-    template <typename _Tp1, typename _Tp2>
-    bool operator()(const _Tp1& __x, const _Tp2& __y) {
-      return _M_compare(__x, __y);
-    }
-  };
-# define __CheckedCompare(__comp) _CheckedCompare<__typeof__(__comp)>(__comp)
-#else
-# define __CheckedCompare(__comp) __comp
-#endif
-
   /**
    *  This is an uglified
    *  search_n(_ForwardIterator, _ForwardIterator, _Integer, const _Tp&)
@@ -2128,20 +2095,18 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	  ++__result_real_last;
 	  ++__first;
 	}
-      std::make_heap(__result_first, __result_real_last,
-                     __CheckedCompare(__comp));
+      std::make_heap(__result_first, __result_real_last, __comp);
       while (__first != __last)
 	{
-	  if (__CheckedCompare(__comp)(*__first, *__result_first))
+	  if (__comp(*__first, *__result_first))
 	    std::__adjust_heap(__result_first, _DistanceType(0),
 			       _DistanceType(__result_real_last
 					     - __result_first),
 			       _InputValueType(*__first),
-			       __CheckedCompare(__comp));
+			       __comp);
 	  ++__first;
 	}
-      std::sort_heap(__result_first, __result_real_last,
-                     __CheckedCompare(__comp));
+      std::sort_heap(__result_first, __result_real_last, __comp);
       return __result_real_last;
     }
 
@@ -2502,7 +2467,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	  _DistanceType __half = __len >> 1;
 	  _ForwardIterator __middle = __first;
 	  std::advance(__middle, __half);
-	  if (__CheckedCompare(__comp)(*__middle, __val))
+	  if (__comp(*__middle, __val))
 	    {
 	      __first = __middle;
 	      ++__first;
@@ -2598,7 +2563,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	  _DistanceType __half = __len >> 1;
 	  _ForwardIterator __middle = __first;
 	  std::advance(__middle, __half);
-	  if (__CheckedCompare(__comp)(__val, *__middle))
+	  if (__comp(__val, *__middle))
 	    __len = __half;
 	  else
 	    {
@@ -2717,13 +2682,13 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	  _DistanceType __half = __len >> 1;
 	  _ForwardIterator __middle = __first;
 	  std::advance(__middle, __half);
-	  if (__CheckedCompare(__comp)(*__middle, __val))
+	  if (__comp(*__middle, __val))
 	    {
 	      __first = __middle;
 	      ++__first;
 	      __len = __len - __half - 1;
 	    }
-	  else if (__CheckedCompare(__comp)(__val, *__middle))
+	  else if (__comp(__val, *__middle))
 	    __len = __half;
 	  else
 	    {
@@ -2801,7 +2766,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 						__val, __comp);
 
       _ForwardIterator __i = std::lower_bound(__first, __last, __val, __comp);
-      return __i != __last && !bool(__CheckedCompare(__comp)(__val, *__i));
+      return __i != __last && !bool(__comp(__val, *__i));
     }
 
   // merge
@@ -3292,11 +3257,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 								  __last);
       if (__buf.begin() == 0)
 	std::__merge_without_buffer(__first, __middle, __last, __len1,
-				    __len2, __CheckedCompare(__comp));
+				    __len2, __comp);
       else
 	std::__merge_adaptive(__first, __middle, __last, __len1, __len2,
 			      __buf.begin(), _DistanceType(__buf.size()),
-			      __CheckedCompare(__comp));
+			      __comp);
     }
 
 
@@ -3675,9 +3640,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       __glibcxx_requires_sorted_set_pred(__first2, __last2, __first1, __comp);
 
       while (__first1 != __last1 && __first2 != __last2)
-	if (__CheckedCompare(__comp)(*__first2, *__first1))
+	if (__comp(*__first2, *__first1))
 	  return false;
-	else if(__CheckedCompare(__comp)(*__first1, *__first2))
+	else if(__comp(*__first1, *__first2))
 	  ++__first1;
 	else
 	  ++__first1, ++__first2;
@@ -3790,10 +3755,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	{
 	  _BidirectionalIterator __ii = __i;
 	  --__i;
-	  if (__CheckedCompare(__comp)(*__i, *__ii))
+	  if (__comp(*__i, *__ii))
 	    {
 	      _BidirectionalIterator __j = __last;
-	      while (!bool(__CheckedCompare(__comp)(*__i, *--__j)))
+	      while (!bool(__comp(*__i, *--__j)))
 		{}
 	      std::iter_swap(__i, __j);
 	      std::reverse(__ii, __last);
@@ -3903,10 +3868,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	{
 	  _BidirectionalIterator __ii = __i;
 	  --__i;
-	  if (__CheckedCompare(__comp)(*__ii, *__i))
+	  if (__comp(*__ii, *__i))
 	    {
 	      _BidirectionalIterator __j = __last;
-	      while (!bool(__CheckedCompare(__comp)(*--__j, *__i)))
+	      while (!bool(__comp(*--__j, *__i)))
 		{}
 	      std::iter_swap(__i, __j);
 	      std::reverse(__ii, __last);
@@ -4079,7 +4044,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
       _ForwardIterator __next = __first;
       for (++__next; __next != __last; __first = __next, ++__next)
-	if (__CheckedCompare(__comp)(*__next, *__first))
+	if (__comp(*__next, *__first))
 	  return __next;
       return __next;
     }
@@ -4116,9 +4081,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     inline pair<const _Tp&, const _Tp&>
     minmax(const _Tp& __a, const _Tp& __b, _Compare __comp)
     {
-      return __CheckedCompare(__comp)(__b, __a)
-          ? pair<const _Tp&, const _Tp&>(__b, __a)
-          : pair<const _Tp&, const _Tp&>(__a, __b);
+      return __comp(__b, __a) ? pair<const _Tp&, const _Tp&>(__b, __a)
+	                      : pair<const _Tp&, const _Tp&>(__a, __b);
     }
 
   /**
@@ -4226,7 +4190,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	return std::make_pair(__first, __first);
 
       _ForwardIterator __min, __max;
-      if (__CheckedCompare(__comp)(*__next, *__first))
+      if (__comp(*__next, *__first))
 	{
 	  __min = __next;
 	  __max = __first;
@@ -4245,25 +4209,25 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	  __next = __first;
 	  if (++__next == __last)
 	    {
-	      if (__CheckedCompare(__comp)(*__first, *__min))
+	      if (__comp(*__first, *__min))
 		__min = __first;
-	      else if (!__CheckedCompare(__comp)(*__first, *__max))
+	      else if (!__comp(*__first, *__max))
 		__max = __first;
 	      break;
 	    }
 
-	  if (__CheckedCompare(__comp)(*__next, *__first))
+	  if (__comp(*__next, *__first))
 	    {
-	      if (__CheckedCompare(__comp)(*__next, *__min))
+	      if (__comp(*__next, *__min))
 		__min = __next;
-	      if (!__CheckedCompare(__comp)(*__first, *__max))
+	      if (!__comp(*__first, *__max))
 		__max = __first;
 	    }
 	  else
 	    {
-	      if (__CheckedCompare(__comp)(*__first, *__min))
+	      if (__comp(*__first, *__min))
 		__min = __first;
-	      if (!__CheckedCompare(__comp)(*__next, *__max))
+	      if (!__comp(*__next, *__max))
 		__max = __next;
 	    }
 
@@ -5396,8 +5360,8 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
       __glibcxx_requires_valid_range(__first, __middle);
       __glibcxx_requires_valid_range(__middle, __last);
 
-      std::__heap_select(__first, __middle, __last, __CheckedCompare(__comp));
-      std::sort_heap(__first, __middle, __CheckedCompare(__comp));
+      std::__heap_select(__first, __middle, __last, __comp);
+      std::sort_heap(__first, __middle, __comp);
     }
 
   /**
@@ -5474,8 +5438,7 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
 	return;
 
       std::__introselect(__first, __nth, __last,
-			 std::__lg(__last - __first) * 2,
-                         __CheckedCompare(__comp));
+			 std::__lg(__last - __first) * 2, __comp);
     }
 
 
@@ -5547,10 +5510,8 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
       if (__first != __last)
 	{
 	  std::__introsort_loop(__first, __last,
-				std::__lg(__last - __first) * 2,
-                                __CheckedCompare(__comp));
-	  std::__final_insertion_sort(__first, __last,
-                                      __CheckedCompare(__comp));
+				std::__lg(__last - __first) * 2, __comp);
+	  std::__final_insertion_sort(__first, __last, __comp);
 	}
     }
 
@@ -5663,7 +5624,7 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
 
       while (__first1 != __last1 && __first2 != __last2)
 	{
-	  if (__CheckedCompare(__comp)(*__first2, *__first1))
+	  if (__comp(*__first2, *__first1))
 	    {
 	      *__result = *__first2;
 	      ++__first2;
@@ -5760,11 +5721,10 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
       _Temporary_buffer<_RandomAccessIterator, _ValueType> __buf(__first,
 								 __last);
       if (__buf.begin() == 0)
-	std::__inplace_stable_sort(__first, __last, __CheckedCompare(__comp));
+	std::__inplace_stable_sort(__first, __last, __comp);
       else
 	std::__stable_sort_adaptive(__first, __last, __buf.begin(),
-				    _DistanceType(__buf.size()),
-                                    __CheckedCompare(__comp));
+				    _DistanceType(__buf.size()), __comp);
     }
 
 
@@ -5881,12 +5841,12 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
 
       while (__first1 != __last1 && __first2 != __last2)
 	{
-	  if (__CheckedCompare(__comp)(*__first1, *__first2))
+	  if (__comp(*__first1, *__first2))
 	    {
 	      *__result = *__first1;
 	      ++__first1;
 	    }
-	  else if (__CheckedCompare(__comp)(*__first2, *__first1))
+	  else if (__comp(*__first2, *__first1))
 	    {
 	      *__result = *__first2;
 	      ++__first2;
@@ -6002,9 +5962,9 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
       __glibcxx_requires_sorted_set_pred(__first2, __last2, __first1, __comp);
 
       while (__first1 != __last1 && __first2 != __last2)
-	if (__CheckedCompare(__comp)(*__first1, *__first2))
+	if (__comp(*__first1, *__first2))
 	  ++__first1;
-	else if (__CheckedCompare(__comp)(*__first2, *__first1))
+	else if (__comp(*__first2, *__first1))
 	  ++__first2;
 	else
 	  {
@@ -6121,13 +6081,13 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
       __glibcxx_requires_sorted_set_pred(__first2, __last2, __first1, __comp);
 
       while (__first1 != __last1 && __first2 != __last2)
-	if (__CheckedCompare(__comp)(*__first1, *__first2))
+	if (__comp(*__first1, *__first2))
 	  {
 	    *__result = *__first1;
 	    ++__first1;
 	    ++__result;
 	  }
-	else if (__CheckedCompare(__comp)(*__first2, *__first1))
+	else if (__comp(*__first2, *__first1))
 	  ++__first2;
 	else
 	  {
@@ -6248,13 +6208,13 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
       __glibcxx_requires_sorted_set_pred(__first2, __last2, __first1, __comp);
 
       while (__first1 != __last1 && __first2 != __last2)
-	if (__CheckedCompare(__comp)(*__first1, *__first2))
+	if (__comp(*__first1, *__first2))
 	  {
 	    *__result = *__first1;
 	    ++__first1;
 	    ++__result;
 	  }
-	else if (__CheckedCompare(__comp)(*__first2, *__first1))
+	else if (__comp(*__first2, *__first1))
 	  {
 	    *__result = *__first2;
 	    ++__first2;
@@ -6321,7 +6281,7 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
 	return __first;
       _ForwardIterator __result = __first;
       while (++__first != __last)
-	if (__CheckedCompare(__comp)(*__first, *__result))
+	if (__comp(*__first, *__result))
 	  __result = __first;
       return __result;
     }
@@ -6376,12 +6336,10 @@ _GLIBCXX_BEGIN_NAMESPACE_ALGO
       if (__first == __last) return __first;
       _ForwardIterator __result = __first;
       while (++__first != __last)
-	if (__CheckedCompare(__comp)(*__result, *__first))
+	if (__comp(*__result, *__first))
 	  __result = __first;
       return __result;
     }
-
-#undef __CheckedCompare
 
 _GLIBCXX_END_NAMESPACE_ALGO
 } // namespace std

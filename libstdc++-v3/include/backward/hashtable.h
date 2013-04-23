@@ -125,8 +125,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       _Hashtable_iterator(_Node* __n, _Hashtable* __tab)
       : _M_cur(__n), _M_ht(__tab) { }
 
-      _Hashtable_iterator()
-      : _M_cur(0), _M_ht(0) { }
+      _Hashtable_iterator() { }
 
       reference
       operator*() const

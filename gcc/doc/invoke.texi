@@ -241,7 +241,7 @@ Objective-C and Objective-C++ Dialects}.
 -Wno-deprecated-declarations -Wdisabled-optimization  @gol
 -Wno-div-by-zero -Wdouble-promotion -Wempty-body  -Wenum-compare @gol
 -Wno-endif-labels -Werror  -Werror=* @gol
--Wfatal-errors  -Wfloat-equal -Wforce-warnings -Wformat  -Wformat=2 @gol
+-Wfatal-errors  -Wfloat-equal  -Wformat  -Wformat=2 @gol
 -Wno-format-contains-nul -Wno-format-extra-args -Wformat-nonliteral @gol
 -Wformat-security  -Wformat-y2k @gol
 -Wframe-larger-than=@var{len} -Wno-free-nonheap-object -Wjump-misses-init @gol
@@ -258,9 +258,8 @@ Objective-C and Objective-C++ Dialects}.
 -Woverlength-strings  -Wpacked  -Wpacked-bitfield-compat  -Wpadded @gol
 -Wparentheses  -Wpedantic-ms-format -Wno-pedantic-ms-format @gol
 -Wpointer-arith  -Wno-pointer-to-int-cast @gol
--Wredundant-decls  -Wno-return-local-addr -Wipa-opt-mismatch @gol
--Wreturn-type -Wself-assign -Wself-assign-non-pod -Wsequence-point  -Wshadow @gol
--Wshadow-compatible-local -Wshadow-local @gol
+-Wredundant-decls  -Wno-return-local-addr @gol
+-Wreturn-type  -Wsequence-point  -Wshadow @gol
 -Wsign-compare  -Wsign-conversion  -Wsizeof-pointer-memaccess @gol
 -Wstack-protector -Wstack-usage=@var{len} -Wstrict-aliasing @gol
 -Wstrict-aliasing=n @gol -Wstrict-overflow -Wstrict-overflow=@var{n} @gol
@@ -328,19 +327,16 @@ Objective-C and Objective-C++ Dialects}.
 -fenable-@var{kind}-@var{pass} @gol
 -fenable-@var{kind}-@var{pass}=@var{range-list} @gol
 -fdebug-types-section -fmem-report-wpa @gol
--fenable-@var{kind}-@var{pass} @gol
--fenable-@var{kind}-@var{pass}=@var{range-list} @gol
--fdebug-types-section @gol
 -fmem-report -fpre-ipa-mem-report -fpost-ipa-mem-report -fprofile-arcs @gol
--fprofile-strip=@var{suffix} -frandom-seed=@var{string} -fsched-verbose=@var{n} @gol
 -fopt-info @gol
 -fopt-info-@var{options}@r{[}=@var{file}@r{]} @gol
+-frandom-seed=@var{string} -fsched-verbose=@var{n} @gol
 -fsel-sched-verbose -fsel-sched-dump-cfg -fsel-sched-pipelining-verbose @gol
 -fstack-usage  -ftest-coverage  -ftime-report -fvar-tracking @gol
 -fvar-tracking-assignments  -fvar-tracking-assignments-toggle @gol
 -g  -g@var{level}  -gtoggle  -gcoff  -gdwarf-@var{version} @gol
 -ggdb  -grecord-gcc-switches  -gno-record-gcc-switches @gol
--gmlt -gstabs  -gstabs+  -gstrict-dwarf  -gno-strict-dwarf @gol
+-gstabs  -gstabs+  -gstrict-dwarf  -gno-strict-dwarf @gol
 -gvms  -gxcoff  -gxcoff+ @gol
 -fno-merge-debug-strings -fno-dwarf2-cfi-asm @gol
 -fdebug-prefix-map=@var{old}=@var{new} @gol
@@ -360,8 +356,7 @@ Objective-C and Objective-C++ Dialects}.
 -fassociative-math -fauto-inc-dec -fbranch-probabilities @gol
 -fbranch-target-load-optimize -fbranch-target-load-optimize2 @gol
 -fbtr-bb-exclusive -fcaller-saves @gol
--fcallgraph-profiles-sections -fcheck-data-deps -fclone-hot-version-paths @gol
--fcombine-stack-adjustments -fconserve-stack @gol
+-fcheck-data-deps -fcombine-stack-adjustments -fconserve-stack @gol
 -fcompare-elim -fcprop-registers -fcrossjumping @gol
 -fcse-follow-jumps -fcse-skip-blocks -fcx-fortran-rules @gol
 -fcx-limited-range @gol
@@ -395,16 +390,12 @@ Objective-C and Objective-C++ Dialects}.
 -fpartial-inlining -fpeel-loops -fpredictive-commoning @gol
 -fprefetch-loop-arrays -fprofile-report @gol
 -fprofile-correction -fprofile-dir=@var{path} -fprofile-generate @gol
--fprofile-generate=@var{path} -fprofile-generate-sampling @gol
+-fprofile-generate=@var{path} @gol
 -fprofile-use -fprofile-use=@var{path} -fprofile-values @gol
 -freciprocal-math -free -fregmove -frename-registers -freorder-blocks @gol
--frecord-gcc-switches-in-elf@gol
 -freorder-blocks-and-partition -freorder-functions @gol
 -frerun-cse-after-loop -freschedule-modulo-scheduled-loops @gol
--fripa -fripa-disallow-asm-modules -fripa-disallow-opt-mismatch @gol
--fripa-inc-path-sub=@var{path_mapping} -fripa-no-promote-always-inline-func -fripa-verbose @gol
--fripa-peel-size-limit -fripa-unroll-size-limit -frounding-math @gol
--fsched2-use-superblocks -fsched-pressure @gol
+-frounding-math -fsched2-use-superblocks -fsched-pressure @gol
 -fsched-spec-load -fsched-spec-load-dangerous @gol
 -fsched-stalled-insns-dep[=@var{n}] -fsched-stalled-insns[=@var{n}] @gol
 -fsched-group-heuristic -fsched-critical-path-heuristic @gol
@@ -415,8 +406,8 @@ Objective-C and Objective-C++ Dialects}.
 -fsel-sched-pipelining -fsel-sched-pipelining-outer-loops @gol
 -fshrink-wrap -fsignaling-nans -fsingle-precision-constant @gol
 -fsplit-ivs-in-unroller -fsplit-wide-types -fstack-protector @gol
--fstack-protector-all -fstack-protector-strong -fstrict-aliasing @gol
--fstrict-overflow -fthread-jumps -ftracer -ftree-bit-ccp @gol
+-fstack-protector-all -fstrict-aliasing -fstrict-overflow @gol
+-fthread-jumps -ftracer -ftree-bit-ccp @gol
 -ftree-builtin-call-dce -ftree-ccp -ftree-ch @gol
 -ftree-coalesce-inline-vars -ftree-coalesce-vars -ftree-copy-prop @gol
 -ftree-copyrename -ftree-dce -ftree-dominator-opts -ftree-dse @gol
@@ -1430,20 +1421,11 @@ gcc -c -Q -O2 --help=optimizers > /tmp/O2-opts
 diff /tmp/O2-opts /tmp/O3-opts | grep enabled
 @end smallexample
 
-@item -canonical-prefixes
-@opindex canonical-prefixes
-Always expand any symbolic links, resolve references to @samp{/../}
-or @samp{/./}, and make the path absolute when generating a relative
-prefix.
-
 @item -no-canonical-prefixes
 @opindex no-canonical-prefixes
-Never expand any symbolic links, resolve references to @samp{/../}
+Do not expand any symbolic links, resolve references to @samp{/../}
 or @samp{/./}, or make the path absolute when generating a relative
-prefix. If neither @option{-canonical-prefixes} nor
-@option{-nocanonical-prefixes} is given, GCC tries to set an appropriate
-default by looking for a target-specific subdirectory alongside the
-directory containing the compiler driver.
+prefix.
 
 @item --version
 @opindex version
@@ -3054,11 +3036,6 @@ This option causes the compiler to abort compilation on the first error
 occurred rather than trying to keep going and printing further error
 messages.
 
-@item -Wforce-warnings
-@opindex Wforce-warnings
-This option causes the compiler to ignore @option{-Werror} and
-@option{-Werror=} and suppress promotion of warnings to errors.
-
 @end table
 
 You can request many specific warnings with options beginning with
@@ -3156,7 +3133,6 @@ Options} and @ref{Objective-C and Objective-C++ Dialect Options}.
 -Wpointer-sign  @gol
 -Wreorder   @gol
 -Wreturn-type  @gol
--Wripa-opt-mismatch @gol
 -Wsequence-point  @gol
 -Wsign-compare @r{(only in C++)}  @gol
 -Wstrict-aliasing  @gol
@@ -3392,7 +3368,7 @@ If @option{-Wformat} is specified, also warn about @code{strftime}
 formats that may yield only a two-digit year.
 @end table
 
-@item -Wnonnull @r{(C and Objective-C only)}
+@item -Wnonnull
 @opindex Wnonnull
 @opindex Wno-nonnull
 Warn about passing a null pointer for arguments marked as
@@ -3590,61 +3566,6 @@ definitions, may be found on the GCC readings page, at
 
 This warning is enabled by @option{-Wall} for C and C++.
 
-@item -Wself-assign
-@opindex Wself-assign
-@opindex Wno-self-assign
-Warn about self-assignment and self-initialization. This warning is intended
-for detecting accidental self-assignment due to typos, and therefore does
-not warn on a statement that is semantically a self-assignment after
-constant folding. Here is an example of what will trigger a self-assign
-warning and what will not:
-
-@smallexample
-@group
-void func()
-@{
-   int i = 2;
-   int x = x;   /* warn */
-   float f = 5.0;
-   double a[3];
-
-   i = i + 0;   /* not warn */
-   f = f / 1;   /* not warn */
-   a[1] = a[1]; /* warn */
-   i += 0;      /* not warn */
-@}
-@end group
-@end smallexample
-
-In C++ it will not warn on self-assignment of non-POD variables unless
-@option{-Wself-assign-non-pod} is also enabled.
-
-@item -Wself-assign-non-pod
-@opindex Wself-assign-non-pod
-@opindex Wno-self-assign-non-pod
-Warn about self-assignment of non-POD variables. This is a C++-specific
-warning and only effective when @option{-Wself-assign} is enabled.
-
-There are cases where self-assignment might be intentional. For example,
-a C++ programmer might write code to test whether an overloaded
-@code{operator=} works when the same object is assigned to itself.
-One way to work around the self-assign warning in such cases when this flag
-is enabled is using the functional form @code{object.operator=(object)}
-instead of the assignment form @code{object = object}, as shown in the
-following example.
-
-@smallexample
-@group
-void test_func()
-@{
-   MyType t;
-
-   t.operator=(t);  // not warn
-   t = t;           // warn
-@}
-@end group
-@end smallexample
-
 @item -Wno-return-local-addr
 @opindex Wno-return-local-addr
 @opindex Wreturn-local-addr
@@ -3664,16 +3585,6 @@ expression in a function whose return type is @code{void}.
 For C++, a function without return type always produces a diagnostic
 message, even when @option{-Wno-return-type} is specified.  The only
 exceptions are @samp{main} and functions defined in system headers.
-
-This warning is enabled by @option{-Wall}.
-
-@item -Wripa-opt-mismatch
-@opindex Wripa-opt-mismatch
-@opindex Wno-ripa-opt-mismatch
-When doing an FDO build with @option{-fprofile-use} and @option{-fripa},
-warn if importing an axuiliary module that was built with a different
-GCC command line during the profile-generate phase than the primary
-module.
 
 This warning is enabled by @option{-Wall}.
 
@@ -3788,10 +3699,6 @@ This warning is enabled by @option{-Wall}.
 
 To suppress this warning use the @samp{unused} attribute
 (@pxref{Variable Attributes}).
-
-Note that a classic way to avoid @option{-Wunused-variable} warning is
-using @code{x = x}, but that does not work with @option{-Wself-assign}.
-Use @code{(void) x} or @code{static_cast<void>(x)} instead.
 
 @item -Wunused-value
 @opindex Wunused-value
@@ -4238,43 +4145,6 @@ Warn whenever a local variable or type declaration shadows another variable,
 parameter, type, or class member (in C++), or whenever a built-in function
 is shadowed. Note that in C++, the compiler warns if a local variable
 shadows an explicit typedef, but not if it shadows a struct/class/enum.
-
-@item -Wshadow-local
-@opindex Wshadow-local
-@opindex Wno-shadow-local
-Warn when a local variable shadows another local variable or parameter.
-
-@item -Wshadow-compatible-local
-@opindex Wshadow-compatible-local
-@opindex Wno-shadow-compatible-local
-Warn when a local variable shadows another local variable or parameter
-whose type is compatible with that of the shadowing variable. In C++,
-type compatibility here means the type of the shadowing variable can be
-converted to that of the shadowed variable. The creation of this flag
-(in addition to @option{-Wshadow-local}) is based on the idea that when
-a local variable shadows another one of incompatible type, it is most
-likely intentional, not a bug or typo, as shown in the following example:
-
-@smallexample
-@group
-for (SomeIterator i = SomeObj.begin(); i != SomeObj.end(); ++i)
-@{
-  for (int i = 0; i < N; ++i)
-  @{
-    ...
-  @}
-  ...
-@}
-@end group
-@end smallexample
-
-Since the two variable @code{i} in the example above have incompatible types, 
-enabling only @option{-Wshadow-compatible-local} will not emit a warning.
-Because their types are incompatible, if a programmer accidentally uses one
-in place of the other, type checking will catch that and emit an error or
-warning. So not warning (about shadowing) in this case will not lead to
-undetected bugs. Use of this flag instead of @option{-Wshadow-local} can
-possibly reduce the number of warnings triggered by intentional shadowing.
 
 @item -Wlarger-than=@var{len}
 @opindex Wlarger-than=@var{len}
@@ -4848,12 +4718,6 @@ Suppress warnings from casts to pointer type of an integer of a
 different size. In C++, casting to a pointer type of smaller size is
 an error. @option{Wint-to-pointer-cast} is enabled by default.
 
-@item max-lipo-mem
-When importing auxiliary modules during profile-use, check current
-memory consumption after parsing each auxiliary module. If it exceeds
-this limit (specified in kb), don't import any more auxiliary modules.
-Specifying a value of 0 means don't enforce this limit. This parameter
-is only useful when using @option{-fprofile-use} and @option{-fripa}.
 
 @item -Wno-pointer-to-int-cast @r{(C and Objective-C only)}
 @opindex Wno-pointer-to-int-cast
@@ -5151,8 +5015,8 @@ Level 0 produces no debug information at all.  Thus, @option{-g0} negates
 
 Level 1 produces minimal information, enough for making backtraces in
 parts of the program that you don't plan to debug.  This includes
-descriptions of functions and external variables, and line number
-tables, but no information about local variables.
+descriptions of functions and external variables, but no information
+about local variables and no line numbers.
 
 Level 3 includes extra information, such as all the macro definitions
 present in the program.  Some debuggers support macro expansion when
@@ -8612,20 +8476,6 @@ The following options are enabled: @code{-fprofile-arcs}, @code{-fprofile-values
 If @var{path} is specified, GCC looks at the @var{path} to find
 the profile feedback data files. See @option{-fprofile-dir}.
 
-@item -fprofile-generate-sampling
-@opindex -fprofile-generate-sampling
-
-Enable sampling for instrumented binaries.  Instead of recording every event,
-record only every N-th event, where N (the sampling period) can be set either
-at compile time using
-@option{--param profile-generate-sampling-period=@var{value}}, or at
-execution start time through environment variable @samp{GCOV_SAMPLING_PERIOD}.
-
-At this time sampling applies only to branch counters.  A sampling period of 100
-decreases instrumentated binary slowdown from up to 20x for heavily threaded
-applications down to around 2x.  @option{-fprofile-correction} is always
-needed with sampling.
-
 @item -fprofile-use
 @itemx -fprofile-use=@var{path}
 @opindex fprofile-use
@@ -8643,68 +8493,6 @@ code.
 
 If @var{path} is specified, GCC looks at the @var{path} to find
 the profile feedback data files. See @option{-fprofile-dir}.
-
-@item -fprofile-strip=@var{base_suffix}
-@opindex fprofile-strip
-
-The option causes the compiler to strip @var{base_suffix} from the
-base file name and use that to find the gcda file.
-
-@item -fripa
-@opindex fripa
-Perform dynamic inter-procedural analysis. This is used in conjunction with
-the @option{-fprofile-generate} and @option{-fprofile-use} options.
-During the @option{-fprofile-generate} phase, this flag turns on some additional
-instrumentation code that enables dynamic call-graph analysis.
-During the @option{-fprofile-use} phase, this flag enables cross-module
-optimizations such as inlining.
-
-@item -fripa-disallow-asm-modules
-@opindex fripa-disallow-asm-modules
-During profile-gen, if this flag is enabled, and the module has asm statements,
-arrange so that a bit recording this information will be set in the profile
-feedback data file.
-During profile-use, if this flag is enabled, and the same bit in auxiliary
-module's profile feedback data is set, don't import this auxiliary module.
-If this is the primary module, don't export it.
-
-@item -fripa-disallow-opt-mismatch
-@opindex fripa-disallow-opt-mismatch
-Don't import an auxiliary module, if the GCC command line options used for this
-auxiliary module during the profile-generate stage were different from those used
-for the primary module. Note that any mismatches in warning-related options are
-ignored for this comparison.
-
-@item -fripa-inc-path-sub=@var{path_mapping}
-@opindex fripa-inc-path-sub
-This option allows LIPO profile data associated with one compiler to be usable
-by another compiler at different installation path. A user can use this option
-to specify an include search path mapping so that the compiler can convert include
-search paths stored in gcda files into exisiting paths. The mapping is specified
-as a comma separated sub path pairs in the form: OLD_SUBPATH:NEW_SUBPATH.
-
-@item -fripa-no-promote-always-inline-func
-@opindex fripa-no-promote-always-inline-func
-Do not promote static functions with always inline attribute in LIPO compilation.
-
-@item -fripa-verbose
-@opindex fripa-verbose
-Enable printing of verbose information about dynamic inter-procedural optimizations.
-This is used in conjunction with the @option{-fripa}.
-
-@item -fcallgraph-profiles-sections
-@opindex fcallgraph-profiles-sections
-Emit call graph edge profile counts in .note.callgraph.text sections. This is
-used in conjunction with @option{-fprofile-use}. A new .note.callgraph.text
-section is created for each function. This section lists every callee and the
-number of times it is called. The params variable
-"note-cgraph-section-edge-threshold" can be used to only list edges above a
-certain threshold.
-
-@item -frecord-gcc-switches-in-elf
-@opindex frecord-gcc-switches-in-elf
-Record the command line options in the .gnu.switches.text elf section for sample
-based LIPO to do module grouping.
 @end table
 
 The following options control compiler behavior regarding floating-point 
@@ -8934,12 +8722,6 @@ whether the result of a complex multiplication or division is @code{NaN
 
 The default is @option{-fno-cx-fortran-rules}.
 
-@item min-mcf-cancel-iters
-The minimum number of iterations of negative cycle cancellation during
-MCF profile correction before early termination.  This parameter is
-only useful when using @option{-fprofile-correction}.
-
-
 @end table
 
 The following options control optimizations that may improve
@@ -9094,12 +8876,6 @@ If a guard check fails, an error message is printed and the program exits.
 @item -fstack-protector-all
 @opindex fstack-protector-all
 Like @option{-fstack-protector} except that all functions are protected.
-
-@item -fstack-protector-strong
-@opindex fstack-protector-strong
-Like @option{-fstack-protector} but includes additional functions to be
-protected - those that have local array definitions, or have references to
-local frame addresses.
 
 @item -fsection-anchors
 @opindex fsection-anchors
@@ -9406,12 +9182,6 @@ The maximum number of insns of an unswitched loop.
 
 @item max-unswitch-level
 The maximum number of branches unswitched in a single loop.
-
-@item min-iter-unroll-with-branches
-Minimum iteration count to ignore branch effects when unrolling.
-
-@item unroll-outer-loop-branch-budget
-Maximum number of branches allowed in hot outer loop region after unroll.
 
 @item lim-expensive
 The minimum cost of an expensive expression in the loop invariant motion.
@@ -10007,9 +9777,6 @@ recognize.
 If you want to pass an option that takes an argument, you must use
 @option{-Xassembler} twice, once for the option and once for the argument.
 
-@item profile-generate-sampling-rate
-Set the sampling rate with @option{-fprofile-generate-sampling}.
-
 @end table
 
 @node Link Options
@@ -10249,11 +10016,6 @@ Use @var{script} as the linker script.  This option is supported by most
 systems using the GNU linker.  On some targets, such as bare-board
 targets without an operating system, the @option{-T} option may be required
 when linking to avoid references to undefined symbols.
-
-@item -Xclang-only @var{option}
-@opindex Xclang-only
-Ignore @var{option}.  This is used by some custom drivers to pass options
-to Clang but not GCC.
 
 @item -Xlinker @var{option}
 @opindex Xlinker
@@ -10969,12 +10731,6 @@ given to GCC, substitutes @code{Y}; else substitutes @code{D}.  There can
 be as many clauses as you need.  This may be combined with @code{.},
 @code{,}, @code{!}, @code{|}, and @code{*} as needed.
 
-@item max-lipo-mem
-When importing auxiliary modules during profile-use, check current
-memory consumption after parsing each auxiliary module. If it exceeds
-this limit (specified in kb), don't import any more auxiliary modules.
-Specifying a value of 0 means don't enforce this limit. This parameter
-is only useful when using @option{-fprofile-use} and @option{-fripa}.
 
 @end table
 
