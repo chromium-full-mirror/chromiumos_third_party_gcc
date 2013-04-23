@@ -43,6 +43,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "ipa-inline.h"
 #include "tree-inline.h"
 #include "tree-pass.h"
+#include "l-ipo.h"
 
 int ncalls_inlined;
 int nfunctions_inlined;
@@ -206,7 +207,12 @@ inline_call (struct cgraph_edge *e, bool update_original,
   struct cgraph_node *to = NULL;
   struct cgraph_edge *curr = e;
   struct cgraph_node *callee = cgraph_function_or_thunk_node (e->callee, NULL);
+  struct cgraph_node *resolved_target = callee;
   bool new_edges_found = false;
+
+  /* Skip fake edge.  */
+  if (L_IPO_COMP_MODE && !e->call_stmt)
+    return false;
 
 #ifdef ENABLE_CHECKING
   int estimated_growth = estimate_edge_growth (e);
@@ -230,7 +236,10 @@ inline_call (struct cgraph_edge *e, bool update_original,
   if (e->callee != callee)
     {
       struct cgraph_node *alias = e->callee, *next_alias;
-      cgraph_redirect_edge_callee (e, callee);
+
+      if (L_IPO_COMP_MODE && cgraph_pre_profiling_inlining_done)
+        resolved_target = cgraph_lipo_get_resolved_node (callee->symbol.decl);
+      cgraph_redirect_edge_callee (e, resolved_target);
       while (alias && alias != callee)
 	{
 	  if (!alias->callers
@@ -262,6 +271,7 @@ inline_call (struct cgraph_edge *e, bool update_original,
      error due to INLINE_SIZE_SCALE roudoff errors.  */
   gcc_assert (!update_overall_summary || !overall_size
 	      || abs (estimated_growth - (new_size - old_size)) <= 1
+              || resolved_target != callee
 	      /* FIXME: a hack.  Edges with false predicate are accounted
 		 wrong, we should remove them from callgraph.  */
 	      || predicated);

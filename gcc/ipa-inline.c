@@ -109,7 +109,11 @@ along with GCC; see the file COPYING3.  If not see
 #include "rtl.h"
 #include "tree-flow.h"
 #include "ipa-prop.h"
+#include "basic-block.h"
+#include "toplev.h"
+#include "dbgcnt.h"
 #include "except.h"
+#include "l-ipo.h"
 #include "target.h"
 #include "ipa-inline.h"
 #include "ipa-utils.h"
@@ -362,6 +366,11 @@ can_early_inline_edge_p (struct cgraph_edge *e)
       e->inline_failed = CIF_BODY_NOT_AVAILABLE;
       return false;
     }
+
+  /* Skip fake edges  */
+  if (L_IPO_COMP_MODE && !e->call_stmt)
+    return false;
+
   /* In early inliner some of callees may not be in SSA form yet
      (i.e. the callgraph is cyclic and we did not process
      the callee by early inliner, yet).  We don't have CIF code for this
@@ -385,10 +394,12 @@ static int
 num_calls (struct cgraph_node *n)
 {
   struct cgraph_edge *e;
+  /* The following is buggy -- indirect call is not considered.  */
   int num = 0;
 
   for (e = n->callees; e; e = e->next_callee)
-    if (!is_inexpensive_builtin (e->callee->symbol.decl))
+    if (e->call_stmt /* Only exist in profile use pass in LIPO  */
+        && !is_inexpensive_builtin (e->callee->symbol.decl))
       num++;
   return num;
 }
@@ -783,6 +794,49 @@ want_inline_function_to_all_callers_p (struct cgraph_node *node, bool cold)
 
 #define RELATIVE_TIME_BENEFIT_RANGE (INT_MAX / 64)
 
+/* Return true if FUNCDECL is a function with fixed
+   argument list.  */
+
+static bool
+fixed_arg_function_p (tree fndecl)
+{
+  tree fntype = TREE_TYPE (fndecl);
+  return (TYPE_ARG_TYPES (fntype) == 0
+          || (TREE_VALUE (tree_last (TYPE_ARG_TYPES (fntype)))
+              == void_type_node));
+}
+
+/* For profile collection with flag_dyn_ipa (LIPO), we always
+   want to inline comdat functions for the following reasons:
+   1) Functions in comdat may be actually defined in a different
+   module (depending on how linker picks). This results in a edge
+   from one module to another module in the dynamic callgraph.
+   The edge is false and result in unnecessary module grouping.
+   2) The profile counters in comdat functions are not 'comdated'
+   -- which means each copy of the same comdat function has its
+   own set of counters. With inlining, we are actually splitting
+   the counters and make the profile information 'context sensitive',
+   which is a good thing.
+   3) During profile-use pass of LIPO (flag_dyn_ipa == 1),
+   the pre-tree_profile inline decisions have to be the same as the
+   profile-gen pass (otherwise coverage mismatch will occur). Due to
+   this reason, it is better for each module to 'use' the comdat copy
+   of its own. The only way to get profile data for the copy is to
+   inline the copy in profile-gen phase.
+   TODO: For indirectly called comdat functions, the above issues
+   still exist. */
+
+static bool
+better_inline_comdat_function_p (struct cgraph_node *node)
+{
+  return (profile_arc_flag && flag_dyn_ipa
+          && DECL_COMDAT (node->symbol.decl)
+          && inline_summary (node)->size
+	     <= PARAM_VALUE (PARAM_MAX_INLINE_INSNS_SINGLE)
+          && fixed_arg_function_p (node->symbol.decl));
+}
+
+
 /* Return relative time improvement for inlining EDGE in range
    1...RELATIVE_TIME_BENEFIT_RANGE  */
 
@@ -978,7 +1032,12 @@ edge_badness (struct cgraph_edge *edge, bool dump)
   if (cgraph_edge_recursive_p (edge))
     return badness + 1;
   else
-    return badness;
+    {
+      if (better_inline_comdat_function_p (edge->callee))
+        return INT_MIN  + 1;
+      else
+        return badness;
+    }
 }
 
 /* Recompute badness of EDGE and update its key in HEAP if needed.  */
@@ -1119,7 +1178,8 @@ update_caller_keys (fibheap_t heap, struct cgraph_node *node,
 	    || check_inlinablity_for == edge)
 	  {
 	    if (can_inline_edge_p (edge, false)
-		&& want_inline_small_function_p (edge, false))
+		&& (want_inline_small_function_p (edge, false)
+                    || better_inline_comdat_function_p (node)))
 	      update_edge_key (heap, edge);
 	    else if (edge->aux)
 	      {
@@ -1225,6 +1285,7 @@ recursive_inlining (struct cgraph_edge *edge,
 		    vec<cgraph_edge_p> *new_edges)
 {
   int limit = PARAM_VALUE (PARAM_MAX_INLINE_INSNS_RECURSIVE_AUTO);
+  int probability = PARAM_VALUE (PARAM_MIN_INLINE_RECURSIVE_PROBABILITY);
   fibheap_t heap;
   struct cgraph_node *node;
   struct cgraph_edge *e;
@@ -1289,12 +1350,38 @@ recursive_inlining (struct cgraph_edge *edge,
 	    == cgraph_function_or_thunk_node (curr->callee, NULL)->symbol.decl)
           depth++;
 
+      if (max_count)
+	{
+          if (!cgraph_maybe_hot_edge_p (curr))
+	    {
+	      if (dump_file)
+		fprintf (dump_file, "   Not inlining cold call\n");
+
+              cgraph_redirect_edge_callee (curr, dest);
+              reset_edge_growth_cache (curr);
+	      continue;
+	    }
+          if (node->count == 0 || curr->count * 100 / node->count < probability)
+	    {
+	      if (dump_file)
+		fprintf (dump_file,
+			 "   Probability of edge is too small\n");
+
+              cgraph_redirect_edge_callee (curr, dest);
+              reset_edge_growth_cache (curr);
+	      continue;
+	    }
+	}
+
       if (!want_inline_self_recursive_call_p (curr, node, false, depth))
 	{
 	  cgraph_redirect_edge_callee (curr, dest);
 	  reset_edge_growth_cache (curr);
 	  continue;
 	}
+
+      if (!dbg_cnt (inl))
+        continue;
 
       if (dump_file)
 	{
@@ -1445,6 +1532,9 @@ inline_small_functions (void)
 	for (edge = node->callers; edge; edge = edge->next_caller)
 	  if (max_count < edge->count)
 	    max_count = edge->count;
+        for (edge = node->indirect_calls; edge; edge = edge->next_callee)
+          if (max_count < edge->count)
+            max_count = edge->count;
       }
   ipa_free_postorder_info ();
   initialize_growth_caches ();
@@ -1470,7 +1560,8 @@ inline_small_functions (void)
 	for (edge = node->callers; edge; edge = edge->next_caller)
 	  if (edge->inline_failed
 	      && can_inline_edge_p (edge, true)
-	      && want_inline_small_function_p (edge, true)
+	      && (want_inline_small_function_p (edge, true)
+                  || better_inline_comdat_function_p (node))
 	      && edge->inline_failed)
 	    {
 	      gcc_assert (!edge->aux);
@@ -1497,6 +1588,9 @@ inline_small_functions (void)
       if (!edge->inline_failed)
 	continue;
 
+      if (L_IPO_COMP_MODE && !edge->call_stmt)
+        continue;
+
       /* Be sure that caches are maintained consistent.  
          We can not make this ENABLE_CHECKING only because it cause different
          updates of the fibheap queue.  */
@@ -1518,7 +1612,7 @@ inline_small_functions (void)
 
       if (!can_inline_edge_p (edge, true))
 	continue;
-      
+ 
       callee = cgraph_function_or_thunk_node (edge->callee, NULL);
       growth = estimate_edge_growth (edge);
       if (dump_file)
@@ -1554,8 +1648,12 @@ inline_small_functions (void)
 	  continue;
 	}
 
-      if (!want_inline_small_function_p (edge, true))
+      if (!want_inline_small_function_p (edge, true)
+          && !better_inline_comdat_function_p (edge->callee))
 	continue;
+
+      if (!dbg_cnt (inl))
+         continue;
 
       /* Heuristics for inlining small functions works poorly for
 	 recursive calls where we do efect similar to loop unrolling.
@@ -1635,8 +1733,9 @@ inline_small_functions (void)
       if (dump_file)
 	{
 	  fprintf (dump_file,
-		   " Inlined into %s which now has time %i and size %i,"
+		   "INFO: %s Inlined into %s which now has time %i and size %i,"
 		   "net change of %+i.\n",
+		   cgraph_node_name (edge->callee),
 		   cgraph_node_name (edge->caller),
 		   inline_summary (edge->caller)->time,
 		   inline_summary (edge->caller)->size,
@@ -1952,6 +2051,7 @@ early_inline_small_functions (struct cgraph_node *node)
 
       if (cgraph_edge_recursive_p (e))
 	{
+
 	  if (dump_file)
 	    fprintf (dump_file, "  Not inlining: recursive call.\n");
 	  continue;
@@ -2044,6 +2144,9 @@ early_inliner (void)
 	  for (edge = node->callees; edge; edge = edge->next_callee)
 	    {
 	      struct inline_edge_summary *es = inline_edge_summary (edge);
+
+	      if (!edge->call_stmt)
+	        continue;
 	      es->call_stmt_size
 		= estimate_num_insns (edge->call_stmt, &eni_size_weights);
 	      es->call_stmt_time
@@ -2092,7 +2195,6 @@ struct gimple_opt_pass pass_early_inline =
   0                 			/* todo_flags_finish */
  }
 };
-
 
 /* When to run IPA inlining.  Inlining of always-inline functions
    happens during early inlining.

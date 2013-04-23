@@ -38,6 +38,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "data-streamer.h"
 #include "tree-streamer.h"
 #include "params.h"
+#include "l-ipo.h"
 
 /* Intermediate information about a parameter that is only useful during the
    run of ipa_analyze_node and is not kept afterwards.  */
@@ -1390,7 +1391,20 @@ ipa_compute_jump_functions_for_edge (struct param_analysis_info *parms_ainfo,
       tree arg = gimple_call_arg (call, n);
 
       if (is_gimple_ip_invariant (arg))
-	ipa_set_jf_constant (jfunc, arg);
+        {
+          if (L_IPO_COMP_MODE && TREE_CODE (arg) == ADDR_EXPR
+              && TREE_CODE (TREE_OPERAND (arg, 0)) == FUNCTION_DECL)
+            {
+              tree fdecl = TREE_OPERAND (arg, 0);
+	      fdecl = cgraph_lipo_get_resolved_node (fdecl)->symbol.decl;
+              if (fdecl != TREE_OPERAND (arg, 0))
+                {
+                  arg = unshare_expr (arg);
+                  TREE_OPERAND (arg, 0) = fdecl;
+                }
+            }
+          ipa_set_jf_constant (jfunc, arg);
+        }
       else if (!is_gimple_reg_type (TREE_TYPE (arg))
 	       && TREE_CODE (arg) == PARM_DECL)
 	{

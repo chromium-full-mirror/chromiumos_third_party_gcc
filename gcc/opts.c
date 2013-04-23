@@ -1212,6 +1212,7 @@ print_specific_help (unsigned int include_flags,
 		       opts->x_help_columns, opts, lang_mask);
 }
 
+
 /* Handle target- and language-independent options.  Return zero to
    generate an "unknown option" message.  Only options that need
    extra handling need to be listed here; if you simply want
@@ -1423,6 +1424,10 @@ common_handle_option (struct gcc_options *opts,
 			       opts, opts_set, loc, dc);
       break;
 
+    case OPT_Wforce_warnings:
+      dc->force_warnings_requested = value;
+      break;
+
     case OPT_Wlarger_than_:
       opts->x_larger_than_size = value;
       opts->x_warn_larger_than = value != -1;
@@ -1440,6 +1445,15 @@ common_handle_option (struct gcc_options *opts,
     case OPT_Wstack_usage_:
       opts->x_warn_stack_usage = value;
       opts->x_flag_stack_usage_info = value != -1;
+      break;
+
+    case OPT_Wshadow:
+      warn_shadow_local = value;
+      warn_shadow_compatible_local = value;
+      break;
+
+    case OPT_Wshadow_local:
+      warn_shadow_compatible_local = value;
       break;
 
     case OPT_Wstrict_aliasing:
@@ -1615,6 +1629,10 @@ common_handle_option (struct gcc_options *opts,
         opts->x_flag_ipa_reference = false;
       break;
 
+    case OPT_fripa_inc_path_sub_:
+      lipo_inc_path_pattern = xstrdup (arg);
+      break;
+
     case OPT_fshow_column:
       dc->show_column = value;
       break;
@@ -1691,8 +1709,13 @@ common_handle_option (struct gcc_options *opts,
       break;
 
     case OPT_g:
-      set_debug_level (NO_DEBUG, DEFAULT_GDB_EXTENSIONS, arg, opts, opts_set,
-		       loc);
+      /* -g by itself should force -g2.  */
+      if (*arg == '\0')
+	set_debug_level (NO_DEBUG, DEFAULT_GDB_EXTENSIONS, "2", opts, opts_set,
+			 loc);
+      else
+	set_debug_level (NO_DEBUG, DEFAULT_GDB_EXTENSIONS, arg, opts, opts_set,
+			 loc);
       break;
 
     case OPT_gcoff:
@@ -1719,6 +1742,12 @@ common_handle_option (struct gcc_options *opts,
     case OPT_gstabs:
     case OPT_gstabs_:
       set_debug_level (DBX_DEBUG, code == OPT_gstabs_, arg, opts, opts_set,
+		       loc);
+      break;
+
+    case OPT_gmlt:
+      /* Synonym for -g1.  */
+      set_debug_level (NO_DEBUG, DEFAULT_GDB_EXTENSIONS, "1", opts, opts_set,
 		       loc);
       break;
 

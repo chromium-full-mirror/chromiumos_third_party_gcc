@@ -67,6 +67,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "predict.h"
 #include "lto-streamer.h"
 #include "plugin.h"
+#include "l-ipo.h"
 #include "ipa-utils.h"
 #include "tree-pretty-print.h" /* for dump_function_header */
 
@@ -180,6 +181,13 @@ rest_of_decl_compilation (tree decl,
 				     top_level, at_end);
 	}
 #endif
+      if (L_IPO_COMP_MODE)
+        {
+          /* Create the node early during parsing so
+             that module id can be captured.  */
+          if (TREE_CODE (decl) == VAR_DECL)
+            varpool_node_for_decl (decl);
+        }
 
       timevar_pop (TV_VARCONST);
     }
@@ -1383,6 +1391,7 @@ init_optimization_passes (void)
   /* These passes are run after IPA passes on every function that is being
      output to the assembler file.  */
   p = &all_passes;
+  NEXT_PASS (pass_direct_call_profile);
   NEXT_PASS (pass_fixup_cfg);
   NEXT_PASS (pass_lower_eh_dispatch);
   NEXT_PASS (pass_all_optimizations);
