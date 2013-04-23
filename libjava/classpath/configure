@@ -8394,7 +8394,22 @@ fi
 
 # Check whether --with-pic was given.
 if test "${with_pic+set}" = set; then :
-  withval=$with_pic; pic_mode="$withval"
+  withval=$with_pic; p=${PACKAGE-default}
+    case "$withval" in
+    yes|no) pic_mode="$withval" ;;
+    *)
+      pic_mode=default
+      # Look at the argument we got.  We use all the common list separators.
+      lt_save_ifs="$IFS"; IFS="${IFS}$PATH_SEPARATOR,"
+      for pkg in $withval; do
+	IFS="$lt_save_ifs"
+	if test "X$pkg" = "X$p"; then
+	  pic_mode=yes
+	fi
+      done
+      IFS="$lt_save_ifs"
+      ;;
+    esac
 else
   pic_mode=default
 fi
@@ -11820,7 +11835,7 @@ else
   lt_dlunknown=0; lt_dlno_uscore=1; lt_dlneed_uscore=2
   lt_status=$lt_dlunknown
   cat > conftest.$ac_ext <<_LT_EOF
-#line 11823 "configure"
+#line 11838 "configure"
 #include "confdefs.h"
 
 #if HAVE_DLFCN_H
@@ -11926,7 +11941,7 @@ else
   lt_dlunknown=0; lt_dlno_uscore=1; lt_dlneed_uscore=2
   lt_status=$lt_dlunknown
   cat > conftest.$ac_ext <<_LT_EOF
-#line 11929 "configure"
+#line 11944 "configure"
 #include "confdefs.h"
 
 #if HAVE_DLFCN_H
@@ -24046,7 +24061,7 @@ else
 JAVA_TEST=Object.java
 CLASS_TEST=Object.class
 cat << \EOF > $JAVA_TEST
-/* #line 24049 "configure" */
+/* #line 24064 "configure" */
 package java.lang;
 
 public class Object
@@ -24139,7 +24154,7 @@ EOF
 if uudecode$EXEEXT Test.uue; then
         ac_cv_prog_uudecode_base64=yes
 else
-        echo "configure: 24142: uudecode had trouble decoding base 64 file 'Test.uue'" >&5
+        echo "configure: 24157: uudecode had trouble decoding base 64 file 'Test.uue'" >&5
         echo "configure: failed file was:" >&5
         cat Test.uue >&5
         ac_cv_prog_uudecode_base64=no
@@ -24167,7 +24182,7 @@ JAVA_TEST=Test.java
 CLASS_TEST=Test.class
 TEST=Test
 cat << \EOF > $JAVA_TEST
-/* [#]line 24170 "configure" */
+/* [#]line 24185 "configure" */
 public class Test {
 public static void main (String args[]) {
         System.exit (0);
@@ -24375,7 +24390,7 @@ if test "x${use_glibj_zip}" = xfalse || \
   JAVA_TEST=Test.java
   CLASS_TEST=Test.class
   cat << \EOF > $JAVA_TEST
-  /* #line 24378 "configure" */
+  /* #line 24393 "configure" */
   public class Test
   {
     public static void main(String args)

@@ -131,8 +131,7 @@ instrument_expr (gimple_stmt_iterator gsi, tree expr, bool is_write)
   if (TREE_READONLY (base))
     return false;
 
-  if (size == 0
-      || bitpos % (size * BITS_PER_UNIT)
+  if (bitpos % (size * BITS_PER_UNIT)
       || bitsize != size * BITS_PER_UNIT)
     return false;
 

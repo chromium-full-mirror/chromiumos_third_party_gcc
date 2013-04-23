@@ -764,6 +764,21 @@ AC_ARG_WITH(build-sysroot,
   [SYSROOT_CFLAGS_FOR_TARGET=])
 AC_SUBST(SYSROOT_CFLAGS_FOR_TARGET)
 
+AC_ARG_WITH([runtime-root-prefix],
+  [  --with-runtime-root-prefix=prefix
+                          prepend prefix to paths used by the compiler to
+                          name the dynamic linker and other files used at
+                          runtime.  Defaults to empty (no prefix).],
+[
+ case ${with_runtime_root_prefix} in
+ yes|no) AC_MSG_ERROR([bad value ${withval} given for runtime root prefix]) ;;
+ /*) ;;
+ *) AC_MSG_ERROR([${withval} should be an absolute directory]) ;;
+ esac
+ RUNTIME_ROOT_PREFIX_DEFINE="-DRUNTIME_ROOT_PREFIX=\\\"${withval}\\\""
+], [RUNTIME_ROOT_PREFIX_DEFINE=""])
+AC_SUBST(RUNTIME_ROOT_PREFIX_DEFINE)
+
 if test "x$prefix" = xNONE; then
  test_prefix=/usr/local
 else
@@ -5063,6 +5078,18 @@ AC_ARG_ENABLE(version-specific-runtime-libs,
                 [specify that runtime libraries should be
                  installed in a compiler-specific directory])])
 
+# Set default prefix canonicalization.
+
+AC_ARG_ENABLE(canonical-prefixes,
+[  --enable-canonical-prefixes
+                          enable or disable prefix canonicalization],
+[],
+enable_canonical_prefixes=yes)
+if test x"$enable_canonical_prefixes" = xyes; then
+  AC_DEFINE(ENABLE_CANONICAL_PREFIXES,
+            1, [Define to enable prefix canonicalization.])
+fi
+
 # Substitute configuration variables
 AC_SUBST(subdirs)
 AC_SUBST(srcdir)
@@ -5271,6 +5298,20 @@ if test "${ENABLE_LIBQUADMATH_SUPPORT}" != "no" ; then
   AC_DEFINE(ENABLE_LIBQUADMATH_SUPPORT, 1,
             [Define to 1 to enable libquadmath support])
 fi
+
+
+warn_frame_larger_than_extra_text=
+AC_ARG_WITH(warn-frame-larger-than-extra-text,
+[  --with-warn-frame-larger-than-extra-text=TEXT
+                          specifies extra text for frame size warnings],
+[case "${withval}" in
+yes)	AC_MSG_ERROR(bad value ${withval} given for frame size warning text) ;;
+no)	;;
+*)	warn_frame_larger_than_extra_text="$withval" ;;
+esac])
+AC_DEFINE_UNQUOTED(WARN_FRAME_LARGER_THAN_EXTRA_TEXT,
+                   "$warn_frame_larger_than_extra_text",
+                   [Define to be extra text for frame size warnings.])
 
 
 # Specify what hash style to use by default.
