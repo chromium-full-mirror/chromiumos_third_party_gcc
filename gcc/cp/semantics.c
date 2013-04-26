@@ -1738,7 +1738,8 @@ finish_qualified_id_expr (tree qualifying_class,
 			  bool done,
 			  bool address_p,
 			  bool template_p,
-			  bool template_arg_p)
+			  bool template_arg_p,
+			  tsubst_flags_t complain)
 {
   gcc_assert (TYPE_P (qualifying_class));
 
@@ -1758,7 +1759,7 @@ finish_qualified_id_expr (tree qualifying_class,
       if (TREE_CODE (expr) == SCOPE_REF)
 	expr = TREE_OPERAND (expr, 1);
       expr = build_offset_ref (qualifying_class, expr,
-			       /*address_p=*/true);
+			       /*address_p=*/true, complain);
       return expr;
     }
 
@@ -1792,11 +1793,12 @@ finish_qualified_id_expr (tree qualifying_class,
 		 expr,
 		 BASELINK_ACCESS_BINFO (expr),
 		 /*preserve_reference=*/false,
-		 tf_warning_or_error));
+		 complain));
       else if (done)
 	/* The expression is a qualified name whose address is not
 	   being taken.  */
-	expr = build_offset_ref (qualifying_class, expr, /*address_p=*/false);
+	expr = build_offset_ref (qualifying_class, expr, /*address_p=*/false,
+				 complain);
     }
   else if (BASELINK_P (expr))
     ;
@@ -3233,7 +3235,8 @@ finish_id_expression (tree id_expression,
 		    decl = finish_qualified_id_expr (scope, decl,
 						     done, address_p,
 						     template_p,
-						     template_arg_p);
+						     template_arg_p,
+						     tf_warning_or_error);
 		  else
 		    {
 		      tree type = NULL_TREE;
@@ -3349,7 +3352,8 @@ finish_id_expression (tree id_expression,
 					     done,
 					     address_p,
 					     template_p,
-					     template_arg_p);
+					     template_arg_p,
+					     tf_warning_or_error);
 	  else
 	    decl = convert_from_reference (decl);
 	}
@@ -3751,18 +3755,6 @@ emit_associated_thunks (tree fn)
       && ! DECL_REALLY_EXTERN (fn))
     {
       tree thunk;
-
-      if (L_IPO_COMP_MODE)
-        {
-          /* In LIPO mode, multiple copies of definitions for the same function
-             may exist, but assembler hash table keeps only one copy which might
-             have been deleted at this point.  */
-          struct cgraph_node *n = cgraph_get_create_node (fn);
-	  #ifdef FIXME_LIPO
-          insert_to_assembler_name_hash ((symtab_node)n);
-	  #endif
-          cgraph_link_node (n);
-        }
 
       for (thunk = DECL_THUNKS (fn); thunk; thunk = DECL_CHAIN (thunk))
 	{
@@ -6310,15 +6302,6 @@ cx_check_missing_mem_inits (tree fun, tree body, bool complain)
     }
 
   return bad;
-}
-
-/* Clear constexpr hash table  */
-
-void
-cp_clear_constexpr_hashtable (void)
-{
-  /* htab_delete (constexpr_fundef_table); */
-  constexpr_fundef_table = NULL;
 }
 
 /* We are processing the definition of the constexpr function FUN.

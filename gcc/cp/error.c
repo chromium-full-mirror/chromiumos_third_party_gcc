@@ -1831,8 +1831,7 @@ dump_expr (tree t, int flags)
     case SSA_NAME:
       if (SSA_NAME_VAR (t)
 	  && !DECL_ARTIFICIAL (SSA_NAME_VAR (t)))
-	dump_expr (SSA_NAME_VAR (t),
-                   (flags & ~TFF_DECL_SPECIFIERS) | TFF_NO_FUNCTION_ARGUMENTS);
+	dump_expr (SSA_NAME_VAR (t), flags);
       else
 	pp_cxx_ws_string (cxx_pp, M_("<unknown>"));
       break;

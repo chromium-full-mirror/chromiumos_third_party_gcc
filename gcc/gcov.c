@@ -523,8 +523,7 @@ process_args (int argc, char **argv)
 {
   int opt;
 
-  while ((opt = getopt_long (argc, argv, "abcdfhlno:s:pruv", options, NULL)) !=
-         -1)
+  while ((opt = getopt_long (argc, argv, "abcdfhlno:s:pruv", options, NULL)) != -1)
     {
       switch (opt)
 	{
@@ -1062,7 +1061,6 @@ read_graph_file (void)
 	  *fns_end = fn;
 	  fns_end = &fn->next;
 	  current_tag = tag;
-
 	}
       else if (fn && tag == GCOV_TAG_BLOCKS)
 	{
@@ -1173,7 +1171,6 @@ read_graph_file (void)
 		      line_nos[ix++] = src_idx;
 		    }
 		  line_nos[ix++] = lineno;
-
 		}
 	      else
 		{

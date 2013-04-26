@@ -196,9 +196,11 @@ def GetMakefileValue(makefile_name, value_name):
   return None
 
 
-def ValidBuildDirectory(builddir):
+def ValidBuildDirectory(builddir, target):
   if (not os.path.exists(builddir) or
-      not os.path.exists('%s/Makefile' % builddir)):
+      not os.path.exists('%s/Makefile' % builddir) or
+      (not os.path.exists('%s/build-%s' % (builddir, target)) and
+       not os.path.exists('%s/%s' % (builddir, target)))):
     return False
   return True
 
@@ -360,17 +362,14 @@ def GetManifestPath(srcdir, target, user_provided_must_exist):
       Error('Manifest does not exist: %s' % manifest_path)
     return manifest_path
   else:
-    if not srcdir:
-      Error('Could not determine the location of GCC\'s source tree. '
-            'The Makefile does not contain a definition for "srcdir".')
-    if not target:
-      Error('Could not determine the target triplet for this build. '
-            'The Makefile does not contain a definition for "target_alias".')
+    assert srcdir and target
     return _MANIFEST_PATH_PATTERN % (srcdir, _MANIFEST_SUBDIR, target)
 
 
 def GetBuildData():
-  if not ValidBuildDirectory(_OPTIONS.build_dir):
+  srcdir = GetMakefileValue('%s/Makefile' % _OPTIONS.build_dir, 'srcdir =')
+  target = GetMakefileValue('%s/Makefile' % _OPTIONS.build_dir, 'target_alias=')
+  if not ValidBuildDirectory(_OPTIONS.build_dir, target):
     # If we have been given a set of results to use, we may
     # not be inside a valid GCC build directory.  In that case,
     # the user must provide both a manifest file and a set
@@ -381,8 +380,6 @@ def GetBuildData():
             _OPTIONS.build_dir)
     else:
       return None, None
-  srcdir = GetMakefileValue('%s/Makefile' % _OPTIONS.build_dir, 'srcdir =')
-  target = GetMakefileValue('%s/Makefile' % _OPTIONS.build_dir, 'target_alias=')
   print 'Source directory: %s' % srcdir
   print 'Build target:     %s' % target
   return srcdir, target

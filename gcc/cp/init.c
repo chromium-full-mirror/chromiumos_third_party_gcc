@@ -634,7 +634,12 @@ perform_member_init (tree member, tree init)
 	init = build_x_compound_expr_from_list (init, ELK_MEM_INIT,
 						tf_warning_or_error);
       if (TREE_TYPE (init) != type)
-	init = digest_init (type, init, tf_warning_or_error);
+	{
+	  if (BRACE_ENCLOSED_INITIALIZER_P (init)
+	      && CP_AGGREGATE_TYPE_P (type))
+	    init = reshape_init (type, init, tf_warning_or_error);
+	  init = digest_init (type, init, tf_warning_or_error);
+	}
       if (init == error_mark_node)
 	return;
       /* A FIELD_DECL doesn't really have a suitable lifetime, but
@@ -723,8 +728,8 @@ perform_member_init (tree member, tree init)
 						tf_warning_or_error);
 
       if (init)
-          finish_expr_stmt (cp_build_modify_expr (decl, INIT_EXPR, init,
-                                                  tf_warning_or_error));
+	finish_expr_stmt (cp_build_modify_expr (decl, INIT_EXPR, init,
+						tf_warning_or_error));
     }
 
   if (TYPE_HAS_NONTRIVIAL_DESTRUCTOR (type))
@@ -742,11 +747,6 @@ perform_member_init (tree member, tree init)
       if (expr != error_mark_node)
 	finish_eh_cleanup (expr);
     }
-
-  /* Check for and warn about self-initialization if -Wself-assign is
-     enabled.  */
-  if (warn_self_assign)
-    check_for_self_assign (input_location, decl, init);
 }
 
 /* Returns a TREE_LIST containing (as the TREE_PURPOSE of each node) all
@@ -1822,7 +1822,8 @@ get_type_value (tree name)
    @@ This function should be rewritten and placed in search.c.  */
 
 tree
-build_offset_ref (tree type, tree member, bool address_p)
+build_offset_ref (tree type, tree member, bool address_p,
+		  tsubst_flags_t complain)
 {
   tree decl;
   tree basebinfo = NULL_TREE;
@@ -1846,7 +1847,8 @@ build_offset_ref (tree type, tree member, bool address_p)
   type = TYPE_MAIN_VARIANT (type);
   if (!COMPLETE_OR_OPEN_TYPE_P (complete_type (type)))
     {
-      error ("incomplete type %qT does not have member %qD", type, member);
+      if (complain & tf_error)
+	error ("incomplete type %qT does not have member %qD", type, member);
       return error_mark_node;
     }
 
@@ -1859,7 +1861,8 @@ build_offset_ref (tree type, tree member, bool address_p)
 
   if (TREE_CODE (member) == FIELD_DECL && DECL_C_BIT_FIELD (member))
     {
-      error ("invalid pointer to bit-field %qD", member);
+      if (complain & tf_error)
+	error ("invalid pointer to bit-field %qD", member);
       return error_mark_node;
     }
 
@@ -1888,10 +1891,10 @@ build_offset_ref (tree type, tree member, bool address_p)
 	  if (address_p && DECL_P (t)
 	      && DECL_NONSTATIC_MEMBER_P (t))
 	    perform_or_defer_access_check (TYPE_BINFO (type), t, t,
-					   tf_warning_or_error);
+					   complain);
 	  else
 	    perform_or_defer_access_check (basebinfo, t, t,
-					   tf_warning_or_error);
+					   complain);
 
 	  if (DECL_STATIC_FUNCTION_P (t))
 	    return t;
@@ -1905,7 +1908,7 @@ build_offset_ref (tree type, tree member, bool address_p)
        check_accessibility_of_qualified_id in case it is
        a pointer to non-static member.  */
     perform_or_defer_access_check (TYPE_BINFO (type), member, member,
-				   tf_warning_or_error);
+				   complain);
 
   if (!address_p)
     {
@@ -1937,15 +1940,17 @@ build_offset_ref (tree type, tree member, bool address_p)
 	  if (flag_ms_extensions)
 	    {
 	      PTRMEM_OK_P (member) = 1;
-	      return cp_build_addr_expr (member, tf_warning_or_error);
+	      return cp_build_addr_expr (member, complain);
 	    }
-	  error ("invalid use of non-static member function %qD",
-		 TREE_OPERAND (member, 1));
+	  if (complain & tf_error)
+	    error ("invalid use of non-static member function %qD",
+		   TREE_OPERAND (member, 1));
 	  return error_mark_node;
 	}
       else if (TREE_CODE (member) == FIELD_DECL)
 	{
-	  error ("invalid use of non-static data member %qD", member);
+	  if (complain & tf_error)
+	    error ("invalid use of non-static data member %qD", member);
 	  return error_mark_node;
 	}
       return member;

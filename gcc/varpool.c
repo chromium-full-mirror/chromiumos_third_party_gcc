@@ -34,9 +34,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "output.h"
 #include "gimple.h"
 #include "tree-flow.h"
-#include "toplev.h"
 #include "flags.h"
-#include "l-ipo.h"
 
 /* Return varpool node assigned to DECL.  Create new one when needed.  */
 struct varpool_node *
@@ -49,7 +47,6 @@ varpool_node_for_decl (tree decl)
     return node;
 
   node = ggc_alloc_cleared_varpool_node ();
-  node->module_id = current_module_id;
   node->symbol.type = SYMTAB_VARIABLE;
   node->symbol.decl = decl;
   symtab_register_node ((symtab_node)node);
@@ -60,7 +57,6 @@ varpool_node_for_decl (tree decl)
 void
 varpool_remove_node (struct varpool_node *node)
 {
-  varpool_remove_link_node (node);
   symtab_unregister_node ((symtab_node)node);
   if (DECL_INITIAL (node->symbol.decl)
       && !DECL_IN_CONSTANT_POOL (node->symbol.decl)
@@ -113,7 +109,6 @@ debug_varpool (void)
 }
 
 /* Given an assembler name, lookup node.  */
-
 struct varpool_node *
 varpool_node_for_asm (tree asmname)
 {
