@@ -856,7 +856,7 @@ static const char *cc1_options =
  %{!fsyntax-only:%{S:%W{o*}%{!o*:-o %b.s}}}\
  %{fsyntax-only:-o %j} %{-param*}\
  %{fmudflap|fmudflapth:-fno-builtin -fno-merge-constants}\
- %{coverage:-fprofile-arcs -ftest-coverage}";
+ %{coverage:-fprofile-arcs -ftest-coverage -fno-early-inlining}";
 
 static const char *asm_options =
 "%{-target-help:%:print-asm-header()} "
@@ -3079,10 +3079,11 @@ display_help (void)
   fputs (_("  -Xassembler <arg>        Pass <arg> on to the assembler\n"), stdout);
   fputs (_("  -Xpreprocessor <arg>     Pass <arg> on to the preprocessor\n"), stdout);
   fputs (_("  -Xlinker <arg>           Pass <arg> on to the linker\n"), stdout);
+  fputs (_("  -Xclang-only=<arg>       Ignore <arg>\n"), stdout);
   fputs (_("  -save-temps              Do not delete intermediate files\n"), stdout);
   fputs (_("  -save-temps=<arg>        Do not delete intermediate files\n"), stdout);
   fputs (_("\
-  -no-canonical-prefixes   Do not canonicalize paths when building relative\n\
+  -[no-]canonical-prefixes Specify the path canonicalization for relative\n\
                            prefixes to other gcc components\n"), stdout);
   fputs (_("  -pipe                    Use pipes rather than intermediate files\n"), stdout);
   fputs (_("  -time                    Time the execution of each subprocess\n"), stdout);
@@ -3508,6 +3509,7 @@ driver_handle_option (struct gcc_options *opts,
 		     decoded->orig_option_with_args_text);
       break;
 
+    case OPT_canonical_prefixes:
     case OPT_no_canonical_prefixes:
       /* Already handled as a special case, so ignored here.  */
       do_save = false;
@@ -3688,20 +3690,25 @@ process_command (unsigned int decoded_options_count,
 	}
     }
 
-  /* Handle any -no-canonical-prefixes flag early, to assign the function
+  /* Handle any -[no-]canonical-prefixes flags early, to assign the function
      that builds relative prefixes.  This function creates default search
      paths that are needed later in normal option handling.  */
 
   for (j = 1; j < decoded_options_count; j++)
     {
-      if (decoded_options[j].opt_index == OPT_no_canonical_prefixes)
-	{
-	  get_relative_prefix = make_relative_prefix_ignore_links;
-	  break;
-	}
+      if (decoded_options[j].opt_index == OPT_canonical_prefixes)
+	get_relative_prefix = make_relative_prefix;
+      else if (decoded_options[j].opt_index == OPT_no_canonical_prefixes)
+	get_relative_prefix = make_relative_prefix_ignore_links;
     }
   if (! get_relative_prefix)
-    get_relative_prefix = make_relative_prefix;
+    {
+#ifdef ENABLE_CANONICAL_PREFIXES
+      get_relative_prefix = make_relative_prefix;
+#else
+      get_relative_prefix = make_relative_prefix_ignore_links;
+#endif
+    }
 
   /* Set up the default search paths.  If there is no GCC_EXEC_PREFIX,
      see if we can create it from the pathname specified in

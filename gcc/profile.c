@@ -159,6 +159,14 @@ instrument_values (histogram_values values)
       histogram_value hist = values[i];
       unsigned t = COUNTER_FOR_HIST_TYPE (hist->type);
 
+      /* See condition in gimple_gen_ic_func_topn_profiler  */
+      if (t == GCOV_COUNTER_ICALL_TOPNV
+          && (DECL_STATIC_CONSTRUCTOR (current_function_decl)
+              || DECL_STATIC_CONSTRUCTOR (current_function_decl)
+              || DECL_NO_INSTRUMENT_FUNCTION_ENTRY_EXIT (
+                  current_function_decl)))
+         continue;
+
       if (!coverage_counter_alloc (t, hist->n_counters))
 	continue;
 
@@ -181,6 +189,7 @@ instrument_values (histogram_values values)
 	  break;
 
  	case HIST_TYPE_INDIR_CALL:
+ 	case HIST_TYPE_INDIR_CALL_TOPN:
  	  gimple_gen_ic_profiler (hist, t, 0);
   	  break;
 
@@ -393,6 +402,7 @@ is_edge_inconsistent (vec<edge, va_gc> *edges)
         {
           if (e->count < 0
 	      && (!(e->flags & EDGE_FAKE)
+		  || e->src == ENTRY_BLOCK_PTR
 	          || !block_ends_with_call_p (e->src)))
 	    {
 	      if (dump_file)
@@ -944,9 +954,14 @@ compute_value_histograms (histogram_values values, unsigned cfg_checksum,
   gcov_type *histogram_counts[GCOV_N_VALUE_COUNTERS];
   gcov_type *act_count[GCOV_N_VALUE_COUNTERS];
   gcov_type *aact_count;
+  bool warned[GCOV_N_VALUE_COUNTERS];
+  static const char *const ctr_names[] = GCOV_COUNTER_NAMES;
 
   for (t = 0; t < GCOV_N_VALUE_COUNTERS; t++)
-    n_histogram_counters[t] = 0;
+    {
+      n_histogram_counters[t] = 0;
+      warned[t] = 0;
+    }
 
   for (i = 0; i < values.length (); i++)
     {
@@ -982,6 +997,19 @@ compute_value_histograms (histogram_values values, unsigned cfg_checksum,
       t = (int) hist->type;
 
       aact_count = act_count[t];
+      /* If the counter cannot be found in gcda file, skip this 
+         histogram and give a warning.  */
+      if (aact_count == 0)
+        {
+          if (!warned[t])
+            warning (0, "cannot find %s counters in function %s.",
+                     ctr_names[COUNTER_FOR_HIST_TYPE(t)],
+                     IDENTIFIER_POINTER (
+                       DECL_ASSEMBLER_NAME (current_function_decl)));
+          hist->n_counters = 0;
+          warned[t] = true;
+          continue;
+        }
       act_count[t] += hist->n_counters;
 
       gimple_add_histogram_value (cfun, stmt, hist);
@@ -1390,6 +1418,9 @@ branch_prob (void)
 
       /* Commit changes done by instrumentation.  */
       gsi_commit_edge_inserts ();
+
+      if (flag_profile_generate_sampling)
+        add_sampling_to_edge_counters ();
     }
 
   free_aux_for_edges ();

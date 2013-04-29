@@ -1959,10 +1959,6 @@ add_function_candidate (struct z_candidate **candidates,
 		     object parameter has reference type.  */
 		  bool rv = FUNCTION_RVALUE_QUALIFIED (TREE_TYPE (fn));
 		  parmtype = cp_build_reference_type (parmtype, rv);
-		  if (TREE_CODE (arg) == CONVERT_EXPR
-		      && TYPE_PTR_P (TREE_TYPE (arg)))
-		    /* Strip conversion from reference to pointer.  */
-		    arg = TREE_OPERAND (arg, 0);
 		  arg = build_fold_indirect_ref (arg);
 		  argtype = lvalue_type (arg);
 		}
@@ -5617,8 +5613,22 @@ build_op_delete_call (enum tree_code code, tree addr, tree size,
 	       usual deallocation function."
 
 	       So (void*) beats (void*, size_t).  */
-	    if (FUNCTION_ARG_CHAIN (fn) == void_list_node)
-	      break;
+            /* If type is not void, pick (void*, size_t) version (which comes
+               first).  */
+	    if (!flag_sized_delete || TREE_CODE (type) == VOID_TYPE )
+              {
+                /* If -fsized-delete is not passed or if a void * is deleted,
+                   prefer delete (void *) version.  */
+                if (FUNCTION_ARG_CHAIN (fn) == void_list_node)
+                  break;
+              }
+            else
+              {
+                /* If -fsized-delete is passed and it is not a void *,
+                   prefer delete (void *, size_t) version.  */
+                if (FUNCTION_ARG_CHAIN (fn) != void_list_node)
+                  break;
+              }
 	  }
       }
 

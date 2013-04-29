@@ -2266,7 +2266,8 @@ estimate_function_body_sizes (struct cgraph_node *node, bool early)
 {
   gcov_type time = 0;
   /* Estimate static overhead for function prologue/epilogue and alignment. */
-  int size = 2;
+  int overhead = PARAM_VALUE (PARAM_INLINE_FUNCTION_OVERHEAD_SIZE);
+  int size = overhead;
   /* Benefits are scaled by probability of elimination that is in range
      <0,2>.  */
   basic_block bb;
@@ -2307,7 +2308,7 @@ estimate_function_body_sizes (struct cgraph_node *node, bool early)
   account_size_time (info, 0, 0, &bb_predicate);
 
   bb_predicate = not_inlined_predicate ();
-  account_size_time (info, 2 * INLINE_SIZE_SCALE, 0, &bb_predicate);
+  account_size_time (info, overhead * INLINE_SIZE_SCALE, 0, &bb_predicate);
 
   gcc_assert (my_function && my_function->cfg);
   if (parms_info)
