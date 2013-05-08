@@ -11285,6 +11285,8 @@ ix86_output_function_nops_prologue_epilogue (FILE *file,
   unsigned int section_flags = SECTION_RELRO;
   char *section_name_comdat = NULL;
   const char *decl_section_name = NULL;
+  const char *func_name = NULL;
+  char *section_name_function_sections = NULL;
   size_t len;
 
   gcc_assert (num_remaining_nops >= 0);
@@ -11336,11 +11338,23 @@ ix86_output_function_nops_prologue_epilogue (FILE *file,
     {
       decl_section_name =
           TREE_STRING_POINTER (DECL_SECTION_NAME (current_function_decl));
-      len = strlen (decl_section_name) + strlen (section_name) + 1;
+      len = strlen (decl_section_name) + strlen (section_name) + 2;
       section_name_comdat = (char *) alloca (len);
       sprintf (section_name_comdat, "%s.%s", section_name, decl_section_name);
       section_name = section_name_comdat;
       section_flags |= SECTION_LINKONCE;
+    }
+  else if (flag_function_sections)
+    {
+      func_name = XSTR (XEXP (DECL_RTL (current_function_decl), 0), 0);
+      if (func_name)
+        {
+          len = strlen (func_name) + strlen (section_name) + 2;
+          section_name_function_sections = (char *) alloca (len);
+          sprintf (section_name_function_sections, "%s.%s", section_name,
+                   func_name);
+          section_name = section_name_function_sections;
+        }
     }
   section = get_section (section_name, section_flags, current_function_decl);
   switch_to_section (section);
@@ -11369,7 +11383,7 @@ ix86_elf_asm_named_section (const char *name, unsigned int flags,
                             tree decl)
 {
   const char *section_name = name;
-  if (HAVE_COMDAT_GROUP && flags & SECTION_LINKONCE)
+  if (!flag_function_sections && HAVE_COMDAT_GROUP && flags & SECTION_LINKONCE)
     {
       const int prologue_section_name_length =
           sizeof(FUNCTION_PATCH_PROLOGUE_SECTION) - 1;
@@ -20661,7 +20675,7 @@ ix86_expand_vec_perm (rtx operands[])
 	      vec[i * 2 + 1] = const1_rtx;
 	    }
 	  vt = gen_rtx_CONST_VECTOR (maskmode, gen_rtvec_v (w, vec));
-	  vt = force_const_mem (maskmode, vt);
+	  vt = validize_mem (force_const_mem (maskmode, vt));
 	  t1 = expand_simple_binop (maskmode, PLUS, t1, vt, t1, 1,
 				    OPTAB_DIRECT);
 
@@ -20858,7 +20872,7 @@ ix86_expand_vec_perm (rtx operands[])
       for (i = 0; i < 16; ++i)
 	vec[i] = GEN_INT (i/e * e);
       vt = gen_rtx_CONST_VECTOR (V16QImode, gen_rtvec_v (16, vec));
-      vt = force_const_mem (V16QImode, vt);
+      vt = validize_mem (force_const_mem (V16QImode, vt));
       if (TARGET_XOP)
 	emit_insn (gen_xop_pperm (mask, mask, mask, vt));
       else
@@ -20869,7 +20883,7 @@ ix86_expand_vec_perm (rtx operands[])
       for (i = 0; i < 16; ++i)
 	vec[i] = GEN_INT (i % e);
       vt = gen_rtx_CONST_VECTOR (V16QImode, gen_rtvec_v (16, vec));
-      vt = force_const_mem (V16QImode, vt);
+      vt = validize_mem (force_const_mem (V16QImode, vt));
       emit_insn (gen_addv16qi3 (mask, mask, vt));
     }
 
@@ -40964,7 +40978,9 @@ ix86_expand_mul_widen_evenodd (rtx dest, rtx op1, rtx op2,
      the even slots.  For some cpus this is faster than a PSHUFD.  */
   if (odd_p)
     {
-      if (TARGET_XOP && mode == V4SImode)
+      /* For XOP use vpmacsdqh, but only for smult, as it is only
+	 signed.  */
+      if (TARGET_XOP && mode == V4SImode && !uns_p)
 	{
 	  x = force_reg (wmode, CONST0_RTX (wmode));
 	  emit_insn (gen_xop_pmacsdqh (dest, op1, op2, x));
