@@ -117,10 +117,14 @@ along with GCC; see the file COPYING3.  If not see
 #include "target.h"
 #include "ipa-inline.h"
 #include "ipa-utils.h"
+#include "auto-profile.h"
 
 /* Statistics we collect about inlining algorithm.  */
 static int overall_size;
 static gcov_type max_count;
+
+/* Global variable to denote if it is in ipa-inline pass. */
+bool is_in_ipa_inline = false;
 
 /* Return false when inlining edge E would lead to violating
    limits on function unit growth or stack usage growth.  
@@ -413,6 +417,8 @@ want_early_inline_function_p (struct cgraph_edge *e)
 
   if (DECL_DISREGARD_INLINE_LIMITS (callee->symbol.decl))
     ;
+  else if (flag_auto_profile && afdo_callsite_hot_enough_for_early_inline (e))
+    ;
   else if (!DECL_DECLARED_INLINE_P (callee->symbol.decl)
 	   && !flag_inline_small_functions)
     {
@@ -528,6 +534,13 @@ edge_hot_enough_p (struct cgraph_edge *edge)
 {
   if (cgraph_maybe_hot_edge_p (edge))
     return true;
+
+  /* We disable hot-caller heuristic if the callee's entry count is
+     0 because in this case we do not have enough information to
+     calculate the scaling factor.  */
+  if (flag_auto_profile && edge->callee->count == 0
+      && edge->callee->max_bb_count > 0)
+    return false;
   if (PARAM_VALUE (PARAM_INLINE_HOT_CALLER)
       && maybe_hot_count_p (NULL, edge->caller->max_bb_count))
     return true;
@@ -1506,6 +1519,8 @@ inline_small_functions (void)
   vec<cgraph_edge_p> new_indirect_edges = vNULL;
   int initial_size = 0;
   struct cgraph_node **order = XCNEWVEC (struct cgraph_node *, cgraph_n_nodes);
+
+  is_in_ipa_inline = true;
 
   if (flag_indirect_inlining)
     new_indirect_edges.create (8);

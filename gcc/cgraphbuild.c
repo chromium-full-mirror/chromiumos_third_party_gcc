@@ -37,6 +37,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "except.h"
 #include "l-ipo.h"
 #include "ipa-inline.h"
+#include "auto-profile.h"
 
 /* Context of record_reference.  */
 struct record_reference_ctx
@@ -77,7 +78,7 @@ record_reference (tree *tp, int *walk_subtrees, void *data)
       decl = get_base_var (*tp);
       if (TREE_CODE (decl) == FUNCTION_DECL)
 	{
-	  struct cgraph_node *node = cgraph_get_create_node (decl);
+	  struct cgraph_node *node = cgraph_get_create_real_symbol_node (decl);
 	  if (!ctx->only_vars)
 	    cgraph_mark_address_taken_node (node);
 	  ipa_record_reference ((symtab_node)ctx->varpool_node,
@@ -147,7 +148,7 @@ record_eh_tables (struct cgraph_node *node, struct function *fun)
     {
       struct cgraph_node *per_node;
 
-      per_node = cgraph_get_create_node (DECL_FUNCTION_PERSONALITY (node->symbol.decl));
+      per_node = cgraph_get_create_real_symbol_node (DECL_FUNCTION_PERSONALITY (node->symbol.decl));
       ipa_record_reference ((symtab_node)node, (symtab_node)per_node, IPA_REF_ADDR, NULL);
       cgraph_mark_address_taken_node (per_node);
     }
@@ -255,6 +256,7 @@ add_fake_indirect_call_edges (struct cgraph_node *node)
     return;
 
   gcc_assert ((n_counts % GCOV_ICALL_TOPN_NCOUNTS) == 0);
+  gcc_assert (!flag_auto_profile);
 
 /* After the early_inline_1 before value profile transformation,
    functions that are indirect call targets may have their bodies
@@ -281,7 +283,7 @@ add_fake_indirect_call_edges (struct cgraph_node *node)
       if (val1 == 0 || count1 == 0)
         continue;
 
-      direct_call1 = find_func_by_global_id (val1);
+      direct_call1 = find_func_by_global_id (val1, false);
       if (direct_call1)
         {
           tree decl = direct_call1->symbol.decl;
@@ -293,7 +295,7 @@ add_fake_indirect_call_edges (struct cgraph_node *node)
 
       if (val2 == 0 || count2 == 0)
         continue;
-      direct_call2 = find_func_by_global_id (val2);
+      direct_call2 = find_func_by_global_id (val2, false);
       if (direct_call2)
         {
           tree decl = direct_call2->symbol.decl;
@@ -423,7 +425,7 @@ mark_load (gimple stmt, tree t, void *data)
     {
       /* ??? This can happen on platforms with descriptors when these are
 	 directly manipulated in the code.  Pretend that it's an address.  */
-      struct cgraph_node *node = cgraph_get_create_node (t);
+      struct cgraph_node *node = cgraph_get_create_real_symbol_node (t);
       cgraph_mark_address_taken_node (node);
       ipa_record_reference ((symtab_node)data,
 			    (symtab_node)node,
@@ -489,6 +491,9 @@ build_cgraph_edges (void)
   tree decl;
   unsigned ix;
 
+  if (flag_auto_profile)
+    afdo_set_current_function_count ();
+
   /* Create the callgraph edges and record the nodes referenced by the function.
      body.  */
   FOR_EACH_BB (bb)
@@ -518,7 +523,7 @@ build_cgraph_edges (void)
 	    {
 	      tree fn = gimple_omp_parallel_child_fn (stmt);
 	      ipa_record_reference ((symtab_node)node,
-				    (symtab_node)cgraph_get_create_node (fn),
+				    (symtab_node)cgraph_get_create_real_symbol_node (fn),
 				    IPA_REF_ADDR, stmt);
 	    }
 	  if (gimple_code (stmt) == GIMPLE_OMP_TASK)
@@ -526,12 +531,12 @@ build_cgraph_edges (void)
 	      tree fn = gimple_omp_task_child_fn (stmt);
 	      if (fn)
 		ipa_record_reference ((symtab_node)node,
-				      (symtab_node) cgraph_get_create_node (fn),
+				      (symtab_node) cgraph_get_create_real_symbol_node (fn),
 				      IPA_REF_ADDR, stmt);
 	      fn = gimple_omp_task_copy_fn (stmt);
 	      if (fn)
 		ipa_record_reference ((symtab_node)node,
-				      (symtab_node)cgraph_get_create_node (fn),
+				      (symtab_node)cgraph_get_create_real_symbol_node (fn),
 				      IPA_REF_ADDR, stmt);
 	    }
 	}
@@ -717,10 +722,18 @@ struct gimple_opt_pass pass_rebuild_cgraph_edges =
  }
 };
 
+/* Defined in tree-optimize.c  */
+extern bool cgraph_callee_edges_final_cleanup; 
 
 static unsigned int
 remove_cgraph_callee_edges (void)
 {
+  /* The -freorder-functions=* needs the call-graph preserved till
+     pass_final.  */
+  if (cgraph_callee_edges_final_cleanup
+      && (flag_reorder_functions > 1))
+      return 0;
+
   cgraph_node_remove_callees (cgraph_get_node (current_function_decl));
   return 0;
 }

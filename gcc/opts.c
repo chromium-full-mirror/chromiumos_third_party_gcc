@@ -784,6 +784,10 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
 			     opts->x_param_values, opts_set->x_param_values);
     }
 
+  if (opts->x_flag_auto_profile)
+    maybe_set_param_value (PARAM_EARLY_INLINER_MAX_ITERATIONS, 10,
+			   opts->x_param_values, opts_set->x_param_values);
+
   if (opts->x_flag_lto)
     {
 #ifdef ENABLE_LTO
@@ -846,6 +850,10 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
   /* The -gsplit-dwarf option requires -gpubnames.  */
   if (opts->x_dwarf_split_debug_info)
     opts->x_debug_generate_pub_sections = 1;
+
+  /* Turn on -ffunction-sections when -freorder-functions=* is used.  */
+  if (opts->x_flag_reorder_functions > 1)
+    opts->x_flag_function_sections = 1;
 }
 
 #define LEFT_COLUMN	27
@@ -1603,6 +1611,41 @@ common_handle_option (struct gcc_options *opts,
 	opts->x_flag_peel_loops = value;
       if (!opts_set->x_flag_tracer)
 	opts->x_flag_tracer = value;
+      if (!opts_set->x_flag_value_profile_transformations)
+	opts->x_flag_value_profile_transformations = value;
+      if (!opts_set->x_flag_inline_functions)
+	opts->x_flag_inline_functions = value;
+      if (!opts_set->x_flag_ipa_cp)
+	opts->x_flag_ipa_cp = value;
+      if (!opts_set->x_flag_ipa_cp_clone
+	  && value && opts->x_flag_ipa_cp)
+	opts->x_flag_ipa_cp_clone = value;
+      if (!opts_set->x_flag_predictive_commoning)
+	opts->x_flag_predictive_commoning = value;
+      if (!opts_set->x_flag_unswitch_loops)
+	opts->x_flag_unswitch_loops = value;
+      if (!opts_set->x_flag_gcse_after_reload)
+	opts->x_flag_gcse_after_reload = value;
+      if (!opts_set->x_flag_tree_vectorize)
+	opts->x_flag_tree_vectorize = value;
+      if (!opts_set->x_flag_vect_cost_model)
+	opts->x_flag_vect_cost_model = value;
+      if (!opts_set->x_flag_tree_loop_distribute_patterns)
+	opts->x_flag_tree_loop_distribute_patterns = value;
+      break;
+
+    case OPT_fauto_profile_:
+      auto_profile_file = xstrdup (arg);
+      opts->x_flag_auto_profile = true;
+      value = true;
+    /* No break here - do -fauto-profile processing. */
+    case OPT_fauto_profile:
+      if (!opts_set->x_flag_branch_probabilities)
+	opts->x_flag_branch_probabilities = value;
+      if (!opts_set->x_flag_unroll_loops)
+	opts->x_flag_unroll_loops = value;
+      if (!opts_set->x_flag_peel_loops)
+	opts->x_flag_peel_loops = value;
       if (!opts_set->x_flag_value_profile_transformations)
 	opts->x_flag_value_profile_transformations = value;
       if (!opts_set->x_flag_inline_functions)

@@ -56,6 +56,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "filenames.h"
 #include "dwarf2asm.h"
 #include "target.h"
+#include "auto-profile.h"
 
 #include "gcov-io.h"
 #include "gcov-io.c"
@@ -302,7 +303,7 @@ has_incompatible_cg_opts (bool *cg_opts1, bool *cg_opts2, unsigned num_cg_opts)
 
 /* Returns true if the command-line arguments stored in the given module-infos
    are incompatible.  */
-static bool
+bool
 incompatible_cl_args (struct gcov_module_info* mod_info1,
 		      struct gcov_module_info* mod_info2)
 {
@@ -2115,14 +2116,39 @@ build_info (tree info_type, tree fn_ary)
   return build_constructor (info_type, v1);
 }
 
-/* Create the gcov_info types and object.  Generate the constructor
-   function to call __gcov_init.  Does not generate the initializer
+/* Generate the constructor function to call __gcov_init.  */
+
+static void
+build_init_ctor (tree gcov_info_type)
+{
+  tree ctor, stmt, init_fn;
+
+  /* Build a decl for __gcov_init.  */
+  init_fn = build_pointer_type (gcov_info_type);
+  init_fn = build_function_type_list (void_type_node, init_fn, NULL);
+  init_fn = build_decl (BUILTINS_LOCATION, FUNCTION_DECL,
+			get_identifier ("__gcov_init"), init_fn);
+  TREE_PUBLIC (init_fn) = 1;
+  DECL_EXTERNAL (init_fn) = 1;
+  DECL_ASSEMBLER_NAME (init_fn);
+
+  /* Generate a call to __gcov_init(&gcov_info).  */
+  ctor = NULL;
+  stmt = build_fold_addr_expr (gcov_info_var);
+  stmt = build_call_expr (init_fn, 1, stmt);
+  append_to_statement_list (stmt, &ctor);
+
+  /* Generate a constructor to run it.  */
+  cgraph_build_static_cdtor ('I', ctor, DEFAULT_INIT_PRIORITY);
+}
+
+/* Create the gcov_info types and object. Does not generate the initializer
    for the object.  Returns TRUE if coverage data is being emitted.  */
 
 static bool
 coverage_obj_init (void)
 {
-  tree gcov_info_type, ctor, stmt, init_fn;
+  tree gcov_info_type;
   unsigned n_counters = 0;
   unsigned ix;
   struct coverage_data *fn;
@@ -2171,24 +2197,6 @@ coverage_obj_init (void)
   ASM_GENERATE_INTERNAL_LABEL (name_buf, "LPBX", 0);
   DECL_NAME (gcov_info_var) = get_identifier (name_buf);
 
-  /* Build a decl for __gcov_init.  */
-  init_fn = build_pointer_type (gcov_info_type);
-  init_fn = build_function_type_list (void_type_node, init_fn, NULL);
-  init_fn = build_decl (BUILTINS_LOCATION, FUNCTION_DECL,
-			get_identifier ("__gcov_init"), init_fn);
-  TREE_PUBLIC (init_fn) = 1;
-  DECL_EXTERNAL (init_fn) = 1;
-  DECL_ASSEMBLER_NAME (init_fn);
-
-  /* Generate a call to __gcov_init(&gcov_info).  */
-  ctor = NULL;
-  stmt = build_fold_addr_expr (gcov_info_var);
-  stmt = build_call_expr (init_fn, 1, stmt);
-  append_to_statement_list (stmt, &ctor);
-
-  /* Generate a constructor to run it.  */
-  cgraph_build_static_cdtor ('I', ctor, DEFAULT_INIT_PRIORITY);
-
   return true;
 }
 
@@ -2211,7 +2219,8 @@ coverage_obj_fn (vec<constructor_elt, va_gc> *ctor, tree fn,
 }
 
 /* Finalize the coverage data.  Generates the array of pointers to
-   function objects from CTOR.  Generate the gcov_info initializer.  */
+   function objects from CTOR.  Generate the gcov_info initializer.
+   Generate the constructor function to call __gcov_init.  */
 
 static void
 coverage_obj_finish (vec<constructor_elt, va_gc> *ctor)
@@ -2229,9 +2238,12 @@ coverage_obj_finish (vec<constructor_elt, va_gc> *ctor)
   DECL_NAME (fn_info_ary) = get_identifier (name_buf);
   DECL_INITIAL (fn_info_ary) = build_constructor (fn_info_ary_type, ctor);
   varpool_finalize_decl (fn_info_ary);
-  
+
   DECL_INITIAL (gcov_info_var)
     = build_info (TREE_TYPE (gcov_info_var), fn_info_ary);
+
+  build_init_ctor (TREE_TYPE (gcov_info_var));
+
   varpool_finalize_decl (gcov_info_var);
 }
 
@@ -2533,7 +2545,7 @@ coverage_init (const char *filename, const char* source_name)
 
   bbg_file_stamp = local_tick;
 
-  if (flag_branch_probabilities)
+  if (flag_branch_probabilities && !flag_auto_profile)
     read_counts_file (da_file_name, 0);
 
   /* Rebuild counts_hash and read the auxiliary GCDA files.  */
@@ -2553,6 +2565,8 @@ coverage_init (const char *filename, const char* source_name)
       tree_init_dyn_ipa_parameters ();
       tree_init_instrumentation_sampling ();
     }
+  if (flag_auto_profile)
+    init_auto_profile ();
 
   /* Name of bbg file.  */
   if (flag_test_coverage && !flag_compare_debug)
@@ -2661,15 +2675,31 @@ coverage_has_asm_stmt (void)
 /* Write command line options to the .note section.  */
 
 void
-write_opts_to_asm (void)
+write_compilation_info_to_asm (void)
 {
   size_t i;
   cpp_dir *quote_paths, *bracket_paths, *pdir;
   struct str_list *pdef, *pinc;
   int num_quote_paths = 0;
   int num_bracket_paths = 0;
+  unsigned lang;
 
   get_include_chains (&quote_paths, &bracket_paths);
+
+  /* Write lang, ggc_memory to ASM section.  */
+  switch_to_section (get_section (".gnu.switches.text.lipo_info",
+				  SECTION_DEBUG, NULL));
+  if (!strcmp (lang_hooks.name, "GNU C"))
+    lang = GCOV_MODULE_C_LANG;
+  else if (!strcmp (lang_hooks.name, "GNU C++"))
+    lang = GCOV_MODULE_CPP_LANG;
+  else
+    lang = GCOV_MODULE_UNKNOWN_LANG;
+  if (has_asm_statement)
+    lang |= GCOV_MODULE_ASM_STMTS;
+  dw2_asm_output_nstring (in_fnames[0], (size_t)-1, NULL);
+  dw2_asm_output_data_uleb128 (lang, NULL);
+  dw2_asm_output_data_uleb128 (ggc_total_memory, NULL);
 
   /* Write quote_paths to ASM section.  */
   switch_to_section (get_section (".gnu.switches.text.quote_paths",

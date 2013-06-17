@@ -957,7 +957,7 @@ AC_HEADER_SYS_WAIT
 AC_CHECK_HEADERS(limits.h stddef.h string.h strings.h stdlib.h time.h iconv.h \
 		 fcntl.h unistd.h sys/file.h sys/time.h sys/mman.h \
 		 sys/resource.h sys/param.h sys/times.h sys/stat.h \
-		 direct.h malloc.h langinfo.h ldfcn.h locale.h wchar.h libintl.h)
+		 direct.h malloc.h langinfo.h ldfcn.h locale.h wchar.h)
 
 # Check for thread headers.
 AC_CHECK_HEADER(thread.h, [have_thread_h=yes], [have_thread_h=])
@@ -1939,6 +1939,10 @@ case $use_collect2 in
     esac
     ;;
 esac
+
+AC_DEFINE_UNQUOTED(FRPLUGINSONAME,"${host_function_reordering_plugin_soname}",
+[Define to the name of the function reordering plugin DSO that must be
+  passed to the linker's -plugin=LIB option.])
 
 AC_DEFINE_UNQUOTED(LTOPLUGINSONAME,"${host_lto_plugin_soname}",
 [Define to the name of the LTO plugin DSO that must be

@@ -1274,6 +1274,31 @@ AC_DEFUN([GLIBCXX_ENABLE_LIBSTDCXX_TIME], [
     fi
   fi
 
+  if test x"$ac_has_clock_monotonic" != x"yes"; then
+    case ${target_os} in
+      linux*)
+	AC_MSG_CHECKING([for clock_gettime syscall])
+	AC_TRY_COMPILE(
+	  [#include <unistd.h>
+	   #include <time.h>
+	   #include <sys/syscall.h>
+	  ],
+	  [#if _POSIX_TIMERS > 0 && defined(_POSIX_MONOTONIC_CLOCK)
+	    timespec tp;
+	   #endif
+	   syscall(SYS_clock_gettime, CLOCK_MONOTONIC, &tp);
+	   syscall(SYS_clock_gettime, CLOCK_REALTIME, &tp);
+	  ], [ac_has_clock_monotonic_syscall=yes], [ac_has_clock_monotonic_syscall=no])
+	AC_MSG_RESULT($ac_has_clock_monotonic_syscall)
+	if test x"$ac_has_clock_monotonic_syscall" = x"yes"; then
+	  AC_DEFINE(_GLIBCXX_USE_CLOCK_GETTIME_SYSCALL, 1,
+	  [ Defined if clock_gettime syscall has monotonic and realtime clock support. ])
+	  ac_has_clock_monotonic=yes
+	  ac_has_clock_realtime=yes
+	fi;;
+    esac
+  fi
+
   if test x"$ac_has_clock_monotonic" = x"yes"; then
     AC_DEFINE(_GLIBCXX_USE_CLOCK_MONOTONIC, 1,
       [ Defined if clock_gettime has monotonic clock support. ])
@@ -3484,9 +3509,15 @@ AC_DEFUN([GLIBCXX_CHECK_X86_RDRAND], [
 		[ac_cv_x86_rdrand=yes], [ac_cv_x86_rdrand=no])
   esac
   ])
+  AH_VERBATIM([_GLIBCXX_X86_RDRAND,],
+              [/* Defined if as can handle rdrand.
+   Disable when building with Clang.  Google ref b/8680429 */
+#ifndef __clang__
+#undef _GLIBCXX_X86_RDRAND
+#endif])
+
   if test $ac_cv_x86_rdrand = yes; then
-    AC_DEFINE(_GLIBCXX_X86_RDRAND, 1,
-		[ Defined if as can handle rdrand. ])
+    AC_DEFINE(_GLIBCXX_X86_RDRAND, 1)
   fi
   AC_MSG_RESULT($ac_cv_x86_rdrand)
 ])

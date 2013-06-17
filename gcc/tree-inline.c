@@ -1886,9 +1886,10 @@ copy_edges_for_bb (basic_block bb, gcov_type count_scale, basic_block ret_bb)
 	edge new_edge;
 
 	flags = old_edge->flags;
+	flags &= (~EDGE_ANNOTATED);
 
 	/* Return edges do get a FALLTHRU flag when the get inlined.  */
-	if (old_edge->dest->index == EXIT_BLOCK && !old_edge->flags
+	if (old_edge->dest->index == EXIT_BLOCK && !flags
 	    && old_edge->dest->aux != EXIT_BLOCK_PTR)
 	  flags |= EDGE_FALLTHRU;
 	new_edge = make_edge (new_bb, (basic_block) old_edge->dest->aux, flags);
@@ -3788,6 +3789,15 @@ add_local_variables (struct function *callee, struct function *caller,
 	  {
 	    tree tem = DECL_DEBUG_EXPR (var);
 	    bool old_regimplify = id->regimplify;
+
+            /* The mapped debug expression might be deleted
+               as a varpool node (the reachbility analysis
+               of varpool node does not check the reference
+               from debug expressions.
+               Set it to 0 for all global vars.  */
+            if (L_IPO_COMP_MODE && tem && is_global_var (tem))
+              tem = NULL;
+
 	    id->remapping_type_depth++;
 	    walk_tree (&tem, copy_tree_body_r, id, NULL);
 	    id->remapping_type_depth--;

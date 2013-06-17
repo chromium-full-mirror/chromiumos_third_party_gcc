@@ -23592,7 +23592,7 @@ arm_expand_epilogue (bool really_return)
       || (IS_VOLATILE (func_type) && TARGET_ABORT_NORETURN))
     {
       if (really_return)
-	emit_jump_insn (simple_return_rtx);
+        emit_jump_insn (simple_return_rtx);
       return;
     }
 

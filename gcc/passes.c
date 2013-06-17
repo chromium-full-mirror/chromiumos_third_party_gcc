@@ -304,11 +304,17 @@ struct simple_ipa_opt_pass pass_early_local_passes =
  }
 };
 
+/* Decides if the cgraph callee edges are being cleaned up for the
+   last time.  */
+bool cgraph_callee_edges_final_cleanup = false;
+
 /* Gate: execute, or not, all of the non-trivial optimizations.  */
 
 static bool
 gate_all_early_optimizations (void)
 {
+  /* The cgraph callee edges are being cleaned up for the last time.  */
+  cgraph_callee_edges_final_cleanup = true;
   return (optimize >= 1
 	  /* Don't bother doing anything if the program has errors.  */
 	  && !seen_error ());
@@ -720,7 +726,7 @@ dump_passes (void)
 
   create_pass_tab();
 
-  FOR_EACH_DEFINED_FUNCTION (n)
+  FOR_EACH_FUNCTION (n)
     if (DECL_STRUCT_FUNCTION (n->symbol.decl))
       {
 	node = n;
@@ -1356,6 +1362,7 @@ init_optimization_passes (void)
       NEXT_PASS (pass_inline_parameters);
     }
   NEXT_PASS (pass_ipa_free_inline_summary);
+  NEXT_PASS (pass_ipa_auto_profile);
   NEXT_PASS (pass_ipa_tree_profile);
     {
       struct opt_pass **p = &pass_ipa_tree_profile.pass.sub;
