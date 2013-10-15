@@ -48,6 +48,17 @@ unsigned char arch
 TargetSave
 unsigned char tune
 
+mtune-ctrl=
+Target RejectNegative Joined Var(ix86_tune_ctrl_string)
+Fine grain control of tune features
+
+mno-default
+Target RejectNegative Var(ix86_tune_no_default) Init(0)
+Clear all tune features
+
+mdump-tune-features
+Target RejectNegative Var(ix86_dump_tunes) Init(0)
+
 ;; CPU schedule model
 TargetSave
 unsigned char schedule
@@ -315,6 +326,14 @@ Realign stack in prologue
 mstack-arg-probe
 Target Report Mask(STACK_PROBE) Save
 Enable stack probing
+
+mmemcpy-strategy=
+Target RejectNegative Joined Var(ix86_tune_memcpy_strategy)
+Specify memcpy expansion strategy when expected size is known
+
+mmemset-strategy=
+Target RejectNegative Joined Var(ix86_tune_memset_strategy)
+Specify memset expansion strategy when expected size is known
 
 mstringop-strategy=
 Target RejectNegative Joined Enum(stringop_alg) Var(ix86_stringop_alg) Init(no_stringop)

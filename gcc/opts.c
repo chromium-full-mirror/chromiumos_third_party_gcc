@@ -484,6 +484,7 @@ static const struct default_options default_options_table[] =
     { OPT_LEVELS_2_PLUS, OPT_falign_labels, NULL, 1 },
     { OPT_LEVELS_2_PLUS, OPT_falign_functions, NULL, 1 },
     { OPT_LEVELS_2_PLUS, OPT_ftree_tail_merge, NULL, 1 },
+    { OPT_LEVELS_2_PLUS, OPT_fvect_cost_model_, NULL, VECT_COST_MODEL_CHEAP },
     { OPT_LEVELS_2_PLUS_SPEED_ONLY, OPT_foptimize_strlen, NULL, 1 },
     { OPT_LEVELS_2_PLUS, OPT_fhoist_adjacent_loads, NULL, 1 },
 
@@ -496,8 +497,9 @@ static const struct default_options default_options_table[] =
     { OPT_LEVELS_1_PLUS_NOT_DEBUG, OPT_finline_functions_called_once, NULL, 1 },
     { OPT_LEVELS_3_PLUS, OPT_funswitch_loops, NULL, 1 },
     { OPT_LEVELS_3_PLUS, OPT_fgcse_after_reload, NULL, 1 },
-    { OPT_LEVELS_3_PLUS, OPT_ftree_vectorize, NULL, 1 },
-    { OPT_LEVELS_3_PLUS, OPT_fvect_cost_model, NULL, 1 },
+    { OPT_LEVELS_3_PLUS, OPT_ftree_loop_vectorize, NULL, 1 },
+    { OPT_LEVELS_3_PLUS, OPT_ftree_slp_vectorize, NULL, 1 },
+    { OPT_LEVELS_3_PLUS, OPT_fvect_cost_model_, NULL, VECT_COST_MODEL_DYNAMIC },
     { OPT_LEVELS_3_PLUS, OPT_fipa_cp_clone, NULL, 1 },
     { OPT_LEVELS_3_PLUS, OPT_ftree_partial_pre, NULL, 1 },
 
@@ -607,9 +609,14 @@ default_options_optimization (struct gcc_options *opts,
      opts->x_param_values, opts_set->x_param_values);
 
   if (opts->x_optimize_size)
-    /* We want to crossjump as much as possible.  */
-    maybe_set_param_value (PARAM_MIN_CROSSJUMP_INSNS, 1,
-			   opts->x_param_values, opts_set->x_param_values);
+    {
+      /* We want to crossjump as much as possible.  */
+      maybe_set_param_value (PARAM_MIN_CROSSJUMP_INSNS, 1,
+			     opts->x_param_values, opts_set->x_param_values);
+      /* Don't be aggressive in inlining comdats.  */
+      maybe_set_param_value (PARAM_COMDAT_SHARING_PROBABILITY, 80,
+                             opts->x_param_values, opts_set->x_param_values);
+    }
   else
     maybe_set_param_value (PARAM_MIN_CROSSJUMP_INSNS,
 			   default_param_value (PARAM_MIN_CROSSJUMP_INSNS),
@@ -784,10 +791,6 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
 			     opts->x_param_values, opts_set->x_param_values);
     }
 
-  if (opts->x_flag_auto_profile)
-    maybe_set_param_value (PARAM_EARLY_INLINER_MAX_ITERATIONS, 10,
-			   opts->x_param_values, opts_set->x_param_values);
-
   if (opts->x_flag_lto)
     {
 #ifdef ENABLE_LTO
@@ -802,7 +805,7 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
 #endif
       if (!opts->x_flag_fat_lto_objects && !HAVE_LTO_PLUGIN)
         error_at (loc, "-fno-fat-lto-objects are supported only with linker plugin.");
-}
+    }
   if ((opts->x_flag_lto_partition_balanced != 0) + (opts->x_flag_lto_partition_1to1 != 0)
        + (opts->x_flag_lto_partition_none != 0) >= 1)
     {
@@ -841,19 +844,51 @@ finish_options (struct gcc_options *opts, struct gcc_options *opts_set,
 	 opts->x_param_values, opts_set->x_param_values);
     }
 
+  /* Tune vectorization related parametees according to cost model.  */
+  if (opts->x_flag_vect_cost_model == VECT_COST_MODEL_CHEAP)
+    {
+      maybe_set_param_value (PARAM_VECT_MAX_VERSION_FOR_ALIAS_CHECKS,
+            6, opts->x_param_values, opts_set->x_param_values);
+      maybe_set_param_value (PARAM_VECT_MAX_VERSION_FOR_ALIGNMENT_CHECKS,
+            0, opts->x_param_values, opts_set->x_param_values);
+      maybe_set_param_value (PARAM_VECT_MAX_PEELING_FOR_ALIGNMENT,
+            0, opts->x_param_values, opts_set->x_param_values);
+    }
+
   /* Set PARAM_MAX_STORES_TO_SINK to 0 if either vectorization or if-conversion
      is disabled.  */
-  if (!opts->x_flag_tree_vectorize || !opts->x_flag_tree_loop_if_convert)
+  if ((!opts->x_flag_tree_loop_vectorize && !opts->x_flag_tree_slp_vectorize)
+       || !opts->x_flag_tree_loop_if_convert)
     maybe_set_param_value (PARAM_MAX_STORES_TO_SINK, 0,
                            opts->x_param_values, opts_set->x_param_values);
 
-  /* The -gsplit-dwarf option requires -gpubnames.  */
+  /* The -gsplit-dwarf option requires -ggnu-pubnames.  */
   if (opts->x_dwarf_split_debug_info)
-    opts->x_debug_generate_pub_sections = 1;
+    opts->x_debug_generate_pub_sections = 2;
 
   /* Turn on -ffunction-sections when -freorder-functions=* is used.  */
   if (opts->x_flag_reorder_functions > 1)
     opts->x_flag_function_sections = 1;
+
+  /* LIPO module grouping depends on the memory consumed by the profile-gen
+     parsing phase, recorded in a per-module ggc_memory field of the module
+     info struct. This will be higher when debug generation is on via
+     -g/-gmlt, which causes the FE to generate debug structures that will
+     increase the ggc_total_memory. This could in theory cause the module
+     groups to be slightly more conservative. Disable -g/-gmlt under
+     -fripa -fprofile-generate, but provide an option to override this
+     in case we actually need to debug an instrumented binary.  */
+  if (opts->x_profile_arc_flag
+      && opts->x_flag_dyn_ipa
+      && opts->x_debug_info_level != DINFO_LEVEL_NONE
+      && !opts->x_flag_dyn_ipa_allow_debug)
+    {
+      inform (loc,
+	      "Debug generation via -g option disabled under -fripa "
+              "-fprofile-generate (use -fripa-allow-debug to override)");
+      set_debug_level (NO_DEBUG, DEFAULT_GDB_EXTENSIONS, "0", opts, opts_set,
+                       loc);
+    }
 }
 
 #define LEFT_COLUMN	27
@@ -1609,8 +1644,6 @@ common_handle_option (struct gcc_options *opts,
 	opts->x_flag_unroll_loops = value;
       if (!opts_set->x_flag_peel_loops)
 	opts->x_flag_peel_loops = value;
-      if (!opts_set->x_flag_tracer)
-	opts->x_flag_tracer = value;
       if (!opts_set->x_flag_value_profile_transformations)
 	opts->x_flag_value_profile_transformations = value;
       if (!opts_set->x_flag_inline_functions)
@@ -1626,10 +1659,11 @@ common_handle_option (struct gcc_options *opts,
 	opts->x_flag_unswitch_loops = value;
       if (!opts_set->x_flag_gcse_after_reload)
 	opts->x_flag_gcse_after_reload = value;
-      if (!opts_set->x_flag_tree_vectorize)
-	opts->x_flag_tree_vectorize = value;
+      if (!opts_set->x_flag_tree_vectorize
+          && !opts_set->x_flag_tree_loop_vectorize)
+	opts->x_flag_tree_loop_vectorize = value;
       if (!opts_set->x_flag_vect_cost_model)
-	opts->x_flag_vect_cost_model = value;
+	opts->x_flag_vect_cost_model = VECT_COST_MODEL_DYNAMIC;
       if (!opts_set->x_flag_tree_loop_distribute_patterns)
 	opts->x_flag_tree_loop_distribute_patterns = value;
       break;
@@ -1661,10 +1695,11 @@ common_handle_option (struct gcc_options *opts,
 	opts->x_flag_unswitch_loops = value;
       if (!opts_set->x_flag_gcse_after_reload)
 	opts->x_flag_gcse_after_reload = value;
-      if (!opts_set->x_flag_tree_vectorize)
-	opts->x_flag_tree_vectorize = value;
+      if (!opts_set->x_flag_tree_loop_vectorize
+          && !opts_set->x_flag_tree_vectorize)
+	opts->x_flag_tree_loop_vectorize = value;
       if (!opts_set->x_flag_vect_cost_model)
-	opts->x_flag_vect_cost_model = value;
+	opts->x_flag_vect_cost_model = VECT_COST_MODEL_DYNAMIC;
       if (!opts_set->x_flag_tree_loop_distribute_patterns)
 	opts->x_flag_tree_loop_distribute_patterns = value;
       break;
@@ -1691,6 +1726,12 @@ common_handle_option (struct gcc_options *opts,
       lipo_inc_path_pattern = xstrdup (arg);
       break;
 
+    case OPT_ftree_vectorize:
+      if (!opts_set->x_flag_tree_loop_vectorize)
+        opts->x_flag_tree_loop_vectorize = value;
+      if (!opts_set->x_flag_tree_slp_vectorize)
+        opts->x_flag_tree_slp_vectorize = value;
+      break;
     case OPT_fshow_column:
       dc->show_column = value;
       break;

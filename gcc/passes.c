@@ -313,8 +313,6 @@ bool cgraph_callee_edges_final_cleanup = false;
 static bool
 gate_all_early_optimizations (void)
 {
-  /* The cgraph callee edges are being cleaned up for the last time.  */
-  cgraph_callee_edges_final_cleanup = true;
   return (optimize >= 1
 	  /* Don't bother doing anything if the program has errors.  */
 	  && !seen_error ());
@@ -345,6 +343,8 @@ static struct gimple_opt_pass pass_all_early_optimizations =
 static bool
 gate_all_optimizations (void)
 {
+  /* The cgraph callee edges are being cleaned up for the last time.  */
+  cgraph_callee_edges_final_cleanup = true;
   return optimize >= 1 && !optimize_debug;
 }
 
@@ -539,6 +539,11 @@ register_one_dump_file (struct opt_pass *pass)
   flag_name = concat (prefix, name, num, NULL);
   glob_name = concat (prefix, name, NULL);
   optgroup_flags |= pass->optinfo_flags;
+  /* For any passes that do not have an optgroup set, and which are not
+     IPA passes setup above, set the optgroup to OPTGROUP_OTHER so that
+     any dump messages are emitted properly under -fopt-info(-optall).  */
+  if (optgroup_flags == OPTGROUP_NONE)
+    optgroup_flags = OPTGROUP_OTHER;
   id = dump_register (dot_name, flag_name, glob_name, flags, optgroup_flags);
   set_pass_for_id (id, pass);
   full_name = concat (prefix, pass->name, num, NULL);
@@ -1547,15 +1552,15 @@ init_optimization_passes (void)
       /* Perform simple scalar cleanup which is constant/copy propagation.  */
       NEXT_PASS (pass_ccp);
       NEXT_PASS (pass_object_sizes);
+      /* Fold remaining builtins.  */
+      NEXT_PASS (pass_fold_builtins);
       /* Copy propagation also copy-propagates constants, this is necessary
-         to forward object-size results properly.  */
+         to forward object-size and builtin folding results properly.  */
       NEXT_PASS (pass_copy_prop);
+      NEXT_PASS (pass_dce);
       NEXT_PASS (pass_asan);
       NEXT_PASS (pass_tsan);
       NEXT_PASS (pass_rename_ssa_copies);
-      NEXT_PASS (pass_dce);
-      /* Fold remaining builtins.  */
-      NEXT_PASS (pass_fold_builtins);
       /* ???  We do want some kind of loop invariant motion, but we possibly
          need to adjust LIM to be more friendly towards preserving accurate
 	 debug information here.  */
@@ -1614,6 +1619,7 @@ init_optimization_passes (void)
 	  NEXT_PASS (pass_rtl_loop_done);
 	  *p = NULL;
 	}
+      NEXT_PASS (pass_simplify_got);
       NEXT_PASS (pass_web);
       NEXT_PASS (pass_rtl_cprop);
       NEXT_PASS (pass_cse2);

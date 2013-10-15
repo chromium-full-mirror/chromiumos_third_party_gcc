@@ -709,7 +709,7 @@ next_discriminator_for_locus (location_t locus)
   item.discriminator = 0;
   slot = (struct locus_discrim_map **)
       htab_find_slot_with_hash (discriminator_per_locus, (void *) &item,
-                                (hashval_t) locus, INSERT);
+                                locus_map_hash (&item), INSERT);
   gcc_assert (slot);
   if (*slot == HTAB_EMPTY_ENTRY)
     {
@@ -732,8 +732,8 @@ same_line_p (location_t locus1, location_t locus2)
   if (locus1 == locus2)
     return true;
 
-  from = expand_location_to_spelling_point (locus1);
-  to = expand_location_to_spelling_point (locus2);
+  from = expand_location (locus1);
+  to = expand_location (locus2);
 
   if (from.line != to.line)
     return false;
@@ -751,24 +751,22 @@ static void
 assign_discriminator (location_t locus, basic_block bb)
 {
   gimple_stmt_iterator gsi;
-  tree block = LOCATION_BLOCK (locus);
+  int discriminator;
 
   locus = map_discriminator_location (locus);
 
   if (locus == UNKNOWN_LOCATION)
     return;
 
-  locus = location_with_discriminator (
-      locus, next_discriminator_for_locus (locus));
-
-  if (block != NULL)
-    locus = COMBINE_LOCATION_DATA (line_table, locus, block);
+  discriminator = next_discriminator_for_locus (locus);
 
   for (gsi = gsi_start_bb (bb); !gsi_end_p (gsi); gsi_next (&gsi))
     {
       gimple stmt = gsi_stmt (gsi);
-      if (same_line_p (locus, gimple_location (stmt)))
-	gimple_set_location (stmt, locus);
+      location_t stmt_locus = gimple_location (stmt);
+      if (same_line_p (locus, stmt_locus))
+	gimple_set_location (stmt,
+	    location_with_discriminator (stmt_locus, discriminator));
     }
 }
 
@@ -783,8 +781,36 @@ assign_discriminators (void)
     {
       edge e;
       edge_iterator ei;
+      gimple_stmt_iterator gsi;
       gimple last = last_stmt (bb);
       location_t locus = last ? gimple_location (last) : UNKNOWN_LOCATION;
+      location_t curr_locus = UNKNOWN_LOCATION;
+      int curr_discr = 0;
+
+      /* Traverse the basic block, if two function calls within a basic block
+	 are mapped to a same line, assign a new discriminator because a call
+	 stmt could be a split point of a basic block.  */
+      for (gsi = gsi_start_bb (bb); !gsi_end_p (gsi); gsi_next (&gsi))
+	{
+	  gimple stmt = gsi_stmt (gsi);
+	  if (curr_locus == UNKNOWN_LOCATION)
+	    {
+	      curr_locus = gimple_location (stmt);
+	    }
+	  else if (!same_line_p (curr_locus, gimple_location (stmt)))
+	    {
+	      curr_locus = gimple_location (stmt);
+	      curr_discr = 0;
+	    }
+	  else if (curr_discr != 0)
+	    {
+	      gimple_set_location (stmt, location_with_discriminator (
+		  gimple_location (stmt), curr_discr));
+	    }
+	  /* Allocate a new discriminator for CALL stmt.  */
+	  if (gimple_code (stmt) == GIMPLE_CALL)
+	    curr_discr = next_discriminator_for_locus (curr_locus);
+	}
 
       if (locus == UNKNOWN_LOCATION)
 	continue;
@@ -1447,13 +1473,6 @@ gimple_can_merge_blocks_p (basic_block a, basic_block b)
     return false;
 
   if (b == EXIT_BLOCK_PTR)
-    return false;
-
-  /* Some functions may have long jumps but not marked
-     properly to be control flow alterring. FIXME
-     this is a kludge  */
-  if (L_IPO_COMP_MODE && profile_info
-      && b->count != a->count)
     return false;
 
   /* If A ends by a statement causing exceptions or something similar, we

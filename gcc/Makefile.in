@@ -754,6 +754,7 @@ GCC_INSTALL_NAME := $(shell echo gcc|sed '$(program_transform_name)')
 GCC_TARGET_INSTALL_NAME := $(target_noncanonical)-$(shell echo gcc|sed '$(program_transform_name)')
 CPP_INSTALL_NAME := $(shell echo cpp|sed '$(program_transform_name)')
 GCOV_INSTALL_NAME := $(shell echo gcov|sed '$(program_transform_name)')
+PROFILE_TOOL_INSTALL_NAME := $(shell echo profile_tool|sed '$(program_transform_name)')
 
 # Setup the testing framework, if you have one
 EXPECT = `if [ -f $${rootme}/../expect/expect ] ; then \
@@ -1348,6 +1349,7 @@ OBJS = \
 	sel-sched-dump.o \
 	sel-sched.o \
 	sese.o \
+	simplify-got.o \
 	simplify-rtx.o \
 	sparseset.o \
 	sreal.o \
@@ -2511,7 +2513,7 @@ tree-ssa-reassoc.o : tree-ssa-reassoc.c $(TREE_FLOW_H) $(CONFIG_H) \
    $(TM_H) coretypes.h $(TREE_PASS_H) $(FLAGS_H) \
    tree-iterator.h $(BASIC_BLOCK_H) $(GIMPLE_H) $(TREE_INLINE_H) \
    $(VEC_H) langhooks.h alloc-pool.h pointer-set.h $(CFGLOOP_H) \
-   $(TARGET_H) $(GIMPLE_PRETTY_PRINT_H) $(DIAGNOSTIC_CORE_H)
+   $(TARGET_H) $(GIMPLE_PRETTY_PRINT_H) $(DIAGNOSTIC_CORE_H) $(PARAMS_H)
 tree-optimize.o : tree-optimize.c $(TREE_FLOW_H) $(CONFIG_H) $(SYSTEM_H) \
    $(TREE_H) $(TM_P_H) $(GGC_H) \
    $(DIAGNOSTIC_H) $(BASIC_BLOCK_H) $(FLAGS_H) $(TM_H) \
@@ -2620,7 +2622,7 @@ tree-vect-data-refs.o: tree-vect-data-refs.c $(CONFIG_H) $(SYSTEM_H) \
 tree-vectorizer.o: tree-vectorizer.c $(CONFIG_H) $(SYSTEM_H) coretypes.h \
    dumpfile.h $(TM_H) $(GGC_H) $(TREE_H) $(TREE_FLOW_H) \
    $(CFGLOOP_H) $(TREE_PASS_H) $(TREE_VECTORIZER_H) \
-   $(TREE_PRETTY_PRINT_H)
+   $(TREE_PRETTY_PRINT_H) $(DBGCNT_H)
 tree-loop-distribution.o: tree-loop-distribution.c $(CONFIG_H) $(SYSTEM_H) \
    coretypes.h $(TREE_FLOW_H) $(CFGLOOP_H) $(TREE_DATA_REF_H) $(TREE_PASS_H)
 tree-parloops.o: tree-parloops.c $(CONFIG_H) $(SYSTEM_H) coretypes.h \
@@ -2859,6 +2861,8 @@ jump.o : jump.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) $(RTL_H) \
    $(EXCEPT_H) $(FUNCTION_H) $(BASIC_BLOCK_H) $(TREE_PASS_H) \
    $(DIAGNOSTIC_CORE_H) $(DIAGNOSTIC_CORE_H) $(INSN_ATTR_H) $(TM_P_H) reload.h \
    $(PREDICT_H) $(TARGET_H)
+simplify-got.o : simplify-got.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) \
+   $(RTL_H) $(FLAGS_H) $(TREE_PASS_H) $(TIMEVAR_H) $(TARGET_H) $(HASHTAB_H)
 simplify-rtx.o : simplify-rtx.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) \
    $(RTL_H) $(REGS_H) hard-reg-set.h $(FLAGS_H) insn-config.h \
    $(RECOG_H) $(EXPR_H) $(DIAGNOSTIC_CORE_H) $(FUNCTION_H) $(GGC_H) $(TM_P_H) \
@@ -2880,8 +2884,7 @@ cgraphunit.o : cgraphunit.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) \
    $(FIBHEAP_H) output.h $(PARAMS_H) $(RTL_H) $(IPA_PROP_H) \
    gt-cgraphunit.h tree-iterator.h $(COVERAGE_H) $(TREE_DUMP_H) \
    $(GIMPLE_PRETTY_PRINT_H) $(IPA_INLINE_H) $(IPA_UTILS_H) l-ipo.h \
-   $(LTO_STREAMER_H) output.h $(REGSET_H) $(EXCEPT_H) $(GCC_PLUGIN_H) plugin.h \
-   $(AUTO_PROFILE_H)
+   $(LTO_STREAMER_H) output.h $(REGSET_H) $(EXCEPT_H) $(GCC_PLUGIN_H) plugin.h
 cgraphclones.o : cgraphclones.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) \
    $(TREE_H) langhooks.h $(TREE_INLINE_H) toplev.h $(DIAGNOSTIC_CORE_H) $(FLAGS_H) $(GGC_H) \
    $(TARGET_H) $(CGRAPH_H) intl.h pointer-set.h $(FUNCTION_H) $(GIMPLE_H) \
@@ -2889,11 +2892,11 @@ cgraphclones.o : cgraphclones.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) \
    $(PARAMS_H) $(RTL_H) $(IPA_PROP_H) \
    tree-iterator.h $(COVERAGE_H) \
    $(GIMPLE_PRETTY_PRINT_H) $(IPA_INLINE_H) $(IPA_UTILS_H) \
-   $(LTO_STREAMER_H) $(EXCEPT_H) $(GCC_PLUGIN_H) $(AUTO_PROFILE_H) gt-cgraphclones.h
+   $(LTO_STREAMER_H) $(EXCEPT_H) $(GCC_PLUGIN_H) gt-cgraphclones.h
 cgraphbuild.o : cgraphbuild.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) \
    $(TREE_H) langhooks.h $(CGRAPH_H) intl.h pointer-set.h $(GIMPLE_H) \
    $(TREE_FLOW_H) $(TREE_PASS_H) $(IPA_UTILS_H) $(EXCEPT_H) \
-   $(IPA_INLINE_H) l-ipo.h $(AUTO_PROFILE_H)
+   $(IPA_INLINE_H) l-ipo.h
 varpool.o : varpool.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) \
    $(TREE_H) $(CGRAPH_H) langhooks.h $(DIAGNOSTIC_CORE_H) $(HASHTAB_H) \
    $(GGC_H) $(TIMEVAR_H) debug.h $(TARGET_H) output.h $(GIMPLE_H) \
@@ -2923,7 +2926,7 @@ ipa-inline.o : ipa-inline.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) \
    $(DIAGNOSTIC_H) $(FIBHEAP_H) $(PARAMS_H) $(TREE_PASS_H) \
    $(COVERAGE_H) $(GGC_H) $(TREE_FLOW_H) $(RTL_H) $(IPA_PROP_H) \
    $(EXCEPT_H) $(GIMPLE_PRETTY_PRINT_H) $(IPA_INLINE_H) $(TARGET_H) \
-   $(IPA_UTILS_H) l-ipo.h $(AUTO_PROFILE_H)
+   $(IPA_UTILS_H) l-ipo.h $(AUTO_PROFILE_H) sreal.h
 ipa-inline-analysis.o : ipa-inline-analysis.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) \
    $(TREE_H) langhooks.h $(TREE_INLINE_H) $(FLAGS_H) $(CGRAPH_H) intl.h \
    $(DIAGNOSTIC_H) $(PARAMS_H) $(TREE_PASS_H) $(CFGLOOP_H) \
@@ -2960,7 +2963,7 @@ coverage.o : coverage.c $(GCOV_IO_H) $(CONFIG_H) $(SYSTEM_H) coretypes.h dumpfil
 auto-profile.o : auto-profile.c $(CONFIG_H) $(SYSTEM_H) $(FLAGS_H) \
    $(BASIC_BLOCK_H) $(DIAGNOSTIC_CORE_H) $(GCOV_IO_H) $(INPUT_H) profile.h \
    $(LANGHOOKS_H) $(OPTS_H) $(TREE_PASS_H) $(CGRAPH_H) $(GIMPLE_H) value-prof.h \
-   $(COVERAGE_H) coretypes.h $(TREE_H) $(AUTO_PROFILE_H)
+   $(COVERAGE_H) coretypes.h $(TREE_H) $(PARAMS_H) l-ipo.h $(AUTO_PROFILE_H)
 cselib.o : cselib.c $(CONFIG_H) $(SYSTEM_H) coretypes.h dumpfile.h $(TM_H) $(RTL_H) \
    $(REGS_H) hard-reg-set.h $(FLAGS_H) insn-config.h $(RECOG_H) \
    $(EMIT_RTL_H) $(DIAGNOSTIC_CORE_H) $(FUNCTION_H) \
@@ -3390,7 +3393,7 @@ predict.o: predict.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) $(RTL_H) \
    hard-reg-set.h $(DIAGNOSTIC_CORE_H) $(RECOG_H) $(FUNCTION_H) $(EXCEPT_H) \
    $(TM_P_H) $(PREDICT_H) sreal.h $(PARAMS_H) $(TARGET_H) $(CFGLOOP_H) \
    $(COVERAGE_H) $(SCEV_H) $(GGC_H) predict.def \
-   $(TREE_FLOW_H) $(TREE_PASS_H) $(EXPR_H) pointer-set.h $(AUTO_PROFILE_H)
+   $(TREE_FLOW_H) $(TREE_PASS_H) $(EXPR_H) pointer-set.h
 lists.o: lists.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) $(DIAGNOSTIC_CORE_H) \
    $(RTL_H) $(GGC_H) gt-lists.h
 bb-reorder.o : bb-reorder.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) \
@@ -4689,6 +4692,13 @@ install-common: native lang.install-common installdirs
 	then \
 	    rm -f $(DESTDIR)$(bindir)/$(GCOV_INSTALL_NAME)$(exeext); \
 	    $(INSTALL_PROGRAM) gcov$(exeext) $(DESTDIR)$(bindir)/$(GCOV_INSTALL_NAME)$(exeext); \
+	fi
+# Install profile_tool if it is available.
+	-if [ -f $(srcdir)/../contrib/profile_tool ]; \
+	then \
+	    rm -f $(DESTDIR)$(bindir)/$(PROFILE_TOOL_INSTALL_NAME)$(exeext); \
+	    $(INSTALL_PROGRAM) $(srcdir)/../contrib/profile_tool \
+	    $(DESTDIR)$(bindir)/$(PROFILE_TOOL_INSTALL_NAME)$(exeext); \
 	fi
 
 # Install the driver program as $(target_noncanonical)-gcc,

@@ -713,6 +713,7 @@ lipo_cmp_type (tree t1, tree t2)
               && lipo_cmp_type (TREE_TYPE (t1), TREE_TYPE (t2)));
     case VOID_TYPE:
     case BOOLEAN_TYPE:
+    case NULLPTR_TYPE:
       return 1;
     case TEMPLATE_TYPE_PARM:
       return 1;
@@ -2006,7 +2007,9 @@ varpool_remove_duplicate_weak_decls (void)
       tree decl = node->symbol.decl;
 
       if (TREE_PUBLIC (decl) && DECL_WEAK (decl) && !DECL_EXTERNAL (decl)
-	  && get_name_seq_num (IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (decl))))
+          && ((DECL_ARTIFICIAL (decl) &&
+           get_name_seq_num (IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (decl))))
+          || (!DECL_ARTIFICIAL (decl) && real_varpool_node (decl) != node)))
         {
 	  DECL_EXTERNAL (decl) = 1;
 	  TREE_STATIC (decl) = 0;
@@ -2141,6 +2144,19 @@ resolve_varpool_node (struct varpool_node **slot, struct varpool_node *node)
       merge_addressable_attr (decl2, decl1);
       return;
     }
+
+  if (DECL_INITIAL (decl1) && !DECL_INITIAL (decl2))
+    {    
+      merge_addressable_attr (decl1, decl2);
+      return;
+    }    
+
+  if (!DECL_INITIAL (decl1) && DECL_INITIAL (decl2))
+    {    
+      *slot = node;
+      merge_addressable_attr (decl2, decl1);
+      return;
+    }    
 
   /* Either all complete or neither's type is complete. Just
      pick the primary module's decl.  */

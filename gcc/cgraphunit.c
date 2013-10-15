@@ -195,7 +195,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "l-ipo.h"
 #include "except.h"
 #include "regset.h"     /* FIXME: For reg_obstack.  */
-#include "auto-profile.h"
 
 /* Queue of cgraph nodes scheduled to be added into cgraph.  This is a
    secondary queue used during optimization to accommodate passes that
@@ -270,6 +269,12 @@ enqueue_node (symtab_node node)
   gcc_checking_assert (first);
   node->symbol.aux = first;
   first = node;
+}
+
+void
+cgraph_enqueue_node (struct cgraph_node *node)
+{
+  enqueue_node ((symtab_node) node);
 }
 
 /* Process CGRAPH_NEW_FUNCTIONS and perform actions necessary to add these
@@ -2242,13 +2247,6 @@ void
 finalize_compilation_unit (void)
 {
   timevar_push (TV_CGRAPH);
-
-  /* Before compilation, auto profile will process the profile to build the
-     hash tables for later optimizations. We delay this function call here
-     because all the parsing should be done so that we will have the bfd
-     name mapping ready. */
-  if (flag_auto_profile)
-    process_auto_profile ();
 
   /* If we're here there's no current function anymore.  Some frontends
      are lazy in clearing these.  */

@@ -2029,7 +2029,10 @@ copy_phis_for_bb (basic_block bb, copy_body_data *id)
 		  n = (tree *) pointer_map_contains (id->decl_map,
 			LOCATION_BLOCK (locus));
 		  gcc_assert (n);
-		  locus = COMBINE_LOCATION_DATA (line_table, locus, *n);
+		  if (*n)
+		    locus = COMBINE_LOCATION_DATA (line_table, locus, *n);
+		  else
+		    locus = LOCATION_LOCUS (locus);
 		}
 	      else
 		locus = LOCATION_LOCUS (locus);
@@ -3875,8 +3878,10 @@ expand_call_inline (basic_block bb, gimple stmt, copy_body_data *id)
 	     for inlining, but we can't do that because frontends overwrite
 	     the body.  */
 	  && !cg_edge->callee->local.redefined_extern_inline
-	  /* Avoid warnings during early inline pass. */
-	  && cgraph_global_info_ready
+	  /* During early inline pass, report only when optimization is
+	     not turned on.  */
+	  && (cgraph_global_info_ready
+	      || !optimize)
 	  /* PR 20090218-1_0.c. Body can be provided by another module. */
 	  && (reason != CIF_BODY_NOT_AVAILABLE || !flag_generate_lto))
 	{

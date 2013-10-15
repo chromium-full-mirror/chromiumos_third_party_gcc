@@ -45,6 +45,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "function.h"
 #include "params.h"
 #include "l-ipo.h"
+#include "dumpfile.h"
 
 #ifndef DOLLARS_IN_IDENTIFIERS
 # define DOLLARS_IN_IDENTIFIERS true
@@ -876,6 +877,12 @@ c_common_post_options (const char **pfilename)
   if (warn_packed_bitfield_compat == -1)
     warn_packed_bitfield_compat = 1;
 
+  /* Enable warning for converting real values to integral values
+     when -Wconversion is specified (unless disabled through
+     -Wno-real-conversion).  */
+  if (warn_real_conversion == -1)
+    warn_real_conversion = warn_conversion;
+
   /* Special format checking options don't work without -Wformat; warn if
      they are used.  */
   if (!warn_format)
@@ -1051,12 +1058,16 @@ lipo_max_mem_reached (unsigned int i)
          by the optimizer.  */
       && ((ggc_total_allocated () >> 10) * 1.25
           > (size_t) PARAM_VALUE (PARAM_MAX_LIPO_MEMORY))) {
-    i++;
-    do {
-      inform (input_location, "Not importing %s: maximum memory "
-	      "consumption reached", in_fnames[i]);
-      i++;
-    } while (i < num_in_fnames);
+    if (dump_enabled_p ())
+      {
+        i++;
+        do {
+          dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                           "Not importing %s: maximum memory "
+                           "consumption reached", in_fnames[i]);
+          i++;
+        } while (i < num_in_fnames);
+      }
     return true;
   }
   return false;
@@ -1077,7 +1088,14 @@ c_common_parse_file (void)
       pch_init ();
       set_lipo_c_parsing_context (parse_in, i, verbose);
       push_file_scope ();
+
       c_parse_file ();
+      if (i == 0 && flag_record_compilation_info_in_elf)
+        write_compilation_flags_to_asm ();
+
+      if (i == 0)
+	ggc_total_memory = (ggc_total_allocated () >> 10);
+
       /* In lipo mode, processing too many auxiliary files will cause us
 	 to hit memory limits, and cause thrashing -- prevent this by not
 	 processing any further auxiliary modules if we reach a certain
@@ -1100,7 +1118,6 @@ c_common_parse_file (void)
       if (!this_input_filename)
 	break;
     }
-    ggc_total_memory = (ggc_total_allocated () >> 10);
     parsing_done_p = true;
 }
 

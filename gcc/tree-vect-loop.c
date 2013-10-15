@@ -940,7 +940,7 @@ destroy_loop_vec_info (loop_vec_info loop_vinfo, bool clean_stmts)
     }
 
   free (LOOP_VINFO_BBS (loop_vinfo));
-  free_data_refs (LOOP_VINFO_DATAREFS (loop_vinfo));
+  vect_destroy_datarefs (loop_vinfo, NULL);
   free_dependence_relations (LOOP_VINFO_DDRS (loop_vinfo));
   LOOP_VINFO_LOOP_NEST (loop_vinfo).release ();
   LOOP_VINFO_MAY_MISALIGN_STMTS (loop_vinfo).release ();
@@ -2629,7 +2629,7 @@ vect_estimate_min_profitable_iters (loop_vec_info loop_vinfo,
   void *target_cost_data = LOOP_VINFO_TARGET_COST_DATA (loop_vinfo);
 
   /* Cost model disabled.  */
-  if (!flag_vect_cost_model)
+  if (unlimited_cost_model ())
     {
       dump_printf_loc (MSG_NOTE, vect_location, "cost model disabled.");
       *ret_min_profitable_niters = 0;
@@ -4329,9 +4329,8 @@ vect_finalize_reduction:
         if (!flow_bb_inside_loop_p (loop, gimple_bb (USE_STMT (use_p))))
           phis.safe_push (USE_STMT (use_p));
 
-      /* We expect to have found an exit_phi because of loop-closed-ssa
-         form.  */
-      gcc_assert (!phis.is_empty ());
+      /* While we expect to have found an exit_phi because of loop-closed-ssa
+         form we can end up without one if the scalar cycle is dead.  */
 
       FOR_EACH_VEC_ELT (phis, i, exit_phi)
         {

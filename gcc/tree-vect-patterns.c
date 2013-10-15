@@ -395,7 +395,7 @@ vect_recog_dot_prod_pattern (vec<gimple> *stmts, tree *type_in,
           || !promotion)
         return NULL;
       oprnd00 = gimple_assign_rhs1 (def_stmt);
-      if (!type_conversion_p (oprnd0, stmt, true, &half_type1, &def_stmt,
+      if (!type_conversion_p (oprnd1, stmt, true, &half_type1, &def_stmt,
                                 &promotion)
           || !promotion)
         return NULL;
@@ -638,7 +638,10 @@ vect_recog_widen_mult_pattern (vec<gimple> *stmts,
           && vect_handle_widen_op_by_const (last_stmt, MULT_EXPR, oprnd1,
 		                            &oprnd0, stmts, type,
 					    &half_type0, def_stmt0))
-        half_type1 = half_type0;
+	{
+	  half_type1 = half_type0;
+	  oprnd1 = fold_convert (half_type1, oprnd1);
+	}
       else
         return NULL;
     }

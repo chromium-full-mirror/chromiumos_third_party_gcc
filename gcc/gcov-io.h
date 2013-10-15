@@ -217,6 +217,14 @@ typedef unsigned gcov_type_unsigned __attribute__ ((mode (QI)));
 
 #endif  /* BITS_PER_UNIT == 8  */
 
+#if LONG_LONG_TYPE_SIZE > 32
+#define GCOV_TYPE_ATOMIC_FETCH_ADD_FN __atomic_fetch_add_8
+#define GCOV_TYPE_ATOMIC_FETCH_ADD BUILT_IN_ATOMIC_FETCH_ADD_8
+#else
+#define GCOV_TYPE_ATOMIC_FETCH_ADD_FN __atomic_fetch_add_4
+#define GCOV_TYPE_ATOMIC_FETCH_ADD BUILT_IN_ATOMIC_FETCH_ADD_4
+#endif
+
 #undef EXTRACT_MODULE_ID_FROM_GLOBAL_ID
 #undef EXTRACT_FUNC_ID_FROM_GLOBAL_ID
 #undef GEN_FUNC_GLOBAL_ID
@@ -238,6 +246,19 @@ typedef unsigned gcov_type_unsigned __attribute__ ((mode (QI)));
 
 typedef unsigned gcov_unsigned_t;
 typedef unsigned gcov_position_t;
+
+#if LONG_LONG_TYPE_SIZE > 32
+#define GCOV_TYPE_ATOMIC_FETCH_ADD_FN __atomic_fetch_add_8
+#define GCOV_TYPE_ATOMIC_FETCH_ADD BUILT_IN_ATOMIC_FETCH_ADD_8
+#else
+#define GCOV_TYPE_ATOMIC_FETCH_ADD_FN __atomic_fetch_add_4
+#define GCOV_TYPE_ATOMIC_FETCH_ADD BUILT_IN_ATOMIC_FETCH_ADD_4
+#endif
+#define PROFILE_GEN_EDGE_ATOMIC (flag_profile_gen_atomic == 1 || \
+                                 flag_profile_gen_atomic == 3)
+#define PROFILE_GEN_VALUE_ATOMIC (flag_profile_gen_atomic == 2 || \
+                                  flag_profile_gen_atomic == 3)
+
 /* gcov_type is typedef'd elsewhere for the compiler */
 #if IN_GCOV
 #define GCOV_LINKAGE static
@@ -516,6 +537,7 @@ struct gcov_module_info
   char *source_filename;
   gcov_unsigned_t num_quote_paths;
   gcov_unsigned_t num_bracket_paths;
+  gcov_unsigned_t num_system_paths;
   gcov_unsigned_t num_cpp_defines;
   gcov_unsigned_t num_cpp_includes;
   gcov_unsigned_t num_cl_args;
@@ -739,6 +761,28 @@ GCOV_LINKAGE unsigned gcov_histo_index (gcov_type value);
 GCOV_LINKAGE void gcov_write_string (const char *);
 GCOV_LINKAGE gcov_position_t gcov_write_tag (gcov_unsigned_t);
 GCOV_LINKAGE void gcov_write_length (gcov_position_t /*position*/);
+#endif
+
+#if IN_GCOV <= 0 && !IN_LIBGCOV
+/* Available in gcov-dump and the compiler.  */
+
+/* Number of data points in the working set summary array. Using 128
+   provides information for at least every 1% increment of the total
+   profile size. The last entry is hardwired to 99.9% of the total.  */
+#define NUM_GCOV_WORKING_SETS 128
+
+/* Working set size statistics for a given percentage of the entire
+   profile (sum_all from the counter summary).  */
+typedef struct gcov_working_set_info
+{
+  /* Number of hot counters included in this working set.  */
+  unsigned num_counters;
+  /* Smallest counter included in this working set.  */
+  gcov_type min_counter;
+} gcov_working_set_t;
+
+GCOV_LINKAGE void compute_working_sets (const struct gcov_ctr_summary *summary,
+                                        gcov_working_set_t *gcov_working_sets);
 #endif
 
 #if IN_GCOV > 0

@@ -118,10 +118,12 @@ along with GCC; see the file COPYING3.  If not see
 #include "ipa-inline.h"
 #include "ipa-utils.h"
 #include "auto-profile.h"
+#include "sreal.h"
 
 /* Statistics we collect about inlining algorithm.  */
 static int overall_size;
 static gcov_type max_count;
+static sreal max_count_real, max_relbenefit_real, half_int_min_real;
 
 /* Global variable to denote if it is in ipa-inline pass. */
 bool is_in_ipa_inline = false;
@@ -526,12 +528,76 @@ big_speedup_p (struct cgraph_edge *e)
   return false;
 }
 
+/* Returns true if callee of edge E is considered useful to inline
+   even if it is cold. A callee is considered useful if there is at
+   least one argument of pointer type with IPA_JF_KNOWN_TYPE or
+   IPA_JF_UNKNOWN as the jump function.  The reasoniong here is that
+   it is often beneficial to inline bar into foo in the following
+   code even if the callsite is cold:
+   void foo () {
+     A a;
+     bar (&a);
+     ...
+    }
+
+    This exposes accesses to the 'a' object. The jump function of &a
+    is either IPA_JF_KNOWN_TYPE or IPA_JF_UNKNOWN (depending on
+    intervening code).  */
+
+static inline bool
+useful_cold_callee (struct cgraph_edge *e)
+{
+  gimple call = e->call_stmt;
+  int n, arg_num = gimple_call_num_args (call);
+  struct ipa_edge_args *args = IPA_EDGE_REF (e);
+
+  if (ipa_node_params_vector.exists ())
+    {
+      for (n = 0; n < arg_num; n++)
+        {
+          tree arg = gimple_call_arg (call, n);
+          if (POINTER_TYPE_P (TREE_TYPE (arg)))
+            {
+              struct ipa_jump_func *jfunc = ipa_get_ith_jump_func (args, n);
+              if (jfunc->type == IPA_JF_KNOWN_TYPE
+                  || jfunc->type == IPA_JF_UNKNOWN)
+                return true;
+            }
+        }
+    }
+  return false;
+}
+
+/* Returns true if hot caller heuristic should be used.  */
+
+static inline bool
+enable_hot_caller_heuristic (void)
+{
+
+  gcov_working_set_t *ws = NULL;
+  int size_threshold = PARAM_VALUE (PARAM_HOT_CALLER_CODESIZE_THRESHOLD);
+  int num_counters = 0;
+  int param_inline_hot_caller = PARAM_VALUE (PARAM_INLINE_HOT_CALLER);
+
+  if (param_inline_hot_caller == 0)
+    return false;
+  else if (param_inline_hot_caller == 1)
+    return true;
+
+  ws = find_working_set(PARAM_VALUE (HOT_BB_COUNT_WS_PERMILLE));
+  if (!ws)
+    return false;
+  num_counters = ws->num_counters;
+  return num_counters <= size_threshold;
+
+}
 /* Returns true if an edge or its caller are hot enough to
    be considered for inlining.  */
 
 static bool
 edge_hot_enough_p (struct cgraph_edge *edge)
 {
+  static bool use_hot_caller_heuristic = enable_hot_caller_heuristic ();
   if (cgraph_maybe_hot_edge_p (edge))
     return true;
 
@@ -541,9 +607,17 @@ edge_hot_enough_p (struct cgraph_edge *edge)
   if (flag_auto_profile && edge->callee->count == 0
       && edge->callee->max_bb_count > 0)
     return false;
-  if (PARAM_VALUE (PARAM_INLINE_HOT_CALLER)
-      && maybe_hot_count_p (NULL, edge->caller->max_bb_count))
-    return true;
+  if (use_hot_caller_heuristic)
+    {
+      struct cgraph_node *where = edge->caller;
+      if (maybe_hot_count_p (NULL, where->max_bb_count))
+        {
+          if (PARAM_VALUE (PARAM_INLINE_USEFUL_COLD_CALLEE))
+            return useful_cold_callee (edge);
+          else
+            return true;
+        }
+    }
   return false;
 }
 
@@ -966,12 +1040,26 @@ edge_badness (struct cgraph_edge *edge, bool dump)
 
   else if (max_count)
     {
+      sreal tmp, relbenefit_real, growth_real;
       int relbenefit = relative_time_benefit (callee_info, edge, edge_time);
-      badness =
-	((int)
-	 ((double) edge->count * INT_MIN / 2 / max_count / RELATIVE_TIME_BENEFIT_RANGE) *
-	 relbenefit) / growth;
-      
+
+      sreal_init(&relbenefit_real, relbenefit, 0);
+      sreal_init(&growth_real, growth, 0);
+
+      /* relative_edge_count.  */
+      sreal_init (&tmp, edge->count, 0);
+      sreal_div (&tmp, &tmp, &max_count_real);
+
+      /* relative_time_benefit.  */
+      sreal_mul (&tmp, &tmp, &relbenefit_real);
+      sreal_div (&tmp, &tmp, &max_relbenefit_real);
+
+      /* growth_f_caller.  */
+      sreal_mul (&tmp, &tmp, &half_int_min_real);
+      sreal_div (&tmp, &tmp, &growth_real);
+
+      badness = -sreal_to_int (&tmp);
+ 
       /* Be sure that insanity of the profile won't lead to increasing counts
 	 in the scalling and thus to overflow in the computation above.  */
       gcc_assert (max_count >= edge->count);
@@ -1566,6 +1654,9 @@ inline_small_functions (void)
           if (max_count < edge->count)
             max_count = edge->count;
       }
+  sreal_init (&max_count_real, max_count, 0);
+  sreal_init (&max_relbenefit_real, RELATIVE_TIME_BENEFIT_RANGE, 0);
+  sreal_init (&half_int_min_real, INT_MAX / 2, 0);
   ipa_free_postorder_info ();
   initialize_growth_caches ();
 
@@ -2035,7 +2126,15 @@ inline_always_inline_functions (struct cgraph_node *node)
 	}
 
       if (!can_early_inline_edge_p (e))
-	continue;
+	{
+	  /* Set inlined to true if the callee is marked "always_inline" but
+	     is not inlinable.  This will allow flagging an error later in
+	     expand_call_inline in tree-inline.c.  */
+	  if (lookup_attribute ("always_inline",
+				 DECL_ATTRIBUTES (callee->symbol.decl)) != NULL)
+	    inlined = true;
+	  continue;
+	}
 
       if (dump_file)
 	fprintf (dump_file, "  Inlining %s into %s (always_inline).\n",
@@ -2182,8 +2281,8 @@ early_inliner (void)
 	      es->call_stmt_time
 		= estimate_num_insns (edge->call_stmt, &eni_time_weights);
 	      if (edge->callee->symbol.decl
-		  && !gimple_check_call_matching_types (edge->call_stmt,
-							edge->callee->symbol.decl))
+		  && !gimple_check_call_matching_types (
+		      edge->call_stmt, edge->callee->symbol.decl, false))
 		edge->call_stmt_cannot_inline_p = true;
 	    }
 	  timevar_pop (TV_INTEGRATION);

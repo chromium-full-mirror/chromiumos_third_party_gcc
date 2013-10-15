@@ -504,9 +504,11 @@ check_counter (gimple stmt, const char * name,
               : DECL_SOURCE_LOCATION (current_function_decl);
       if (flag_profile_correction)
         {
-	  inform (locus, "correcting inconsistent value profile: "
-		  "%s profiler overall count (%d) does not match BB count "
-                  "(%d)", name, (int)*all, (int)bb_count);
+          if (dump_enabled_p ())
+            dump_printf_loc (MSG_MISSED_OPTIMIZATION, locus,
+                             "correcting inconsistent value profile: %s "
+                             "profiler overall count (%d) does not match BB "
+                             "count (%d)", name, (int)*all, (int)bb_count);
 	  *all = bb_count;
 	  if (*count > *all)
             *count = *all;
@@ -540,35 +542,35 @@ check_ic_counter (gimple stmt, gcov_type *count1, gcov_type *count2,
                   gcov_type all)
 {
   location_t locus;
+  locus = (stmt != NULL)
+      ? gimple_location (stmt)
+      : DECL_SOURCE_LOCATION (current_function_decl);
   if (*count1 > all && flag_profile_correction)
     {
-      locus = (stmt != NULL)
-              ? gimple_location (stmt)
-              : DECL_SOURCE_LOCATION (current_function_decl);
-      inform (locus, "Correcting inconsistent value profile: "
-              "ic (topn) profiler top target count (%ld) exceeds "
-	      "BB count (%ld)", (long)*count1, (long)all);
+      if (dump_enabled_p ())
+        dump_printf_loc (MSG_MISSED_OPTIMIZATION, locus,
+                         "Correcting inconsistent value profile: "
+                         "ic (topn) profiler top target count (%ld) exceeds "
+                         "BB count (%ld)", (long)*count1, (long)all);
       *count1 = all;
     }
   if (*count2 > all && flag_profile_correction)
     {
-      locus = (stmt != NULL)
-              ? gimple_location (stmt)
-              : DECL_SOURCE_LOCATION (current_function_decl);
-      inform (locus, "Correcting inconsistent value profile: "
-              "ic (topn) profiler second target count (%ld) exceeds "
-	      "BB count (%ld)", (long)*count2, (long)all);
+      if (dump_enabled_p ())
+        dump_printf_loc (MSG_MISSED_OPTIMIZATION, locus,
+                         "Correcting inconsistent value profile: "
+                         "ic (topn) profiler second target count (%ld) exceeds "
+                         "BB count (%ld)", (long)*count2, (long)all);
       *count2 = all;
     }
   
   if (*count2 > *count1)
     {
-      locus = (stmt != NULL)
-              ? gimple_location (stmt)
-              : DECL_SOURCE_LOCATION (current_function_decl);
-      inform (locus, "Corrupted topn ic value profile: "
-	      "first target count (%ld) is less than the second "
-	      "target count (%ld)", (long)*count1, (long)*count2);
+      if (dump_enabled_p ())
+        dump_printf_loc (MSG_MISSED_OPTIMIZATION, locus,
+                         "Corrupted topn ic value profile: "
+                         "first target count (%ld) is less than the second "
+                         "target count (%ld)", (long)*count1, (long)*count2);
       return true;
     }
 
@@ -580,12 +582,12 @@ check_ic_counter (gimple stmt, gcov_type *count1, gcov_type *count2,
 	*count2 = all - *count1;
       else
 	{
-	  locus = (stmt != NULL)
-	    ? gimple_location (stmt)
-	    : DECL_SOURCE_LOCATION (current_function_decl);
-	  inform (locus, "Corrupted topn ic value profile: top two targets's"
-		  " total count (%ld) exceeds bb count (%ld)",
-		  (long)(*count1 + *count2), (long)all);
+          if (dump_enabled_p ())
+            dump_printf_loc (MSG_MISSED_OPTIMIZATION, locus,
+                             "Corrupted topn ic value profile: top two "
+                             "targets's total count (%ld) exceeds bb count "
+                             "(%ld)",
+                             (long)(*count1 + *count2), (long)all);
 	  return true;
 	}
     }
@@ -1196,9 +1198,11 @@ find_func_by_funcdef_no (int func_id)
   int max_id = get_last_funcdef_no ();
   if (func_id >= max_id || cgraph_node_map[func_id] == NULL)
     {
-      if (flag_profile_correction)
-        inform (DECL_SOURCE_LOCATION (current_function_decl),
-                "Inconsistent profile: indirect call target (%d) does not exist", func_id);
+      if (flag_profile_correction && dump_enabled_p ())
+        dump_printf_loc (MSG_MISSED_OPTIMIZATION,
+                         DECL_SOURCE_LOCATION (current_function_decl),
+                         "Inconsistent profile: indirect call target (%d) "
+                         "does not exist", func_id);
       else
         error ("Inconsistent profile: indirect call target (%d) does not exist", func_id);
 
@@ -1327,12 +1331,14 @@ static bool
 check_ic_target (gimple call_stmt, struct cgraph_node *target)
 {
    location_t locus;
-   if (gimple_check_call_matching_types (call_stmt, target->symbol.decl))
+   if (gimple_check_call_matching_types (call_stmt, target->symbol.decl, true))
      return true;
 
    locus =  gimple_location (call_stmt);
-   inform (locus, "Skipping target %s with mismatching types for icall ",
-           cgraph_node_name (target));
+   if (dump_enabled_p ())
+     dump_printf_loc (MSG_MISSED_OPTIMIZATION, locus,
+                      "Skipping target %s with mismatching types for icall ",
+                      cgraph_node_name (target));
    return false;
 }
 
@@ -1455,8 +1461,7 @@ gimple_ic (gimple icall_stmt, struct cgraph_node *direct_call,
 
   /* Build an EH edge for the direct call if necessary.  */
   lp_nr = lookup_stmt_eh_lp (icall_stmt);
-  if (lp_nr != 0
-      && stmt_could_throw_p (dcall_stmt))
+  if (lp_nr > 0 && stmt_could_throw_p (dcall_stmt))
     {
       edge e_eh, e;
       edge_iterator ei;
@@ -1552,6 +1557,7 @@ gimple_ic_transform_mult_targ (gimple stmt, histogram_value histogram)
   gimple modify1, modify2;
   struct cgraph_node *direct_call1 = 0, *direct_call2 = 0;
   int perc_threshold, count_threshold, always_inline;
+  int use_hotness_heur = false;
   location_t locus;
 
   val1 = histogram->hvalue.counters [1];
@@ -1570,9 +1576,18 @@ gimple_ic_transform_mult_targ (gimple stmt, histogram_value histogram)
   perc_threshold = PARAM_VALUE (PARAM_ICALL_PROMOTE_PERCENT_THRESHOLD);
   count_threshold = PARAM_VALUE (PARAM_ICALL_PROMOTE_COUNT_THRESHOLD);
   always_inline = PARAM_VALUE (PARAM_ALWAYS_INLINE_ICALL_TARGET);
+  use_hotness_heur = PARAM_VALUE (PARAM_ICALL_USE_HOTNESS_HEUR);
 
-  if (100 * count1 < all * perc_threshold || count1 < count_threshold)
-    return false;
+  if (!use_hotness_heur)
+    {
+      if (100 * count1 < all * perc_threshold || count1 < count_threshold)
+        return false;
+    }
+  else
+    {
+      if (!maybe_hot_count_p (cfun, count1))
+        return false;
+    }
 
   if (check_ic_counter (stmt, &count1, &count2, all))
     return false;
@@ -1591,28 +1606,40 @@ gimple_ic_transform_mult_targ (gimple stmt, histogram_value histogram)
 
   direct_call1 = find_func_by_global_id (val1, flag_auto_profile);
 
-  if (val2 && (100 * count2 >= all * perc_threshold)
-      && count2 > count_threshold)
-    direct_call2 = find_func_by_global_id (val2, flag_auto_profile);
+  if (!use_hotness_heur)
+    {
+      if (val2 && (100 * count2 >= all * perc_threshold)
+          && count2 > count_threshold)
+        direct_call2 = find_func_by_global_id (val2, flag_auto_profile);
+    }
+  else
+    {
+      if (maybe_hot_count_p (cfun, count2))
+        direct_call2 = find_func_by_global_id (val2, flag_auto_profile);
+    }
 
   locus = (stmt != NULL) ? gimple_location (stmt)
       : DECL_SOURCE_LOCATION (current_function_decl);
   if (direct_call1 == NULL
       || !check_ic_target (stmt, direct_call1))
     {
-      if (flag_ripa_verbose && !flag_auto_profile)
+      if (dump_enabled_p () && !flag_auto_profile)
         {
           if (!direct_call1)
-            inform (locus, "Can not find indirect call target decl "
-                    "(%d:%d)[cnt:%u] in current module",
-                    EXTRACT_MODULE_ID_FROM_GLOBAL_ID (val1),
-                    EXTRACT_FUNC_ID_FROM_GLOBAL_ID (val1), (unsigned) count1);
+            dump_printf_loc (MSG_MISSED_OPTIMIZATION, locus,
+                             "Can not find indirect call target decl "
+                             "(%d:%d)[cnt:%u] in current module",
+                             EXTRACT_MODULE_ID_FROM_GLOBAL_ID (val1),
+                             EXTRACT_FUNC_ID_FROM_GLOBAL_ID (val1),
+                             (unsigned) count1);
           else
-            inform (locus,
-                    "Can not find promote indirect call target decl -- type mismatch "
-                    "(%d:%d)[cnt:%u] in current module",
-                    EXTRACT_MODULE_ID_FROM_GLOBAL_ID (val1),
-                    EXTRACT_FUNC_ID_FROM_GLOBAL_ID (val1), (unsigned) count1);
+            dump_printf_loc (MSG_MISSED_OPTIMIZATION, locus,
+                             "Can not find promote indirect call target decl "
+                             "-- type mismatch (%d:%d)[cnt:%u] in current "
+                             "module",
+                             EXTRACT_MODULE_ID_FROM_GLOBAL_ID (val1),
+                             EXTRACT_FUNC_ID_FROM_GLOBAL_ID (val1),
+                             (unsigned) count1);
         }
       return false;
     }
@@ -1626,10 +1653,12 @@ gimple_ic_transform_mult_targ (gimple stmt, histogram_value histogram)
     return false;
 
   modify1 = gimple_ic (stmt, direct_call1, prob1, count1, all);
-  if (flag_ripa_verbose)
-    inform (locus, "Promote indirect call to target (call count:%u) %s",
-	    (unsigned) count1,
-	    lang_hooks.decl_printable_name (direct_call1->symbol.decl, 3));
+  if (dump_enabled_p ())
+     dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, locus,
+                      "Promote indirect call to target (call count:%u) %s",
+                      (unsigned) count1,
+                      lang_hooks.decl_printable_name (direct_call1->symbol.decl,
+                                                      3));
 
   if (always_inline && count1 >= always_inline)
     {
@@ -1667,10 +1696,12 @@ gimple_ic_transform_mult_targ (gimple stmt, histogram_value histogram)
       modify2 = gimple_ic (stmt, direct_call2,
                            prob2, count2, all - count1);
 
-      if (flag_ripa_verbose)
-	inform (locus, "Promote indirect call to target (call count:%u) %s",
-		(unsigned) count2,
-		lang_hooks.decl_printable_name (direct_call2->symbol.decl, 3));
+      if (dump_enabled_p ())
+        dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, locus,
+                         "Promote indirect call to target (call count:%u) %s",
+                         (unsigned) count2,
+                         lang_hooks.decl_printable_name (
+                             direct_call2->symbol.decl, 3));
 
       if (always_inline && count2 >= always_inline)
         {

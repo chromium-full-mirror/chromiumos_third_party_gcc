@@ -48,6 +48,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "opts.h"
 #include "gcov-io.h"
 #include "tree-flow.h"
+#include "tree-pass.h"
 #include "cpplib.h"
 #include "incpath.h"
 #include "diagnostic-core.h"
@@ -188,6 +189,15 @@ get_gcov_unsigned_t (void)
   return lang_hooks.types.type_for_mode (mode, true);
 }
 
+/* Return the type node for const char *.  */
+
+tree
+get_const_string_type (void)
+{
+  return build_pointer_type
+    (build_qualified_type (char_type_node, TYPE_QUAL_CONST));
+}
+
 inline hashval_t
 counts_entry::hash (const value_type *entry)
 {
@@ -263,6 +273,10 @@ static struct opt_desc force_matching_cg_opts[] =
     { "-fsized-delete", "-fno-sized-delete", false },
     { "-frtti", "-fno-rtti", true },
     { "-fstrict-aliasing", "-fno-strict-aliasing", true },
+    { "-fsigned-char", "-funsigned-char", true },
+    /* { "-fsigned-char", "-fno-signed-char", true },
+       { "-funsigned-char", "-fno-unsigned-char", false }, */
+    { "-ansi", "", false },
     { NULL, NULL, false }
   };
 
@@ -317,12 +331,12 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
   bool warning_mismatch = false;
   bool non_warning_mismatch = false;
   hash_table <string_hasher> option_tab1, option_tab2;
-  unsigned int start_index1 = mod_info1->num_quote_paths +
-    mod_info1->num_bracket_paths + mod_info1->num_cpp_defines +
-    mod_info1->num_cpp_includes;
-  unsigned int start_index2 = mod_info2->num_quote_paths +
-    mod_info2->num_bracket_paths + mod_info2->num_cpp_defines +
-    mod_info2->num_cpp_includes;
+  unsigned int start_index1 = mod_info1->num_quote_paths 
+    + mod_info1->num_bracket_paths + mod_info1->num_system_paths 
+    + mod_info1->num_cpp_defines + mod_info1->num_cpp_includes;
+  unsigned int start_index2 = mod_info2->num_quote_paths
+    + mod_info2->num_bracket_paths + mod_info2->num_system_paths
+    + mod_info2->num_cpp_defines + mod_info2->num_cpp_includes;
 
   bool *cg_opts1, *cg_opts2, has_any_incompatible_cg_opts, has_incompatible_std;
   unsigned int num_cg_opts = 0;
@@ -411,14 +425,18 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
     warning (OPT_Wripa_opt_mismatch, "command line arguments mismatch for %s "
 	     "and %s", mod_info1->source_filename, mod_info2->source_filename);
 
-   if (warn_ripa_opt_mismatch && non_warning_mismatch && flag_ripa_verbose)
+   if (warn_ripa_opt_mismatch && non_warning_mismatch && dump_enabled_p ())
      {
-       inform (UNKNOWN_LOCATION, "Options for %s", mod_info1->source_filename);
+       dump_printf_loc (MSG_MISSED_OPTIMIZATION, UNKNOWN_LOCATION,
+                        "Options for %s", mod_info1->source_filename);
        for (i = 0; i < num_non_warning_opts1; i++)
-         inform (UNKNOWN_LOCATION, non_warning_opts1[i]);
-       inform (UNKNOWN_LOCATION, "Options for %s", mod_info2->source_filename);
+         dump_printf_loc (MSG_MISSED_OPTIMIZATION, UNKNOWN_LOCATION,
+                          non_warning_opts1[i]);
+       dump_printf_loc (MSG_MISSED_OPTIMIZATION, UNKNOWN_LOCATION,
+                        "Options for %s", mod_info2->source_filename);
        for (i = 0; i < num_non_warning_opts2; i++)
-         inform (UNKNOWN_LOCATION, non_warning_opts2[i]);
+         dump_printf_loc (MSG_MISSED_OPTIMIZATION, UNKNOWN_LOCATION,
+                          non_warning_opts2[i]);
      }
 
    has_any_incompatible_cg_opts
@@ -813,6 +831,7 @@ read_counts_file (const char *da_file_name, unsigned module_id)
           info_sz = (sizeof (struct gcov_module_info) +
 		     sizeof (void *) * (mod_info->num_quote_paths +
 					mod_info->num_bracket_paths +
+					mod_info->num_system_paths +
 					mod_info->num_cpp_defines +
 					mod_info->num_cpp_includes +
 					mod_info->num_cl_args));
@@ -835,30 +854,57 @@ read_counts_file (const char *da_file_name, unsigned module_id)
 	      char *aux_da_filename = get_da_file_name (mod_info->da_filename);
               gcc_assert (!mod_info->is_primary);
 	      if (pointer_set_insert (modset, (void *)(size_t)mod_info->ident))
-		inform (input_location, "Not importing %s: already imported",
-			mod_info->source_filename);
+                {
+                  if (dump_enabled_p ())
+                    dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                                     "Not importing %s: already imported",
+                                     mod_info->source_filename);
+                }
 	      else if ((module_infos[0]->lang & GCOV_MODULE_LANG_MASK) !=
 		       (mod_info->lang & GCOV_MODULE_LANG_MASK))
-		inform (input_location, "Not importing %s: source language"
-			" different from primary module's source language",
-			mod_info->source_filename);
+                {
+                  if (dump_enabled_p ())
+                    dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                                     "Not importing %s: source language"
+                                     " different from primary module's source"
+                                     " language",
+                                     mod_info->source_filename);
+                }
 	      else if (module_infos_read == max_group
                        /* If reordering is specified, delay the cutoff
 			  until after sorting.  */
 		       && !getenv ("LIPO_REORDER_GROUP"))
-		inform (input_location, "Not importing %s: maximum group size"
-			" reached", mod_info->source_filename);
+                {
+                  if (dump_enabled_p ())
+                    dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                                     "Not importing %s: maximum group size"
+                                     " reached", mod_info->source_filename);
+                }
 	      else if (incompatible_cl_args (module_infos[0], mod_info))
-		inform (input_location, "Not importing %s: command-line"
-			" arguments not compatible with primary module",
-			mod_info->source_filename);
+                {
+                  if (dump_enabled_p ())
+                    dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                                     "Not importing %s: command-line"
+                                     " arguments not compatible with primary"
+                                     " module",
+                                     mod_info->source_filename);
+                }
 	      else if ((fd = open (aux_da_filename, O_RDONLY)) < 0)
-		inform (input_location, "Not importing %s: couldn't open %s",
-			mod_info->source_filename, aux_da_filename);
+                {
+                  if (dump_enabled_p ())
+                    dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                                     "Not importing %s: couldn't open %s",
+                                     mod_info->source_filename,
+                                     aux_da_filename);
+                }
 	      else if ((mod_info->lang & GCOV_MODULE_ASM_STMTS)
 		       && flag_ripa_disallow_asm_modules)
-		inform (input_location, "Not importing %s: contains assembler"
-			" statements", mod_info->source_filename);
+                {
+                  if (dump_enabled_p ())
+                    dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                                     "Not importing %s: contains assembler"
+                                     " statements", mod_info->source_filename);
+                }
               else if (mod_info->is_primary == false 
                        && MODULE_EXPORTED_FLAG (mod_info) == false)
                 {
@@ -884,16 +930,17 @@ read_counts_file (const char *da_file_name, unsigned module_id)
           record_module_name (mod_info->ident,
                               lbasename (mod_info->source_filename));
 
-          if (flag_ripa_verbose)
+          if (dump_enabled_p ())
             {
-              inform (input_location,
-                      "MODULE Id=%d, Is_Primary=%s,"
-                      " Is_Exported=%s, Include_all=%s, Name=%s (%s)",
-                      mod_info->ident, mod_info->is_primary?"yes":"no",
-                      MODULE_EXPORTED_FLAG (mod_info)?"yes":"no",
-                      MODULE_INCLUDE_ALL_AUX_FLAG (mod_info)?"yes":"no",
-                      mod_info->source_filename,
-                      mod_info->da_filename);
+              dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                               "MODULE Id=%d, Is_Primary=%s,"
+                               " Is_Exported=%s, Include_all=%s, Name=%s (%s)",
+                               mod_info->ident, mod_info->is_primary?"yes":"no",
+                               MODULE_EXPORTED_FLAG (mod_info)?"yes":"no",
+                               MODULE_INCLUDE_ALL_AUX_FLAG (mod_info)?"yes"
+                                                                     :"no",
+                               mod_info->source_filename,
+                               mod_info->da_filename);
             }
         }
       gcov_sync (offset, length);
@@ -958,11 +1005,13 @@ get_coverage_counts (unsigned counter, unsigned expected,
     {
       static int warned = 0;
 
-      if (!warned++)
-	inform (input_location, (flag_guess_branch_prob
-		 ? "file %s not found, execution counts estimated"
-		 : "file %s not found, execution counts assumed to be zero"),
-		da_file_name);
+      if (!warned++ && dump_enabled_p ())
+	dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                         (flag_guess_branch_prob
+                          ? "file %s not found, execution counts estimated"
+                          : "file %s not found, execution counts assumed to "
+                            "be zero"),
+                         da_file_name);
       return NULL;
     }
 
@@ -970,9 +1019,11 @@ get_coverage_counts (unsigned counter, unsigned expected,
 
   if (!entry || !entry->summary.num)
     {
-      if (!flag_dyn_ipa && 0 /*TODO reenable with opt-info */)
-	warning (0, "no coverage for function %qE found",
-		 DECL_ASSEMBLER_NAME (current_function_decl));
+      if (!flag_dyn_ipa && dump_enabled_p ())
+	dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                         "no coverage for function %s found",
+                         IDENTIFIER_POINTER
+                         (DECL_ASSEMBLER_NAME (current_function_decl)));
       return NULL;
     }
 
@@ -987,21 +1038,25 @@ get_coverage_counts (unsigned counter, unsigned expected,
 	warning_at (input_location, OPT_Wcoverage_mismatch,
 		    "the control flow of function %qE does not match "
 		    "its profile data (counter %qs)", id, ctr_names[counter]);
-      if (warning_printed)
+      if (warning_printed && dump_enabled_p ())
 	{
-	 inform (input_location, "use -Wno-error=coverage-mismatch to tolerate "
-	 	 "the mismatch but performance may drop if the function is hot");
+          dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                           "use -Wno-error=coverage-mismatch to tolerate "
+                           "the mismatch but performance may drop if the "
+                           "function is hot");
 	  
 	  if (!seen_error ()
 	      && !warned++)
 	    {
-	      inform (input_location, "coverage mismatch ignored");
-	      inform (input_location, flag_guess_branch_prob
-		      ? G_("execution counts estimated")
-		      : G_("execution counts assumed to be zero"));
+	      dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                               "coverage mismatch ignored");
+	      dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                               flag_guess_branch_prob
+                               ? G_("execution counts estimated")
+                               : G_("execution counts assumed to be zero"));
 	      if (!flag_guess_branch_prob)
-		inform (input_location,
-			"this can result in poorly optimized code");
+		dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                                 "this can result in poorly optimized code");
 	    }
 	}
 
@@ -1009,7 +1064,8 @@ get_coverage_counts (unsigned counter, unsigned expected,
     }
     else if (entry->lineno_checksum != lineno_checksum)
       {
-        warning (0, "Source location for function %qE have changed,"
+        warning (OPT_Wripa_opt_mismatch,
+                 "Source location for function %qE have changed,"
                  " the profile data may be out of date",
                  DECL_ASSEMBLER_NAME (current_function_decl));
       }
@@ -1753,8 +1809,8 @@ build_gcov_module_info_type (void)
   tree type, field, fields = NULL_TREE;
   tree string_type, index_type, string_array_type;
 
-  cpp_dir *quote_paths, *bracket_paths, *pdir;
-  int num_quote_paths = 0, num_bracket_paths = 0;
+  cpp_dir *quote_paths, *bracket_paths, *system_paths, *pdir;
+  int num_quote_paths = 0, num_bracket_paths = 0, num_system_paths = 0;
 
   type = lang_hooks.types.make_type (RECORD_TYPE);
   string_type = build_pointer_type (
@@ -1820,6 +1876,12 @@ build_gcov_module_info_type (void)
   DECL_CHAIN (field) = fields;
   fields = field;
 
+  /* Num system paths  */
+  field = build_decl (BUILTINS_LOCATION, FIELD_DECL,
+                      NULL_TREE, get_gcov_unsigned_t ());
+  DECL_CHAIN (field) = fields;
+  fields = field;
+
   /* Num -D/-U options.  */
   field = build_decl (BUILTINS_LOCATION, FIELD_DECL,
                       NULL_TREE, get_gcov_unsigned_t ());
@@ -1838,7 +1900,7 @@ build_gcov_module_info_type (void)
   DECL_CHAIN (field) = fields;
   fields = field;
 
-  get_include_chains (&quote_paths, &bracket_paths);
+  get_include_chains (&quote_paths, &bracket_paths, &system_paths);
   for (pdir = quote_paths; pdir; pdir = pdir->next)
     {
       if (pdir == bracket_paths)
@@ -1846,15 +1908,23 @@ build_gcov_module_info_type (void)
       num_quote_paths++;
     }
   for (pdir = bracket_paths; pdir; pdir = pdir->next)
-    num_bracket_paths++;
+    {
+      if (pdir == system_paths)
+        break;
+      num_bracket_paths++;
+    }
+  for (pdir = system_paths; pdir; pdir = pdir->next)
+    num_system_paths++;
 
   /* string array  */
   index_type = build_index_type (build_int_cst (NULL_TREE,
 						num_quote_paths	+
 						num_bracket_paths +
+                                                num_system_paths +
 						num_cpp_defines +
 						num_cpp_includes +
 						num_lipo_cl_args));
+
   string_array_type = build_array_type (string_type, index_type);
   field = build_decl (BUILTINS_LOCATION, FIELD_DECL,
                       NULL_TREE, string_array_type);
@@ -1876,8 +1946,8 @@ build_gcov_module_info_value (tree mod_type)
   tree value = NULL_TREE;
   int file_name_len;
   tree filename_string, string_array_type,  string_type;
-  cpp_dir *quote_paths, *bracket_paths, *pdir;
-  int num_quote_paths = 0, num_bracket_paths = 0;
+  cpp_dir *quote_paths, *bracket_paths, *system_paths, *pdir;
+  int num_quote_paths = 0, num_bracket_paths = 0, num_system_paths = 0;
   unsigned lang;
   char name_buf[50];
   vec<constructor_elt,va_gc> *v = NULL, *path_v = NULL;
@@ -1948,7 +2018,7 @@ build_gcov_module_info_value (tree mod_type)
                           build1 (ADDR_EXPR, string_type, filename_string));
   info_fields = DECL_CHAIN (info_fields);
 
-  get_include_chains (&quote_paths, &bracket_paths);
+  get_include_chains (&quote_paths, &bracket_paths, &system_paths);
   for (pdir = quote_paths; pdir; pdir = pdir->next)
     {
       if (pdir == bracket_paths)
@@ -1956,7 +2026,13 @@ build_gcov_module_info_value (tree mod_type)
       num_quote_paths++;
     }
   for (pdir = bracket_paths; pdir; pdir = pdir->next)
-    num_bracket_paths++;
+    {
+      if (pdir == system_paths)
+        break;
+      num_bracket_paths++;
+    }
+  for (pdir = system_paths; pdir; pdir = pdir->next)
+    num_system_paths++;
 
   /* Num quote paths  */
   CONSTRUCTOR_APPEND_ELT (v, info_fields,
@@ -1968,6 +2044,12 @@ build_gcov_module_info_value (tree mod_type)
   CONSTRUCTOR_APPEND_ELT (v, info_fields,
                           build_int_cstu (get_gcov_unsigned_t (),
                                           num_bracket_paths));
+  info_fields = DECL_CHAIN (info_fields);
+
+  /* Num system paths  */
+  CONSTRUCTOR_APPEND_ELT (v, info_fields,
+                          build_int_cstu (get_gcov_unsigned_t (),
+                                          num_system_paths));
   info_fields = DECL_CHAIN (info_fields);
 
   /* Num -D/-U options.  */
@@ -1994,6 +2076,8 @@ build_gcov_module_info_value (tree mod_type)
                               quote_paths, num_quote_paths);
   build_inc_path_array_value (string_type, &path_v,
                               bracket_paths, num_bracket_paths);
+  build_inc_path_array_value (string_type, &path_v,
+                              system_paths, num_system_paths);
   build_str_array_value (string_type, &path_v,
                          cpp_defines_head);
   build_str_array_value (string_type, &path_v,
@@ -2493,21 +2577,21 @@ set_lipo_c_parsing_context (struct cpp_reader *parse_in, int i, bool verbose)
 	   i < mod_info->num_bracket_paths; i++, j++)
         add_path (xstrdup (mod_info->string_array[j]),
                   BRACKET, 0, 1);
+      for (i = 0; i < mod_info->num_system_paths; i++, j++)
+        add_path (xstrdup (mod_info->string_array[j]),
+                  SYSTEM, 0, 1);
       register_include_chains (parse_in, NULL, NULL, NULL,
                                0, 0, verbose);
 
       /* Setup defines/undefs.  */
-      for (i = 0, j = mod_info->num_quote_paths + mod_info->num_bracket_paths;
-	   i < mod_info->num_cpp_defines; i++, j++)
+      for (i = 0; i < mod_info->num_cpp_defines; i++, j++)
 	if (mod_info->string_array[j][0] == 'D')
 	  cpp_define (parse_in, mod_info->string_array[j] + 1);
 	else
 	  cpp_undef (parse_in, mod_info->string_array[j] + 1);
 
       /* Setup -imacro/-include.  */
-      for (i = 0, j = mod_info->num_quote_paths + mod_info->num_bracket_paths +
-	     mod_info->num_cpp_defines; i < mod_info->num_cpp_includes;
-	   i++, j++)
+      for (i = 0; i < mod_info->num_cpp_includes; i++, j++)
 	cpp_push_include (parse_in, mod_info->string_array[j]);
     }
 }
@@ -2521,6 +2605,11 @@ coverage_init (const char *filename, const char* source_name)
   char* src_name_prefix = 0;
   int src_name_prefix_len = 0;
   int len = strlen (filename);
+
+  /* Since coverage_init is invoked very early, before the pass
+     manager, we need to set up the dumping explicitly. This is
+     similar to the handling in finish_optimization_passes.  */
+  dump_start (pass_profile.pass.static_pass_number, NULL);
 
   has_asm_statement = false;
   da_file_name = get_da_file_name (filename);
@@ -2562,6 +2651,7 @@ coverage_init (const char *filename, const char* source_name)
   /* Define variables which are referenced at runtime by libgcov.  */
   if (profiling_enabled_p ())
     {
+      tree_init_instrumentation ();
       tree_init_dyn_ipa_parameters ();
       tree_init_instrumentation_sampling ();
     }
@@ -2586,6 +2676,8 @@ coverage_init (const char *filename, const char* source_name)
 	  gcov_write_unsigned (bbg_file_stamp);
 	}
     }
+
+  dump_finish (pass_profile.pass.static_pass_number);
 }
 
 /* Return True if any type of profiling is enabled which requires linking
@@ -2672,20 +2764,12 @@ coverage_has_asm_stmt (void)
   has_asm_statement = flag_ripa_disallow_asm_modules;
 }
 
-/* Write command line options to the .note section.  */
+/* Write compilation info to the .note section.  */
 
 void
 write_compilation_info_to_asm (void)
 {
-  size_t i;
-  cpp_dir *quote_paths, *bracket_paths, *pdir;
-  struct str_list *pdef, *pinc;
-  int num_quote_paths = 0;
-  int num_bracket_paths = 0;
   unsigned lang;
-
-  get_include_chains (&quote_paths, &bracket_paths);
-
   /* Write lang, ggc_memory to ASM section.  */
   switch_to_section (get_section (".gnu.switches.text.lipo_info",
 				  SECTION_DEBUG, NULL));
@@ -2700,6 +2784,22 @@ write_compilation_info_to_asm (void)
   dw2_asm_output_nstring (in_fnames[0], (size_t)-1, NULL);
   dw2_asm_output_data_uleb128 (lang, NULL);
   dw2_asm_output_data_uleb128 (ggc_total_memory, NULL);
+}
+
+
+/* Write command line options to the .note section.  */
+
+void
+write_compilation_flags_to_asm (void)
+{
+  size_t i;
+  cpp_dir *quote_paths, *bracket_paths, *system_paths, *pdir;
+  struct str_list *pdef, *pinc;
+  int num_quote_paths = 0;
+  int num_bracket_paths = 0;
+  int num_system_paths = 0;
+
+  get_include_chains (&quote_paths, &bracket_paths, &system_paths);
 
   /* Write quote_paths to ASM section.  */
   switch_to_section (get_section (".gnu.switches.text.quote_paths",
@@ -2723,10 +2823,28 @@ write_compilation_info_to_asm (void)
   switch_to_section (get_section (".gnu.switches.text.bracket_paths",
 				  SECTION_DEBUG, NULL));
   for (pdir = bracket_paths; pdir; pdir = pdir->next)
-    num_bracket_paths++;
+    {
+      if (pdir == system_paths)
+	break;
+      num_bracket_paths++;
+    }
   dw2_asm_output_nstring (in_fnames[0], (size_t)-1, NULL);
   dw2_asm_output_data_uleb128 (num_bracket_paths, NULL);
   for (pdir = bracket_paths; pdir; pdir = pdir->next)
+    {
+      if (pdir == system_paths)
+	break;
+      dw2_asm_output_nstring (pdir->name, (size_t)-1, NULL);
+    }
+
+  /* Write system_paths to ASM section.  */
+  switch_to_section (get_section (".gnu.switches.text.system_paths",
+				  SECTION_DEBUG, NULL));
+  for (pdir = system_paths; pdir; pdir = pdir->next)
+    num_system_paths++;
+  dw2_asm_output_nstring (in_fnames[0], (size_t)-1, NULL);
+  dw2_asm_output_data_uleb128 (num_system_paths, NULL);
+  for (pdir = system_paths; pdir; pdir = pdir->next)
     dw2_asm_output_nstring (pdir->name, (size_t)-1, NULL);
 
   /* Write cpp_defines to ASM section.  */
