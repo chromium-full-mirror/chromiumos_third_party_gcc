@@ -558,6 +558,7 @@ LIBOBJS
 asm_hidden_op
 extra_parts
 cpu_type
+thread_header
 tm_defines
 tm_file
 tmake_file
@@ -567,7 +568,6 @@ set_have_cc_tls
 vis_hide
 fixed_point
 enable_decimal_float
-enable_vtable_verify
 decimal_float
 long_double_type_size
 double_type_size
@@ -660,7 +660,6 @@ with_slibdir
 enable_maintainer_mode
 with_build_libsubdir
 enable_decimal_float
-enable_vtable_verify
 with_system_libunwind
 enable_sjlj_exceptions
 enable_tls
@@ -2139,17 +2138,7 @@ else
   enable_shared=yes
 fi
 
-# Check whether --enable-vtable-verify was given.
-if test "${enable_vtable_verify+set}" = set; then :
-  enableval=$enable_vtable_verify;
-    case "$enableval" in
-    yes | no) ;;
-    *) as_fn_error "Argument to enable/disable vtable-verify must be yes or no" "$LINENO" 5 ;;
-    esac
 
-else
-  enable_vtable_verify=no
-fi
 
 # Make sure we can run config.sub.
 $SHELL "$ac_aux_dir/config.sub" sun4 >/dev/null 2>&1 ||
@@ -4087,6 +4076,7 @@ else
 
   case $host in
     powerpc*-*-linux* | i?86*-*-linux* | x86_64*-*-linux* | s390*-*-linux* | \
+    i?86*-*-gnu* | \
     i?86*-*-mingw* | x86_64*-*-mingw* | \
     i?86*-*-cygwin*)
       enable_decimal_float=yes
@@ -4370,7 +4360,7 @@ fi
 
 
 # See if we have thread-local storage.  We can only test assembler
-# sicne link-time and run-time tests require the newly built
+# since link-time and run-time tests require the newly built
 # gcc, which can't be used to build executable due to that libgcc
 # is yet to be built here.
 
@@ -4515,6 +4505,7 @@ tm_file="${tm_file_}"
 
 
 # Map from thread model to thread header.
+
 case $target_thread_file in
     aix)	thread_header=config/rs6000/gthr-aix.h ;;
     dce)	thread_header=config/pa/gthr-dce.h ;;
@@ -4527,6 +4518,8 @@ case $target_thread_file in
     vxworks)	thread_header=config/gthr-vxworks.h ;;
     win32)	thread_header=config/i386/gthr-win32.h ;;
 esac
+
+
 
 # Substitute configuration variables
 

@@ -68,4 +68,4 @@ template struct Foo<::B>; // { dg-error "20:'<::' cannot begin" "begin" { target
 
 // On the first error message, an additional note about the use of 
 //  -fpermissive should be present
-// { dg-message "17:\\(if you use '-fpermissive' G\\+\\+ will accept your code\\)" "-fpermissive" { target c++98 } 19 }
+// { dg-message "17:\\(if you use '-fpermissive' or '-std=c\\+\\+11', or '-std=gnu\\+\\+11' G\\+\\+ will accept your code\\)" "-fpermissive" { target c++98 } 19 }

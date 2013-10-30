@@ -1,7 +1,6 @@
 // Vector implementation (out of line) -*- C++ -*-
 
-// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
-// 2011 Free Software Foundation, Inc.
+// Copyright (C) 2001-2013 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -85,7 +84,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 	}
     }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
   template<typename _Tp, typename _Alloc>
     template<typename... _Args>
       void
@@ -117,7 +116,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 	}
       else
 	{
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
 	  if (this->_M_impl._M_finish != this->_M_impl._M_end_of_storage)
 	    {
 	      _Tp __x_copy = __x;
@@ -167,7 +166,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 #endif
       if (&__x != this)
 	{
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
 	  if (_Alloc_traits::_S_propagate_on_copy_assign())
 	    {
 	      if (!_Alloc_traits::_S_always_equal()
@@ -178,6 +177,9 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 		  _M_deallocate(this->_M_impl._M_start,
 				this->_M_impl._M_end_of_storage
 				- this->_M_impl._M_start);
+		  this->_M_impl._M_start = nullptr;
+		  this->_M_impl._M_finish = nullptr;
+		  this->_M_impl._M_end_of_storage = nullptr;
 		}
 	      std::__alloc_on_copy(_M_get_Tp_allocator(),
 				   __x._M_get_Tp_allocator());
@@ -289,7 +291,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 	  }
       }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
   template<typename _Tp, typename _Alloc>
     template<typename... _Args>
       typename vector<_Tp, _Alloc>::iterator
@@ -327,13 +329,13 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 			           _GLIBCXX_MOVE(*(this->_M_impl._M_finish
 				                   - 1)));
 	  ++this->_M_impl._M_finish;
-#ifndef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus < 201103L
 	  _Tp __x_copy = __x;
 #endif
 	  _GLIBCXX_MOVE_BACKWARD3(__position.base(),
 				  this->_M_impl._M_finish - 2,
 				  this->_M_impl._M_finish - 1);
-#ifndef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus < 201103L
 	  *__position = __x_copy;
 #else
 	  *__position = _Tp(std::forward<_Args>(__args)...);
@@ -354,7 +356,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 	      // taking the element by const lvalue ref (see 23.1/13).
 	      _Alloc_traits::construct(this->_M_impl,
 		                       __new_start + __elems_before,
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
 				       std::forward<_Args>(__args)...);
 #else
 	                               __x);
@@ -394,7 +396,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 	}
     }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
   template<typename _Tp, typename _Alloc>
     template<typename... _Args>
       void
@@ -528,7 +530,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 	}
     }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
   template<typename _Tp, typename _Alloc>
     void
     vector<_Tp, _Alloc>::
@@ -792,7 +794,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 	}
     }
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
   template<typename _Alloc>
     bool
     vector<bool, _Alloc>::
@@ -813,7 +815,7 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
 _GLIBCXX_END_NAMESPACE_CONTAINER
 } // namespace std
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
+#if __cplusplus >= 201103L
 
 namespace std _GLIBCXX_VISIBILITY(default)
 {
@@ -855,6 +857,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 _GLIBCXX_END_NAMESPACE_VERSION
 } // namespace std
 
-#endif // __GXX_EXPERIMENTAL_CXX0X__
+#endif // C++11
 
 #endif /* _VECTOR_TCC */

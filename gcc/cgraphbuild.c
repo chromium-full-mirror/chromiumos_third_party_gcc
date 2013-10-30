@@ -1,6 +1,5 @@
 /* Callgraph construction.
-   Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
-   Free Software Foundation, Inc.
+   Copyright (C) 2003-2013 Free Software Foundation, Inc.
    Contributed by Jan Hubicka
 
 This file is part of GCC.
@@ -38,7 +37,6 @@ along with GCC; see the file COPYING3.  If not see
 #include "except.h"
 #include "l-ipo.h"
 #include "ipa-inline.h"
-#include "auto-profile.h"
 
 /* Context of record_reference.  */
 struct record_reference_ctx
@@ -59,7 +57,7 @@ record_reference (tree *tp, int *walk_subtrees, void *data)
   tree decl;
   struct record_reference_ctx *ctx = (struct record_reference_ctx *)data;
 
-  t = canonicalize_constructor_val (t);
+  t = canonicalize_constructor_val (t, NULL);
   if (!t)
     t = *tp;
   else if (t != *tp)
@@ -79,21 +77,19 @@ record_reference (tree *tp, int *walk_subtrees, void *data)
       decl = get_base_var (*tp);
       if (TREE_CODE (decl) == FUNCTION_DECL)
 	{
-	  struct cgraph_node *node = cgraph_get_create_node (decl);
+	  struct cgraph_node *node = cgraph_get_create_real_symbol_node (decl);
 	  if (!ctx->only_vars)
 	    cgraph_mark_address_taken_node (node);
-	  ipa_record_reference (NULL, ctx->varpool_node, node, NULL,
+	  ipa_record_reference ((symtab_node)ctx->varpool_node,
+				(symtab_node)node,
 			        IPA_REF_ADDR, NULL);
 	}
 
       if (TREE_CODE (decl) == VAR_DECL)
 	{
-	  struct varpool_node *vnode = varpool_node (decl);
-	  if (lang_hooks.callgraph.analyze_expr)
-	    lang_hooks.callgraph.analyze_expr (&decl, walk_subtrees);
-	  varpool_mark_needed_node (vnode);
-	  ipa_record_reference (NULL, ctx->varpool_node,
-				NULL, vnode,
+	  struct varpool_node *vnode = varpool_node_for_decl (decl);
+	  ipa_record_reference ((symtab_node)ctx->varpool_node,
+				(symtab_node)vnode,
 				IPA_REF_ADDR, NULL);
 	}
       *walk_subtrees = 0;
@@ -107,9 +103,6 @@ record_reference (tree *tp, int *walk_subtrees, void *data)
 	  *walk_subtrees = 0;
 	  break;
 	}
-
-      if ((unsigned int) TREE_CODE (t) >= LAST_AND_UNUSED_TREE_CODE)
-	return lang_hooks.callgraph.analyze_expr (tp, walk_subtrees);
       break;
     }
 
@@ -133,10 +126,9 @@ record_type_list (struct cgraph_node *node, tree list)
 	  type = TREE_OPERAND (type, 0);
 	  if (TREE_CODE (type) == VAR_DECL)
 	    {
-	      struct varpool_node *vnode = varpool_node (type);
-	      varpool_mark_needed_node (vnode);
-	      ipa_record_reference (node, NULL,
-				    NULL, vnode,
+	      struct varpool_node *vnode = varpool_node_for_decl (type);
+	      ipa_record_reference ((symtab_node)node,
+				    (symtab_node)vnode,
 				    IPA_REF_ADDR, NULL);
 	    }
 	}
@@ -151,12 +143,12 @@ record_eh_tables (struct cgraph_node *node, struct function *fun)
 {
   eh_region i;
 
-  if (DECL_FUNCTION_PERSONALITY (node->decl))
+  if (DECL_FUNCTION_PERSONALITY (node->symbol.decl))
     {
       struct cgraph_node *per_node;
 
-      per_node = cgraph_get_create_node (DECL_FUNCTION_PERSONALITY (node->decl));
-      ipa_record_reference (node, NULL, per_node, NULL, IPA_REF_ADDR, NULL);
+      per_node = cgraph_get_create_real_symbol_node (DECL_FUNCTION_PERSONALITY (node->symbol.decl));
+      ipa_record_reference ((symtab_node)node, (symtab_node)per_node, IPA_REF_ADDR, NULL);
       cgraph_mark_address_taken_node (per_node);
     }
 
@@ -202,20 +194,6 @@ record_eh_tables (struct cgraph_node *node, struct function *fun)
 	  while (i->next_peer == NULL);
 	  i = i->next_peer;
 	}
-    }
-}
-
-/* Reset inlining information of all incoming call edges of NODE.  */
-
-void
-reset_inline_failed (struct cgraph_node *node)
-{
-  struct cgraph_edge *e;
-
-  for (e = node->callers; e; e = e->next_caller)
-    {
-      e->callee->global.inlined_to = NULL;
-      initialize_inline_failed (e);
     }
 }
 
@@ -270,13 +248,14 @@ add_fake_indirect_call_edges (struct cgraph_node *node)
     return;
 
   ic_counts
-      = get_coverage_counts_no_warn (DECL_STRUCT_FUNCTION (node->decl),
+      = get_coverage_counts_no_warn (DECL_STRUCT_FUNCTION (node->symbol.decl),
                                      GCOV_COUNTER_ICALL_TOPNV, &n_counts);
 
   if (!ic_counts)
     return;
 
   gcc_assert ((n_counts % GCOV_ICALL_TOPN_NCOUNTS) == 0);
+  gcc_assert (!flag_auto_profile);
 
 /* After the early_inline_1 before value profile transformation,
    functions that are indirect call targets may have their bodies
@@ -303,10 +282,10 @@ add_fake_indirect_call_edges (struct cgraph_node *node)
       if (val1 == 0 || count1 == 0)
         continue;
 
-      direct_call1 = find_func_by_global_id (val1);
+      direct_call1 = find_func_by_global_id (val1, false);
       if (direct_call1)
         {
-          tree decl = direct_call1->decl;
+          tree decl = direct_call1->symbol.decl;
           cgraph_create_edge (node,
 	                      cgraph_get_create_node (decl),
 			      NULL,
@@ -315,10 +294,10 @@ add_fake_indirect_call_edges (struct cgraph_node *node)
 
       if (val2 == 0 || count2 == 0)
         continue;
-      direct_call2 = find_func_by_global_id (val2);
+      direct_call2 = find_func_by_global_id (val2, false);
       if (direct_call2)
         {
-          tree decl = direct_call2->decl;
+          tree decl = direct_call2->symbol.decl;
           cgraph_create_edge (node,
 	                      cgraph_get_create_node (decl),
                               NULL,
@@ -340,10 +319,11 @@ cgraph_add_fake_indirect_call_edges (void)
   if (!L_IPO_COMP_MODE)
     return;
 
-  for (node = cgraph_nodes; node; node = node->next)
+  FOR_EACH_DEFINED_FUNCTION (node)
     {
-      if (node->analyzed && (node->needed || node->reachable))
-        add_fake_indirect_call_edges (node);
+      if (!gimple_has_body_p (node->symbol.decl))
+	continue;
+      add_fake_indirect_call_edges (node);
     }
 }
 
@@ -359,18 +339,18 @@ cgraph_remove_zero_count_fake_edges (void)
   if (!L_IPO_COMP_MODE)
     return;
 
-  for (node = cgraph_nodes; node; node = node->next)
+  FOR_EACH_DEFINED_FUNCTION (node)
     {
-      if (node->analyzed && (node->needed || node->reachable))
-        {
-          struct cgraph_edge *e, *f;
-	  for (e = node->callees; e; e = f)
-	    {
-	      f = e->next_callee;
-	      if (!e->call_stmt && !e->count && !e->frequency)
-                cgraph_remove_edge (e);
-            }
-	}
+      if (!gimple_has_body_p (node->symbol.decl))
+	continue;
+
+     struct cgraph_edge *e, *f;
+     for (e = node->callees; e; e = f)
+       {
+         f = e->next_callee;
+	 if (!e->call_stmt && !e->count && !e->frequency)
+           cgraph_remove_edge (e);
+       }
     }
 }
 
@@ -383,17 +363,16 @@ record_reference_to_real_target_from_alias (struct cgraph_node *alias)
   /* Need to add a reference to the resolved node in LIPO
      mode to avoid the real node from eliminated  */
   if (alias->alias && alias->analyzed)
-  {
-    struct cgraph_node *target, *real_target;
+    {
+      struct cgraph_node *target, *real_target;
 
-    target = cgraph_alias_aliased_node (alias);
-    real_target = cgraph_lipo_get_resolved_node (target->decl);
-    /* TODO: this make create duplicate entries in the
-       reference list.  */
-    if (real_target != target)
-      ipa_record_reference (alias, NULL, real_target, NULL,
-                            IPA_REF_ALIAS, NULL);
-  }
+      target = cgraph_alias_aliased_node (alias);
+      real_target = cgraph_lipo_get_resolved_node (target->symbol.decl);
+      /* TODO: this make create duplicate entries in the reference list.  */
+      if (real_target != target)
+        ipa_record_reference ((symtab_node)alias, (symtab_node)real_target,
+                              IPA_REF_ALIAS, NULL);
+    }
 }
 
 /* Mark address taken in STMT.  */
@@ -409,23 +388,27 @@ mark_address (gimple stmt, tree addr, void *data)
         node = cgraph_lipo_get_resolved_node (addr);
 
       cgraph_mark_address_taken_node (node);
-      ipa_record_reference ((struct cgraph_node *)data, NULL,
-			    node, NULL,
+      ipa_record_reference ((symtab_node)data,
+			    (symtab_node)node,
 			    IPA_REF_ADDR, stmt);
       record_reference_to_real_target_from_alias (node);
     }
   else if (addr && TREE_CODE (addr) == VAR_DECL
 	   && (TREE_STATIC (addr) || DECL_EXTERNAL (addr)))
     {
-      struct varpool_node *vnode = varpool_node (addr);
-      int walk_subtrees;
+      struct varpool_node *vnode = varpool_node_for_decl (addr);
 
-      if (lang_hooks.callgraph.analyze_expr)
-	lang_hooks.callgraph.analyze_expr (&addr, &walk_subtrees);
-      varpool_mark_needed_node (vnode);
-      ipa_record_reference ((struct cgraph_node *)data, NULL,
-			    NULL, vnode,
+      ipa_record_reference ((symtab_node)data,
+			    (symtab_node)vnode,
 			    IPA_REF_ADDR, stmt);
+      if (L_IPO_COMP_MODE && cgraph_pre_profiling_inlining_done)
+        {
+          struct varpool_node *rvnode = real_varpool_node (addr);
+          if (rvnode != vnode)
+            ipa_record_reference ((symtab_node)data,
+                                  (symtab_node)rvnode,
+                                  IPA_REF_ADDR, stmt);
+        }
     }
 
   return false;
@@ -441,24 +424,29 @@ mark_load (gimple stmt, tree t, void *data)
     {
       /* ??? This can happen on platforms with descriptors when these are
 	 directly manipulated in the code.  Pretend that it's an address.  */
-      struct cgraph_node *node = cgraph_get_create_node (t);
+      struct cgraph_node *node = cgraph_get_create_real_symbol_node (t);
       cgraph_mark_address_taken_node (node);
-      ipa_record_reference ((struct cgraph_node *)data, NULL,
-			    node, NULL,
+      ipa_record_reference ((symtab_node)data,
+			    (symtab_node)node,
 			    IPA_REF_ADDR, stmt);
     }
   else if (t && TREE_CODE (t) == VAR_DECL
 	   && (TREE_STATIC (t) || DECL_EXTERNAL (t)))
     {
-      struct varpool_node *vnode = varpool_node (t);
-      int walk_subtrees;
+      struct varpool_node *vnode = varpool_node_for_decl (t);
 
-      if (lang_hooks.callgraph.analyze_expr)
-	lang_hooks.callgraph.analyze_expr (&t, &walk_subtrees);
-      varpool_mark_needed_node (vnode);
-      ipa_record_reference ((struct cgraph_node *)data, NULL,
-			    NULL, vnode,
+      ipa_record_reference ((symtab_node)data,
+			    (symtab_node)vnode,
 			    IPA_REF_LOAD, stmt);
+
+      if (L_IPO_COMP_MODE && cgraph_pre_profiling_inlining_done)
+        {
+          struct varpool_node *rvnode = real_varpool_node (t);
+          if (rvnode != vnode)
+            ipa_record_reference ((symtab_node)data,
+                                  (symtab_node)rvnode,
+                                  IPA_REF_ADDR, stmt);
+        }
     }
   return false;
 }
@@ -472,15 +460,19 @@ mark_store (gimple stmt, tree t, void *data)
   if (t && TREE_CODE (t) == VAR_DECL
       && (TREE_STATIC (t) || DECL_EXTERNAL (t)))
     {
-      struct varpool_node *vnode = varpool_node (t);
-      int walk_subtrees;
+      struct varpool_node *vnode = varpool_node_for_decl (t);
 
-      if (lang_hooks.callgraph.analyze_expr)
-	lang_hooks.callgraph.analyze_expr (&t, &walk_subtrees);
-      varpool_mark_needed_node (vnode);
-      ipa_record_reference ((struct cgraph_node *)data, NULL,
-			    NULL, vnode,
+      ipa_record_reference ((symtab_node)data,
+			    (symtab_node)vnode,
 			    IPA_REF_STORE, stmt);
+      if (L_IPO_COMP_MODE && cgraph_pre_profiling_inlining_done)
+        {
+          struct varpool_node *rvnode = real_varpool_node (t);
+          if (rvnode != vnode)
+            ipa_record_reference ((symtab_node)data,
+                                  (symtab_node)rvnode,
+                                  IPA_REF_ADDR, stmt);
+        }
      }
   return false;
 }
@@ -497,9 +489,6 @@ build_cgraph_edges (void)
   gimple_stmt_iterator gsi;
   tree decl;
   unsigned ix;
-
-  if (flag_auto_profile)
-    afdo_set_current_function_count ();
 
   /* Create the callgraph edges and record the nodes referenced by the function.
      body.  */
@@ -529,22 +518,25 @@ build_cgraph_edges (void)
 	      && gimple_omp_parallel_child_fn (stmt))
 	    {
 	      tree fn = gimple_omp_parallel_child_fn (stmt);
-	      ipa_record_reference (node, NULL, cgraph_get_create_node (fn),
-				    NULL, IPA_REF_ADDR, stmt);
+	      ipa_record_reference ((symtab_node)node,
+				    (symtab_node)cgraph_get_create_real_symbol_node (fn),
+				    IPA_REF_ADDR, stmt);
 	    }
 	  if (gimple_code (stmt) == GIMPLE_OMP_TASK)
 	    {
 	      tree fn = gimple_omp_task_child_fn (stmt);
 	      if (fn)
-		ipa_record_reference (node, NULL, cgraph_get_create_node (fn),
-				      NULL, IPA_REF_ADDR, stmt);
+		ipa_record_reference ((symtab_node)node,
+				      (symtab_node) cgraph_get_create_real_symbol_node (fn),
+				      IPA_REF_ADDR, stmt);
 	      fn = gimple_omp_task_copy_fn (stmt);
 	      if (fn)
-		ipa_record_reference (node, NULL, cgraph_get_create_node (fn),
-				      NULL, IPA_REF_ADDR, stmt);
+		ipa_record_reference ((symtab_node)node,
+				      (symtab_node)cgraph_get_create_real_symbol_node (fn),
+				      IPA_REF_ADDR, stmt);
 	    }
 	}
-      for (gsi = gsi_start (phi_nodes (bb)); !gsi_end_p (gsi); gsi_next (&gsi))
+      for (gsi = gsi_start_phis (bb); !gsi_end_p (gsi); gsi_next (&gsi))
 	walk_stmt_load_store_addr_ops (gsi_stmt (gsi), node,
 				       mark_load, mark_store, mark_address);
    }
@@ -553,7 +545,8 @@ build_cgraph_edges (void)
   /* Look for initializers of constant variables and private statics.  */
   FOR_EACH_LOCAL_DECL (cfun, ix, decl)
     if (TREE_CODE (decl) == VAR_DECL
-	&& (TREE_STATIC (decl) && !DECL_EXTERNAL (decl)))
+	&& (TREE_STATIC (decl) && !DECL_EXTERNAL (decl))
+	&& !DECL_HAS_VALUE_EXPR_P (decl))
       varpool_finalize_decl (decl);
   record_eh_tables (node, cfun);
 
@@ -566,6 +559,7 @@ struct gimple_opt_pass pass_build_cgraph_edges =
  {
   GIMPLE_PASS,
   "*build_cgraph_edges",			/* name */
+  OPTGROUP_NONE,                        /* optinfo_flags */
   NULL,					/* gate */
   build_cgraph_edges,			/* execute */
   NULL,					/* sub */
@@ -588,7 +582,7 @@ void
 record_references_in_initializer (tree decl, bool only_vars)
 {
   struct pointer_set_t *visited_nodes = pointer_set_create ();
-  struct varpool_node *node = varpool_node (decl);
+  struct varpool_node *node = varpool_node_for_decl (decl);
   struct record_reference_ctx ctx = {false, NULL};
 
   ctx.varpool_node = node;
@@ -596,6 +590,39 @@ record_references_in_initializer (tree decl, bool only_vars)
   walk_tree (&DECL_INITIAL (decl), record_reference,
              &ctx, visited_nodes);
   pointer_set_destroy (visited_nodes);
+}
+
+/* In LIPO mode, before tree_profiling, the call graph edge
+   needs to be built with the original target node to make
+   sure consistent early inline decisions between profile
+   generate and profile use. After tree-profiling, the target
+   needs to be set to the resolved node so that ipa-inline
+   sees the definitions.  */
+#include "gimple-pretty-print.h"
+void
+lipo_fixup_cgraph_edge_call_target (gimple stmt)
+{
+  tree decl;
+  gcc_assert (is_gimple_call (stmt));
+
+  decl = gimple_call_fndecl (stmt);
+  if (decl)
+    {
+      struct cgraph_node *real_callee;
+      real_callee = cgraph_lipo_get_resolved_node (decl);
+
+      if (decl != real_callee->symbol.decl)
+        {
+          int lp_nr;
+
+          gcc_assert (!real_callee->clone.combined_args_to_skip);
+          gimple_call_set_fndecl (stmt, real_callee->symbol.decl);
+          update_stmt (stmt);
+          lp_nr = lookup_stmt_eh_lp (stmt);
+          if (lp_nr != 0 && !stmt_could_throw_p (stmt))
+            remove_stmt_from_eh_lp (stmt);
+        }
+    }
 }
 
 /* Rebuild cgraph edges for current function node.  This needs to be run after
@@ -609,7 +636,7 @@ rebuild_cgraph_edges (void)
   gimple_stmt_iterator gsi;
 
   cgraph_node_remove_callees (node);
-  ipa_remove_all_references (&node->ref_list);
+  ipa_remove_all_references (&node->symbol.ref_list);
 
   node->count = ENTRY_BLOCK_PTR->count;
   node->max_bb_count = 0;
@@ -629,26 +656,12 @@ rebuild_cgraph_edges (void)
 							 bb);
 	      decl = gimple_call_fndecl (stmt);
 	      if (decl)
-	        {
-		  struct cgraph_node *callee;
-		  /* In LIPO mode, before tree_profiling, the call graph edge
-		     needs to be built with the original target node to make
-		     sure consistent early inline decisions between profile
-                     generate and profile use. After tree-profiling, the target
-                     needs to be set to the resolved node so that ipa-inline
-                     sees the definitions.  */
-		  if (L_IPO_COMP_MODE && cgraph_pre_profiling_inlining_done)
-                    {
-                      callee = cgraph_lipo_get_resolved_node (decl);
-                      record_reference_to_real_target_from_alias (callee);
-                    }
-                  else
-		    callee = cgraph_get_create_node (decl);
+                {
+                  struct cgraph_node *callee = cgraph_get_create_node (decl);
+                  if (L_IPO_COMP_MODE)
+                    record_reference_to_real_target_from_alias (callee);
                   cgraph_create_edge (node, callee, stmt,
                                       bb->count, freq);
-                  if (L_IPO_COMP_MODE && cgraph_pre_profiling_inlining_done
-		      && decl != callee->decl)
-		    gimple_call_set_fndecl (stmt, callee->decl);
                 }
 	      else
 		cgraph_create_indirect_edge (node, stmt,
@@ -659,10 +672,11 @@ rebuild_cgraph_edges (void)
 					 mark_store, mark_address);
 
 	}
-      for (gsi = gsi_start (phi_nodes (bb)); !gsi_end_p (gsi); gsi_next (&gsi))
+      for (gsi = gsi_start_phis (bb); !gsi_end_p (gsi); gsi_next (&gsi))
 	walk_stmt_load_store_addr_ops (gsi_stmt (gsi), node,
 				       mark_load, mark_store, mark_address);
     }
+
   add_fake_indirect_call_edges (node);
   record_eh_tables (node, cfun);
   gcc_assert (!node->global.inlined_to);
@@ -680,7 +694,7 @@ cgraph_rebuild_references (void)
   struct cgraph_node *node = cgraph_get_node (current_function_decl);
   gimple_stmt_iterator gsi;
 
-  ipa_remove_all_references (&node->ref_list);
+  ipa_remove_all_references (&node->symbol.ref_list);
 
   node->count = ENTRY_BLOCK_PTR->count;
 
@@ -694,7 +708,7 @@ cgraph_rebuild_references (void)
 					 mark_store, mark_address);
 
 	}
-      for (gsi = gsi_start (phi_nodes (bb)); !gsi_end_p (gsi); gsi_next (&gsi))
+      for (gsi = gsi_start_phis (bb); !gsi_end_p (gsi); gsi_next (&gsi))
 	walk_stmt_load_store_addr_ops (gsi_stmt (gsi), node,
 				       mark_load, mark_store, mark_address);
     }
@@ -706,6 +720,7 @@ struct gimple_opt_pass pass_rebuild_cgraph_edges =
  {
   GIMPLE_PASS,
   "*rebuild_cgraph_edges",		/* name */
+  OPTGROUP_NONE,                        /* optinfo_flags */
   NULL,					/* gate */
   rebuild_cgraph_edges,			/* execute */
   NULL,					/* sub */
@@ -741,6 +756,7 @@ struct gimple_opt_pass pass_remove_cgraph_callee_edges =
  {
   GIMPLE_PASS,
   "*remove_cgraph_callee_edges",		/* name */
+  OPTGROUP_NONE,                        /* optinfo_flags */
   NULL,					/* gate */
   remove_cgraph_callee_edges,		/* execute */
   NULL,					/* sub */

@@ -69,6 +69,7 @@ enum ld_plugin_status claim_file_hook (const struct ld_plugin_input_file *file,
                                        int *claimed);
 enum ld_plugin_status all_symbols_read_hook ();
 
+static ld_plugin_message message = NULL;
 static ld_plugin_register_claim_file register_claim_file_hook = NULL;
 static ld_plugin_register_all_symbols_read
   register_all_symbols_read_hook = NULL;
@@ -88,8 +89,6 @@ static ld_plugin_unique_segment_for_sections unique_segment_for_sections = NULL;
 
 static char *out_file = NULL;
 
-static int is_api_exist = 0;
-
 /* The plugin does nothing when no-op is 1.  */
 static int no_op = 0;
 
@@ -98,6 +97,29 @@ static int no_op = 0;
    "--plugin-opt,split_segment=yes".  */
 static int split_segment = 0;
 
+/* If SORT_NAME_PREFIX is true then the sections not touched by the callgraph
+   are grouped according to their name prefix.  When SORT_NAME_PREFIX is zero,
+   all the sections are put together and sorted according to their node
+   weights.  The default value of SORT_NAME_PREFIX is 0.  Even when sections
+   are grouped by their prefix, each group is sorted by the node weights.  */
+int sort_name_prefix = 0;
+
+/* Edge cutoff is used to discard callgraph edges that are not above a
+   certain threshold.  cutoff_p is to express this as a percent of the
+   maximum value and cutoff_a is used to express this as an absolute
+   value.  The default is to consider all edges.  */
+unsigned int edge_cutoff_p = 0;
+unsigned long long edge_cutoff_a = 0;
+
+/* This is true if the max count of any bb in a function should be used as
+   the node weight rather than the count of the entry bb.  */
+int use_max_count = 1;
+
+/* This is used to decide which sections are considered unlikely.  If the
+   section profile is greater than this value then it is not unlikely
+   executed.  */
+unsigned long long unlikely_segment_profile_cutoff = 0;
+
 /* Copies new output file name out_file  */
 void get_filename (const char *name)
 {
@@ -105,17 +127,39 @@ void get_filename (const char *name)
   strcpy (out_file, name);
 }
 
+/* MSG_FATAL prints a format string and aborts.  Uses the plugin API if
+   available, otherwise falls back to using fprintf.  */
+
+#define MSG_FATAL(...) \
+  if (message) { \
+    message (LDPL_FATAL, __VA_ARGS__); } \
+  else { \
+    fprintf (stderr, "fatal: " __VA_ARGS__); abort (); }
+
+/* MSG_ERROR prints a format string. Uses the plugin API if
+   available, otherwise falls back to using fprintf.  */
+
+#define MSG_ERROR(...) \
+  if (message) { \
+    message (LDPL_ERROR, __VA_ARGS__); } \
+  else { \
+    fprintf (stderr, "error: " __VA_ARGS__); }
+
 /* Process options to plugin.  Options with prefix "group=" are special.
    They specify the type of grouping. The option "group=none" makes the
    plugin do nothing.   Options with prefix "file=" set the output file
    where the final function order must be stored.  Option "segment=none"
    does not place the cold code in a separate ELF segment.  */
-void
+static int
 process_option (const char *name)
 {
   const char *option_group = "group=";
   const char *option_file = "file=";
   const char *option_segment = "split_segment=";
+  const char *option_edge_cutoff = "edge_cutoff=";
+  const char *option_sort_name_prefix = "sort_name_prefix=";
+  const char *option_max_count = "use_maxcount=";
+  const char *option_unlikely_cutoff = "unlikely_cutoff=";
 
   /* Check if option is "group="  */
   if (strncmp (name, option_group, strlen (option_group)) == 0)
@@ -124,13 +168,13 @@ process_option (const char *name)
 	no_op = 1;
       else
 	no_op = 0;
-      return;
+      return 0;
     }
   /* Check if option is "file=" */
   else if (strncmp (name, option_file, strlen (option_file)) == 0)
     {
       get_filename (name + strlen (option_file));
-      return;
+      return 0;
     }
   /* Check if options is "split_segment=[yes|no]"  */
   else if (strncmp (name, option_segment, strlen (option_segment)) == 0)
@@ -139,19 +183,90 @@ process_option (const char *name)
       if (strcmp (option_val, "no") == 0)
 	{
 	  split_segment = 0;
-	  return;
+	  return 0;
 	}
       else if (strcmp (option_val, "yes") == 0)
 	{
 	  split_segment = 1;
-	  return;
+	  return 0;
 	}
     }
+  else if (strncmp (name, option_edge_cutoff,
+	   strlen (option_edge_cutoff)) == 0)
+    {
+      const char *a_or_p = name + strlen (option_edge_cutoff);
+      char *endptr = NULL;
+      if (a_or_p[0] == 'p')
+	{
+          edge_cutoff_p = strtol (a_or_p + 1, &endptr, 10);
+	  /* Sanity check value entered.  */
+	  if (*endptr == '\0' && edge_cutoff_p <= 100)
+	    return 0;
+	  if (edge_cutoff_p > 100)
+	    {
+	      MSG_ERROR ("Percent value > 100 in option %s\n", name);
+	      return 1;
+	    }
+	}
+      else if (a_or_p[0] == 'a')
+	{
+          edge_cutoff_a = strtoll (a_or_p + 1, &endptr, 10);
+	  /* Sanity check value entered.  */
+	  if (*endptr == '\0')
+	    return 0;
+	}
+      MSG_ERROR ("Wrong format/non-numeric value for edge_cutoff in %s, "
+   	        "use edge_cutoff=[p|a]<value>\n", name);
+      return 1;
+    }
+  else if (strncmp (name, option_sort_name_prefix,
+	   strlen (option_sort_name_prefix)) == 0)
+    {
+      const char *option_val = name + strlen (option_sort_name_prefix);
+      if (strcmp (option_val, "no") == 0)
+	{
+	  sort_name_prefix = 0;
+	  return 0;
+	}
+      else if (strcmp (option_val, "yes") == 0)
+	{
+	  sort_name_prefix = 1;
+	  return 0;
+	}
+    }
+  else if (strncmp (name, option_max_count,
+	   strlen (option_max_count)) == 0)
+    {
+      const char *option_val = name + strlen (option_max_count);
+      if (strcmp (option_val, "no") == 0)
+	{
+	  use_max_count = 0;
+	  return 0;
+	}
+      else if (strcmp (option_val, "yes") == 0)
+	{
+	  use_max_count = 1;
+	  return 0;
+	}
+    }
+  /* Check if option is unlikely_cutoff.  This decides what sections are
+     considered unlikely for segment splitting.  The default cutoff is 0.  */
+  else if (strncmp (name, option_unlikely_cutoff,
+	   strlen (option_unlikely_cutoff)) == 0)
+    {
+      const char *option_val = name + strlen (option_unlikely_cutoff);
+      char *endptr = NULL;
+      unlikely_segment_profile_cutoff = strtoll (option_val, &endptr, 10);
+      /* Sanity check value entered.  */
+      if (*endptr == '\0')
+	return 0;
+      MSG_ERROR ("Non-numeric value in option %s\n", name);
+      return 1;
+    }
 
-  /* Unknown option, set no_op to 1.  */
-  no_op = 1;
-  fprintf (stderr, "Unknown option to function reordering plugin :%s\n",
-	   name);
+  /* Flag error on unknown plugin option.  */
+  MSG_ERROR ("Unknown option to function reordering plugin :%s\n", name);
+  return 1;
 }
 
 /* Plugin entry point.  */
@@ -168,9 +283,13 @@ onload (struct ld_plugin_tv *tv)
         case LDPT_GOLD_VERSION:
           break;
         case LDPT_OPTION:
-	  process_option (entry->tv_u.tv_string);
+	  if (process_option (entry->tv_u.tv_string) == 1)
+	    return LDPS_ERR;
 	  /* If no_op is set, do not do anything else.  */
 	  if (no_op) return LDPS_OK;
+	  break;
+	case LDPT_MESSAGE:
+	  message = *entry->tv_u.tv_message;
 	  break;
         case LDPT_REGISTER_CLAIM_FILE_HOOK:
 	  register_claim_file_hook = *entry->tv_u.tv_register_claim_file;
@@ -211,19 +330,26 @@ onload (struct ld_plugin_tv *tv)
 
   assert (!no_op);
 
-  if (register_all_symbols_read_hook != NULL
-      && register_claim_file_hook != NULL
-      && get_input_section_count != NULL
-      && get_input_section_type != NULL
-      && get_input_section_name != NULL
-      && get_input_section_contents != NULL
-      && update_section_order != NULL
-      && allow_section_ordering != NULL
-      && allow_unique_segment_for_sections != NULL
-      && unique_segment_for_sections != NULL)
-    is_api_exist = 1;
-  else
-    return LDPS_OK;
+  /* If the API for code reordering is missing, abort!  */
+  if (register_all_symbols_read_hook == NULL
+      || register_claim_file_hook == NULL
+      || get_input_section_count == NULL
+      || get_input_section_type == NULL
+      || get_input_section_name == NULL
+      || get_input_section_contents == NULL
+      || update_section_order == NULL
+      || allow_section_ordering == NULL)
+    {
+      MSG_FATAL ("API for code reordering not available\n");
+    }
+
+  /* If segment splitting is desired and the API is missing, flag error.  */
+  if (split_segment == 1
+      && (allow_unique_segment_for_sections == NULL
+          || unique_segment_for_sections == NULL))
+    {
+      MSG_FATAL ("Segment splitting API not available for split_segment\n");
+    }
 
   /* Register handlers.  */
   assert ((*register_all_symbols_read_hook) (all_symbols_read_hook)
@@ -245,9 +371,6 @@ claim_file_hook (const struct ld_plugin_input_file *file, int *claimed)
   unsigned int shndx;
 
   (void) claimed;
-
-  /* Plugin APIs are supported if this is called.  */
-  assert (is_api_exist);
 
   if (is_ordering_specified == 0)
     {
@@ -315,9 +438,6 @@ all_symbols_read_hook (void)
   unsigned int *shndx;
   FILE *fp = NULL;
 
-  /* Plugin APIs are supported if this is called.  */
-  assert (is_api_exist);
-
   if (is_callgraph_empty ())
     return LDPS_OK;
 
@@ -344,24 +464,27 @@ all_symbols_read_hook (void)
       section_list[i].shndx = shndx[i];
     }
 
-  if (split_segment == 1)
+  if (split_segment == 1
+      && unlikely_segment_start >= 0
+      && (unlikely_segment_end >= unlikely_segment_start))
     {
       /* Pass the new order of functions to the linker.  */
       /* Fix the order of all sections upto the beginning of the
 	 unlikely section.  */
       update_section_order (section_list, unlikely_segment_start);
-      assert (num_entries >= unlikely_segment_end);
+      assert (num_entries > unlikely_segment_end);
       /* Fix the order of all sections after the end of the unlikely
 	 section.  */
-      update_section_order (section_list, num_entries - unlikely_segment_end);
+      update_section_order (section_list + unlikely_segment_end + 1,
+			    num_entries - unlikely_segment_end - 1);
       /* Map all unlikely code into a new segment.  */
       unique_segment_for_sections (
 	  ".text.unlikely_executed", 0, 0x1000,
 	  section_list + unlikely_segment_start,
-	  unlikely_segment_end - unlikely_segment_start);
+	  unlikely_segment_end - unlikely_segment_start + 1);
       if (fp != NULL)
 	fprintf (fp, "Moving %u section(s) to new segment\n",
-		 unlikely_segment_end - unlikely_segment_start);
+		 unlikely_segment_end - unlikely_segment_start + 1);
     }
   else
     {

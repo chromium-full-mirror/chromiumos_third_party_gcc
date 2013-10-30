@@ -1,4 +1,4 @@
-/* { dg-options "-O2 -fdump-rtl-expand-blocks" } */
+/* { dg-options "-O2 -fdump-rtl-expand-all" } */
 int g;
 
 __attribute__((noinline)) void foo (int  n)
@@ -35,6 +35,6 @@ int main ()
    foo ((i * i) % 5);
  return 0;
 }
-/* { dg-final-use { scan-rtl-dump-times "Basic block\[^\\n\]*count 4000" 2 "expand"} } */
-/* { dg-final-use { scan-rtl-dump-times "Basic block\[^\\n\]*count 2000" 1 "expand"} } */
+/* { dg-final-use { scan-rtl-dump-times ";; basic block\[^\\n\]*count 4000" 2 "expand"} } */
+/* { dg-final-use { scan-rtl-dump-times ";; basic block\[^\\n\]*count 2000" 1 "expand"} } */
 /* { dg-final-use { cleanup-rtl-dump "expand" } } */

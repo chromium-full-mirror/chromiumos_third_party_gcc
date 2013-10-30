@@ -1,4 +1,4 @@
-#   Copyright (C) 1997, 2001, 2007 Free Software Foundation, Inc.
+#   Copyright (C) 1997-2013 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -70,53 +70,55 @@ proc verify-lines { testname testcase file } {
     return $failed
 }
 
+
 #
 # verify-intermediate -- check that intermediate file has certain lines
 #
+# TESTNAME is the name of the test, including unique flags.
 # TESTCASE is the name of the test.
 # FILE is the name of the gcov output file.
 #
-# Checks are very loose, they are based on being certain tags present
+# Checks are very loose, they are based on certain tags being present
 # in the output. They do not check for exact expected execution
 # counts. For that the regular gcov format should be checked.
 #
-proc verify-intermediate { testcase file } {
+proc verify-intermediate { testname testcase file } {
     set failed 0
-    set sf 0
-    set fn 0
-    set fnda 0
-    set da 0
+    set srcfile 0
+    set function 0
+    set lcount 0
+    set branch 0
     set fd [open $file r]
     while { [gets $fd line] >= 0 } {
-	if [regexp "^SF:" $line] {
-	    incr sf
+	if [regexp "^file:" $line] {
+	    incr srcfile
 	}
-	if [regexp "^FN:(\[0-9\]+)," $line] {
-	    incr fn
+	if [regexp "^function:(\[0-9\]+),(\[0-9\]+),.*" $line] {
+	    incr function
 	}
-	if [regexp "^FNDA:(\[0-9\]+)," $line] {
-	    incr fnda
+	if [regexp "^lcount:(\[0-9\]+),(\[0-9\]+)" $line] {
+	    incr lcount
 	}
-	if [regexp "^DA:(\[0-9\]+),(\[0-9\]+)" $line] {
-	    incr da
+	if [regexp "^branch:(\[0-9\]+),(taken|nottaken|notexec)" $line] {
+	    incr branch
 	}
     }
 
     # We should see at least one tag of each type
-    if {$sf == 0} {
-	fail "expected SF: not found"
+    if {$srcfile == 0} {
+	fail "$testname expected 'file:' tag not found"
 	incr failed
     }
-    if {$fn == 0} {
-	fail "expected FN: not found"
+    if {$function == 0} {
+	fail "$testname expected 'function:' tag not found"
 	incr failed
     }
-    if {$fnda == 0} {
-	fail "expected FNDA: not found"
+    if {$lcount == 0} {
+	fail "$testname expected 'lcount:' tag not found"
 	incr failed
     }
-    if {$da == 0} {
-	fail "expected DA: not found"
+    if {$branch == 0} {
+	fail "$testname expected 'branch:' tag not found"
 	incr failed
     }
     return $failed
@@ -356,6 +358,7 @@ proc run-gcov { args } {
     }
     remote_upload host $testcase.gcov $testcase.gcov
 
+    # Check that line execution counts are as expected.
     if { $gcov_verify_lines } {
 	# Check that line execution counts are as expected.
 	set lfailed [verify-lines $testname $testcase $testcase.gcov]
@@ -377,7 +380,7 @@ proc run-gcov { args } {
     }
     if { $gcov_verify_intermediate } {
 	# Check that intermediate format has the expected format
-	set ifailed [verify-intermediate $testcase $testcase.gcov]
+	set ifailed [verify-intermediate $testname $testcase $testcase.gcov]
     } else {
 	set ifailed 0
     }

@@ -1,7 +1,7 @@
-/* Test that -g overrides -gmlt.  */
+/* Test that -g overrides -g1.  */
 /* Origin: Cary Coutant  <ccoutant@google.com> */
 /* { dg-do compile } */
-/* { dg-options "-O2 -gdwarf-2 -dA -gmlt -g" } */
+/* { dg-options "-O2 -gdwarf-2 -dA -g1 -g" } */
 /* { dg-final { scan-assembler "DW_AT_stmt_list" } } */
 /* { dg-final { scan-assembler "DW_TAG_subprogram" } } */
 /* { dg-final { scan-assembler "DW_TAG_inlined_subroutine" } } */

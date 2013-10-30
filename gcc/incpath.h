@@ -1,6 +1,5 @@
 /* Set up combined include path for the preprocessor.
-   Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008
-   Free Software Foundation, Inc.
+   Copyright (C) 2003-2013 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify it
    under the terms of the GNU General Public License as published by the
@@ -22,7 +21,8 @@ extern void register_include_chains (cpp_reader *, const char *,
 				     const char *, const char *,
 				     int, int, int);
 extern void add_cpp_dir_path (struct cpp_dir *, int);
-extern void get_include_chains (cpp_dir **quotes, cpp_dir **brackets);
+extern void get_include_chains (cpp_dir **quotes, cpp_dir **brackets,
+                                cpp_dir **systems);
 extern void clear_include_chains (void);
 extern struct cpp_dir *get_added_cpp_dirs (int);
 
