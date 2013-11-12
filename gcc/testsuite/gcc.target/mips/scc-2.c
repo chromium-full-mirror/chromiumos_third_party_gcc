@@ -1,6 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-mgp64" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-O -mgp64" } */
 
 /* { dg-final { scan-assembler-not "and\t\|andi\t\|ext\t\|sll\t\|srl\t" } } */
 /* { dg-final { scan-assembler-times "slt\t\|slti?u\t" 12 } } */

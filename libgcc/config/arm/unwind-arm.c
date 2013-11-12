@@ -1,5 +1,5 @@
 /* ARM EABI compliant unwinding routines.
-   Copyright (C) 2004-2013 Free Software Foundation, Inc.
+   Copyright (C) 2004, 2005, 2009 Free Software Foundation, Inc.
    Contributed by Paul Brook
 
    This file is free software; you can redistribute it and/or modify it
@@ -53,6 +53,16 @@ struct vfpv3_regs
   _uw64 d[16];
 };
 
+struct fpa_reg
+{
+  _uw w[3];
+};
+
+struct fpa_regs
+{
+  struct fpa_reg f[8];
+};
+
 struct wmmxd_regs
 {
   _uw64 wd[16];
@@ -80,6 +90,7 @@ typedef struct
   _uw prev_sp; /* Only valid during forced unwinding.  */
   struct vfp_regs vfp;
   struct vfpv3_regs vfp_regs_16_to_31;
+  struct fpa_regs fpa;
   struct wmmxd_regs wmmxd;
   struct wmmxc_regs wmmxc;
 } phase1_vrs;
@@ -170,6 +181,7 @@ _Unwind_VRS_Result _Unwind_VRS_Get (_Unwind_Context *context,
       return _UVRSR_OK;
 
     case _UVRSC_VFP:
+    case _UVRSC_FPA:
     case _UVRSC_WMMXD:
     case _UVRSC_WMMXC:
       return _UVRSR_NOT_IMPLEMENTED;
@@ -201,6 +213,7 @@ _Unwind_VRS_Result _Unwind_VRS_Set (_Unwind_Context *context,
       return _UVRSR_OK;
 
     case _UVRSC_VFP:
+    case _UVRSC_FPA:
     case _UVRSC_WMMXD:
     case _UVRSC_WMMXC:
       return _UVRSR_NOT_IMPLEMENTED;
@@ -366,6 +379,9 @@ _Unwind_VRS_Result _Unwind_VRS_Pop (_Unwind_Context *context,
           }
       }
       return _UVRSR_OK;
+
+    case _UVRSC_FPA:
+      return _UVRSR_NOT_IMPLEMENTED;
 
     case _UVRSC_WMMXD:
       {

@@ -6,30 +6,30 @@
 
 package syscall
 
-import "unsafe"
+import (
+	"unsafe"
+)
 
-func (any *anyMessage) toRoutingMessage(b []byte) RoutingMessage {
+func (any *anyMessage) toRoutingMessage(buf []byte) RoutingMessage {
 	switch any.Type {
 	case RTM_ADD, RTM_DELETE, RTM_CHANGE, RTM_GET, RTM_LOSING, RTM_REDIRECT, RTM_MISS, RTM_LOCK, RTM_RESOLVE:
 		p := (*RouteMessage)(unsafe.Pointer(any))
-		return &RouteMessage{Header: p.Header, Data: b[SizeofRtMsghdr:any.Msglen]}
+		rtm := &RouteMessage{}
+		rtm.Header = p.Header
+		rtm.Data = buf[SizeofRtMsghdr:any.Msglen]
+		return rtm
 	case RTM_IFINFO:
 		p := (*InterfaceMessage)(unsafe.Pointer(any))
-		return &InterfaceMessage{Header: p.Header, Data: b[SizeofIfMsghdr:any.Msglen]}
-	case RTM_IFANNOUNCE:
-		p := (*InterfaceAnnounceMessage)(unsafe.Pointer(any))
-		return &InterfaceAnnounceMessage{Header: p.Header}
+		ifm := &InterfaceMessage{}
+		ifm.Header = p.Header
+		ifm.Data = buf[SizeofIfMsghdr:any.Msglen]
+		return ifm
 	case RTM_NEWADDR, RTM_DELADDR:
 		p := (*InterfaceAddrMessage)(unsafe.Pointer(any))
-		return &InterfaceAddrMessage{Header: p.Header, Data: b[SizeofIfaMsghdr:any.Msglen]}
+		ifam := &InterfaceAddrMessage{}
+		ifam.Header = p.Header
+		ifam.Data = buf[SizeofIfaMsghdr:any.Msglen]
+		return ifam
 	}
 	return nil
 }
-
-// InterfaceAnnounceMessage represents a routing message containing
-// network interface arrival and depature information.
-type InterfaceAnnounceMessage struct {
-	Header IfAnnounceMsghdr
-}
-
-func (m *InterfaceAnnounceMessage) sockaddr() (sas []Sockaddr) { return nil }

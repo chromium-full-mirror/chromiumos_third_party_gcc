@@ -1,6 +1,8 @@
 // Stack implementation -*- C++ -*-
 
-// Copyright (C) 2001-2013 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
+// 2010, 2011
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -68,9 +70,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    *
    *  @ingroup sequences
    *
-   *  @tparam _Tp  Type of element.
-   *  @tparam _Sequence  Type of underlying sequence, defaults to deque<_Tp>.
-   *
    *  Meets many of the requirements of a
    *  <a href="tables.html#65">container</a>,
    *  but does not define anything to do with iterators.  Very few of the
@@ -125,7 +124,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       /**
        *  @brief  Default constructor creates no elements.
        */
-#if __cplusplus < 201103L
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
       explicit
       stack(const _Sequence& __c = _Sequence())
       : c(__c) { }
@@ -186,7 +185,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       push(const value_type& __x)
       { c.push_back(__x); }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       void
       push(value_type&& __x)
       { c.push_back(std::move(__x)); }
@@ -215,7 +214,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	c.pop_back();
       }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       void
       swap(stack& __s)
       noexcept(noexcept(swap(c, __s.c)))
@@ -285,7 +284,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     operator>=(const stack<_Tp, _Seq>& __x, const stack<_Tp, _Seq>& __y)
     { return !(__x < __y); }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   template<typename _Tp, typename _Seq>
     inline void
     swap(stack<_Tp, _Seq>& __x, stack<_Tp, _Seq>& __y)

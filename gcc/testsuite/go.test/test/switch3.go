@@ -1,11 +1,8 @@
-// errorcheck
+// errchk $G -e $D/$F.go
 
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-
-// Verify that erroneous switch statements are detected by the compiler.
-// Does not compile.
 
 package main
 
@@ -44,17 +41,6 @@ func bad() {
 	case nil:
 	case f1: // ERROR "can only compare func f to nil|func can only be compared to nil"
 	default:
-	}
-
-	var ar, ar1 [4]func()
-	switch ar { // ERROR "cannot switch on"
-	case ar1:
-	default:
-	}
-
-	var st, st1 struct{ f func() }
-	switch st { // ERROR "cannot switch on"
-	case st1:
 	}
 }
 

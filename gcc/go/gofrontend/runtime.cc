@@ -6,6 +6,8 @@
 
 #include "go-system.h"
 
+#include <gmp.h>
+
 #include "gogo.h"
 #include "types.h"
 #include "expressions.h"
@@ -28,10 +30,8 @@ enum Runtime_function_type
   RFT_BOOL,
   // Go type *bool, C type _Bool*.
   RFT_BOOLPTR,
-  // Go type int, C type intgo.
+  // Go type int, C type int.
   RFT_INT,
-  // Go type int32, C type int32_t.
-  RFT_INT32,
   // Go type int64, C type int64_t.
   RFT_INT64,
   // Go type uint64, C type uint64_t.
@@ -100,10 +100,6 @@ runtime_function_type(Runtime_function_type bft)
 
 	case RFT_INT:
 	  t = Type::lookup_integer_type("int");
-	  break;
-
-	case RFT_INT32:
-	  t = Type::lookup_integer_type("int32");
 	  break;
 
 	case RFT_INT64:
@@ -210,7 +206,6 @@ convert_to_runtime_function_type(Runtime_function_type bft, Expression* e,
     case RFT_BOOL:
     case RFT_BOOLPTR:
     case RFT_INT:
-    case RFT_INT32:
     case RFT_INT64:
     case RFT_UINT64:
     case RFT_UINTPTR:

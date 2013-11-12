@@ -14,7 +14,7 @@
  * ====================================================
  */
 
-/* atanhq(x)
+/* __ieee754_atanhl(x)
  * Method :
  *    1.Reduced x to positive by atanh(-x) = -atanh(x)
  *    2.For x>=0.5

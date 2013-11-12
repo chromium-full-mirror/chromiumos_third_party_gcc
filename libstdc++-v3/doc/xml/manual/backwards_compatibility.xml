@@ -4,8 +4,12 @@
 
 <info><title>Backwards Compatibility</title>
   <keywordset>
-    <keyword>ISO C++</keyword>
-    <keyword>backwards</keyword>
+    <keyword>
+      ISO C++
+    </keyword>
+    <keyword>
+      backwards
+    </keyword>
   </keywordset>
 </info>
 

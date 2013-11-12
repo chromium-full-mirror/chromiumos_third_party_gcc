@@ -1,5 +1,6 @@
 /* IPA reference lists.
-   Copyright (C) 2010-2013 Free Software Foundation, Inc.
+   Copyright (C) 2010
+   Free Software Foundation, Inc.
    Contributed by Jan Hubicka
 
 This file is part of GCC.
@@ -18,51 +19,61 @@ You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING3.  If not see
 <http://www.gnu.org/licenses/>.  */
 
-/* Return callgraph node REF is referring.  */
+/* Return callgraph node REF is refering.  */
 static inline struct cgraph_node *
 ipa_ref_node (struct ipa_ref *ref)
 {
-  return cgraph (ref->referred);
+  gcc_assert (ref->refered_type == IPA_REF_CGRAPH);
+  return ref->refered.cgraph_node;
 }
 
-/* Return varpool node REF is referring.  */
+/* Return varpool node REF is refering.  */
 
 static inline struct varpool_node *
 ipa_ref_varpool_node (struct ipa_ref *ref)
 {
-  return varpool (ref->referred);
+  gcc_assert (ref->refered_type == IPA_REF_VARPOOL);
+  return ref->refered.varpool_node;
 }
 
 /* Return cgraph node REF is in.  */
 
 static inline struct cgraph_node *
-ipa_ref_referring_node (struct ipa_ref *ref)
+ipa_ref_refering_node (struct ipa_ref *ref)
 {
-  return cgraph (ref->referring);
+  gcc_assert (ref->refering_type == IPA_REF_CGRAPH);
+  return ref->refering.cgraph_node;
 }
 
 /* Return varpool node REF is in.  */
 
 static inline struct varpool_node *
-ipa_ref_referring_varpool_node (struct ipa_ref *ref)
+ipa_ref_refering_varpool_node (struct ipa_ref *ref)
 {
-  return varpool (ref->referring);
+  gcc_assert (ref->refering_type == IPA_REF_VARPOOL);
+  return ref->refering.varpool_node;
 }
 
 /* Return reference list REF is in.  */
 
 static inline struct ipa_ref_list *
-ipa_ref_referring_ref_list (struct ipa_ref *ref)
+ipa_ref_refering_ref_list (struct ipa_ref *ref)
 {
-  return &ref->referring->symbol.ref_list;
+  if (ref->refering_type == IPA_REF_CGRAPH)
+    return &ipa_ref_refering_node (ref)->ref_list;
+  else
+    return &ipa_ref_refering_varpool_node (ref)->ref_list;
 }
 
 /* Return reference list REF is in.  */
 
 static inline struct ipa_ref_list *
-ipa_ref_referred_ref_list (struct ipa_ref *ref)
+ipa_ref_refered_ref_list (struct ipa_ref *ref)
 {
-  return &ref->referred->symbol.ref_list;
+  if (ref->refered_type == IPA_REF_CGRAPH)
+    return &ipa_ref_node (ref)->ref_list;
+  else
+    return &ipa_ref_varpool_node (ref)->ref_list;
 }
 
 /* Return first reference in LIST or NULL if empty.  */
@@ -70,19 +81,19 @@ ipa_ref_referred_ref_list (struct ipa_ref *ref)
 static inline struct ipa_ref *
 ipa_ref_list_first_reference (struct ipa_ref_list *list)
 {
-  if (!vec_safe_length (list->references))
+  if (!VEC_length (ipa_ref_t, list->references))
     return NULL;
-  return &(*list->references)[0];
+  return VEC_index (ipa_ref_t, list->references, 0);
 }
 
-/* Return first referring ref in LIST or NULL if empty.  */
+/* Return first refering ref in LIST or NULL if empty.  */
 
 static inline struct ipa_ref *
-ipa_ref_list_first_referring (struct ipa_ref_list *list)
+ipa_ref_list_first_refering (struct ipa_ref_list *list)
 {
-  if (!list->referring.length ())
+  if (!VEC_length (ipa_ref_ptr, list->refering))
     return NULL;
-  return list->referring[0];
+  return VEC_index (ipa_ref_ptr, list->refering, 0);
 }
 
 /* Clear reference list.  */
@@ -90,7 +101,7 @@ ipa_ref_list_first_referring (struct ipa_ref_list *list)
 static inline void
 ipa_empty_ref_list (struct ipa_ref_list *list)
 {
-  list->referring.create (0);
+  list->refering = NULL;
   list->references = NULL;
 }
 
@@ -99,10 +110,10 @@ ipa_empty_ref_list (struct ipa_ref_list *list)
 static inline unsigned int
 ipa_ref_list_nreferences (struct ipa_ref_list *list)
 {
-  return vec_safe_length (list->references);
+  return VEC_length (ipa_ref_t, list->references);
 }
 
 #define ipa_ref_list_reference_iterate(L,I,P) \
-   vec_safe_iterate ((L)->references, (I), &(P))
-#define ipa_ref_list_referring_iterate(L,I,P) \
-   (L)->referring.iterate ((I), &(P))
+   VEC_iterate(ipa_ref_t, (L)->references, (I), (P))
+#define ipa_ref_list_refering_iterate(L,I,P) \
+   VEC_iterate(ipa_ref_ptr, (L)->refering, (I), (P))

@@ -12,8 +12,7 @@ int main()
 #   endif
 #   if defined(GC_LINUX_THREADS) || defined(GC_IRIX_THREADS) \
 	|| defined(GC_SOLARIS_PTHREADS) \
-	|| defined(GC_DARWIN_THREADS) || defined(GC_AIX_THREADS) \
-	|| defined(GC_GNU_THREADS)
+	|| defined(GC_DARWIN_THREADS) || defined(GC_AIX_THREADS)
         printf("-lpthread\n");
 #   endif
 #   if defined(GC_FREEBSD_THREADS)

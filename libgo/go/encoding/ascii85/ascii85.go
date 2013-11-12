@@ -296,4 +296,5 @@ func (d *decoder) Read(p []byte) (n int, err error) {
 		nn, d.readErr = d.r.Read(d.buf[d.nbuf:])
 		d.nbuf += nn
 	}
+	panic("unreachable")
 }

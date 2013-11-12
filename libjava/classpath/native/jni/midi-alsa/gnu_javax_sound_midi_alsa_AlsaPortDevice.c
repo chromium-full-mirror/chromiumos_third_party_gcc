@@ -1,5 +1,5 @@
 /* gnu_javax_sound_midi_alsa_AlsaPortDevice.c - Native support
-   Copyright (C) 2005, 2010, 2011
+   Copyright (C) 2005, 2010
    Free Software Foundation, Inc.
    
 This file is part of GNU Classpath.
@@ -41,7 +41,6 @@ exception statement from your version. */
 #include <gnu_javax_sound_midi_alsa_AlsaPortDevice.h>
 #include <unistd.h>
 
-#include <jcl.h>
 #include <alsa/asoundlib.h>
 
 JNIEXPORT void JNICALL
@@ -49,7 +48,6 @@ Java_gnu_javax_sound_midi_alsa_AlsaPortDevice_run_1receiver_1thread_1
   (JNIEnv *env, jobject this __attribute__((unused)), 
    jlong client, jlong port, jobject receiver)
 {
-  int rc;
   snd_seq_port_info_t *pinfo, *sinfo;
   snd_seq_port_subscribe_t *subs;
   snd_seq_addr_t sender, dest;
@@ -59,16 +57,12 @@ Java_gnu_javax_sound_midi_alsa_AlsaPortDevice_run_1receiver_1thread_1
   snd_seq_port_info_alloca (&sinfo);
   snd_seq_port_subscribe_alloca (&subs);
 
-  rc = snd_seq_open (&seq, "default", SND_SEQ_OPEN_DUPLEX, SND_SEQ_NONBLOCK);
-  if (rc < 0)
-    JCL_ThrowException (env, "java/lang/InternalError", snd_strerror (rc));
+  snd_seq_open (&seq, "default", SND_SEQ_OPEN_DUPLEX, SND_SEQ_NONBLOCK);
 
   snd_seq_port_info_set_capability (pinfo, SND_SEQ_PORT_CAP_WRITE);
   snd_seq_port_info_set_type (pinfo, SND_SEQ_PORT_TYPE_MIDI_GENERIC);
 
-  rc = snd_seq_create_port (seq, pinfo);
-  if (rc < 0)
-    JCL_ThrowException (env, "java/lang/InternalError", snd_strerror (rc));
+  snd_seq_create_port (seq, pinfo);
 
   sender.client = (int) client;
   sender.port = (int) port;
@@ -77,9 +71,7 @@ Java_gnu_javax_sound_midi_alsa_AlsaPortDevice_run_1receiver_1thread_1
 
   snd_seq_port_subscribe_set_sender (subs, &sender);
   snd_seq_port_subscribe_set_dest (subs, &dest);
-  rc = snd_seq_subscribe_port(seq, subs);
-  if (rc < 0)
-    JCL_ThrowException (env, "java/lang/InternalError", snd_strerror (rc));
+  snd_seq_subscribe_port(seq, subs);
 
   {
     int npfd;

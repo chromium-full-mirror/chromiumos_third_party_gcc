@@ -1,5 +1,7 @@
 /* Definitions of default options for config/rs6000 configurations.
-   Copyright (C) 1992-2013 Free Software Foundation, Inc.
+   Copyright (C) 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
+   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -33,12 +35,11 @@
 #define OPT_32 "m32"
 #endif
 
-#ifndef OPTION_MASK_64BIT
-#define OPTION_MASK_64BIT 0
+#ifndef MASK_64BIT
 #define MASK_64BIT 0
 #endif
 
-#if TARGET_DEFAULT & OPTION_MASK_64BIT
+#if TARGET_DEFAULT & MASK_64BIT
 #define OPT_ARCH64 "!"OPT_32
 #define OPT_ARCH32 OPT_32
 #else

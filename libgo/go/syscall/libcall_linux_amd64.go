@@ -7,7 +7,7 @@
 package syscall
 
 //sys	Ioperm(from int, num int, on int) (err error)
-//ioperm(from _C_long, num _C_long, on _C_int) _C_int
+//ioperm(from _C_long, num _C_long, on int) int
 
 //sys	Iopl(level int) (err error)
-//iopl(level _C_int) _C_int
+//iopl(level int) int

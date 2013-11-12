@@ -31,9 +31,5 @@ void bench_test()
     }
 }
 
-// There should be two calls to commitTransaction.
-// The one in the uninstrumented code path is a tail call.
-// The one in the instrumented code path is not.
-// { dg-final { scan-tree-dump-times "ITM_commitTransaction.*tail call" 1 "tmedge" } }
-
+// { dg-final { scan-tree-dump-times "ITM_commitTransaction.*tail call" 0 "tmedge" } }
 // { dg-final { cleanup-tree-dump "tmedge" } }

@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -62,25 +63,17 @@ readlines:
 	}
 
 	for key, expected := range expectedMap {
-		got := m[key]
-		if key == "cwd" {
-			// For Windows. golang.org/issue/4645.
-			fi1, _ := os.Stat(got)
-			fi2, _ := os.Stat(expected)
-			if os.SameFile(fi1, fi2) {
-				got = expected
-			}
-		}
-		if got != expected {
+		if got := m[key]; got != expected {
 			t.Errorf("for key %q got %q; expected %q", key, got, expected)
 		}
 	}
 	return rw
 }
 
-var cgiTested, cgiWorks bool
+var cgiTested = false
+var cgiWorks bool
 
-func check(t *testing.T) {
+func skipTest(t *testing.T) bool {
 	if !cgiTested {
 		cgiTested = true
 		cgiWorks = exec.Command("./testdata/test.cgi").Run() == nil
@@ -88,12 +81,16 @@ func check(t *testing.T) {
 	if !cgiWorks {
 		// No Perl on Windows, needed by test.cgi
 		// TODO: make the child process be Go, not Perl.
-		t.Skip("Skipping test: test.cgi failed.")
+		t.Logf("Skipping test: test.cgi failed.")
+		return true
 	}
+	return false
 }
 
 func TestCGIBasicGet(t *testing.T) {
-	check(t)
+	if skipTest(t) {
+		return
+	}
 	h := &Handler{
 		Path: "testdata/test.cgi",
 		Root: "/test.cgi",
@@ -127,7 +124,9 @@ func TestCGIBasicGet(t *testing.T) {
 }
 
 func TestCGIBasicGetAbsPath(t *testing.T) {
-	check(t)
+	if skipTest(t) {
+		return
+	}
 	pwd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd error: %v", err)
@@ -145,7 +144,9 @@ func TestCGIBasicGetAbsPath(t *testing.T) {
 }
 
 func TestPathInfo(t *testing.T) {
-	check(t)
+	if skipTest(t) {
+		return
+	}
 	h := &Handler{
 		Path: "testdata/test.cgi",
 		Root: "/test.cgi",
@@ -162,7 +163,9 @@ func TestPathInfo(t *testing.T) {
 }
 
 func TestPathInfoDirRoot(t *testing.T) {
-	check(t)
+	if skipTest(t) {
+		return
+	}
 	h := &Handler{
 		Path: "testdata/test.cgi",
 		Root: "/myscript/",
@@ -178,7 +181,9 @@ func TestPathInfoDirRoot(t *testing.T) {
 }
 
 func TestDupHeaders(t *testing.T) {
-	check(t)
+	if skipTest(t) {
+		return
+	}
 	h := &Handler{
 		Path: "testdata/test.cgi",
 	}
@@ -198,7 +203,9 @@ func TestDupHeaders(t *testing.T) {
 }
 
 func TestPathInfoNoRoot(t *testing.T) {
-	check(t)
+	if skipTest(t) {
+		return
+	}
 	h := &Handler{
 		Path: "testdata/test.cgi",
 		Root: "",
@@ -214,7 +221,9 @@ func TestPathInfoNoRoot(t *testing.T) {
 }
 
 func TestCGIBasicPost(t *testing.T) {
-	check(t)
+	if skipTest(t) {
+		return
+	}
 	postReq := `POST /test.cgi?a=b HTTP/1.0
 Host: example.com
 Content-Type: application/x-www-form-urlencoded
@@ -241,7 +250,9 @@ func chunk(s string) string {
 
 // The CGI spec doesn't allow chunked requests.
 func TestCGIPostChunked(t *testing.T) {
-	check(t)
+	if skipTest(t) {
+		return
+	}
 	postReq := `POST /test.cgi?a=b HTTP/1.1
 Host: example.com
 Content-Type: application/x-www-form-urlencoded
@@ -262,7 +273,9 @@ Transfer-Encoding: chunked
 }
 
 func TestRedirect(t *testing.T) {
-	check(t)
+	if skipTest(t) {
+		return
+	}
 	h := &Handler{
 		Path: "testdata/test.cgi",
 		Root: "/test.cgi",
@@ -277,7 +290,9 @@ func TestRedirect(t *testing.T) {
 }
 
 func TestInternalRedirect(t *testing.T) {
-	check(t)
+	if skipTest(t) {
+		return
+	}
 	baseHandler := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		fmt.Fprintf(rw, "basepath=%s\n", req.URL.Path)
 		fmt.Fprintf(rw, "remoteaddr=%s\n", req.RemoteAddr)
@@ -297,9 +312,8 @@ func TestInternalRedirect(t *testing.T) {
 // TestCopyError tests that we kill the process if there's an error copying
 // its output. (for example, from the client having gone away)
 func TestCopyError(t *testing.T) {
-	check(t)
-	if runtime.GOOS == "windows" {
-		t.Skipf("skipping test on %q", runtime.GOOS)
+	if skipTest(t) || runtime.GOOS == "windows" {
+		return
 	}
 	h := &Handler{
 		Path: "testdata/test.cgi",
@@ -339,7 +353,11 @@ func TestCopyError(t *testing.T) {
 	}
 
 	childRunning := func() bool {
-		return isProcessRunning(t, pid)
+		p, err := os.FindProcess(pid)
+		if err != nil {
+			return false
+		}
+		return p.Signal(syscall.Signal(0)) == nil
 	}
 
 	if !childRunning() {
@@ -358,10 +376,10 @@ func TestCopyError(t *testing.T) {
 }
 
 func TestDirUnix(t *testing.T) {
-	check(t)
-	if runtime.GOOS == "windows" {
-		t.Skipf("skipping test on %q", runtime.GOOS)
+	if skipTest(t) || runtime.GOOS == "windows" {
+		return
 	}
+
 	cwd, _ := os.Getwd()
 	h := &Handler{
 		Path: "testdata/test.cgi",
@@ -387,8 +405,8 @@ func TestDirUnix(t *testing.T) {
 }
 
 func TestDirWindows(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("Skipping windows specific test.")
+	if skipTest(t) || runtime.GOOS != "windows" {
+		return
 	}
 
 	cgifile, _ := filepath.Abs("testdata/test.cgi")
@@ -397,7 +415,7 @@ func TestDirWindows(t *testing.T) {
 	var err error
 	perl, err = exec.LookPath("perl")
 	if err != nil {
-		t.Skip("Skipping test: perl not found.")
+		return
 	}
 	perl, _ = filepath.Abs(perl)
 
@@ -439,7 +457,7 @@ func TestEnvOverride(t *testing.T) {
 	var err error
 	perl, err = exec.LookPath("perl")
 	if err != nil {
-		t.Skipf("Skipping test: perl not found.")
+		return
 	}
 	perl, _ = filepath.Abs(perl)
 

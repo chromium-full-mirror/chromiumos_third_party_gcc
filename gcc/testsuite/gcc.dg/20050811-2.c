@@ -1,6 +1,6 @@
-/* Test whether graph dumping doesn't crash.  */
+/* Test whether -dov doesn't crash.  */
 /* { dg-do compile } */
-/* { dg-options "-O2 -fdump-rtl-postreload-graph" } */
+/* { dg-options "-O2 -dv -fdump-rtl-postreload" } */
 
 int foo (void)
 {
@@ -17,4 +17,4 @@ int bar (int x)
     return foo ();
 }
 
-/* { dg-final { cleanup-rtl-dump "postreload*" } } */
+// { dg-final { cleanup-rtl-dump "postreload*" } }

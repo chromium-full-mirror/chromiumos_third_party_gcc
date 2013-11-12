@@ -1,6 +1,6 @@
 // Profiling multimap implementation -*- C++ -*-
 
-// Copyright (C) 2009-2013 Free Software Foundation, Inc.
+// Copyright (C) 2009, 2010, 2011, 2012 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -68,12 +68,7 @@ namespace __profile
 			const _Allocator& __a = _Allocator())
       : _Base(__comp, __a) { }
 
-#if __cplusplus >= 201103L
-      template<typename _InputIterator,
-	       typename = std::_RequireInputIter<_InputIterator>>
-#else
       template<typename _InputIterator>
-#endif
       multimap(_InputIterator __first, _InputIterator __last,
 	       const _Compare& __comp = _Compare(),
 	       const _Allocator& __a = _Allocator())
@@ -85,7 +80,7 @@ namespace __profile
       multimap(const _Base& __x)
       : _Base(__x) { }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       multimap(multimap&& __x)
       noexcept(is_nothrow_copy_constructible<_Compare>::value)
       : _Base(std::move(__x))
@@ -106,7 +101,7 @@ namespace __profile
 	return *this;
       }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       multimap&
       operator=(multimap&& __x)
       {
@@ -161,7 +156,7 @@ namespace __profile
       rend() const _GLIBCXX_NOEXCEPT
       { return const_reverse_iterator(begin()); }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       const_iterator
       cbegin() const noexcept
       { return const_iterator(_Base::begin()); }
@@ -185,28 +180,11 @@ namespace __profile
       using _Base::max_size;
 
       // modifiers:
-#if __cplusplus >= 201103L
-      template<typename... _Args>
-	iterator
-	emplace(_Args&&... __args)
-	{
-	  return iterator(_Base::emplace(std::forward<_Args>(__args)...));
-	}
-
-      template<typename... _Args>
-	iterator
-	emplace_hint(const_iterator __pos, _Args&&... __args)
-	{
-	  return iterator(_Base::emplace_hint(__pos,
-					      std::forward<_Args>(__args)...));
-	}
-#endif
-      
       iterator
       insert(const value_type& __x)
       { return iterator(_Base::insert(__x)); }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       template<typename _Pair, typename = typename
 	       std::enable_if<std::is_constructible<value_type,
 						    _Pair&&>::value>::type>
@@ -215,21 +193,21 @@ namespace __profile
         { return iterator(_Base::insert(std::forward<_Pair>(__x))); }
 #endif
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       void
       insert(std::initializer_list<value_type> __list)
       { _Base::insert(__list); }
 #endif
 
       iterator
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       insert(const_iterator __position, const value_type& __x)
 #else
       insert(iterator __position, const value_type& __x)
 #endif
       { return iterator(_Base::insert(__position, __x)); }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       template<typename _Pair, typename = typename
 	       std::enable_if<std::is_constructible<value_type,
 						    _Pair&&>::value>::type>
@@ -239,17 +217,12 @@ namespace __profile
 					std::forward<_Pair>(__x))); }
 #endif
 
-#if __cplusplus >= 201103L
-      template<typename _InputIterator,
-	       typename = std::_RequireInputIter<_InputIterator>>
-#else
       template<typename _InputIterator>
-#endif
         void
         insert(_InputIterator __first, _InputIterator __last)
         { _Base::insert(__first, __last); }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       iterator
       erase(const_iterator __position)
       { return iterator(_Base::erase(__position)); }
@@ -277,7 +250,7 @@ namespace __profile
 	return __count;
       }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       iterator
       erase(const_iterator __first, const_iterator __last)
       { return iterator(_Base::erase(__first, __last)); }

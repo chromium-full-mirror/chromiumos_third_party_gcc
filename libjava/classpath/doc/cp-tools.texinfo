@@ -5,20 +5,7 @@
 @settitle GNU Classpath Tools Guide
 @c %**end of header
 
-@copying
-This file documents the Tools included in a standard distribution of the GNU
-Classpath project deliverables.
-
-Copyright @copyright{} 2006, 2007 Free Software Foundation, Inc.
-
-@quotation
-Permission is granted to make and distribute verbatim copies of this document provided the copyright notice and this permission notice are preserved on all copies.
-
-Permission is granted to copy and distribute modified versions of this document under the conditions for verbatim copying, provided that the entire resulting derived work is distributed under the terms of a permission notice identical to this one.
-
-Permission is granted to copy and distribute translations of this manual into another language, under the above conditions for modified versions, except that this permission notice may be stated in a translation approved by the Free Software Foundation.
-@end quotation
-@end copying
+@setchapternewpage on
 
 @c Common macros to support generating man pages:
 
@@ -32,9 +19,12 @@ Permission is granted to copy and distribute translations of this manual into an
 @end macro
 
 @ifinfo
-@ifnotplaintext
-@setchapternewpage on
+This file documents the Tools included in a standard distribution of the GNU
+Classpath project deliverables.
 
+Copyright (C) 2006, 2007 Free Software Foundation, Inc.
+
+@ifnotplaintext
 @dircategory GNU Libraries
 @direntry
 * Classpath Tools: (cp-tools).  GNU Classpath Tools Guide
@@ -48,7 +38,14 @@ Permission is granted to copy and distribute translations of this manual into an
 
 @page
 @vskip 0pt plus 1filll
-@insertcopying
+Copyright @copyright{} 2006 Free Software Foundation, Inc.
+@sp 2
+Permission is granted to make and distribute verbatim copies of this document provided the copyright notice and this permission notice are preserved on all copies.
+
+Permission is granted to copy and distribute modified versions of this document under the conditions for verbatim copying, provided that the entire resulting derived work is distributed under the terms of a permission notice identical to this one.
+
+Permission is granted to copy and distribute translations of this manual into another language, under the above conditions for modified versions, except that this permission notice may be stated in a translation approved by the Free Software Foundation.
+
 @end titlepage
 
 @contents
@@ -2025,7 +2022,7 @@ Doclet, grouped by type.  Explanations are in the following sections.
 
 @item Virtual Machine Options
 @xref{Virtual Machine Options,,Options Controlling Gjdoc Behavior}.
-@gccoptlist{-classpath  -bootclasspath  -J @var{vmopt}}
+@gccoptlist{-classpath}  @gccoptlist{-bootclasspath}  @gccoptlist{-J}@var{vmopt}
 
 @end table
 
@@ -2438,14 +2435,14 @@ with the header @samp{CVS ID}, you would specify:
 Let's say that a class javadoc comment contains
 
 @smallexample
-@@cvsid $Id: cp-tools.texinfo,v 1.9 2012-03-07 15:27:27 gnu_andrew Exp $
+@@cvsid $Id: cp-tools.texinfo,v 1.7 2008/08/13 13:32:05 jsumali Exp $
 @end smallexample
 
 Then the HTML output will contain something like
 
 @smallexample
 CVS ID:
-  $Id: cp-tools.texinfo,v 1.9 2012-03-07 15:27:27 gnu_andrew Exp $
+  $Id: cp-tools.texinfo,v 1.7 2008/08/13 13:32:05 jsumali Exp $
 @end smallexample
 @end table
 

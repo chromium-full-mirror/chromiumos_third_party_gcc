@@ -15,7 +15,6 @@
 
 /* { dg-do compile } */
 /* { dg-options "-g -O1 -funroll-loops -fcompare-debug" } */
-/* { dg-xfail-if "" { powerpc-ibm-aix* } { "*" } { "" } } */
 
 void foo()
 {

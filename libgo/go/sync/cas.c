@@ -6,9 +6,7 @@
 
 #include <stdint.h>
 
-#include "runtime.h"
-
-_Bool cas (int32_t *, int32_t, int32_t) __asm__ (GOSYM_PREFIX "libgo_sync.sync.cas");
+_Bool cas (int32_t *, int32_t, int32_t) asm ("libgo_sync.sync.cas");
 
 _Bool
 cas (int32_t *ptr, int32_t old, int32_t new)

@@ -1,6 +1,7 @@
 // Boilerplate support routines for -*- C++ -*- dynamic memory management.
 
-// Copyright (C) 1997-2013 Free Software Foundation, Inc.
+// Copyright (C) 1997, 1998, 1999, 2000, 2004, 2009, 2010, 2011 
+// Free Software Foundation
 //
 // This file is part of GCC.
 //

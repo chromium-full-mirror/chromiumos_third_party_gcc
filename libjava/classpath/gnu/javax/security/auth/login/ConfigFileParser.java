@@ -1,5 +1,5 @@
 /* ConfigFileParser.java -- JAAS Login Configuration default syntax parser
-   Copyright (C) 2006, 2010  Free Software Foundation, Inc.
+   Copyright (C) 2006 Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -91,11 +91,9 @@ import javax.security.auth.login.AppConfigurationEntry;
  */
 public final class ConfigFileParser
 {
-  private static final Logger log = Configuration.DEBUG ?
-                Logger.getLogger(ConfigFileParser.class.getName()) : null;
-
+  private static final Logger log = Logger.getLogger(ConfigFileParser.class.getName());
   private ConfigFileTokenizer cft;
-  private final Map map = new HashMap();
+  private Map map = new HashMap();
 
   // default 0-arguments constructor
 

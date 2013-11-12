@@ -1,8 +1,8 @@
-/* Test that -g1 includes line tables and inlined subroutine entries,
+/* Test that -gmlt includes line tables and inlined subroutine entries,
    and excludes types and variables.  */
 /* Origin: Cary Coutant  <ccoutant@google.com> */
 /* { dg-do compile } */
-/* { dg-options "-O2 -gdwarf-2 -dA -g1" } */
+/* { dg-options "-O2 -gdwarf-2 -dA -gmlt" } */
 /* { dg-final { scan-assembler "DW_AT_stmt_list" } } */
 /* { dg-final { scan-assembler "DW_TAG_subprogram" } } */
 /* { dg-final { scan-assembler "DW_TAG_inlined_subroutine" } } */

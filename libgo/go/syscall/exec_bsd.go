@@ -38,18 +38,10 @@ func forkAndExecInChild(argv0 *byte, argv, envv []*byte, chroot, dir *byte, attr
 		i      int
 	)
 
-	// guard against side effects of shuffling fds below.
-	// Make sure that nextfd is beyond any currently open files so
-	// that we can't run the risk of overwriting any of them.
 	fd := make([]int, len(attr.Files))
-	nextfd = len(attr.Files)
 	for i, ufd := range attr.Files {
-		if nextfd < int(ufd) {
-			nextfd = int(ufd)
-		}
 		fd[i] = int(ufd)
 	}
-	nextfd++
 
 	// About to call fork.
 	// No more allocation or calls of non-assembly functions.
@@ -144,6 +136,7 @@ func forkAndExecInChild(argv0 *byte, argv, envv []*byte, chroot, dir *byte, attr
 
 	// Pass 1: look for fd[i] < i and move those up above len(fd)
 	// so that pass 2 won't stomp on an fd it needs later.
+	nextfd = int(len(fd))
 	if pipe < nextfd {
 		err1 = raw_dup2(pipe, nextfd)
 		if err1 != 0 {
@@ -224,18 +217,9 @@ childerror:
 	for {
 		raw_exit(253)
 	}
-}
 
-// Try to open a pipe with O_CLOEXEC set on both file descriptors.
-func forkExecPipe(p []int) error {
-	err := Pipe(p)
-	if err != nil {
-		return err
-	}
-	_, err = fcntl(p[0], F_SETFD, FD_CLOEXEC)
-	if err != nil {
-		return err
-	}
-	_, err = fcntl(p[1], F_SETFD, FD_CLOEXEC)
-	return err
+	// Calling panic is not actually safe,
+	// but the for loop above won't break
+	// and this shuts up the compiler.
+	panic("unreached")
 }

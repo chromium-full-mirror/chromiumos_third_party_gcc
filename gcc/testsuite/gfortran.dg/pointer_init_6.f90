@@ -27,7 +27,7 @@ module m2
  type(t) :: x
  procedure(s), pointer :: pp1 => s
  procedure(s), pointer :: pp2 => pp1    ! { dg-error "may not be a procedure pointer" }
- procedure(s), pointer :: pp3 => t%ppc  ! { dg-error "Symbol 't' at .1. has no IMPLICIT type" }
+ procedure(s), pointer :: pp3 => t%ppc  ! { dg-error "Syntax error" }
 
 contains
 
@@ -35,3 +35,5 @@ contains
   end subroutine
 
 end module m2
+
+! { dg-final { cleanup-modules "m1 m2" } }

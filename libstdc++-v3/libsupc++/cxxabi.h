@@ -1,6 +1,7 @@
 // ABI Support -*- C++ -*-
 
-// Copyright (C) 2000-2013 Free Software Foundation, Inc.
+// Copyright (C) 2000, 2002, 2003, 2004, 2006, 2007, 2009, 2010, 2011
+// Free Software Foundation, Inc.
 //
 // This file is part of GCC.
 //
@@ -132,10 +133,6 @@ namespace __cxxabiv1
 
   int
   __cxa_finalize(void*);
-
-  // TLS destruction.
-  int
-  __cxa_thread_atexit(void (*)(void*), void*, void *) _GLIBCXX_NOTHROW;
 
   // Pure virtual functions.
   void
@@ -355,11 +352,7 @@ namespace __cxxabiv1
   {
   public:
     const __class_type_info* 	__base_type;  // Base class type.
-#ifdef _GLIBCXX_LLP64
-    long long			__offset_flags;  // Offset and info.
-#else
     long 			__offset_flags;  // Offset and info.
-#endif
 
     enum __offset_flags_masks
       {

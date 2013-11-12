@@ -25,14 +25,6 @@
 #define __UNUSED__
 #endif
 
-/* Define __FASTCALL__ so that other compilers than gcc can run the tests.  */
-#undef __FASTCALL__
-#if defined _MSC_VER
-#define __FASTCALL__ __fastcall
-#else
-#define __FASTCALL__ __attribute__((fastcall))
-#endif
-
 /* Prefer MAP_ANON(YMOUS) to /dev/zero, since we don't need to keep a
    file open.  */
 #ifdef HAVE_MMAP_ANON
@@ -116,15 +108,6 @@
 #else
 #define PRIuPTR "u"
 #endif
-#endif
-
-/* MSVC kludge.  */
-#if defined _MSC_VER
-#define PRIuPTR "lu"
-#define PRIu8 "u"
-#define PRId8 "d"
-#define PRIu64 "I64u"
-#define PRId64 "I64d"
 #endif
 
 #ifdef USING_MMAP

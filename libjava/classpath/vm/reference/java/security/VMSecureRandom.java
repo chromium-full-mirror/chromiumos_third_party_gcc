@@ -1,5 +1,5 @@
 /* VMSecureRandom.java -- random seed generator.
-   Copyright (C) 2006, 2010  Free Software Foundation, Inc.
+   Copyright (C) 2006  Free Software Foundation, Inc.
 
 This file is a part of GNU Classpath.
 
@@ -55,8 +55,6 @@ package java.security;
 final class VMSecureRandom
 {
 
-  private VMSecureRandom() {} // Prohibits instantiation.
-
   /**
    * Generate a random seed. Implementations are free to generate
    * fewer random bytes than are requested, and leave the remaining
@@ -106,8 +104,7 @@ final class VMSecureRandom
     return length;
   }
 
-  static class Spinner
-    implements Runnable
+  static class Spinner implements Runnable
   {
     volatile byte value;
     volatile boolean running;
@@ -124,7 +121,7 @@ final class VMSecureRandom
         value++;
     }
 
-    void stop()
+    private void stop()
     {
       running = false;
     }

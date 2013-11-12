@@ -1,10 +1,10 @@
-// run
+// $G $D/$F.go && $L $F.$A && ./$A.out || echo BUG method3
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Test methods on slices.
+// test that methods on slices work
 
 package main
 

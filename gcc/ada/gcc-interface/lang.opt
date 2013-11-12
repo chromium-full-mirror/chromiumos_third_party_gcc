@@ -1,6 +1,5 @@
 ; Options for the Ada front end.
-; Copyright (C) 2003, 2007, 2008, 2010, 2011, 2012
-; Free Software Foundation, Inc.
+; Copyright (C) 2003, 2007, 2008, 2010, 2011 Free Software Foundation, Inc.
 ;
 ; This file is part of GCC.
 ;
@@ -29,33 +28,30 @@ Ada
 Language
 AdaWhy
 
-Language
-AdaSCIL
-
 -all-warnings
-Ada AdaWhy AdaSCIL Alias(Wall)
+Ada AdaWhy Alias(Wall)
 
 -include-barrier
-Ada AdaWhy AdaSCIL Alias(I, -)
+Ada AdaWhy Alias(I, -)
 
 -include-directory
-Ada AdaWhy AdaSCIL Separate Alias(I)
+Ada AdaWhy Separate Alias(I)
 
 -include-directory=
-Ada AdaWhy AdaSCIL Joined Alias(I)
+Ada AdaWhy Joined Alias(I)
 
 -no-standard-includes
-Ada AdaWhy AdaSCIL Alias(nostdinc)
+Ada AdaWhy Alias(nostdinc)
 
 -no-standard-libraries
-Ada AdaWhy AdaSCIL Alias(nostdlib)
+Ada AdaWhy Alias(nostdlib)
 
 I
-Ada AdaWhy AdaSCIL Joined Separate
-; Documented in C but it should be: -I <dir>.	Add <dir> to the end of the main source path
+Ada AdaWhy Joined Separate
+-I <dir>.	Add <dir> to the end of the main source path
 
 Wall
-Ada AdaWhy AdaSCIL
+Ada AdaWhy
 Enable most warning messages
 
 k8
@@ -63,27 +59,27 @@ Driver
 Synonym of -gnatk8
 
 nostdinc
-Ada AdaWhy AdaSCIL RejectNegative
-; Documented in C but it should be: Do not look for source files in standard path
+Ada AdaWhy RejectNegative
+Do not look for source files in standard path
 
 nostdlib
-Ada AdaWhy AdaSCIL
+Ada AdaWhy
 Do not look for object files in standard path
 
 fRTS=
-Ada AdaWhy AdaSCIL Joined RejectNegative
+Ada AdaWhy Joined RejectNegative
 Select the runtime
 
 gant
-Ada AdaWhy AdaSCIL Joined Undocumented
+Ada AdaWhy Joined Undocumented
 Catch typos
 
 gnatO
-Ada AdaWhy AdaSCIL Separate
+Ada AdaWhy Separate
 Set name of output ALI file (internal switch)
 
 gnat
-Ada AdaWhy AdaSCIL Joined
+Ada AdaWhy Joined
 -gnat<options>	Specify options to GNAT
 
 ; This comment is to ensure we retain the blank line above.

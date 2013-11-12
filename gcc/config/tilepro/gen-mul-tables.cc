@@ -1,5 +1,6 @@
 /* Multiply table generator for tile.
-   Copyright (C) 2011-2013 Free Software Foundation, Inc.
+   Copyright (C) 2011, 2012
+   Free Software Foundation, Inc.
    Contributed by Walter Lee (walt@tilera.com)
 
    This file is part of GCC.
@@ -1230,7 +1231,8 @@ main ()
 #else
   printf ("/* Constant multiply table for TILE-Gx.\n");
 #endif
-  printf ("   Copyright (C) 2011-2013 Free Software Foundation, Inc.\n");
+  printf ("   Copyright (C) 2011, 2012\n");
+  printf ("   Free Software Foundation, Inc.\n");
   printf ("   Contributed by Walter Lee (walt@tilera.com)\n");
   printf ("\n");
   printf ("   This file is part of GCC.\n");

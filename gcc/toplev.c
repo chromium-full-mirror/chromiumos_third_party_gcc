@@ -1,5 +1,7 @@
 /* Top level of GCC compilers (cc1, cc1plus, etc.)
-   Copyright (C) 1987-2013 Free Software Foundation, Inc.
+   Copyright (C) 1987, 1988, 1989, 1992, 1993, 1994, 1995, 1996, 1997, 1998,
+   1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010,
+   2011 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -47,6 +49,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "basic-block.h"
 #include "intl.h"
 #include "ggc.h"
+#include "graph.h"
 #include "regs.h"
 #include "timevar.h"
 #include "diagnostic.h"
@@ -56,11 +59,13 @@ along with GCC; see the file COPYING3.  If not see
 #include "reload.h"
 #include "ira.h"
 #include "dwarf2asm.h"
+#include "integrate.h"
 #include "debug.h"
 #include "target.h"
 #include "common/common-target.h"
 #include "langhooks.h"
-#include "cfgloop.h" /* for init_set_costs */
+#include "cfglayout.h"
+#include "cfgloop.h"
 #include "hosthooks.h"
 #include "cgraph.h"
 #include "opts.h"
@@ -69,12 +74,18 @@ along with GCC; see the file COPYING3.  If not see
 #include "value-prof.h"
 #include "alloc-pool.h"
 #include "tree-mudflap.h"
-#include "asan.h"
-#include "tsan.h"
+#include "tree-asan.h"
+#include "tree-tsan.h"
+#include "tree-pass.h"
 #include "gimple.h"
 #include "tree-ssa-alias.h"
 #include "plugin.h"
+#include "tree-threadsafe-analyze.h"
 #include "auto-profile.h"
+
+#if defined (DWARF2_UNWIND_INFO) || defined (DWARF2_DEBUGGING_INFO)
+#include "dwarf2out.h"
+#endif
 
 #if defined(DBX_DEBUGGING_INFO) || defined(XCOFF_DEBUGGING_INFO)
 #include "dbxout.h"
@@ -139,6 +150,10 @@ HOST_WIDE_INT random_seed;
 
 /* -f flags.  */
 
+/* Nonzero means make permerror produce warnings instead of errors.  */
+
+int flag_permissive = 0;
+
 /* When non-NULL, indicates that whenever space is allocated on the
    stack, the resulting stack pointer must not pass this
    address---that is, for stacks that grow downward, the stack pointer
@@ -169,6 +184,8 @@ const char *user_label_prefix;
 FILE *asm_out_file;
 FILE *aux_info_file;
 FILE *stack_usage_file = NULL;
+FILE *dump_file = NULL;
+const char *dump_file_name;
 
 /* The current working directory of a translation.  It's generally the
    directory from which compilation was initiated, but a preprocessed
@@ -185,10 +202,6 @@ unsigned primary_module_id = 0;
 /* Current module id.  */
 
 unsigned current_module_id = 0;
-
-/* Include all auxiliary modules specified in the profile. This
-   will bypass the ggc_memory limit check.  */
-bool include_all_aux = 0;
 
 /* Initialize src_pwd with the given string, and return true.  If it
    was already initialized, return false.  As a special case, it may
@@ -369,8 +382,7 @@ wrapup_global_declaration_1 (tree decl)
 bool
 wrapup_global_declaration_2 (tree decl)
 {
-  if (TREE_ASM_WRITTEN (decl) || DECL_EXTERNAL (decl)
-      || (TREE_CODE (decl) == VAR_DECL && DECL_HAS_VALUE_EXPR_P (decl)))
+  if (TREE_ASM_WRITTEN (decl) || DECL_EXTERNAL (decl))
     return false;
 
   /* Don't write out static consts, unless we still need them.
@@ -414,7 +426,7 @@ wrapup_global_declaration_2 (tree decl)
 	       && (TREE_USED (decl)
 		   || TREE_USED (DECL_ASSEMBLER_NAME (decl))))
 	/* needed */;
-      else if (node && node->analyzed)
+      else if (node && node->needed)
 	/* needed */;
       else if (DECL_COMDAT (decl))
 	needed = false;
@@ -487,6 +499,7 @@ check_global_declaration_1 (tree decl)
 	warning (OPT_Wunused_function, "%q+F declared %<static%> but never defined", decl);
       /* This symbol is effectively an "extern" declaration now.  */
       TREE_PUBLIC (decl) = 1;
+      assemble_external (decl);
     }
 
   /* Warn about static fns or vars defined but not used.  */
@@ -514,16 +527,16 @@ check_global_declaration_1 (tree decl)
 	     "%q+D defined but not used", decl);
 }
 
-/* Issue appropriate warnings for the global declarations in V (of
+/* Issue appropriate warnings for the global declarations in VEC (of
    which there are LEN).  */
 
 void
-check_global_declarations (tree *v, int len)
+check_global_declarations (tree *vec, int len)
 {
   int i;
 
   for (i = 0; i < len; i++)
-    check_global_declaration_1 (v[i]);
+    check_global_declaration_1 (vec[i]);
 }
 
 /* Emit debugging information for all global declarations in VEC.  */
@@ -565,23 +578,34 @@ compile_file (void)
   if (flag_syntax_only || flag_wpa)
     return;
 
+  timevar_start (TV_PHASE_GENERATE);
+
   ggc_protect_identifiers = false;
 
-  /* This must also call finalize_compilation_unit.  */
+  /* This must also call cgraph_finalize_compilation_unit.  */
   lang_hooks.decls.final_write_globals ();
 
   if (seen_error ())
-    return;
+    {
+      timevar_stop (TV_PHASE_GENERATE);
+      return;
+    }
+
+  /* Clean up the global data structures used by the thread safety
+     analysis.  */
+  if (warn_thread_safety)
+    clean_up_threadsafe_analysis ();
 
   if (flag_dyn_ipa)
     coverage_finish ();
-
-  timevar_start (TV_PHASE_LATE_ASM);
 
   /* Compilation unit is finalized.  When producing non-fat LTO object, we are
      basically finished.  */
   if (in_lto_p || !flag_lto || flag_fat_lto_objects)
     {
+      varpool_assemble_pending_decls ();
+      finish_aliases_2 ();
+
       /* Likewise for mudflap static object registrations.  */
       if (flag_mudflap)
 	mudflap_finish_file ();
@@ -590,12 +614,13 @@ compile_file (void)
       if (flag_asan)
         asan_finish_file ();
 
+      /* File-scope initialization for ThreadSanitizer.  */
       if (flag_tsan)
-	tsan_finish_file ();
+        tsan_finish_file ();
 
       output_shared_constant_pool ();
       output_object_blocks ();
-      finish_tm_clone_pairs ();
+  finish_tm_clone_pairs ();
 
       /* Write out any pending weak symbol declarations.  */
       weak_finish ();
@@ -664,17 +689,17 @@ compile_file (void)
   /* Attach a special .ident directive to the end of the file to identify
      the version of GCC which compiled this code.  The format of the .ident
      string is patterned after the ones produced by native SVR4 compilers.  */
+#ifdef IDENT_ASM_OP
   if (!flag_no_ident)
     {
       const char *pkg_version = "(GNU) ";
-      char *ident_str;
 
       if (strcmp ("(GCC) ", pkgversion_string))
 	pkg_version = pkgversion_string;
-
-      ident_str = ACONCAT (("GCC: ", pkg_version, version_string, NULL));
-      targetm.asm_out.output_ident (ident_str);
+      fprintf (asm_out_file, "%s\"GCC: %s%s\"\n",
+	       IDENT_ASM_OP, pkg_version, version_string);
     }
+#endif
 
   /* Auto profile finalization. */
   if (flag_auto_profile)
@@ -688,7 +713,7 @@ compile_file (void)
      assembly file after this point.  */
   targetm.asm_out.file_end ();
 
-  timevar_stop (TV_PHASE_LATE_ASM);
+  timevar_stop (TV_PHASE_GENERATE);
 }
 
 /* Print version information to FILE.
@@ -933,7 +958,7 @@ init_asm_output (const char *name)
       if (!strcmp (asm_file_name, "-"))
 	asm_out_file = stdout;
       else
-	asm_out_file = fopen (asm_file_name, "w");
+	asm_out_file = fopen (asm_file_name, "w+b");
       if (asm_out_file == 0)
 	fatal_error ("can%'t open %s for writing: %m", asm_file_name);
     }
@@ -968,6 +993,63 @@ init_asm_output (const char *name)
 	  putc ('\n', asm_out_file);
 	}
     }
+}
+
+/* Default tree printer.   Handles declarations only.  */
+bool
+default_tree_printer (pretty_printer *pp, text_info *text, const char *spec,
+		      int precision, bool wide, bool set_locus, bool hash)
+{
+  tree t;
+
+  /* FUTURE: %+x should set the locus.  */
+  if (precision != 0 || wide || hash)
+    return false;
+
+  switch (*spec)
+    {
+    case 'E':
+      t = va_arg (*text->args_ptr, tree);
+      if (TREE_CODE (t) == IDENTIFIER_NODE)
+	{
+	  pp_identifier (pp, IDENTIFIER_POINTER (t));
+	  return true;
+	}
+      break;
+
+    case 'D':
+      t = va_arg (*text->args_ptr, tree);
+      if (DECL_DEBUG_EXPR_IS_FROM (t) && DECL_DEBUG_EXPR (t))
+	t = DECL_DEBUG_EXPR (t);
+      break;
+
+    case 'F':
+    case 'T':
+      t = va_arg (*text->args_ptr, tree);
+      break;
+
+    case 'K':
+      percent_K_format (text);
+      return true;
+
+    default:
+      return false;
+    }
+
+  if (set_locus && text->locus)
+    *text->locus = DECL_SOURCE_LOCATION (t);
+
+  if (DECL_P (t))
+    {
+      const char *n = DECL_NAME (t)
+        ? identifier_to_locale (lang_hooks.decl_printable_name (t, 2))
+        : _("<anonymous>");
+      pp_string (pp, n);
+    }
+  else
+    dump_generic_node (pp, t, 0, TDF_DIAGNOSTIC, 0);
+
+  return true;
 }
 
 /* A helper function; used as the reallocator function for cpp's line
@@ -1114,17 +1196,13 @@ general_init (const char *argv0)
   /* Initialize the diagnostics reporting machinery, so option parsing
      can give warnings and errors.  */
   diagnostic_initialize (global_dc, N_OPTS);
+  diagnostic_starter (global_dc) = default_tree_diagnostic_starter;
+  /* By default print macro expansion contexts in the diagnostic
+     finalizer -- for tokens resulting from macro macro expansion.  */
+  diagnostic_finalizer (global_dc) = virt_loc_aware_diagnostic_finalizer;
   /* Set a default printer.  Language specific initializations will
      override it later.  */
-  tree_diagnostics_defaults (global_dc);
-  /* FIXME: This should probably be moved to C-family
-     language-specific initializations.  */
-  /* By default print macro expansion contexts in the diagnostic
-     finalizer -- for tokens resulting from macro expansion.  */
-  diagnostic_finalizer (global_dc) = virt_loc_aware_diagnostic_finalizer;
-
-  global_dc->show_caret
-    = global_options_init.x_flag_diagnostics_show_caret;
+  pp_format_decoder (global_dc->printer) = &default_tree_printer;
   global_dc->show_option_requested
     = global_options_init.x_flag_diagnostics_show_option;
   global_dc->show_column
@@ -1270,11 +1348,12 @@ process_options (void)
   if (flag_graphite
       || flag_graphite_identity
       || flag_loop_block
+      || flag_loop_flatten
       || flag_loop_interchange
       || flag_loop_strip_mine
       || flag_loop_parallelize_all)
     sorry ("Graphite loop optimizations cannot be used (-fgraphite, "
-	   "-fgraphite-identity, -floop-block, "
+	   "-fgraphite-identity, -floop-block, -floop-flatten, "
 	   "-floop-interchange, -floop-strip-mine, -floop-parallelize-all, "
 	   "and -ftree-loop-linear)");
 #endif
@@ -1383,6 +1462,11 @@ process_options (void)
 	  flag_dump_final_insns = NULL;
 	}
     }
+
+  /* Unless over-ridden for the target, assume that all DWARF levels
+     may be emitted, if DWARF2_DEBUG is selected.  */
+  if (dwarf_strict < 0)
+    dwarf_strict = 0;
 
   /* A lot of code assumes write_symbols == NO_DEBUG if the debugging
      level is 0.  */
@@ -1551,13 +1635,16 @@ process_options (void)
   if (!flag_stack_protect)
     warn_stack_protect = 0;
 
-  /* Address Sanitizer needs porting to each target architecture.  */
-  if (flag_asan
-      && (targetm.asan_shadow_offset == NULL
-	  || !FRAME_GROWS_DOWNWARD))
+  /* ??? Unwind info is not correct around the CFG unless either a frame
+     pointer is present or A_O_A is set.  Fixing this requires rewriting
+     unwind info generation to be aware of the CFG and propagating states
+     around edges.  */
+  if (flag_unwind_tables && !ACCUMULATE_OUTGOING_ARGS
+      && flag_omit_frame_pointer)
     {
-      warning (0, "-fsanitize=address not supported for this target");
-      flag_asan = 0;
+      warning (0, "unwind tables currently require a frame pointer "
+	       "for correctness");
+      flag_omit_frame_pointer = 0;
     }
 
   /* Enable -Werror=coverage-mismatch when -Werror and -Wno-error
@@ -1608,7 +1695,6 @@ backend_init_target (void)
   /* rtx_cost is mode-dependent, so cached values need to be recomputed
      on a mode change.  */
   init_expmed ();
-  init_lower_subreg ();
 
   /* We may need to recompute regno_save_code[] and regno_restore_code[]
      after a mode change as well.  */
@@ -1837,9 +1923,6 @@ finalize (bool no_backend)
   if (mem_report)
     dump_memory_report (true);
 
-  if (profile_report)
-    dump_profile_report ();
-
   /* Language-specific end of compilation actions.  */
   lang_hooks.finish ();
 }
@@ -1886,8 +1969,6 @@ do_compile (void)
           timevar_stop (TV_PHASE_SETUP);
 
           compile_file ();
-	  if (flag_record_compilation_info_in_elf)
-	    write_compilation_info_to_asm ();
         }
       else
         {

@@ -30,8 +30,8 @@
     License along with this library; if not, write to the Free Software
     Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307  USA */
 
-/* __float128 erfq(__float128 x)
- * __float128 erfcq(__float128 x)
+/* double erf(double x)
+ * double erfc(double x)
  *			     x
  *		      2      |\
  *     erf(x)  =  ---------  | exp(-t*t)dt

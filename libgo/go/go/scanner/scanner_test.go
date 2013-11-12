@@ -6,7 +6,6 @@ package scanner
 
 import (
 	"go/token"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -44,16 +43,12 @@ var tokens = [...]elt{
 	// Special tokens
 	{token.COMMENT, "/* a comment */", special},
 	{token.COMMENT, "// a comment \n", special},
-	{token.COMMENT, "/*\r*/", special},
-	{token.COMMENT, "//\r\n", special},
 
 	// Identifiers and basic type literals
 	{token.IDENT, "foobar", literal},
 	{token.IDENT, "a۰۱۸", literal},
 	{token.IDENT, "foo६४", literal},
 	{token.IDENT, "bar９８７６", literal},
-	{token.IDENT, "ŝ", literal},    // was bug (issue 4000)
-	{token.IDENT, "ŝfoo", literal}, // was bug (issue 4000)
 	{token.INT, "0", literal},
 	{token.INT, "1", literal},
 	{token.INT, "123456789012345678890", literal},
@@ -219,6 +214,8 @@ func checkPos(t *testing.T, lit string, p token.Pos, expected token.Position) {
 
 // Verify that calling Scan() provides the correct results.
 func TestScan(t *testing.T) {
+	// make source
+	src_linecount := newlineCount(string(source))
 	whitespace_linecount := newlineCount(whitespace)
 
 	// error handler
@@ -229,81 +226,59 @@ func TestScan(t *testing.T) {
 	// verify scan
 	var s Scanner
 	s.Init(fset.AddFile("", fset.Base(), len(source)), source, eh, ScanComments|dontInsertSemis)
-
-	// set up expected position
+	index := 0
+	// epos is the expected position
 	epos := token.Position{
 		Filename: "",
 		Offset:   0,
 		Line:     1,
 		Column:   1,
 	}
-
-	index := 0
 	for {
 		pos, tok, lit := s.Scan()
-
-		// check position
-		if tok == token.EOF {
-			// correction for EOF
-			epos.Line = newlineCount(string(source))
-			epos.Column = 2
+		if lit == "" {
+			// no literal value for non-literal tokens
+			lit = tok.String()
 		}
-		checkPos(t, lit, pos, epos)
-
-		// check token
 		e := elt{token.EOF, "", special}
 		if index < len(tokens) {
 			e = tokens[index]
-			index++
 		}
+		if tok == token.EOF {
+			lit = "<EOF>"
+			epos.Line = src_linecount
+			epos.Column = 2
+		}
+		checkPos(t, lit, pos, epos)
 		if tok != e.tok {
 			t.Errorf("bad token for %q: got %s, expected %s", lit, tok, e.tok)
 		}
-
-		// check token class
+		if e.tok.IsLiteral() {
+			// no CRs in raw string literals
+			elit := e.lit
+			if elit[0] == '`' {
+				elit = string(stripCR([]byte(elit)))
+				epos.Offset += len(e.lit) - len(lit) // correct position
+			}
+			if lit != elit {
+				t.Errorf("bad literal for %q: got %q, expected %q", lit, lit, elit)
+			}
+		}
 		if tokenclass(tok) != e.class {
 			t.Errorf("bad class for %q: got %d, expected %d", lit, tokenclass(tok), e.class)
 		}
-
-		// check literal
-		elit := ""
-		switch e.tok {
-		case token.COMMENT:
-			// no CRs in comments
-			elit = string(stripCR([]byte(e.lit)))
-			//-style comment literal doesn't contain newline
-			if elit[1] == '/' {
-				elit = elit[0 : len(elit)-1]
-			}
-		case token.IDENT:
-			elit = e.lit
-		case token.SEMICOLON:
-			elit = ";"
-		default:
-			if e.tok.IsLiteral() {
-				// no CRs in raw string literals
-				elit = e.lit
-				if elit[0] == '`' {
-					elit = string(stripCR([]byte(elit)))
-				}
-			} else if e.tok.IsKeyword() {
-				elit = e.lit
-			}
+		epos.Offset += len(lit) + len(whitespace)
+		epos.Line += newlineCount(lit) + whitespace_linecount
+		if tok == token.COMMENT && lit[1] == '/' {
+			// correct for unaccounted '/n' in //-style comment
+			epos.Offset++
+			epos.Line++
 		}
-		if lit != elit {
-			t.Errorf("bad literal for %q: got %q, expected %q", lit, lit, elit)
-		}
-
+		index++
 		if tok == token.EOF {
 			break
 		}
-
-		// update position
-		epos.Offset += len(e.lit) + len(whitespace)
-		epos.Line += newlineCount(e.lit) + whitespace_linecount
-
 	}
-
 	if s.ErrorCount != 0 {
 		t.Errorf("found %d errors", s.ErrorCount)
 	}
@@ -346,7 +321,6 @@ var lines = []string{
 	// # indicates a semicolon present in the source
 	// $ indicates an automatically inserted semicolon
 	"",
-	"\ufeff#;", // first BOM is ignored
 	"#;",
 	"foo$\n",
 	"123$\n",
@@ -547,7 +521,7 @@ func TestLineComments(t *testing.T) {
 	}
 }
 
-// Verify that initializing the same scanner more than once works correctly.
+// Verify that initializing the same scanner more then once works correctly.
 func TestInit(t *testing.T) {
 	var s Scanner
 
@@ -695,10 +669,6 @@ var errors = []struct {
 	{"0X", token.INT, 0, "illegal hexadecimal number"},
 	{"\"abc\x00def\"", token.STRING, 4, "illegal character NUL"},
 	{"\"abc\x80def\"", token.STRING, 4, "illegal UTF-8 encoding"},
-	{"\ufeff\ufeff", token.ILLEGAL, 3, "illegal byte order mark"},            // only first BOM is ignored
-	{"//\ufeff", token.COMMENT, 2, "illegal byte order mark"},                // only first BOM is ignored
-	{"'\ufeff" + `'`, token.CHAR, 1, "illegal byte order mark"},              // only first BOM is ignored
-	{`"` + "abc\ufeffdef" + `"`, token.STRING, 4, "illegal byte order mark"}, // only first BOM is ignored
 }
 
 func TestScanErrors(t *testing.T) {
@@ -713,31 +683,8 @@ func BenchmarkScan(b *testing.B) {
 	file := fset.AddFile("", fset.Base(), len(source))
 	var s Scanner
 	b.StartTimer()
-	for i := 0; i < b.N; i++ {
+	for i := b.N - 1; i >= 0; i-- {
 		s.Init(file, source, nil, ScanComments)
-		for {
-			_, tok, _ := s.Scan()
-			if tok == token.EOF {
-				break
-			}
-		}
-	}
-}
-
-func BenchmarkScanFile(b *testing.B) {
-	b.StopTimer()
-	const filename = "scanner.go"
-	src, err := ioutil.ReadFile(filename)
-	if err != nil {
-		panic(err)
-	}
-	fset := token.NewFileSet()
-	file := fset.AddFile(filename, fset.Base(), len(src))
-	b.SetBytes(int64(len(src)))
-	var s Scanner
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		s.Init(file, src, nil, ScanComments)
 		for {
 			_, tok, _ := s.Scan()
 			if tok == token.EOF {

@@ -92,4 +92,5 @@ func valueToString(val Value) string {
 	default:
 		panic("valueToString: can't print type " + typ.String())
 	}
+	return "valueToString: can't happen"
 }

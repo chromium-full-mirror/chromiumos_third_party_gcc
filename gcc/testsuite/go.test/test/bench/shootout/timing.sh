@@ -5,11 +5,7 @@
 
 set -e
 
-eval $(go tool dist env)
-O=$GOCHAR
-GC="go tool ${O}g"
-LD="go tool ${O}l"
-
+eval $(gomake --no-print-directory -f ../../../src/Make.inc go-env)
 PATH=.:$PATH
 
 havegccgo=false
@@ -97,7 +93,7 @@ revcomp() {
 
 nbody() {
 	runonly echo 'nbody -n 50000000'
-	run 'gcc -O2 nbody.c -lm' a.out 50000000
+	run 'gcc -O2 -lm nbody.c' a.out 50000000
 	run 'gccgo -O2 nbody.go' a.out -n 50000000
 	run 'gc nbody' $O.out -n 50000000
 	run 'gc_B nbody' $O.out -n 50000000
@@ -107,7 +103,7 @@ binarytree() {
 	runonly echo 'binary-tree 15 # too slow to use 20'
 	run 'gcc -O2 binary-tree.c -lm' a.out 15
 	run 'gccgo -O2 binary-tree.go' a.out -n 15
-	run 'gccgo -O2 binary-tree-freelist.go' a.out -n 15
+	run 'gccgo -O2 binary-tree-freelist.go' $O.out -n 15
 	run 'gc binary-tree' $O.out -n 15
 	run 'gc binary-tree-freelist' $O.out -n 15
 }
@@ -147,9 +143,7 @@ knucleotide() {
 	runonly gcc -O2 fasta.c
 	runonly a.out 1000000 > x  # should be using 25000000
 	runonly echo 'k-nucleotide 1000000'
-	if [ $mode = run ]; then
-		run "gcc -O2 k-nucleotide.c $(pkg-config glib-2.0 --cflags --libs)" a.out <x
-	fi
+	run 'gcc -O2 -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include k-nucleotide.c -lglib-2.0' a.out <x
 	run 'gccgo -O2 k-nucleotide.go' a.out <x
 	run 'gccgo -O2 k-nucleotide-parallel.go' a.out <x
 	run 'gc k-nucleotide' $O.out <x

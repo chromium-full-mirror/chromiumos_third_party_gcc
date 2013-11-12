@@ -11,8 +11,7 @@ import (
 
 func initMime() {
 	var root syscall.Handle
-	rootpathp, _ := syscall.UTF16PtrFromString(`\`)
-	if syscall.RegOpenKeyEx(syscall.HKEY_CLASSES_ROOT, rootpathp,
+	if syscall.RegOpenKeyEx(syscall.HKEY_CLASSES_ROOT, syscall.StringToUTF16Ptr(`\`),
 		0, syscall.KEY_READ, &root) != nil {
 		return
 	}
@@ -32,17 +31,15 @@ func initMime() {
 			continue
 		}
 		var h syscall.Handle
-		extpathp, _ := syscall.UTF16PtrFromString(`\` + ext)
 		if syscall.RegOpenKeyEx(
-			syscall.HKEY_CLASSES_ROOT, extpathp,
+			syscall.HKEY_CLASSES_ROOT, syscall.StringToUTF16Ptr(`\`+ext),
 			0, syscall.KEY_READ, &h) != nil {
 			continue
 		}
 		var typ uint32
 		n = uint32(len(buf) * 2) // api expects array of bytes, not uint16
-		contenttypep, _ := syscall.UTF16PtrFromString("Content Type")
 		if syscall.RegQueryValueEx(
-			h, contenttypep,
+			h, syscall.StringToUTF16Ptr("Content Type"),
 			nil, &typ, (*byte)(unsafe.Pointer(&buf[0])), &n) != nil {
 			syscall.RegCloseKey(h)
 			continue
@@ -58,6 +55,7 @@ func initMime() {
 
 func initMimeForTests() map[string]string {
 	return map[string]string{
+		".bmp": "image/bmp",
 		".png": "image/png",
 	}
 }

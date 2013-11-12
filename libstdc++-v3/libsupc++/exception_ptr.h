@@ -1,6 +1,6 @@
 // Exception Handling support header (exception_ptr class) for -*- C++ -*-
 
-// Copyright (C) 2008-2013 Free Software Foundation, Inc.
+// Copyright (C) 2008, 2009, 2010, 2011 Free Software Foundation
 //
 // This file is part of GCC.
 //
@@ -44,8 +44,6 @@ extern "C++" {
 
 namespace std 
 {
-  class type_info;
-
   /**
    * @addtogroup exceptions
    * @{
@@ -91,7 +89,7 @@ namespace std
 
       exception_ptr(const exception_ptr&) _GLIBCXX_USE_NOEXCEPT;
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       exception_ptr(nullptr_t) noexcept
       : _M_exception_object(0)
       { }
@@ -101,7 +99,7 @@ namespace std
       { __o._M_exception_object = 0; }
 #endif
 
-#if (__cplusplus < 201103L) || defined (_GLIBCXX_EH_PTR_COMPAT)
+#if !defined (__GXX_EXPERIMENTAL_CXX0X__) || defined (_GLIBCXX_EH_PTR_COMPAT)
       typedef void (exception_ptr::*__safe_bool)();
 
       // For construction from nullptr or 0.
@@ -111,7 +109,7 @@ namespace std
       exception_ptr& 
       operator=(const exception_ptr&) _GLIBCXX_USE_NOEXCEPT;
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       exception_ptr& 
       operator=(exception_ptr&& __o) noexcept
       {
@@ -134,7 +132,7 @@ namespace std
       operator __safe_bool() const _GLIBCXX_USE_NOEXCEPT;
 #endif
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       explicit operator bool() const
       { return _M_exception_object; }
 #endif
@@ -143,7 +141,7 @@ namespace std
       operator==(const exception_ptr&, const exception_ptr&)
 	_GLIBCXX_USE_NOEXCEPT __attribute__ ((__pure__));
 
-      const class std::type_info*
+      const class type_info*
       __cxa_exception_type() const _GLIBCXX_USE_NOEXCEPT
 	__attribute__ ((__pure__));
     };

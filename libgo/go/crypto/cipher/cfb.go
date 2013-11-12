@@ -17,9 +17,6 @@ type cfb struct {
 // using the given Block. The iv must be the same length as the Block's block
 // size.
 func NewCFBEncrypter(block Block, iv []byte) Stream {
-	if len(iv) != block.BlockSize() {
-		panic("cipher.NewCBFEncrypter: IV length must equal block size")
-	}
 	return newCFB(block, iv, false)
 }
 
@@ -27,9 +24,6 @@ func NewCFBEncrypter(block Block, iv []byte) Stream {
 // using the given Block. The iv must be the same length as the Block's block
 // size.
 func NewCFBDecrypter(block Block, iv []byte) Stream {
-	if len(iv) != block.BlockSize() {
-		panic("cipher.NewCBFEncrypter: IV length must equal block size")
-	}
 	return newCFB(block, iv, true)
 }
 

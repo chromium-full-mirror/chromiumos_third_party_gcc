@@ -1,6 +1,8 @@
 ## Makefile for the C++03 sources of the GNU C++ Standard library.
 ##
-## Copyright (C) 1997-2013 Free Software Foundation, Inc.
+## Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005
+## 2006, 2007, 2008, 2009, 2010, 2011, 2012
+## Free Software Foundation, Inc.
 ##
 ## This file is part of the libstdc++ version 3 distribution.
 ## Process this file with automake to produce Makefile.in.
@@ -39,10 +41,8 @@ sources = \
 	limits.cc \
 	mutex.cc \
 	placeholders.cc \
-	random.cc \
 	regex.cc  \
 	shared_ptr.cc \
-	snprintf_lite.cc \
 	system_error.cc \
 	thread.cc
 
@@ -61,12 +61,17 @@ vpath % $(top_srcdir)/src/c++11
 
 libc__11convenience_la_SOURCES = $(sources)  $(inst_sources)
 
-# Use special rules for the hashtable.cc file so that all
-# the generated template functions are also instantiated. 
-hashtable_c++0x.lo: hashtable_c++0x.cc
-	$(LTCXXCOMPILE) -fimplicit-templates -c $<
-hashtable_c++0x.o: hashtable_c++0x.cc
-	$(CXXCOMPILE) -fimplicit-templates -c $<
+if ENABLE_VTABLE_VERIFY
+EXTRA_VTV_LDFLAGS = \
+        -Wl,-u_vtable_map_vars_start,-u_vtable_map_vars_end
+LIBVTV_FLAGS = \
+        -L$(top_builddir)/libsupc++/.libs --whole-archive -lvtv_init --no-whole-archive
+VTV_CXXFLAGS = -fvtable-verify=std $(EXTRA_VTV_LDFLAGS)
+else
+EXTRA_VTV_LDFLAGS =
+LIBVTV_FLAGS =
+VTV_CXXFLAGS =
+endif
 
 # AM_CXXFLAGS needs to be in each subdirectory so that it can be
 # modified in a per-library or per-sub-library way.  Need to manually
@@ -76,10 +81,8 @@ hashtable_c++0x.o: hashtable_c++0x.cc
 AM_CXXFLAGS = \
 	-std=gnu++11 \
 	$(glibcxx_lt_pic_flag) $(glibcxx_compiler_shared_flag) \
-	$(XTEMPLATE_FLAGS) \
-	$(WARN_CXXFLAGS) \
-	$(OPTIMIZE_CXXFLAGS) \
-	$(CONFIG_CXXFLAGS) -std=gnu++11 \
+	$(XTEMPLATE_FLAGS) $(VTV_CXXFLAGS) \
+	$(WARN_CXXFLAGS) $(OPTIMIZE_CXXFLAGS) $(CONFIG_CXXFLAGS) \
 	$($(@)_no_omit_frame_pointer)
 
 AM_MAKEFLAGS = \
@@ -108,14 +111,14 @@ AM_MAKEFLAGS = \
 # placed after --tag CXX lest things CXX undo the affect of
 # disable-shared.
 
-# 2) Need to explicitly set LTCXXCOMPILE so that EXTRA_CXX_FLAGS is
+# 2) Need to explicitly set LTCXXCOMPILE so that AM_CXXFLAGS is
 # last. (That way, things like -O2 passed down from the toplevel can
 # be overridden by --enable-debug.)
 LTCXXCOMPILE = \
 	$(LIBTOOL) --tag CXX --tag disable-shared \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=compile $(CXX) $(TOPLEVEL_INCLUDES) \
-	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) $(EXTRA_CXX_FLAGS)
+	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS)
 
 LTLDFLAGS = $(shell $(SHELL) $(top_srcdir)/../libtool-ldflags $(LDFLAGS))
 
@@ -125,10 +128,12 @@ LTLDFLAGS = $(shell $(SHELL) $(top_srcdir)/../libtool-ldflags $(LDFLAGS))
 # course is problematic at this point.  So, we get the top-level
 # directory to configure libstdc++-v3 to use gcc as the C++
 # compilation driver.
-CXXLINK = $(LIBTOOL) --tag CXX --tag disable-shared $(LIBTOOLFLAGS) \
-	  --mode=link $(CXX) \
-	  $(OPT_LDFLAGS) $(SECTION_LDFLAGS) $(AM_CXXFLAGS) $(LTLDFLAGS) -o $@
+CXXLINK = \
+	$(LIBTOOL) --tag CXX --tag disable-shared \
+	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
+	--mode=link $(CXX) \
+	$(LIBVTV_FLAGS) \
+	$(OPT_LDFLAGS) $(SECTION_LDFLAGS) $(AM_CXXFLAGS) $(LTLDFLAGS) -o $@
 
 # Google-specific pessimization
 functexcept.lo_no_omit_frame_pointer = -fno-omit-frame-pointer
-debug.lo_no_omit_frame_pointer = -fno-omit-frame-pointer

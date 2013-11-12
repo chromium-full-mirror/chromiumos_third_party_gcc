@@ -63,9 +63,8 @@ func testParameterGeneration(t *testing.T, sizes ParameterSizes, L, N int) {
 }
 
 func TestParameterGeneration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping parameter generation test in short mode")
-	}
+	// This test is too slow to run all the time.
+	return
 
 	testParameterGeneration(t, L1024N160, 1024, 160)
 	testParameterGeneration(t, L2048N224, 2048, 224)

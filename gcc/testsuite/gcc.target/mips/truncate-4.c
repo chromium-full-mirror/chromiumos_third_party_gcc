@@ -1,6 +1,5 @@
 /* The and is performed in DI mode so there is no need for truncation.  */
-/* { dg-options "-mgp64" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-O -mgp64" } */
 /* { dg-final { scan-assembler-not "\tsll\t" } } */
 
 NOMIPS16 unsigned long long

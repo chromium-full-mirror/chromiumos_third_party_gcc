@@ -1,5 +1,4 @@
-/* { dg-options "-march=5kc" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-O2 -march=5kc" } */
 /* { dg-final { scan-assembler-not "\tmsub\t" } } */
 /* { dg-final { scan-assembler "\tmul\t" } } */
 /* { dg-final { scan-assembler "\tsubu\t" } } */

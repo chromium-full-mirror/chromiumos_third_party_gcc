@@ -6,7 +6,7 @@
  *                                                                          *
  *                              C Header File                               *
  *                                                                          *
- *            Copyright (C) 1992-2012, Free Software Foundation, Inc.       *
+ *            Copyright (C) 1992-2011, Free Software Foundation, Inc.       *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -24,8 +24,7 @@
  ****************************************************************************/
 
 /* This is the C file that corresponds to the Ada package specification
-   Namet.  It was created manually from files namet.ads and namet.adb.
-   Some subprograms from Sinput are also made acessable here.  */
+   Namet.  It was created manually from files namet.ads and namet.adb.  */
 
 #ifdef __cplusplus
 extern "C" {
@@ -112,8 +111,7 @@ extern char *Spec_Filename, *Body_Filename;
 #define Is_Non_Ada_Error exp_ch11__is_non_ada_error
 extern Boolean Is_Non_Ada_Error (Entity_Id);
 
-/* Here are some functions in sinput.adb we call from trans.c.  */
-
+/* Here are some functions in sinput.adb we call from a-trans.c.  */
 typedef Nat Source_File_Index;
 typedef Int Logical_Line_Number;
 typedef Int Column_Number;

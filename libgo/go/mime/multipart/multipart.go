@@ -28,12 +28,7 @@ var emptyParams = make(map[string]string)
 type Part struct {
 	// The headers of the body, if any, with the keys canonicalized
 	// in the same fashion that the Go http.Request headers are.
-	// For example, "foo-bar" changes case to "Foo-Bar"
-	//
-	// As a special case, if the "Content-Transfer-Encoding" header
-	// has a value of "quoted-printable", that header is instead
-	// hidden from this map and the body is transparently decoded
-	// during Read calls.
+	// i.e. "foo-bar" changes case to "Foo-Bar"
 	Header textproto.MIMEHeader
 
 	buffer    *bytes.Buffer
@@ -42,11 +37,6 @@ type Part struct {
 
 	disposition       string
 	dispositionParams map[string]string
-
-	// r is either a reader directly reading from mr, or it's a
-	// wrapper around such a reader, decoding the
-	// Content-Transfer-Encoding
-	r io.Reader
 }
 
 // FormName returns the name parameter if p has a Content-Disposition
@@ -104,12 +94,6 @@ func newPart(mr *Reader) (*Part, error) {
 	if err := bp.populateHeaders(); err != nil {
 		return nil, err
 	}
-	bp.r = partReader{bp}
-	const cte = "Content-Transfer-Encoding"
-	if bp.Header.Get(cte) == "quoted-printable" {
-		bp.Header.Del(cte)
-		bp.r = newQuotedPrintableReader(bp.r)
-	}
 	return bp, nil
 }
 
@@ -125,17 +109,6 @@ func (bp *Part) populateHeaders() error {
 // Read reads the body of a part, after its headers and before the
 // next part (if any) begins.
 func (p *Part) Read(d []byte) (n int, err error) {
-	return p.r.Read(d)
-}
-
-// partReader implements io.Reader by reading raw bytes directly from the
-// wrapped *Part, without doing any Transfer-Encoding decoding.
-type partReader struct {
-	p *Part
-}
-
-func (pr partReader) Read(d []byte) (n int, err error) {
-	p := pr.p
 	defer func() {
 		p.bytesRead += n
 	}()
@@ -270,10 +243,11 @@ func (r *Reader) NextPart() (*Part, error) {
 
 		return nil, fmt.Errorf("multipart: unexpected line in Next(): %q", line)
 	}
+	panic("unreachable")
 }
 
 // isFinalBoundary returns whether line is the final boundary line
-// indicating that all parts are over.
+// indiciating that all parts are over.
 // It matches `^--boundary--[ \t]*(\r\n)?$`
 func (mr *Reader) isFinalBoundary(line []byte) bool {
 	if !bytes.HasPrefix(line, mr.dashBoundaryDash) {

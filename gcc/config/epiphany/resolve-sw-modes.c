@@ -1,5 +1,5 @@
 /* Mode switching cleanup pass for the EPIPHANY cpu.
-   Copyright (C) 2000-2013 Free Software Foundation, Inc.
+   Copyright (C) 2000, 2011 Free Software Foundation, Inc.
    Contributed by Embecosm on behalf of Adapteva, Inc.
 
 This file is part of GCC.
@@ -56,14 +56,14 @@ resolve_sw_modes (void)
 {
   basic_block bb;
   rtx insn, src;
-  vec<basic_block> todo;
+  VEC (basic_block, heap) *todo;
   sbitmap pushed;
   bool need_commit = false;
   bool finalize_fp_sets = (MACHINE_FUNCTION (cfun)->unknown_mode_sets == 0);
 
-  todo.create (last_basic_block);
+  todo = VEC_alloc (basic_block, heap, last_basic_block);
   pushed = sbitmap_alloc (last_basic_block);
-  bitmap_clear (pushed);
+  sbitmap_zero (pushed);
   if (!finalize_fp_sets)
     {
       df_note_add_problem ();
@@ -98,24 +98,24 @@ resolve_sw_modes (void)
 	       checking the total frequency of the affected edges.  */
 	    selected_mode = (enum attr_fp_mode) epiphany_normal_fp_rounding;
 
-	    todo.quick_push (bb);
-	    bitmap_set_bit (pushed, bb->index);
+	    VEC_quick_push (basic_block, todo, bb);
+	    SET_BIT (pushed, bb->index);
 	  }
 	XVECEXP (XEXP (src, 0), 0, 0) = GEN_INT (selected_mode);
 	SET_SRC (XVECEXP (PATTERN (insn), 0, 1)) = copy_rtx (src);
 	SET_SRC (XVECEXP (PATTERN (insn), 0, 2)) = copy_rtx (src);
 	df_insn_rescan (insn);
       }
-  while (todo.length ())
+  while (VEC_length (basic_block, todo))
     {
-      basic_block bb = todo.pop ();
+      basic_block bb = VEC_pop (basic_block, todo);
       int selected_reg, jilted_reg;
       enum attr_fp_mode jilted_mode;
       edge e;
       edge_iterator ei;
 
-      bitmap_set_bit (pushed, bb->index);
-      bitmap_set_bit (pushed, bb->index);
+      SET_BIT (pushed, bb->index);
+      SET_BIT (pushed, bb->index);
 
       if (epiphany_normal_fp_rounding == FP_MODE_ROUND_NEAREST)
 	{
@@ -139,10 +139,10 @@ resolve_sw_modes (void)
 	    continue;
 	  if (REGNO_REG_SET_P (DF_LIVE_IN (succ), selected_reg))
 	    {
-	      if (bitmap_bit_p (pushed, succ->index))
+	      if (TEST_BIT (pushed, succ->index))
 		continue;
-	      todo.quick_push (succ);
-	      bitmap_set_bit (pushed, bb->index);
+	      VEC_quick_push (basic_block, todo, succ);
+	      SET_BIT (pushed, bb->index);
 	      continue;
 	    }
 	  start_sequence ();
@@ -154,7 +154,7 @@ resolve_sw_modes (void)
 	  insert_insn_on_edge (seq, e);
 	}
     }
-  todo.release ();
+  VEC_free (basic_block, heap, todo);
   sbitmap_free (pushed);
   if (need_commit)
     commit_edge_insertions ();
@@ -166,7 +166,6 @@ struct rtl_opt_pass pass_resolve_sw_modes =
  {
   RTL_PASS,
   "resolve_sw_modes",			/* name */
-  OPTGROUP_NONE,			/* optinfo_flags */
   gate_resolve_sw_modes,		/* gate */
   resolve_sw_modes,			/* execute */
   NULL,					/* sub */

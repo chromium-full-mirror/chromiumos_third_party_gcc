@@ -1,5 +1,6 @@
 /* Tree inlining hooks and declarations.
-   Copyright (C) 2001-2013 Free Software Foundation, Inc.
+   Copyright 2001, 2003, 2004, 2005, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Alexandre Oliva  <aoliva@redhat.com>
 
 This file is part of GCC.
@@ -20,6 +21,8 @@ along with GCC; see the file COPYING3.  If not see
 
 #ifndef GCC_TREE_INLINE_H
 #define GCC_TREE_INLINE_H
+
+#include "vecir.h" /* For VEC(gimple,heap).  */
 
 struct cgraph_edge;
 
@@ -113,10 +116,10 @@ typedef struct copy_body_data
   struct pointer_set_t *statements_to_fold;
 
   /* Entry basic block to currently copied body.  */
-  basic_block entry_bb;
+  struct basic_block_def *entry_bb;
 
   /* Debug statements that need processing.  */
-  vec<gimple> debug_stmts;
+  VEC(gimple,heap) *debug_stmts;
 
   /* A map from local declarations in the inlined function to
      equivalents in the function into which it is being inlined, where

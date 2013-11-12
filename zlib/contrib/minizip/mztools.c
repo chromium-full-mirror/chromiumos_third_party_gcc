@@ -42,7 +42,7 @@ uLong* bytesRecovered;
     int entries = 0;
     uLong totalBytes = 0;
     char header[30];
-    char filename[1024];
+    char filename[256];
     char extra[1024];
     int offset = 0;
     int offsetCD = 0;
@@ -62,7 +62,7 @@ uLong* bytesRecovered;
         unsigned int fnsize = READ_16(header + 26); /* file name length */
         unsigned int extsize = READ_16(header + 28); /* extra field length */
         filename[0] = extra[0] = '\0';
-
+        
         /* Header */
         if (fwrite(header, 1, 30, fpOut) == 30) {
           offset += 30;
@@ -70,17 +70,12 @@ uLong* bytesRecovered;
           err = Z_ERRNO;
           break;
         }
-
+        
         /* Filename */
         if (fnsize > 0) {
-          if (fnsize < sizeof(filename)) {
-            if (fread(filename, 1, fnsize, fpZip) == fnsize) {
-                if (fwrite(filename, 1, fnsize, fpOut) == fnsize) {
-                offset += fnsize;
-              } else {
-                err = Z_ERRNO;
-                break;
-              }
+          if (fread(filename, 1, fnsize, fpZip) == fnsize) {
+            if (fwrite(filename, 1, fnsize, fpOut) == fnsize) {
+              offset += fnsize;
             } else {
               err = Z_ERRNO;
               break;
@@ -96,14 +91,9 @@ uLong* bytesRecovered;
 
         /* Extra field */
         if (extsize > 0) {
-          if (extsize < sizeof(extra)) {
-            if (fread(extra, 1, extsize, fpZip) == extsize) {
-              if (fwrite(extra, 1, extsize, fpOut) == extsize) {
-                offset += extsize;
-                } else {
-                err = Z_ERRNO;
-                break;
-              }
+          if (fread(extra, 1, extsize, fpZip) == extsize) {
+            if (fwrite(extra, 1, extsize, fpOut) == extsize) {
+              offset += extsize;
             } else {
               err = Z_ERRNO;
               break;
@@ -113,7 +103,7 @@ uLong* bytesRecovered;
             break;
           }
         }
-
+        
         /* Data */
         {
           int dataSize = cpsize;
@@ -143,7 +133,7 @@ uLong* bytesRecovered;
             }
           }
         }
-
+        
         /* Central directory entry */
         {
           char header[46];
@@ -169,7 +159,7 @@ uLong* bytesRecovered;
           /* Header */
           if (fwrite(header, 1, 46, fpOutCD) == 46) {
             offsetCD += 46;
-
+            
             /* Filename */
             if (fnsize > 0) {
               if (fwrite(filename, 1, fnsize, fpOutCD) == fnsize) {
@@ -182,7 +172,7 @@ uLong* bytesRecovered;
               err = Z_STREAM_ERROR;
               break;
             }
-
+            
             /* Extra field */
             if (extsize > 0) {
               if (fwrite(extra, 1, extsize, fpOutCD) == extsize) {
@@ -192,7 +182,7 @@ uLong* bytesRecovered;
                 break;
               }
             }
-
+            
             /* Comment field */
             if (comsize > 0) {
               if ((int)fwrite(comment, 1, comsize, fpOutCD) == comsize) {
@@ -202,8 +192,8 @@ uLong* bytesRecovered;
                 break;
               }
             }
-
-
+            
+            
           } else {
             err = Z_ERRNO;
             break;
@@ -235,17 +225,17 @@ uLong* bytesRecovered;
       WRITE_32(header + 12, offsetCD);    /* size of CD */
       WRITE_32(header + 16, offset);      /* offset to CD */
       WRITE_16(header + 20, comsize);     /* comment */
-
+      
       /* Header */
       if (fwrite(header, 1, 22, fpOutCD) == 22) {
-
+        
         /* Comment field */
         if (comsize > 0) {
           if ((int)fwrite(comment, 1, comsize, fpOutCD) != comsize) {
             err = Z_ERRNO;
           }
         }
-
+        
       } else {
         err = Z_ERRNO;
       }
@@ -267,14 +257,14 @@ uLong* bytesRecovered;
         fclose(fpOutCD);
       }
     }
-
+    
     /* Close */
     fclose(fpZip);
     fclose(fpOut);
-
+    
     /* Wipe temporary file */
     (void)remove(fileOutTmp);
-
+    
     /* Number of recovered entries */
     if (err == Z_OK) {
       if (nRecovered != NULL) {

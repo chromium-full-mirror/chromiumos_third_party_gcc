@@ -6,9 +6,6 @@ main (void)
   /* Test constant folding.  */
   extern void link_error (void);
 
-  if (__builtin_bswap16(0xaabb) != 0xbbaa)
-    link_error ();
-
   if (__builtin_bswap32(0xaabbccdd) != 0xddccbbaa)
     link_error ();
 

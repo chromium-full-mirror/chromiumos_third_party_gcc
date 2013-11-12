@@ -12,7 +12,7 @@ end type Connection
 abstract interface
     subroutine generic_desc(self)
         ! <<< missing IMPORT 
-        class(Connection) :: self ! { dg-error "is being used before it is defined" }
+        class(Connection) :: self ! { dg-error "has not been declared within the interface" }
     end subroutine generic_desc
 end interface
 end

@@ -1,5 +1,6 @@
 /* Simple garbage collection for the GNU compiler.
-   Copyright (C) 1999-2013 Free Software Foundation, Inc.
+   Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
+   2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -78,7 +79,9 @@ ggc_htab_delete (void **slot, void *info)
    tables, for instance from some plugins; this vector is on the heap
    since it is used by GGC internally.  */
 typedef const struct ggc_root_tab *const_ggc_root_tab_t;
-static vec<const_ggc_root_tab_t> extra_root_vec;
+DEF_VEC_P(const_ggc_root_tab_t);
+DEF_VEC_ALLOC_P(const_ggc_root_tab_t, heap);
+static VEC(const_ggc_root_tab_t, heap) *extra_root_vec;
 
 /* Dynamically register a new GGC root table RT. This is useful for
    plugins. */
@@ -87,7 +90,7 @@ void
 ggc_register_root_tab (const struct ggc_root_tab* rt)
 {
   if (rt)
-    extra_root_vec.safe_push (rt);
+    VEC_safe_push (const_ggc_root_tab_t, heap, extra_root_vec, rt);
 }
 
 /* This extra vector of dynamically registered cache_tab-s is used by
@@ -95,7 +98,9 @@ ggc_register_root_tab (const struct ggc_root_tab* rt)
    tables, for instance from some plugins; this vector is on the heap
    since it is used by GGC internally.  */
 typedef const struct ggc_cache_tab *const_ggc_cache_tab_t;
-static vec<const_ggc_cache_tab_t> extra_cache_vec;
+DEF_VEC_P(const_ggc_cache_tab_t);
+DEF_VEC_ALLOC_P(const_ggc_cache_tab_t, heap);
+static VEC(const_ggc_cache_tab_t, heap) *extra_cache_vec;
 
 /* Dynamically register a new GGC cache table CT. This is useful for
    plugins. */
@@ -104,7 +109,7 @@ void
 ggc_register_cache_tab (const struct ggc_cache_tab* ct)
 {
   if (ct)
-    extra_cache_vec.safe_push (ct);
+    VEC_safe_push (const_ggc_cache_tab_t, heap, extra_cache_vec, ct);
 }
 
 /* Scan a hash table that has objects which are to be deleted if they are not
@@ -155,7 +160,7 @@ ggc_mark_roots (void)
   for (rt = gt_ggc_rtab; *rt; rt++)
     ggc_mark_root_tab (*rt);
 
-  FOR_EACH_VEC_ELT (extra_root_vec, i, rtp)
+  FOR_EACH_VEC_ELT (const_ggc_root_tab_t, extra_root_vec, i, rtp)
     ggc_mark_root_tab (rtp);
 
   if (ggc_protect_identifiers)
@@ -166,7 +171,7 @@ ggc_mark_roots (void)
   for (ct = gt_ggc_cache_rtab; *ct; ct++)
     ggc_scan_cache_tab (*ct);
 
-  FOR_EACH_VEC_ELT (extra_cache_vec, i, ctp)
+  FOR_EACH_VEC_ELT (const_ggc_cache_tab_t, extra_cache_vec, i, ctp)
     ggc_scan_cache_tab (ctp);
 
   if (! ggc_protect_identifiers)
@@ -250,7 +255,8 @@ ggc_cleared_alloc_ptr_array_two_args (size_t c, size_t n)
 
 /* These are for splay_tree_new_ggc.  */
 void *
-ggc_splay_alloc (int sz, void *nl)
+ggc_splay_alloc (enum gt_types_enum obj_type ATTRIBUTE_UNUSED, int sz,
+		 void *nl)
 {
   gcc_assert (!nl);
   return ggc_internal_alloc (sz);
@@ -299,6 +305,7 @@ struct ptr_data
   gt_handle_reorder reorder_fn;
   size_t size;
   void *new_addr;
+  enum gt_types_enum type;
 };
 
 #define POINTER_HASH(x) (hashval_t)((intptr_t)x >> 3)
@@ -307,7 +314,8 @@ struct ptr_data
 
 int
 gt_pch_note_object (void *obj, void *note_ptr_cookie,
-		    gt_note_pointers note_ptr_fn)
+		    gt_note_pointers note_ptr_fn,
+		    enum gt_types_enum type)
 {
   struct ptr_data **slot;
 
@@ -332,6 +340,7 @@ gt_pch_note_object (void *obj, void *note_ptr_cookie,
     (*slot)->size = strlen ((const char *)obj) + 1;
   else
     (*slot)->size = ggc_get_size (obj);
+  (*slot)->type = type;
   return 1;
 }
 
@@ -387,7 +396,8 @@ call_count (void **slot, void *state_p)
   struct traversal_state *state = (struct traversal_state *)state_p;
 
   ggc_pch_count_object (state->d, d->obj, d->size,
-			d->note_ptr_fn == gt_pch_p_S);
+			d->note_ptr_fn == gt_pch_p_S,
+			d->type);
   state->count++;
   return 1;
 }
@@ -399,7 +409,8 @@ call_alloc (void **slot, void *state_p)
   struct traversal_state *state = (struct traversal_state *)state_p;
 
   d->new_addr = ggc_pch_alloc_object (state->d, d->obj, d->size,
-				      d->note_ptr_fn == gt_pch_p_S);
+				      d->note_ptr_fn == gt_pch_p_S,
+				      d->type);
   state->ptrs[state->ptrs_i++] = d;
   return 1;
 }
@@ -561,10 +572,6 @@ gt_pch_save (FILE *f)
 
   ggc_pch_prepare_write (state.d, state.f);
 
-#if defined ENABLE_VALGRIND_CHECKING && defined VALGRIND_GET_VBITS
-  vec<char> vbits = vNULL;
-#endif
-
   /* Actually write out the objects.  */
   for (i = 0; i < state.count; i++)
     {
@@ -573,50 +580,6 @@ gt_pch_save (FILE *f)
 	  this_object_size = state.ptrs[i]->size;
 	  this_object = XRESIZEVAR (char, this_object, this_object_size);
 	}
-#if defined ENABLE_VALGRIND_CHECKING && defined VALGRIND_GET_VBITS
-      /* obj might contain uninitialized bytes, e.g. in the trailing
-	 padding of the object.  Avoid warnings by making the memory
-	 temporarily defined and then restoring previous state.  */
-      int get_vbits = 0;
-      size_t valid_size = state.ptrs[i]->size;
-      if (__builtin_expect (RUNNING_ON_VALGRIND, 0))
-	{
-	  if (vbits.length () < valid_size)
-	    vbits.safe_grow (valid_size);
-	  get_vbits = VALGRIND_GET_VBITS (state.ptrs[i]->obj,
-					  vbits.address (), valid_size);
-	  if (get_vbits == 3)
-	    {
-	      /* We assume that first part of obj is addressable, and
-		 the rest is unaddressable.  Find out where the boundary is
-		 using binary search.  */
-	      size_t lo = 0, hi = valid_size;
-	      while (hi > lo)
-		{
-		  size_t mid = (lo + hi) / 2;
-		  get_vbits = VALGRIND_GET_VBITS ((char *) state.ptrs[i]->obj
-						  + mid, vbits.address (),
-						  1);
-		  if (get_vbits == 3)
-		    hi = mid;
-		  else if (get_vbits == 1)
-		    lo = mid + 1;
-		  else
-		    break;
-		}
-	      if (get_vbits == 1 || get_vbits == 3)
-		{
-		  valid_size = lo;
-		  get_vbits = VALGRIND_GET_VBITS (state.ptrs[i]->obj,
-						  vbits.address (),
-						  valid_size);
-		}
-	    }
-	  if (get_vbits == 1)
-	    VALGRIND_DISCARD (VALGRIND_MAKE_MEM_DEFINED (state.ptrs[i]->obj,
-							 state.ptrs[i]->size));
-	}
-#endif
       memcpy (this_object, state.ptrs[i]->obj, state.ptrs[i]->size);
       if (state.ptrs[i]->reorder_fn != NULL)
 	state.ptrs[i]->reorder_fn (state.ptrs[i]->obj,
@@ -630,29 +593,11 @@ gt_pch_save (FILE *f)
 			    state.ptrs[i]->note_ptr_fn == gt_pch_p_S);
       if (state.ptrs[i]->note_ptr_fn != gt_pch_p_S)
 	memcpy (state.ptrs[i]->obj, this_object, state.ptrs[i]->size);
-#if defined ENABLE_VALGRIND_CHECKING && defined VALGRIND_GET_VBITS
-      if (__builtin_expect (get_vbits == 1, 0))
-	{
-	  (void) VALGRIND_SET_VBITS (state.ptrs[i]->obj, vbits.address (),
-				     valid_size);
-	  if (valid_size != state.ptrs[i]->size)
-	    VALGRIND_DISCARD (VALGRIND_MAKE_MEM_NOACCESS ((char *)
-							  state.ptrs[i]->obj
-							  + valid_size,
-							  state.ptrs[i]->size
-							  - valid_size));
-	}
-#endif
     }
-#if defined ENABLE_VALGRIND_CHECKING && defined VALGRIND_GET_VBITS
-  vbits.release ();
-#endif
-
   ggc_pch_finish (state.d, state.f);
   gt_pch_fixup_stringpool ();
 
-  XDELETE (state.ptrs);
-  XDELETE (this_object);
+  free (state.ptrs);
   htab_delete (saving_htab);
 }
 
@@ -900,6 +845,8 @@ init_ggc_heuristics (void)
 #endif
 }
 
+#ifdef GATHER_STATISTICS
+
 /* Datastructure used to store per-call-site statistics.  */
 struct loc_descriptor
 {
@@ -1093,17 +1040,15 @@ add_statistics (void **slot, void *b)
 }
 
 /* Dump per-site memory statistics.  */
-
+#endif
 void
-dump_ggc_loc_statistics (bool final)
+dump_ggc_loc_statistics (bool final ATTRIBUTE_UNUSED)
 {
+#ifdef GATHER_STATISTICS
   int nentries = 0;
   char s[4096];
   size_t collected = 0, freed = 0, allocated = 0, overhead = 0, times = 0;
   int i;
-
-  if (! GATHER_STATISTICS)
-    return;
 
   ggc_force_collect = true;
   ggc_collect ();
@@ -1157,4 +1102,5 @@ dump_ggc_loc_statistics (bool final)
 	   "source location", "Garbage", "Freed", "Leak", "Overhead", "Times");
   fprintf (stderr, "-------------------------------------------------------\n");
   ggc_force_collect = false;
+#endif
 }

@@ -1,7 +1,5 @@
 /* { dg-do compile } */
-/* This test requires widening_mul */
-/* { dg-options "-mdspr2 -mgp32 -fexpensive-optimizations" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-O2 -mdspr2 -mgp32" } */
 /* { dg-final { scan-assembler-times "\tmsubu\t\\\$ac" 2 } } */
 
 typedef unsigned int ui;

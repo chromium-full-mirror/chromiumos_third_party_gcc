@@ -120,10 +120,10 @@ public class Collections
    * @return an empty parameterized set.
    * @since 1.5
    */
-  @SuppressWarnings("unchecked")
   public static final <T> Set<T> emptySet()
   {
-    return (Set<T>) EMPTY_SET;
+    /* FIXME: Could this be optimized? */
+    return new EmptySet<T>();
   }
 
   /**
@@ -161,7 +161,6 @@ public class Collections
      * @return A non-iterating iterator.
      */
     // This is really cheating! I think it's perfectly valid, though.
-    @SuppressWarnings("unchecked")
     public Iterator<T> iterator()
     {
       return (Iterator<T>) EMPTY_LIST.iterator();
@@ -197,7 +196,7 @@ public class Collections
      */
     public boolean equals(Object o)
     {
-      return o instanceof Set<?> && ((Set<?>) o).isEmpty();
+      return o instanceof Set && ((Set) o).isEmpty();
     }
 
     /**
@@ -289,10 +288,10 @@ public class Collections
    * @return an empty parameterized list.
    * @since 1.5
    */
-  @SuppressWarnings("unchecked")
   public static final <T> List<T> emptyList()
   {
-    return (List<T>) EMPTY_LIST;
+    /* FIXME: Could this be optimized? */
+    return new EmptyList<T>();
   }
 
   /**
@@ -370,7 +369,7 @@ public class Collections
      */
     public boolean equals(Object o)
     {
-      return o instanceof List<?> && ((List<?>) o).isEmpty();
+      return o instanceof List && ((List) o).isEmpty();
     }
 
     /**
@@ -481,10 +480,10 @@ public class Collections
    * @return an empty parameterized map.
    * @since 1.5
    */
-  @SuppressWarnings("unchecked")
   public static final <K,V> Map<K,V> emptyMap()
   {
-    return (Map<K,V>) EMPTY_MAP;
+    /* FIXME: Could this be optimized? */
+    return new EmptyMap<K,V>();
   }
 
   /**
@@ -512,10 +511,9 @@ public class Collections
      * There are no entries.
      * @return The empty set.
      */
-    @SuppressWarnings("unchecked")
     public Set<Map.Entry<K, V>> entrySet()
     {
-      return (Set<Map.Entry<K, V>>) EMPTY_SET;
+      return EMPTY_SET;
     }
 
     // The remaining methods are optional, but provide a performance
@@ -548,7 +546,7 @@ public class Collections
      */
     public boolean equals(Object o)
     {
-      return o instanceof Map<?,?> && ((Map<?,?>) o).isEmpty();
+      return o instanceof Map && ((Map) o).isEmpty();
     }
 
     /**
@@ -574,10 +572,9 @@ public class Collections
      * No entries.
      * @return The empty set.
      */
-    @SuppressWarnings("unchecked")
     public Set<K> keySet()
     {
-      return (Set<K>) EMPTY_SET;
+      return EMPTY_SET;
     }
 
     /**
@@ -604,10 +601,9 @@ public class Collections
      * Collection, will work. Besides, that's what the JDK uses!
      * @return The empty set.
      */
-    @SuppressWarnings("unchecked")
     public Collection<V> values()
     {
-      return (Collection<V>) EMPTY_SET;
+      return EMPTY_SET;
     }
 
     /**
@@ -1858,7 +1854,7 @@ public class Collections
     public List<T> subList(int from, int to)
     {
       if (from == to && (to == 0 || to == 1))
-        return emptyList();
+        return EMPTY_LIST;
       if (from == 0 && to == 1)
         return this;
       if (from > to)
@@ -2484,7 +2480,7 @@ public class Collections
      * @throws ArrayStoreException if the type of any element of the
      *         collection is not a subtype of the element type of a.
      */
-    public <E> E[] toArray(E[] a)
+    public <T> T[] toArray(T[] a)
     {
       synchronized (mutex)
         {

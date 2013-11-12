@@ -1,10 +1,8 @@
-// run
+// $G $F.go && $L $F.$A && ./$A.out
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-
-// Test range over strings.
 
 package main
 
@@ -55,13 +53,6 @@ func main() {
 	if c != 23456 {
 		fmt.Println("range empty string assigned to value:", c)
 		ok = false
-	}
-
-	for _, c := range "a\xed\xa0\x80a" {
-		if c != 'a' && c != utf8.RuneError {
-			fmt.Printf("surrogate UTF-8 does not error: %U\n", c)
-			ok = false
-		}
 	}
 
 	if !ok {

@@ -6,38 +6,34 @@
 
 #include <stdint.h>
 
-#include "runtime.h"
 #include "go-alloc.h"
 #include "go-assert.h"
 #include "go-panic.h"
 #include "go-type.h"
 #include "array.h"
+#include "runtime.h"
 #include "arch.h"
 #include "malloc.h"
-
-/* Dummy word to use as base pointer for make([]T, 0).
-   Since you cannot take the address of such a slice,
-   you can't tell that they all have the same base pointer.  */
-uintptr runtime_zerobase;
 
 struct __go_open_array
 __go_make_slice2 (const struct __go_type_descriptor *td, uintptr_t len,
 		  uintptr_t cap)
 {
   const struct __go_slice_type* std;
-  intgo ilen;
-  intgo icap;
+  int ilen;
+  int icap;
   uintptr_t size;
   struct __go_open_array ret;
+  unsigned int flag;
 
   __go_assert (td->__code == GO_SLICE);
   std = (const struct __go_slice_type *) td;
 
-  ilen = (intgo) len;
+  ilen = (int) len;
   if (ilen < 0 || (uintptr_t) ilen != len)
     runtime_panicstring ("makeslice: len out of range");
 
-  icap = (intgo) cap;
+  icap = (int) cap;
   if (cap < len
       || (uintptr_t) icap != cap
       || (std->__element_type->__size > 0
@@ -48,19 +44,10 @@ __go_make_slice2 (const struct __go_type_descriptor *td, uintptr_t len,
   ret.__capacity = icap;
 
   size = cap * std->__element_type->__size;
-
-  if (size == 0)
-    ret.__values = &runtime_zerobase;
-  else if ((std->__element_type->__code & GO_NO_POINTERS) != 0)
-    ret.__values = runtime_mallocgc (size, FlagNoPointers, 1, 1);
-  else
-    {
-      ret.__values = runtime_mallocgc (size, 0, 1, 1);
-
-      if (UseSpanType)
-	runtime_settype (ret.__values,
-			 (uintptr) std->__element_type | TypeInfo_Array);
-    }
+  flag = ((std->__element_type->__code & GO_NO_POINTERS) != 0
+	  ? FlagNoPointers
+	  : 0);
+  ret.__values = runtime_mallocgc (size, flag, 1, 1);
 
   return ret;
 }

@@ -43,7 +43,7 @@ SA(__has_trivial_copy(E));
 
 struct F
 {
-  F(F&) = default;
+  F(F&) = default;		// { dg-error "non-const" }
 };
 
 struct G: public F

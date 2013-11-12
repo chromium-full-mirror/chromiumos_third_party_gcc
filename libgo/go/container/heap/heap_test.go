@@ -2,9 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package heap
+package heap_test
 
 import (
+	. "container/heap"
 	"testing"
 )
 
@@ -166,19 +167,6 @@ func TestRemove2(t *testing.T) {
 	for i := 0; i < len(m); i++ {
 		if !m[i] {
 			t.Errorf("m[%d] doesn't exist", i)
-		}
-	}
-}
-
-func BenchmarkDup(b *testing.B) {
-	const n = 10000
-	h := make(myHeap, n)
-	for i := 0; i < b.N; i++ {
-		for j := 0; j < n; j++ {
-			Push(&h, 0) // all elements are the same
-		}
-		for h.Len() > 0 {
-			Pop(&h)
 		}
 	}
 }

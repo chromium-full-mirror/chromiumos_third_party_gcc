@@ -1,5 +1,5 @@
 /* VMMemoryManagerMXBeanImpl.java - VM interface for a memory manager bean
-   Copyright (C) 2006, 2010  Free Software Foundation, Inc.
+   Copyright (C) 2006 Free Software Foundation
 
 This file is part of GNU Classpath.
 
@@ -55,8 +55,6 @@ import java.util.List;
  */
 final class VMMemoryManagerMXBeanImpl
 {
-
-  private VMMemoryManagerMXBeanImpl() {} // Prohibits instantiation.
 
   /**
    * Returns an array containing the names of the memory pools

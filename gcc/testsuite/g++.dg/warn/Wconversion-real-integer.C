@@ -3,7 +3,7 @@
    gcc/testsuite/gcc.dg/Wconversion-real-integer.c */
 
 /* { dg-do compile }
-/* { dg-options "-Wconversion -ftrack-macro-expansion=0" } */
+/* { dg-options "-Wconversion" } */
 /* { dg-require-effective-target int32plus } */
 #include <limits.h>
 

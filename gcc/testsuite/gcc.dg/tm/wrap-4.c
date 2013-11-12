@@ -11,8 +11,5 @@ void foo()
   __transaction_relaxed { candy(); }
 }
 
-/* We still have one call to candy()-- on the uninstrumented path
-   everything is as usual.  */
-/* { dg-final { scan-tree-dump-times "candy \\(\\);" 1 "optimized" } } */
-
+/* { dg-final { scan-tree-dump-times "candy" 0 "optimized" } } */
 /* { dg-final { cleanup-tree-dump "optimized" } } */

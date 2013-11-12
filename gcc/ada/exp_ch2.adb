@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2012, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2011, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -28,9 +28,11 @@ with Checks;   use Checks;
 with Debug;    use Debug;
 with Einfo;    use Einfo;
 with Elists;   use Elists;
+with Errout;   use Errout;
 with Exp_Smem; use Exp_Smem;
 with Exp_Tss;  use Exp_Tss;
 with Exp_Util; use Exp_Util;
+with Exp_VFpt; use Exp_VFpt;
 with Namet;    use Namet;
 with Nmake;    use Nmake;
 with Opt;      use Opt;
@@ -175,7 +177,7 @@ package body Exp_Ch2 is
          if Nkind (CV) in N_Subexpr then
             Val := CV;
 
-         --  Case of Current_Value is an if expression reference
+         --  Case of Current_Value is a conditional expression reference
 
          else
             Get_Current_Value_Condition (N, Op, Val);
@@ -340,8 +342,7 @@ package body Exp_Ch2 is
    begin
       --  Defend against errors
 
-      if No (E) then
-         Check_Error_Detected;
+      if No (E) and then Total_Errors_Detected /= 0 then
          return;
       end if;
 
@@ -635,14 +636,10 @@ package body Exp_Ch2 is
    ---------------------------
 
    procedure Expand_N_Real_Literal (N : Node_Id) is
-      pragma Unreferenced (N);
-
    begin
-      --  Historically, this routine existed because there were expansion
-      --  requirements for Vax real literals, but now Vax real literals
-      --  are now handled by gigi, so this routine no longer does anything.
-
-      null;
+      if Vax_Float (Etype (N)) then
+         Expand_Vax_Real_Literal (N);
+      end if;
    end Expand_N_Real_Literal;
 
    --------------------------------
@@ -726,10 +723,6 @@ package body Exp_Ch2 is
    --    typ!(recobj).rec.all'Constrained
 
    --  where rec is a selector whose Entry_Formal link points to the formal
-
-   --  If the type of the entry parameter has a representation clause, then an
-   --  extra temp is involved (see below).
-
    --  For a formal of a task entity, the formal is rewritten as a local
    --  renaming.
 
@@ -767,30 +760,10 @@ package body Exp_Ch2 is
       else
          if Nkind (N) = N_Explicit_Dereference then
             declare
-               P    : Node_Id := Prefix (N);
-               S    : Node_Id;
-               E    : Entity_Id;
-               Decl : Node_Id;
+               P : constant Node_Id := Prefix (N);
+               S : Node_Id;
 
             begin
-               --  If the type of an entry parameter has a representation
-               --  clause, then the prefix is not a selected component, but
-               --  instead a reference to a temp pointing at the selected
-               --  component. In this case, set P to be the initial value of
-               --  that temp.
-
-               if Nkind (P) = N_Identifier then
-                  E := Entity (P);
-
-                  if Ekind (E) = E_Constant then
-                     Decl := Parent (E);
-
-                     if Nkind (Decl) = N_Object_Declaration then
-                        P := Expression (Decl);
-                     end if;
-                  end if;
-               end if;
-
                if Nkind (P) = N_Selected_Component then
                   S := Selector_Name (P);
 

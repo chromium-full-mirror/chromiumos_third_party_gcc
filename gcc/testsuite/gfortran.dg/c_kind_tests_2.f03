@@ -1,5 +1,4 @@
 ! { dg-do compile }
-! { dg-options "-Wc-binding-type" }
 module c_kind_tests_2
   use, intrinsic :: iso_c_binding
 
@@ -13,3 +12,4 @@ module c_kind_tests_2
   real(myI), bind(c) :: myCFloat2 ! { dg-warning "is for type INTEGER" }
   real(4), bind(c) :: myFloat     ! { dg-warning "may not be a C interoperable" }
 end module c_kind_tests_2
+! { dg-final { cleanup-modules "c_kind_tests_2" } }

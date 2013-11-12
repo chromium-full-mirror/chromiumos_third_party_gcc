@@ -5,7 +5,7 @@
 
 #define N 16
 
-__attribute__ ((noinline)) int main1 (short a, short *b)
+int main1 (short a, short *b)
 {
   while (++a < 4) *b++ = 2;
 

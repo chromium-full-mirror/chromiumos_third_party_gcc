@@ -21,7 +21,9 @@ var (
 	gobdata  *JSONResponse
 )
 
-func init() {
+func gobinit() {
+	// gobinit is called after json's init,
+	// because it uses jsondata.
 	gobdata = gobResponse(&jsondata)
 
 	var buf bytes.Buffer

@@ -1,5 +1,4 @@
 ! { dg-do run }
-! { dg-options "-fbounds-check" }
 ! This tests the fix for PR30190, in which the array reference
 ! in the associated statement would cause a segfault.
 !

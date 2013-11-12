@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-fgnu-tm -ftrack-macro-expansion=0" } */
+/* { dg-options "-fgnu-tm" } */
 
 #define TC	__attribute__((transaction_callable))
 #define TU	__attribute__((transaction_unsafe))

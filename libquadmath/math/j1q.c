@@ -6,9 +6,9 @@
  *
  * SYNOPSIS:
  *
- * __float128 x, y, j1q();
+ * long double x, y, j1l();
  *
- * y = j1q( x );
+ * y = j1l( x );
  *
  *
  *
@@ -52,9 +52,9 @@
  *
  * SYNOPSIS:
  *
- * __float128, y, y1q();
+ * double x, y, y1l();
  *
- * y = y1q( x );
+ * y = y1l( x );
  *
  *
  *
@@ -836,10 +836,8 @@ y1q (__float128 x)
       return -HUGE_VALQ + x;
     }
   xx = fabsq (x);
-  if (xx <= 0x1p-114)
-    return -TWOOPI / x;
   if (xx <= 2.0Q)
-   {
+    {
       /* 0 <= x <= 2 */
       z = xx * xx;
       p = xx * neval (z, Y0_2N, NY0_2N) / deval (z, Y0_2D, NY0_2D);

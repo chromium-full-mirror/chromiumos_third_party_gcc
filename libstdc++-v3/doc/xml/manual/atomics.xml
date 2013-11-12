@@ -7,9 +7,15 @@
   <indexterm><primary>Atomics</primary></indexterm>
 </title>
   <keywordset>
-    <keyword>ISO C++</keyword>
-    <keyword>library</keyword>
-    <keyword>atomic</keyword>
+    <keyword>
+      ISO C++
+    </keyword>
+    <keyword>
+      library
+    </keyword>
+    <keyword>
+      atomic
+    </keyword>
   </keywordset>
 </info>
 

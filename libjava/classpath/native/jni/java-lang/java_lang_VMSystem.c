@@ -39,12 +39,8 @@ exception statement from your version. */
 
 #include <jcl.h>
 
-#include <time.h>
 #include <sys/time.h>
 #include <stdlib.h>
-#include <errno.h>
-#include <unistd.h>
-#include <string.h>
 
 /*
  * Class:     java_lang_VMSystem
@@ -115,7 +111,15 @@ Java_java_lang_VMSystem_setErr (JNIEnv * env,
   (*env)->SetStaticObjectField (env, cls, field, obj);
 }
 
-static jlong currentTimeMicros(JNIEnv * env)
+/*
+ * Class:     java_lang_VMSystem
+ * Method:    nanoTime
+ * Signature: ()J
+ */
+JNIEXPORT jlong JNICALL
+Java_java_lang_VMSystem_nanoTime
+  (JNIEnv * env __attribute__ ((__unused__)),
+   jclass thisClass __attribute__ ((__unused__)))
 {
   /* Note: this implementation copied directly from Japhar's, by Chris Toshok. */
   jlong result;
@@ -127,49 +131,9 @@ static jlong currentTimeMicros(JNIEnv * env)
   result = (jlong) tp.tv_sec;
   result *= (jlong)1000000L;
   result += (jlong)tp.tv_usec;
+  result *= (jlong)1000;
 
   return result;
-}
-
-/*
- * Class:     java_lang_VMSystem
- * Method:    nanoTime
- * Signature: ()J
- */
-JNIEXPORT jlong JNICALL
-Java_java_lang_VMSystem_nanoTime
-  (JNIEnv * env,
-   jclass thisClass __attribute__ ((__unused__)))
-{
-#if defined(HAVE_CLOCK_GETTIME) && defined(_POSIX_MONOTONIC_CLOCK)
-  jlong result;
-  struct timespec tp;
-
-  if (clock_gettime (CLOCK_MONOTONIC, &tp) == -1) {
-    return currentTimeMicros(env) * (jlong)1000;
-  }
-
-  result = (jlong) tp.tv_sec;
-  result *= (jlong)1000000000L;
-  result += (jlong)tp.tv_nsec;
-
-  return result;
-#else
-  return currentTimeMicros(env) * (jlong)1000;
-#endif
-}
-
-/*
- * Class:     java_lang_VMSystem
- * Method:    currentTimeMillis
- * Signature: ()J
- */
-JNIEXPORT jlong JNICALL
-Java_java_lang_VMSystem_currentTimeMillis
-  (JNIEnv * env,
-   jclass thisClass __attribute__ ((__unused__)))
-{
-  return currentTimeMicros(env) / (jlong)1000L;
 }
 
 JNIEXPORT jstring JNICALL

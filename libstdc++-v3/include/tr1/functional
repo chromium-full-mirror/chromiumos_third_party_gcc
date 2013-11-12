@@ -1,6 +1,7 @@
 // TR1 functional header -*- C++ -*-
 
-// Copyright (C) 2004-2013 Free Software Foundation, Inc.
+// Copyright (C) 2004, 2005, 2006, 2007, 2009, 2010, 2011, 2012
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -42,13 +43,13 @@
 #include <tr1/functional_hash.h>
 #include <ext/type_traits.h>
 #include <bits/move.h> // for std::__addressof
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
 #  include <type_traits> // for integral_constant, true_type, false_type
 #endif
 
 namespace std _GLIBCXX_VISIBILITY(default)
 {
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
 _GLIBCXX_BEGIN_NAMESPACE_VERSION
   template<int> struct _Placeholder;
   template<typename> class _Bind;
@@ -914,7 +915,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   template<int _Num>
     const int is_placeholder<_Placeholder<_Num> >::value;
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   template<int _Num>
     struct is_placeholder<std::_Placeholder<_Num>>
     : std::integral_constant<int, _Num>
@@ -1430,7 +1431,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     is_bind_expression<const volatile _Bind_result<_Result,
                                                    _Signature> >::value;
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   template<typename _Signature>
     struct is_bind_expression<std::_Bind<_Signature>>
     : true_type { };
@@ -1888,7 +1889,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     : public _Maybe_unary_or_binary_function<_Res, _ArgTypes...>,
       private _Function_base
     {
-#if __cplusplus < 201103L
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
       /// This class is used to implement the safe_bool idiom.
       struct _Hidden_type
       {
@@ -2041,7 +2042,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *
        *  This function will not throw an %exception.
        */
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       explicit operator bool() const
       { return !_M_empty(); }
 #else
@@ -2142,7 +2143,13 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     operator()(_ArgTypes... __args) const
     {
       if (_M_empty())
-	_GLIBCXX_THROW_OR_ABORT(bad_function_call());
+        {
+#if __EXCEPTIONS
+          throw bad_function_call();
+#else
+          __builtin_abort();
+#endif
+        }
       return _M_invoker(_M_functor, __args...);
     }
 
@@ -2251,7 +2258,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 _GLIBCXX_END_NAMESPACE_VERSION
 }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
 _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   template<typename> struct is_placeholder;

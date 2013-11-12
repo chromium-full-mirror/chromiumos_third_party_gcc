@@ -1,5 +1,5 @@
 /* ConfigFileTokenizer.java -- JAAS Login Configuration default syntax tokenizer
-   Copyright (C) 2006, 2010  Free Software Foundation, Inc.
+   Copyright (C) 2006 Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -81,9 +81,7 @@ import java.util.logging.Logger;
  */
 public class ConfigFileTokenizer
 {
-  private static final Logger log = Configuration.DEBUG ?
-                Logger.getLogger(ConfigFileParser.class.getName()) : null;
-
+  private static final Logger log = Logger.getLogger(ConfigFileParser.class.getName());
   /** A constant indicating that the end of the stream has been read. */
   public static final int TT_EOF = -1;
   /** A constant indicating that a word token has been read. */
@@ -94,7 +92,7 @@ public class ConfigFileTokenizer
   public String sval;
   public int ttype;
 
-  private final BufferedReader br;
+  private BufferedReader br;
   boolean initialised;
   private CPStringBuilder sb;
   private int sbNdx;
@@ -105,7 +103,10 @@ public class ConfigFileTokenizer
   /** Trivial constructor. */
   ConfigFileTokenizer(Reader r)
   {
+    super();
+
     br = r instanceof BufferedReader ? (BufferedReader) r : new BufferedReader(r);
+    initialised = false;
   }
 
   // Class methods

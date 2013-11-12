@@ -1,7 +1,8 @@
 /* Operating system specific defines to be used when targeting GCC for
    hosting on Windows 32/64 via mingw-w64 runtime, using GNU tools and
    the Windows API Library.
-   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+   Copyright (C) 2009, 2010,
+   2011 Free Software Foundation, Inc.
 
 This file is part of GCC.
 

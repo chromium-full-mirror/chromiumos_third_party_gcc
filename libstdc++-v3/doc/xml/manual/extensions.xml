@@ -7,14 +7,17 @@
   <indexterm><primary>Extensions</primary></indexterm>
 </title>
   <keywordset>
-    <keyword>ISO C++</keyword>
-    <keyword>library</keyword>
+    <keyword>
+      ISO C++
+    </keyword>
+    <keyword>
+      library
+    </keyword>
   </keywordset>
 </info>
 
 
 <preface><info><title/></info>
-<?dbhtml filename="ext_preface.html"?>
 <para>
   Here we will make an attempt at describing the non-Standard
   extensions to the library.  Some of these are from older versions of
@@ -188,7 +191,6 @@ extensions, be aware of two things:
 
 
   <section xml:id="manual.ext.containers.deprecated_sgi" xreflabel="SGI ext dep"><info><title>Deprecated</title></info>
-    <?dbhtml filename="ext_sgi.html"?>
 
 
    <para>

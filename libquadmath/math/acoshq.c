@@ -1,4 +1,4 @@
-/* acoshq.c -- __float128 version of e_acosh.c.
+/* e_acoshl.c -- long double version of e_acosh.c.
  * Conversion to long double by Jakub Jelinek, jj@ultra.linux.cz.
  */
 
@@ -13,7 +13,7 @@
  * ====================================================
  */
 
-/* acoshq(x)
+/* __ieee754_acoshl(x)
  * Method :
  *	Based on
  *		acoshl(x) = logl [ x + sqrtl(x*x-1) ]

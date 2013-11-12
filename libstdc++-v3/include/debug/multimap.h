@@ -1,6 +1,7 @@
 // Debugging multimap implementation -*- C++ -*-
 
-// Copyright (C) 2003-2013 Free Software Foundation, Inc.
+// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2009, 2010, 2011
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -92,7 +93,7 @@ namespace __debug
       multimap(const _Base& __x)
       : _Base(__x) { }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       multimap(multimap&& __x)
       noexcept(is_nothrow_copy_constructible<_Compare>::value)
       : _Base(std::move(__x))
@@ -114,13 +115,12 @@ namespace __debug
 	return *this;
       }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       multimap&
       operator=(multimap&& __x)
       {
 	// NB: DR 1204.
 	// NB: DR 675.
-	__glibcxx_check_self_move_assign(__x);
 	clear();
 	swap(__x);
 	return *this;
@@ -170,7 +170,7 @@ namespace __debug
       rend() const _GLIBCXX_NOEXCEPT
       { return const_reverse_iterator(begin()); }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       const_iterator
       cbegin() const noexcept
       { return const_iterator(_Base::begin(), this); }
@@ -194,30 +194,11 @@ namespace __debug
       using _Base::max_size;
 
       // modifiers:
-#if __cplusplus >= 201103L
-      template<typename... _Args>
-	iterator
-	emplace(_Args&&... __args)
-	{
-	  return iterator(_Base::emplace(std::forward<_Args>(__args)...), this);
-	}
-
-      template<typename... _Args>
-	iterator
-	emplace_hint(const_iterator __pos, _Args&&... __args)
-	{
-	  __glibcxx_check_insert(__pos);
-	  return iterator(_Base::emplace_hint(__pos.base(),
-					      std::forward<_Args>(__args)...),
-			  this);
-	}
-#endif
-      
       iterator
       insert(const value_type& __x)
       { return iterator(_Base::insert(__x), this); }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       template<typename _Pair, typename = typename
 	       std::enable_if<std::is_constructible<value_type,
 						    _Pair&&>::value>::type>
@@ -226,14 +207,14 @@ namespace __debug
         { return iterator(_Base::insert(std::forward<_Pair>(__x)), this); }
 #endif
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       void
       insert(std::initializer_list<value_type> __list)
       { _Base::insert(__list); }
 #endif
 
       iterator
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       insert(const_iterator __position, const value_type& __x)
 #else
       insert(iterator __position, const value_type& __x)
@@ -243,7 +224,7 @@ namespace __debug
 	return iterator(_Base::insert(__position.base(), __x), this);
       }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       template<typename _Pair, typename = typename
 	       std::enable_if<std::is_constructible<value_type,
 						    _Pair&&>::value>::type>
@@ -265,7 +246,7 @@ namespace __debug
 			__gnu_debug::__base(__last));
 	}
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       iterator
       erase(const_iterator __position)
       {
@@ -303,7 +284,7 @@ namespace __debug
 	return __count;
       }
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
       iterator
       erase(const_iterator __first, const_iterator __last)
       {

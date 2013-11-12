@@ -1,8 +1,7 @@
-/* { dg-options "-mno-dsp -ffat-lto-objects" } */
+/* { dg-options "-mno-dsp" } */
 
 void
 foo (void)
 {
   register int x asm ("$ac1hi"); /* { dg-error "cannot be accessed" } */
-  asm volatile ("" : "=r" (x));
 }

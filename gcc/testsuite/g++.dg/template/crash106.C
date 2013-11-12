@@ -10,5 +10,3 @@ struct A
 template<T N = 0, void (A::*)() = &A::foo<N> > struct B {}; // { dg-error "type|declared" }
 
 B<> b; // { dg-error "type|declaration" }
-
-// { dg-prune-output "could not convert" }

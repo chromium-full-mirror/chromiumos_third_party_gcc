@@ -1,5 +1,6 @@
 ;; Machine Descriptions for R8C/M16C/M32C
-;; Copyright (C) 2005-2013 Free Software Foundation, Inc.
+;; Copyright (C) 2005, 2007, 2008, 2010
+;; Free Software Foundation, Inc.
 ;; Contributed by Red Hat.
 ;;
 ;; This file is part of GCC.
@@ -182,12 +183,12 @@
 ; TRUE for memory operands that are not indexed
 (define_predicate "memsym_operand"
   (and (match_operand 0 "memory_operand" "")
-       (match_test "satisfies_constraint_Si (op)")))
+       (match_test "m32c_extra_constraint_p (op, 'S', \"Si\")")))
 
 ; TRUE for memory operands with small integer addresses
 (define_predicate "memimmed_operand"
   (and (match_operand 0 "memory_operand" "")
-       (match_test "satisfies_constraint_Sp (op)")))
+       (match_test "m32c_extra_constraint_p (op, 'S', \"Sp\")")))
 
 ; TRUE for r1h.  This is complicated since r1h isn't a register GCC
 ; normally knows about.
@@ -273,22 +274,22 @@
 ; TRUE for constants we can multiply pointers by
 (define_predicate "m32c_psi_scale"
   (and (match_operand 0 "const_int_operand")
-       (match_test "satisfies_constraint_Ilb (op)")))
+       (match_test "m32c_const_ok_for_constraint_p(INTVAL(op), 'I', \"Ilb\")")))
 
 ; TRUE for one bit set (bit) or clear (mask) out of N bits.
 
 (define_predicate "m32c_1bit8_operand"
   (and (match_operand 0 "const_int_operand")
-       (match_test "satisfies_constraint_Ilb (op)")))
+       (match_test "m32c_const_ok_for_constraint_p(INTVAL(op), 'I', \"Ilb\")")))
 
 (define_predicate "m32c_1bit16_operand"
   (and (match_operand 0 "const_int_operand")
-       (match_test "satisfies_constraint_Ilw (op)")))
+       (match_test "m32c_const_ok_for_constraint_p(INTVAL(op), 'I', \"Ilw\")")))
 
 (define_predicate "m32c_1mask8_operand"
   (and (match_operand 0 "const_int_operand")
-       (match_test "satisfies_constraint_ImB (op)")))
+       (match_test "m32c_const_ok_for_constraint_p(INTVAL(op), 'I', \"ImB\")")))
 
 (define_predicate "m32c_1mask16_operand"
   (and (match_operand 0 "const_int_operand")
-       (match_test "satisfies_constraint_Imw (op)")))
+       (match_test "m32c_const_ok_for_constraint_p(INTVAL(op), 'I', \"Imw\")")))

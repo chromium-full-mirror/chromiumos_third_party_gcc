@@ -2,13 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Sockets for Windows
+
 package net
 
 import "syscall"
 
 func maxListenerBacklog() int {
 	// TODO: Implement this
-	// NOTE: Never return a number bigger than 1<<16 - 1. See issue 5030.
 	return syscall.SOMAXCONN
 }
 
@@ -17,35 +18,26 @@ func listenerSockaddr(s syscall.Handle, f int, la syscall.Sockaddr, toAddr func(
 	if a == nil {
 		return la, nil
 	}
-	switch a := a.(type) {
+	switch v := a.(type) {
 	case *TCPAddr, *UnixAddr:
-		if err := setDefaultListenerSockopts(s); err != nil {
+		err := setDefaultListenerSockopts(s)
+		if err != nil {
 			return nil, err
 		}
 	case *UDPAddr:
-		if a.IP.IsMulticast() {
-			if err := setDefaultMulticastSockopts(s); err != nil {
+		if v.IP.IsMulticast() {
+			err := setDefaultMulticastSockopts(s)
+			if err != nil {
 				return nil, err
 			}
 			switch f {
 			case syscall.AF_INET:
-				a.IP = IPv4zero
+				v.IP = IPv4zero
 			case syscall.AF_INET6:
-				a.IP = IPv6unspecified
+				v.IP = IPv6unspecified
 			}
-			return a.sockaddr(f)
+			return v.sockaddr(f)
 		}
 	}
 	return la, nil
-}
-
-func sysSocket(f, t, p int) (syscall.Handle, error) {
-	// See ../syscall/exec_unix.go for description of ForkLock.
-	syscall.ForkLock.RLock()
-	s, err := syscall.Socket(f, t, p)
-	if err == nil {
-		syscall.CloseOnExec(s)
-	}
-	syscall.ForkLock.RUnlock()
-	return s, err
 }

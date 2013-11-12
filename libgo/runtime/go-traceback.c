@@ -7,31 +7,36 @@
 #include "config.h"
 
 #include "runtime.h"
+#include "go-string.h"
 
 /* Print a stack trace for the current goroutine.  */
 
 void
 runtime_traceback ()
 {
-  Location locbuf[100];
+  uintptr pcbuf[100];
   int32 c;
 
-  c = runtime_callers (1, locbuf, nelem (locbuf));
-  runtime_printtrace (locbuf, c, true);
+  c = runtime_callers (1, pcbuf, sizeof pcbuf / sizeof pcbuf[0]);
+  runtime_printtrace (pcbuf, c);
 }
 
 void
-runtime_printtrace (Location *locbuf, int32 c, bool current)
+runtime_printtrace (uintptr *pcbuf, int32 c)
 {
   int32 i;
 
   for (i = 0; i < c; ++i)
     {
-      if (runtime_showframe (locbuf[i].function, current))
+      struct __go_string fn;
+      struct __go_string file;
+      int line;
+
+      if (__go_file_line (pcbuf[i], &fn, &file, &line)
+	  && runtime_showframe (fn.__data))
 	{
-	  runtime_printf ("%S\n", locbuf[i].function);
-	  runtime_printf ("\t%S:%D\n", locbuf[i].filename,
-			  (int64) locbuf[i].lineno);
+	  runtime_printf ("%S\n", fn);
+	  runtime_printf ("\t%S:%d\n", file, line);
 	}
     }
 }

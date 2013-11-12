@@ -1,5 +1,5 @@
 /* VMClassLoader.java -- Reference implementation of compiler interface
-   Copyright (C) 2004, 2010  Free Software Foundation, Inc.
+   Copyright (C) 2004 Free Software Foundation
 
 This file is part of GNU Classpath.
 
@@ -58,7 +58,7 @@ final class VMCompiler
    *         compilation failed, <code>true</code> if compilation succeeded
    * @throws NullPointerException if oneClass is null
    */
-  static boolean compileClass(Class oneClass)
+  public static boolean compileClass(Class oneClass)
   {
     // Never succeed.
     return false;
@@ -72,7 +72,7 @@ final class VMCompiler
    *         compilation failed, <code>true</code> if compilation succeeded
    * @throws NullPointerException if classNames is null
    */
-  static boolean compileClasses(String classNames)
+  public static boolean compileClasses(String classNames)
   {
     // Note the incredibly lame interface.  Always fail.
     return false;
@@ -87,7 +87,7 @@ final class VMCompiler
    * @return a compiler-specific value, including null
    * @throws NullPointerException if the compiler doesn't like a null arg
    */
-  static Object command(Object arg)
+  public static Object command(Object arg)
   {
     // Our implementation defines this to a no-op.
     return null;
@@ -98,7 +98,7 @@ final class VMCompiler
    * to resume operation if it was previously disabled; provided that a
    * compiler even exists.
    */
-  static void enable()
+  public static void enable()
   {
   }
 
@@ -106,7 +106,7 @@ final class VMCompiler
    * Calling <code>Compiler.disable()</code> will cause the compiler
    * to be suspended; provided that a compiler even exists.
    */
-  static void disable()
+  public static void disable()
   {
   }
 }

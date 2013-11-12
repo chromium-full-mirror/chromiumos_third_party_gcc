@@ -6,9 +6,7 @@
 
 #include <sched.h>
 
-#include "runtime.h"
-
-void Breakpoint (void) __asm__ (GOSYM_PREFIX "runtime.Breakpoint");
+void Breakpoint (void) asm ("runtime.Breakpoint");
 
 void
 Breakpoint (void)

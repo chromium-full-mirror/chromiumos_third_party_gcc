@@ -1,6 +1,7 @@
 // Support for pointer abstractions -*- C++ -*-
 
-// Copyright (C) 2011-2013 Free Software Foundation, Inc.
+// Copyright (C) 2011
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -32,7 +33,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   char const*
   bad_weak_ptr::what() const noexcept
-  { return "bad_weak_ptr"; }
+  { return "std::bad_weak_ptr"; }
 
 _GLIBCXX_END_NAMESPACE_VERSION
 } // namespace

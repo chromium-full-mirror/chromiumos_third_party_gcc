@@ -6,7 +6,7 @@
 --                                                                          --
 --                               B o d y                                    --
 --                                                                          --
---          Copyright (C) 1998-2012, Free Software Foundation, Inc.         --
+--          Copyright (C) 1998-2011, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNARL is free software; you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -41,6 +41,8 @@
 
 --  Note: the compiler generates direct calls to this interface, via Rtsfind
 
+with Ada.Unchecked_Deallocation;
+
 with System.Task_Primitives.Operations;
 with System.Restrictions;
 with System.Parameters;
@@ -55,6 +57,13 @@ package body System.Tasking.Protected_Objects.Entries is
 
    use Parameters;
    use Task_Primitives.Operations;
+
+   -----------------------
+   -- Local Subprograms --
+   -----------------------
+
+   procedure Free_Entry_Names (Object : Protection_Entries);
+   --  Deallocate all string names associated with protected entries
 
    ----------------
    -- Local Data --
@@ -132,6 +141,8 @@ package body System.Tasking.Protected_Objects.Entries is
          end loop;
       end loop;
 
+      Free_Entry_Names (Object);
+
       Object.Finalized := True;
 
       if Single_Lock then
@@ -142,6 +153,26 @@ package body System.Tasking.Protected_Objects.Entries is
 
       STPO.Finalize_Lock (Object.L'Unrestricted_Access);
    end Finalize;
+
+   ----------------------
+   -- Free_Entry_Names --
+   ----------------------
+
+   procedure Free_Entry_Names (Object : Protection_Entries) is
+      Names : Entry_Names_Array_Access := Object.Entry_Names;
+
+      procedure Free_Entry_Names_Array_Access is new
+        Ada.Unchecked_Deallocation
+          (Entry_Names_Array, Entry_Names_Array_Access);
+
+   begin
+      if Names = null then
+         return;
+      end if;
+
+      Free_Entry_Names_Array (Names.all);
+      Free_Entry_Names_Array_Access (Names);
+   end Free_Entry_Names;
 
    -----------------
    -- Get_Ceiling --
@@ -171,11 +202,12 @@ package body System.Tasking.Protected_Objects.Entries is
    -----------------------------------
 
    procedure Initialize_Protection_Entries
-     (Object           : Protection_Entries_Access;
-      Ceiling_Priority : Integer;
-      Compiler_Info    : System.Address;
-      Entry_Bodies     : Protected_Entry_Body_Access;
-      Find_Body_Index  : Find_Body_Index_Access)
+     (Object            : Protection_Entries_Access;
+      Ceiling_Priority  : Integer;
+      Compiler_Info     : System.Address;
+      Entry_Bodies      : Protected_Entry_Body_Access;
+      Find_Body_Index   : Find_Body_Index_Access;
+      Build_Entry_Names : Boolean)
    is
       Init_Priority : Integer := Ceiling_Priority;
       Self_ID       : constant Task_Id := STPO.Self;
@@ -218,6 +250,11 @@ package body System.Tasking.Protected_Objects.Entries is
          Object.Entry_Queues (E).Head := null;
          Object.Entry_Queues (E).Tail := null;
       end loop;
+
+      if Build_Entry_Names then
+         Object.Entry_Names :=
+           new Entry_Names_Array (1 .. Entry_Index (Object.Num_Entries));
+      end if;
    end Initialize_Protection_Entries;
 
    ------------------
@@ -354,17 +391,6 @@ package body System.Tasking.Protected_Objects.Entries is
       end if;
    end Lock_Read_Only_Entries;
 
-   -----------------------
-   -- Number_Of_Entries --
-   -----------------------
-
-   function Number_Of_Entries
-     (Object : Protection_Entries_Access) return Entry_Index
-   is
-   begin
-      return Entry_Index (Object.Num_Entries);
-   end Number_Of_Entries;
-
    -----------------
    -- Set_Ceiling --
    -----------------
@@ -376,17 +402,20 @@ package body System.Tasking.Protected_Objects.Entries is
       Object.New_Ceiling := Prio;
    end Set_Ceiling;
 
-   ---------------------
-   -- Set_Entry_Names --
-   ---------------------
+   --------------------
+   -- Set_Entry_Name --
+   --------------------
 
-   procedure Set_Entry_Names
-     (Object : Protection_Entries_Access;
-      Names  : Protected_Entry_Names_Access)
+   procedure Set_Entry_Name
+     (Object : Protection_Entries'Class;
+      Pos    : Protected_Entry_Index;
+      Val    : String_Access)
    is
    begin
-      Object.Entry_Names := Names;
-   end Set_Entry_Names;
+      pragma Assert (Object.Entry_Names /= null);
+
+      Object.Entry_Names (Entry_Index (Pos)) := Val;
+   end Set_Entry_Name;
 
    --------------------
    -- Unlock_Entries --

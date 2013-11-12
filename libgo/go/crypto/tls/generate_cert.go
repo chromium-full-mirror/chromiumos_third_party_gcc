@@ -16,80 +16,36 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"flag"
-	"fmt"
 	"log"
 	"math/big"
-	"net"
 	"os"
-	"strings"
 	"time"
 )
 
-var (
-	host      = flag.String("host", "", "Comma-separated hostnames and IPs to generate a certificate for")
-	validFrom = flag.String("start-date", "", "Creation date formatted as Jan 1 15:04:05 2011")
-	validFor  = flag.Duration("duration", 365*24*time.Hour, "Duration that certificate is valid for")
-	isCA      = flag.Bool("ca", false, "whether this cert should be its own Certificate Authority")
-	rsaBits   = flag.Int("rsa-bits", 1024, "Size of RSA key to generate")
-)
+var hostName *string = flag.String("host", "127.0.0.1", "Hostname to generate a certificate for")
 
 func main() {
 	flag.Parse()
 
-	if len(*host) == 0 {
-		log.Fatalf("Missing required --host parameter")
-	}
-
-	priv, err := rsa.GenerateKey(rand.Reader, *rsaBits)
+	priv, err := rsa.GenerateKey(rand.Reader, 1024)
 	if err != nil {
 		log.Fatalf("failed to generate private key: %s", err)
 		return
 	}
 
-	var notBefore time.Time
-	if len(*validFrom) == 0 {
-		notBefore = time.Now()
-	} else {
-		notBefore, err = time.Parse("Jan 2 15:04:05 2006", *validFrom)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to parse creation date: %s\n", err)
-			os.Exit(1)
-		}
-	}
-
-	notAfter := notBefore.Add(*validFor)
-
-	// end of ASN.1 time
-	endOfTime := time.Date(2049, 12, 31, 23, 59, 59, 0, time.UTC)
-	if notAfter.After(endOfTime) {
-		notAfter = endOfTime
-	}
+	now := time.Now()
 
 	template := x509.Certificate{
 		SerialNumber: new(big.Int).SetInt64(0),
 		Subject: pkix.Name{
+			CommonName:   *hostName,
 			Organization: []string{"Acme Co"},
 		},
-		NotBefore: notBefore,
-		NotAfter:  notAfter,
+		NotBefore: now.Add(-5 * time.Minute).UTC(),
+		NotAfter:  now.AddDate(1, 0, 0).UTC(), // valid for 1 year.
 
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-	}
-
-	hosts := strings.Split(*host, ",")
-	for _, h := range hosts {
-		if ip := net.ParseIP(h); ip != nil {
-			template.IPAddresses = append(template.IPAddresses, ip)
-		} else {
-			template.DNSNames = append(template.DNSNames, h)
-		}
-	}
-
-	if *isCA {
-		template.IsCA = true
-		template.KeyUsage |= x509.KeyUsageCertSign
+		SubjectKeyId: []byte{1, 2, 3, 4},
+		KeyUsage:     x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
 	}
 
 	derBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)

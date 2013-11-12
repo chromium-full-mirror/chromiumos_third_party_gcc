@@ -121,6 +121,7 @@ func (d *decoder) Read(b []byte) (int, error) {
 		}
 		d.decode()
 	}
+	panic("unreachable")
 }
 
 // decode decompresses bytes from r and leaves them in d.toRead.
@@ -202,6 +203,7 @@ func (d *decoder) decode() {
 			return
 		}
 	}
+	panic("unreachable")
 }
 
 func (d *decoder) flush() {

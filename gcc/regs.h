@@ -1,5 +1,7 @@
 /* Define per-register tables for data flow info and register allocation.
-   Copyright (C) 1987-2013 Free Software Foundation, Inc.
+   Copyright (C) 1987, 1993, 1994, 1995, 1996, 1997, 1998,
+   1999, 2000, 2003, 2004, 2005, 2006, 2007, 2008, 2010 Free Software
+   Foundation, Inc.
 
 This file is part of GCC.
 
@@ -22,7 +24,6 @@ along with GCC; see the file COPYING3.  If not see
 
 #include "machmode.h"
 #include "hard-reg-set.h"
-#include "rtl.h"
 
 #define REG_BYTES(R) mode_size[(int) GET_MODE (R)]
 
@@ -89,10 +90,8 @@ REG_N_SETS (int regno)
 #define SET_REG_N_SETS(N,V) (regstat_n_sets_and_refs[N].sets = V)
 #define INC_REG_N_SETS(N,V) (regstat_n_sets_and_refs[N].sets += V)
 
-/* Given a REG, return TRUE if the reg is a PARM_DECL, FALSE otherwise.  */
-extern bool reg_is_parm_p (rtx);
 
-/* Functions defined in regstat.c.  */
+/* Functions defined in reg-stat.c.  */
 extern void regstat_init_n_sets_and_refs (void);
 extern void regstat_free_n_sets_and_refs (void);
 extern void regstat_compute_ri (void);
@@ -100,7 +99,7 @@ extern void regstat_free_ri (void);
 extern bitmap regstat_get_setjmp_crosses (void);
 extern void regstat_compute_calls_crossed (void);
 extern void regstat_free_calls_crossed (void);
-extern void dump_reg_info (FILE *);
+
 
 /* Register information indexed by register number.  This structure is
    initialized by calling regstat_compute_ri and is destroyed by
@@ -177,17 +176,21 @@ extern size_t reg_info_p_size;
 
 #define REG_N_THROWING_CALLS_CROSSED(N) (reg_info_p[N].throw_calls_crossed)
 
-/* Total number of instructions at which (REG n) is live.
-   
-   This is set in regstat.c whenever register info is requested and
-   remains valid for the rest of the compilation of the function; it is
-   used to control register allocation.  The larger this is, the less
-   priority (REG n) gets for allocation in a hard register (in IRA in
-   priority-coloring mode).
+/* Total number of instructions at which (REG n) is live.  The larger
+   this is, the less priority (REG n) gets for allocation in a hard
+   register (in global-alloc).  This is set in df-problems.c whenever
+   register info is requested and remains valid for the rest of the
+   compilation of the function; it is used to control register
+   allocation.
 
-   Negative values are special: -1 is used to mark a pseudo reg that
-   should not be allocated to a hard register, because it crosses a
-   setjmp call.  */
+   local-alloc.c may alter this number to change the priority.
+
+   Negative values are special.
+   -1 is used to mark a pseudo reg which has a constant or memory equivalent
+   and is used infrequently enough that it should not get a hard register.
+   -2 is used to mark a pseudo reg for a parameter, when a frame pointer
+   is not required.  global.c makes an allocno for this but does
+   not try to assign a hard register to it.  */
 
 #define REG_LIVE_LENGTH(N)  (reg_info_p[N].live_length)
 
@@ -237,6 +240,8 @@ extern int caller_save_needed;
 #define HARD_REGNO_CALL_PART_CLOBBERED(REGNO, MODE) 0
 #endif
 
+typedef unsigned short move_table[N_REG_CLASSES];
+
 /* Target-dependent globals.  */
 struct target_regs {
   /* For each starting hard register, the number of consecutive hard
@@ -255,6 +260,21 @@ struct target_regs {
 
   /* 1 if the corresponding class contains a register of the given mode.  */
   char x_contains_reg_of_mode[N_REG_CLASSES][MAX_MACHINE_MODE];
+
+  /* Maximum cost of moving from a register in one class to a register
+     in another class.  Based on TARGET_REGISTER_MOVE_COST.  */
+  move_table *x_move_cost[MAX_MACHINE_MODE];
+
+  /* Similar, but here we don't have to move if the first index is a
+     subset of the second so in that case the cost is zero.  */
+  move_table *x_may_move_in_cost[MAX_MACHINE_MODE];
+
+  /* Similar, but here we don't have to move if the first index is a
+     superset of the second so in that case the cost is zero.  */
+  move_table *x_may_move_out_cost[MAX_MACHINE_MODE];
+
+  /* Keep track of the last mode we initialized move costs for.  */
+  int x_last_mode_for_init_move_cost;
 
   /* Record for each mode whether we can move a register directly to or
      from an object of that mode in memory.  If we can't, we won't try
@@ -281,6 +301,12 @@ extern struct target_regs *this_target_regs;
   (this_target_regs->x_have_regs_of_mode)
 #define contains_reg_of_mode \
   (this_target_regs->x_contains_reg_of_mode)
+#define move_cost \
+  (this_target_regs->x_move_cost)
+#define may_move_in_cost \
+  (this_target_regs->x_may_move_in_cost)
+#define may_move_out_cost \
+  (this_target_regs->x_may_move_out_cost)
 #define direct_load \
   (this_target_regs->x_direct_load)
 #define direct_store \
@@ -342,16 +368,10 @@ in_hard_reg_set_p (const HARD_REG_SET regs, enum machine_mode mode,
 {
   unsigned int end_regno;
 
-  gcc_assert (HARD_REGISTER_NUM_P (regno));
-  
   if (!TEST_HARD_REG_BIT (regs, regno))
     return false;
 
   end_regno = end_hard_regno (mode, regno);
-
-  if (!HARD_REGISTER_NUM_P (end_regno - 1))
-    return false;
-
   while (++regno < end_regno)
     if (!TEST_HARD_REG_BIT (regs, regno))
       return false;

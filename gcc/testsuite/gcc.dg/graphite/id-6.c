@@ -2,7 +2,7 @@
 void foo (int);
 int test ()
 {
-  int a[N + 8];
+  int a[N];
   unsigned i;
 
   for (i = 0; i < N; i++)

@@ -17,10 +17,6 @@ import (
 	"time"
 )
 
-// onExitFlushLoop is a callback set by tests to detect the state of the
-// flushLoop() goroutine.
-var onExitFlushLoop func()
-
 // ReverseProxy is an HTTP Handler that takes an incoming request and
 // sends it to another server, proxying the response back to the
 // client.
@@ -81,19 +77,6 @@ func copyHeader(dst, src http.Header) {
 	}
 }
 
-// Hop-by-hop headers. These are removed when sent to the backend.
-// http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html
-var hopHeaders = []string{
-	"Connection",
-	"Keep-Alive",
-	"Proxy-Authenticate",
-	"Proxy-Authorization",
-	"Te", // canonicalized version of "TE"
-	"Trailers",
-	"Transfer-Encoding",
-	"Upgrade",
-}
-
 func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	transport := p.Transport
 	if transport == nil {
@@ -109,31 +92,18 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	outreq.ProtoMinor = 1
 	outreq.Close = false
 
-	// Remove hop-by-hop headers to the backend.  Especially
-	// important is "Connection" because we want a persistent
-	// connection, regardless of what the client sent to us.  This
-	// is modifying the same underlying map from req (shallow
-	// copied above) so we only copy it if necessary.
-	copiedHeaders := false
-	for _, h := range hopHeaders {
-		if outreq.Header.Get(h) != "" {
-			if !copiedHeaders {
-				outreq.Header = make(http.Header)
-				copyHeader(outreq.Header, req.Header)
-				copiedHeaders = true
-			}
-			outreq.Header.Del(h)
-		}
+	// Remove the connection header to the backend.  We want a
+	// persistent connection, regardless of what the client sent
+	// to us.  This is modifying the same underlying map from req
+	// (shallow copied above) so we only copy it if necessary.
+	if outreq.Header.Get("Connection") != "" {
+		outreq.Header = make(http.Header)
+		copyHeader(outreq.Header, req.Header)
+		outreq.Header.Del("Connection")
 	}
 
-	if clientIP, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
-		// If we aren't the first proxy retain prior
-		// X-Forwarded-For information as a comma+space
-		// separated list and fold multiple headers into one.
-		if prior, ok := outreq.Header["X-Forwarded-For"]; ok {
-			clientIP = strings.Join(prior, ", ") + ", " + clientIP
-		}
-		outreq.Header.Set("X-Forwarded-For", clientIP)
+	if clientIp, _, err := net.SplitHostPort(req.RemoteAddr); err == nil {
+		outreq.Header.Set("X-Forwarded-For", clientIp)
 	}
 
 	res, err := transport.RoundTrip(outreq)
@@ -142,29 +112,20 @@ func (p *ReverseProxy) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	defer res.Body.Close()
 
 	copyHeader(rw.Header(), res.Header)
 
 	rw.WriteHeader(res.StatusCode)
-	p.copyResponse(rw, res.Body)
-}
 
-func (p *ReverseProxy) copyResponse(dst io.Writer, src io.Reader) {
-	if p.FlushInterval != 0 {
-		if wf, ok := dst.(writeFlusher); ok {
-			mlw := &maxLatencyWriter{
-				dst:     wf,
-				latency: p.FlushInterval,
-				done:    make(chan bool),
+	if res.Body != nil {
+		var dst io.Writer = rw
+		if p.FlushInterval != 0 {
+			if wf, ok := rw.(writeFlusher); ok {
+				dst = &maxLatencyWriter{dst: wf, latency: p.FlushInterval}
 			}
-			go mlw.flushLoop()
-			defer mlw.stop()
-			dst = mlw
 		}
+		io.Copy(dst, res.Body)
 	}
-
-	io.Copy(dst, src)
 }
 
 type writeFlusher interface {
@@ -176,14 +137,22 @@ type maxLatencyWriter struct {
 	dst     writeFlusher
 	latency time.Duration
 
-	lk   sync.Mutex // protects Write + Flush
+	lk   sync.Mutex // protects init of done, as well Write + Flush
 	done chan bool
 }
 
-func (m *maxLatencyWriter) Write(p []byte) (int, error) {
+func (m *maxLatencyWriter) Write(p []byte) (n int, err error) {
 	m.lk.Lock()
 	defer m.lk.Unlock()
-	return m.dst.Write(p)
+	if m.done == nil {
+		m.done = make(chan bool)
+		go m.flushLoop()
+	}
+	n, err = m.dst.Write(p)
+	if err != nil {
+		m.done <- true
+	}
+	return
 }
 
 func (m *maxLatencyWriter) flushLoop() {
@@ -191,17 +160,13 @@ func (m *maxLatencyWriter) flushLoop() {
 	defer t.Stop()
 	for {
 		select {
-		case <-m.done:
-			if onExitFlushLoop != nil {
-				onExitFlushLoop()
-			}
-			return
 		case <-t.C:
 			m.lk.Lock()
 			m.dst.Flush()
 			m.lk.Unlock()
+		case <-m.done:
+			return
 		}
 	}
+	panic("unreached")
 }
-
-func (m *maxLatencyWriter) stop() { m.done <- true }

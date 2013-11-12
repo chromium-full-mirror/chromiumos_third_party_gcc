@@ -132,7 +132,7 @@ func SetNonblock(fd Handle, nonblocking bool) (err error) {
 // getFullPath retrieves the full path of the specified file.
 // Just a wrapper for Windows GetFullPathName api.
 func getFullPath(name string) (path string, err error) {
-	p, err := UTF16PtrFromString(name)
+	p, err := utf16PtrFromString(name)
 	if err != nil {
 		return "", err
 	}
@@ -228,9 +228,8 @@ type ProcAttr struct {
 }
 
 type SysProcAttr struct {
-	HideWindow    bool
-	CmdLine       string // used if non-empty, else the windows command line is built by escaping the arguments passed to StartProcess
-	CreationFlags uint32
+	HideWindow bool
+	CmdLine    string // used if non-empty, else the windows command line is built by escaping the arguments passed to StartProcess
 }
 
 var zeroProcAttr ProcAttr
@@ -265,7 +264,7 @@ func StartProcess(argv0 string, argv []string, attr *ProcAttr) (pid int, handle 
 			return 0, 0, err
 		}
 	}
-	argv0p, err := UTF16PtrFromString(argv0)
+	argv0p, err := utf16PtrFromString(argv0)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -282,7 +281,7 @@ func StartProcess(argv0 string, argv []string, attr *ProcAttr) (pid int, handle 
 
 	var argvp *uint16
 	if len(cmdline) != 0 {
-		argvp, err = UTF16PtrFromString(cmdline)
+		argvp, err = utf16PtrFromString(cmdline)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -290,7 +289,7 @@ func StartProcess(argv0 string, argv []string, attr *ProcAttr) (pid int, handle 
 
 	var dirp *uint16
 	if len(attr.Dir) != 0 {
-		dirp, err = UTF16PtrFromString(attr.Dir)
+		dirp, err = utf16PtrFromString(attr.Dir)
 		if err != nil {
 			return 0, 0, err
 		}
@@ -326,8 +325,7 @@ func StartProcess(argv0 string, argv []string, attr *ProcAttr) (pid int, handle 
 
 	pi := new(ProcessInformation)
 
-	flags := sys.CreationFlags | CREATE_UNICODE_ENVIRONMENT
-	err = CreateProcess(argv0p, argvp, nil, nil, true, flags, createEnvBlock(attr.Env), dirp, si, pi)
+	err = CreateProcess(argv0p, argvp, nil, nil, true, CREATE_UNICODE_ENVIRONMENT, createEnvBlock(attr.Env), dirp, si, pi)
 	if err != nil {
 		return 0, 0, err
 	}

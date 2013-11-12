@@ -1,7 +1,8 @@
 /* Scan linker error messages for missing template instantiations and provide
    them.
 
-   Copyright (C) 1995-2013 Free Software Foundation, Inc.
+   Copyright (C) 1995, 1998, 1999, 2000, 2001, 2003, 2004, 2005, 2007, 2008,
+   2009, 2010, 2011 Free Software Foundation, Inc.
    Contributed by Jason Merrill (jason@cygnus.com).
 
 This file is part of GCC.
@@ -68,11 +69,13 @@ typedef struct file_hash_entry
 } file;
 
 typedef const char *str;
+DEF_VEC_P(str);
+DEF_VEC_ALLOC_P(str,heap);
 
 typedef struct demangled_hash_entry
 {
   const char *key;
-  vec<str> mangled;
+  VEC(str,heap) *mangled;
 } demangled;
 
 /* Hash and comparison functions for these hash tables.  */
@@ -606,7 +609,7 @@ demangle_new_symbols (void)
 	continue;
 
       dem = demangled_hash_lookup (p, true);
-      dem->mangled.safe_push (sym->key);
+      VEC_safe_push (str, heap, dem->mangled, sym->key);
     }
 }
 
@@ -772,9 +775,9 @@ scan_linker_output (const char *fname)
 	     on the next attempt we will switch all of them the other way
 	     and that will cause it to succeed.  */
 	  int chosen = 0;
-	  int len = dem->mangled.length ();
+	  int len = VEC_length (str, dem->mangled);
 	  ok = true;
-	  FOR_EACH_VEC_ELT (dem->mangled, ix, s)
+	  FOR_EACH_VEC_ELT (str, dem->mangled, ix, s)
 	    {
 	      sym = symbol_hash_lookup (s, false);
 	      if (ix == 0)
@@ -817,23 +820,23 @@ scan_linker_output (const char *fname)
 void
 do_tlink (char **ld_argv, char **object_lst ATTRIBUTE_UNUSED)
 {
-  int ret = tlink_execute ("ld", ld_argv, ldout, lderrout);
+  int exit = tlink_execute ("ld", ld_argv, ldout, lderrout);
 
   tlink_init ();
 
-  if (ret)
+  if (exit)
     {
       int i = 0;
 
       /* Until collect does a better job of figuring out which are object
 	 files, assume that everything on the command line could be.  */
       if (read_repo_files (ld_argv))
-	while (ret && i++ < MAX_ITERATIONS)
+	while (exit && i++ < MAX_ITERATIONS)
 	  {
 	    if (tlink_verbose >= 3)
 	      {
-		dump_ld_file (ldout, stdout);
-		dump_ld_file (lderrout, stderr);
+		dump_file (ldout, stdout);
+		dump_file (lderrout, stderr);
 	      }
 	    demangle_new_symbols ();
 	    if (! scan_linker_output (ldout)
@@ -843,23 +846,17 @@ do_tlink (char **ld_argv, char **object_lst ATTRIBUTE_UNUSED)
 	      break;
 	    if (tlink_verbose)
 	      fprintf (stderr, _("collect: relinking\n"));
-	    ret = tlink_execute ("ld", ld_argv, ldout, lderrout);
+	    exit = tlink_execute ("ld", ld_argv, ldout, lderrout);
 	  }
     }
 
-  dump_ld_file (ldout, stdout);
+  dump_file (ldout, stdout);
   unlink (ldout);
-  dump_ld_file (lderrout, stderr);
+  dump_file (lderrout, stderr);
   unlink (lderrout);
-  if (ret)
+  if (exit)
     {
-      error ("ld returned %d exit status", ret);
-      exit (ret);
-    }
-  else
-    {
-      /* We have just successfully produced an output file, so assume that we
-	 may unlink it if need be for now on.  */ 
-      may_unlink_output_file = true;
+      error ("ld returned %d exit status", exit);
+      collect_exit (exit);
     }
 }

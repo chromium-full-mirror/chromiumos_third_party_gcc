@@ -6,7 +6,6 @@ package csv
 
 import (
 	"bytes"
-	"errors"
 	"testing"
 )
 
@@ -41,32 +40,5 @@ func TestWrite(t *testing.T) {
 		if out != tt.Output {
 			t.Errorf("#%d: out=%q want %q", n, out, tt.Output)
 		}
-	}
-}
-
-type errorWriter struct{}
-
-func (e errorWriter) Write(b []byte) (int, error) {
-	return 0, errors.New("Test")
-}
-
-func TestError(t *testing.T) {
-	b := &bytes.Buffer{}
-	f := NewWriter(b)
-	f.Write([]string{"abc"})
-	f.Flush()
-	err := f.Error()
-
-	if err != nil {
-		t.Errorf("Unexpected error: %s\n", err)
-	}
-
-	f = NewWriter(errorWriter{})
-	f.Write([]string{"abc"})
-	f.Flush()
-	err = f.Error()
-
-	if err == nil {
-		t.Error("Error should not be nil")
 	}
 }

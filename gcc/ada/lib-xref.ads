@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 S p e c                                  --
 --                                                                          --
---          Copyright (C) 1998-2012, Free Software Foundation, Inc.         --
+--          Copyright (C) 1998-2011, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -366,7 +366,7 @@ package Lib.Xref is
    --              of the current file.
 
    --              a reference (e.g. a call) at line 8 column 4 of the
-   --              current file.
+   --              of the current file.
 
    --              the END line of the body has an explicit reference to
    --              the name of the procedure at line 12, column 13.
@@ -531,12 +531,7 @@ package Lib.Xref is
       E_Protected_Object                           => ' ',
       E_Protected_Body                             => ' ',
       E_Task_Body                                  => ' ',
-      E_Subprogram_Body                            => ' ',
-
-      --  ??? The following letter is added for completion, proper design and
-      --  implementation of abstract state cross-referencing to follow.
-
-      E_Abstract_State                             => ' ');
+      E_Subprogram_Body                            => ' ');
 
    --  The following table is for information purposes. It shows the use of
    --  each character appearing as an entity type.
@@ -570,34 +565,21 @@ package Lib.Xref is
    --    y     abstract function               entry or entry family
    --    z     generic formal parameter        (unused)
 
-   ---------------------------------------------------
-   -- Handling of Imported and Exported Subprograms --
-   ---------------------------------------------------
+   --------------------------------------
+   -- Handling of Imported Subprograms --
+   --------------------------------------
 
    --  If a pragma Import or Interface applies to a subprogram, the pragma is
    --  the completion of the subprogram. This is noted in the ALI file by
    --  making the occurrence of the subprogram in the pragma into a body
    --  reference ('b') and by including the external name of the subprogram and
    --  its language, bracketed by '<' and '>' in that reference. For example:
-
-   --     3U13*imported_proc 4b<c,there>21
-
-   --  indicates that procedure imported_proc, declared at line 3, has a pragma
+   --
+   --     3U13*elsewhere 4b<c,there>21
+   --
+   --  indicates that procedure elsewhere, declared at line 3, has a pragma
    --  Import at line 4, that its body is in C, and that the link name as given
    --  in the pragma is "there".
-
-   --  If a pragma Export applies to a subprogram exported to a foreign
-   --  language (ie. the pragma has convention different from Ada), then the
-   --  pragma is annotated in the ALI file by making the occurrence of the
-   --  subprogram in the pragma into an implicit reference ('i') and by
-   --  including the external name of the subprogram and its language,
-   --  bracketed by '<' and '>' in that reference. For example:
-
-   --     3U13*exported_proc 4i<c,here>21
-
-   --  indicates that procedure exported_proc, declared at line 3, has a pragma
-   --  Export at line 4, that its body is exported to C, and that the link name
-   --  as given in the pragma is "here".
 
    ----------------------
    -- Alfa Information --
@@ -623,13 +605,10 @@ package Lib.Xref is
         (CU           : Node_Id;
          Process      : Node_Processing;
          Inside_Stubs : Boolean);
-      --  Call Process on all declarations in compilation unit CU. If
-      --  Inside_Stubs is True, then the body of stubs is also traversed.
-      --  Generic declarations are ignored.
+      --  This procedure is undocumented ???
 
       procedure Traverse_All_Compilation_Units (Process : Node_Processing);
-      --  Call Process on all declarations through all compilation units.
-      --  Generic declarations are ignored.
+      --  Call Process on all declarations through all compilation units
 
       procedure Collect_Alfa (Sdep_Table : Unit_Ref_Table; Num_Sdep : Nat);
       --  Collect Alfa information from library units (for files and scopes)

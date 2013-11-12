@@ -7,9 +7,8 @@ EXTRA_DIST = README.jaxp texi2pod.pl $(man_MANS)
 TEXINFO_TEX = ../../gcc/doc/include/texinfo.tex
 info_TEXINFOS = cp-tools.texinfo
 
-# POSIX locale necessary to make grep work; see http://bugs.debian.org/cgi-bin/bugreport.cgi?bug=586134
 .texinfo.dvi:
-	LC_ALL=POSIX texi2dvi --build-dir=$(builddir) -o $@ $<
+	texi2dvi $<
 
 .dvi.ps:
 	dvips -o $@ $<
@@ -136,6 +135,3 @@ MAINTAINERCLEANFILES = \
 		$(srcdir)/gserialver.1 \
 		$(srcdir)/gtnameserv.1 \
 		$(srcdir)/cp-tools.info
-
-clean-local:
-	-rm -rf *.t2d

@@ -1,4 +1,5 @@
-/* { dg-do compile { target { ! ia32 } } } */
+/* { dg-do compile } */
+/* { dg-require-effective-target lp64 } */
 /* { dg-options "-O3 -dp -mavx -mavx256-split-unaligned-load" } */
 
 #define N 1024

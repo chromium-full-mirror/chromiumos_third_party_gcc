@@ -6,7 +6,6 @@
 
 #include <stddef.h>
 
-#include "runtime.h"
 #include "go-string.h"
 
 /* Get a character from the UTF-8 string STR, of length LEN.  Store
@@ -14,9 +13,9 @@
    characters used from STR.  */
 
 int
-__go_get_rune (const unsigned char *str, size_t len, int32 *rune)
+__go_get_rune (const unsigned char *str, size_t len, int *rune)
 {
-  int c, c1, c2, c3, l;
+  int c, c1, c2, c3;
 
   /* Default to the "replacement character".  */
   *rune = 0xfffd;
@@ -38,10 +37,8 @@ __go_get_rune (const unsigned char *str, size_t len, int32 *rune)
   if ((c & 0xe0) == 0xc0
       && (c1 & 0xc0) == 0x80)
     {
-      l = (((c & 0x1f) << 6) + (c1 & 0x3f));
-      if (l <= 0x7f)
-	return 1;
-      *rune = l;
+      *rune = (((c & 0x1f) << 6)
+	       + (c1 & 0x3f));
       return 2;
     }
 
@@ -53,20 +50,16 @@ __go_get_rune (const unsigned char *str, size_t len, int32 *rune)
       && (c1 & 0xc0) == 0x80
       && (c2 & 0xc0) == 0x80)
     {
-      l = (((c & 0xf) << 12)
-	   + ((c1 & 0x3f) << 6)
-	   + (c2 & 0x3f));
+      *rune = (((c & 0xf) << 12)
+	       + ((c1 & 0x3f) << 6)
+	       + (c2 & 0x3f));
 
-      if (l <= 0x7ff)
-	return 1;
-
-      if (l >= 0xd800 && l < 0xe000)
+      if (*rune >= 0xd800 && *rune < 0xe000)
 	{
 	  /* Invalid surrogate half; return replace character.  */
+	  *rune = 0xfffd;
 	  return 1;
 	}
-
-      *rune = l;
 
       return 3;
     }
@@ -80,15 +73,10 @@ __go_get_rune (const unsigned char *str, size_t len, int32 *rune)
       && (c2 & 0xc0) == 0x80
       && (c3 & 0xc0) == 0x80)
     {
-      l = (((c & 0x7) << 18)
-	   + ((c1 & 0x3f) << 12)
-	   + ((c2 & 0x3f) << 6)
-	   + (c3 & 0x3f));
-
-      if (l <= 0xffff || l > 0x10ffff)
-	return 1;
-
-      *rune = l;
+      *rune = (((c & 0x7) << 18)
+	       + ((c1 & 0x3f) << 12)
+	       + ((c2 & 0x3f) << 6)
+	       + (c3 & 0x3f));
       return 4;
     }
 

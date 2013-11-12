@@ -1,5 +1,5 @@
 /* VMStackWalker.java -- Reference implementation of VM hooks for stack access
-   Copyright (C) 2005, 2006, 2010  Free Software Foundation, Inc.
+   Copyright (C) 2005, 2006 Free Software Foundation
 
 This file is part of GNU Classpath.
 
@@ -51,9 +51,6 @@ package gnu.classpath;
  */
 public final class VMStackWalker
 {
-
-  private VMStackWalker() {} // Prohibits instantiation.
-
   /**
    * Get a list of all the classes currently executing methods on the
    * Java stack. <code>getClassContext()[0]</code> is the class associated

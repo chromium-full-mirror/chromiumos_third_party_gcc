@@ -6,13 +6,11 @@ package asn1
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
 	"reflect"
 	"time"
-	"unicode/utf8"
 )
 
 // A forkableWriter is an in-memory buffer that can be
@@ -282,11 +280,6 @@ func marshalIA5String(out *forkableWriter, s string) (err error) {
 	return
 }
 
-func marshalUTF8String(out *forkableWriter, s string) (err error) {
-	_, err = out.Write([]byte(s))
-	return
-}
-
 func marshalTwoDigits(out *forkableWriter, v int) (err error) {
 	err = out.WriteByte(byte('0' + (v/10)%10))
 	if err != nil {
@@ -296,7 +289,8 @@ func marshalTwoDigits(out *forkableWriter, v int) (err error) {
 }
 
 func marshalUTCTime(out *forkableWriter, t time.Time) (err error) {
-	year, month, day := t.Date()
+	utc := t.UTC()
+	year, month, day := utc.Date()
 
 	switch {
 	case 1950 <= year && year < 2000:
@@ -320,7 +314,7 @@ func marshalUTCTime(out *forkableWriter, t time.Time) (err error) {
 		return
 	}
 
-	hour, min, sec := t.Clock()
+	hour, min, sec := utc.Clock()
 
 	err = marshalTwoDigits(out, hour)
 	if err != nil {
@@ -452,14 +446,12 @@ func marshalBody(out *forkableWriter, value reflect.Value, params fieldParameter
 		}
 		return
 	case reflect.String:
-		switch params.stringType {
-		case tagIA5String:
+		if params.stringType == tagIA5String {
 			return marshalIA5String(out, v.String())
-		case tagPrintableString:
+		} else {
 			return marshalPrintableString(out, v.String())
-		default:
-			return marshalUTF8String(out, v.String())
 		}
+		return
 	}
 
 	return StructuralError{"unknown Go type"}
@@ -500,27 +492,11 @@ func marshalField(out *forkableWriter, v reflect.Value, params fieldParameters) 
 	}
 	class := classUniversal
 
-	if params.stringType != 0 && tag != tagPrintableString {
-		return StructuralError{"Explicit string type given to non-string member"}
-	}
-
-	if tag == tagPrintableString {
-		if params.stringType == 0 {
-			// This is a string without an explicit string type. We'll use
-			// a PrintableString if the character set in the string is
-			// sufficiently limited, otherwise we'll use a UTF8String.
-			for _, r := range v.String() {
-				if r >= utf8.RuneSelf || !isPrintable(byte(r)) {
-					if !utf8.ValidString(v.String()) {
-						return errors.New("asn1: string not valid UTF-8")
-					}
-					tag = tagUTF8String
-					break
-				}
-			}
-		} else {
-			tag = params.stringType
+	if params.stringType != 0 {
+		if tag != tagPrintableString {
+			return StructuralError{"Explicit string type given to non-string member"}
 		}
+		tag = params.stringType
 	}
 
 	if params.set {

@@ -120,8 +120,6 @@ Java_gnu_java_awt_peer_gtk_GdkRobotPeer_mouseMove
   result = XTestFakeMotionEvent (xdisplay,
 				 -1,
 				 x, y, CurrentTime);
-  if (result)
-    g_warning("XTestFakeMotionEvent returned %d\n", result);
 
   XFlush (xdisplay);
 
@@ -155,8 +153,6 @@ Java_gnu_java_awt_peer_gtk_GdkRobotPeer_mousePress
   result = XTestFakeButtonEvent (xdisplay,
 				 awt_button_mask_to_num (buttons),
 				 True, CurrentTime);
-  if (result)
-    g_warning("XTestFakeButtonEvent returned %d\n", result);
 
   XFlush (xdisplay);
 
@@ -189,8 +185,6 @@ Java_gnu_java_awt_peer_gtk_GdkRobotPeer_mouseRelease
   result = XTestFakeButtonEvent (xdisplay,
 				 awt_button_mask_to_num (buttons),
 				 False, CurrentTime);
-  if (result)
-    g_warning("XTestFakeButtonEvent returned %d\n", result);
 
   XFlush (xdisplay);
 
@@ -281,7 +275,7 @@ Java_gnu_java_awt_peer_gtk_GdkRobotPeer_keyPress
                                           &n_keys))
     {
       /* No matching keymap entry was found. */
-      g_message ("No matching keymap entries were found\n");
+      g_printerr ("No matching keymap entries were found\n");
       gdk_threads_leave ();
       return;
     }
@@ -293,8 +287,6 @@ Java_gnu_java_awt_peer_gtk_GdkRobotPeer_keyPress
   result = XTestFakeKeyEvent (xdisplay,
 			      keymap_keys[0].keycode,
 			      True, CurrentTime);
-  if (result)
-    g_warning("XTestFakeKeyEvent returned %d\n", result);
 
   g_free (keymap_keys);
 
@@ -338,7 +330,7 @@ Java_gnu_java_awt_peer_gtk_GdkRobotPeer_keyRelease
                                           &n_keys))
     {
       /* No matching keymap entry was found. */
-      g_message ("No matching keymap entries were found\n");
+      g_printerr ("No matching keymap entries were found\n");
       gdk_threads_leave ();
       return;
     }
@@ -350,8 +342,6 @@ Java_gnu_java_awt_peer_gtk_GdkRobotPeer_keyRelease
   result = XTestFakeKeyEvent (xdisplay,
 			      keymap_keys[0].keycode,
 			      False, CurrentTime);
-  if (result)
-    g_warning("XTestFakeKeyEvent returned %d\n", result);
 
   g_free (keymap_keys);
 

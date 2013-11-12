@@ -1,6 +1,7 @@
 // Wrapper for underlying C-language localization -*- C++ -*-
 
-// Copyright (C) 2001-2013 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009, 2010
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -59,7 +60,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   {
     char* __old = std::setlocale(LC_NUMERIC, 0);
     char* __sav = 0;
-    if (__builtin_strcmp(__old, "C"))
+    if (__old != NULL && __builtin_strcmp(__old, "C"))
       {
 	const size_t __len = __builtin_strlen(__old) + 1;
 	__sav = new char[__len];

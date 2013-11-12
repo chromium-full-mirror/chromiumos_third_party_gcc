@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1998-2012, Free Software Foundation, Inc.         --
+--          Copyright (C) 1998-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -223,7 +223,6 @@ package body Xr_Tabls is
       Line         : Natural;
       Column       : Natural;
       Decl_Type    : Character;
-      Is_Parameter : Boolean := False;
       Remove_Only  : Boolean := False;
       Symbol_Match : Boolean := True)
       return         Declaration_Reference
@@ -236,7 +235,7 @@ package body Xr_Tabls is
       New_Decl : Declaration_Reference :=
                    Entities_HTable.Get (Key'Unchecked_Access);
 
-      Is_Param : Boolean := Is_Parameter;
+      Is_Parameter : Boolean := False;
 
    begin
       --  Insert the Declaration in the table. There might already be a
@@ -244,7 +243,7 @@ package body Xr_Tabls is
       --  need to check that first.
 
       if New_Decl /= null and then New_Decl.Symbol_Length = 0 then
-         Is_Param := Is_Parameter or else New_Decl.Is_Parameter;
+         Is_Parameter := New_Decl.Is_Parameter;
          Entities_HTable.Remove (Key'Unrestricted_Access);
          Entities_Count := Entities_Count - 1;
          Free (New_Decl.Key);
@@ -270,7 +269,7 @@ package body Xr_Tabls is
                                       Column        => Column,
                                       Source_Line   => null,
                                       Next          => null),
-              Is_Parameter  => Is_Param,
+              Is_Parameter  => Is_Parameter,
               Decl_Type     => Decl_Type,
               Body_Ref      => null,
               Ref_Ref       => null,
@@ -295,10 +294,6 @@ package body Xr_Tabls is
       then
          New_Decl.Match := Default_Match
            or else Match (File_Ref, Line, Column);
-         New_Decl.Is_Parameter := New_Decl.Is_Parameter or Is_Param;
-
-      elsif New_Decl /= null then
-         New_Decl.Is_Parameter := New_Decl.Is_Parameter or Is_Param;
       end if;
 
       return New_Decl;
@@ -397,8 +392,6 @@ package body Xr_Tabls is
       Labels_As_Ref : Boolean)
    is
       New_Ref : Reference;
-      New_Decl : Declaration_Reference;
-      pragma Unreferenced (New_Decl);
 
    begin
       case Ref_Type is
@@ -413,23 +406,37 @@ package body Xr_Tabls is
 
          when '=' | '<' | '>' | '^' =>
 
-            --  Create dummy declaration in table to report it as a parameter
+            --  Create a dummy declaration in the table to report it as a
+            --  parameter. Note that the current declaration for the subprogram
+            --  comes before the declaration of the parameter.
 
-            --  In a given ALI file, the declaration of the subprogram comes
-            --  before the declaration of the parameter. However, it is
-            --  possible that another ALI file has been parsed that also
-            --  references the parameter (for instance a named parameter in
-            --  a call), so we need to check whether there already exists a
-            --  declaration for the parameter.
+            declare
+               Key      : constant String :=
+                            Key_From_Ref (File_Ref, Line, Column);
+               New_Decl : Declaration_Reference;
 
-            New_Decl :=
-              Add_Declaration
-                (File_Ref     => File_Ref,
-                 Symbol       => "",
-                 Line         => Line,
-                 Column       => Column,
-                 Decl_Type    => ' ',
-                 Is_Parameter => True);
+            begin
+               New_Decl := new Declaration_Record'
+                 (Symbol_Length => 0,
+                  Symbol        => "",
+                  Key           => new String'(Key),
+                  Decl          => new Reference_Record'
+                                     (File          => File_Ref,
+                                      Line          => Line,
+                                      Column        => Column,
+                                      Source_Line   => null,
+                                      Next          => null),
+                  Is_Parameter  => True,
+                  Decl_Type     => ' ',
+                  Body_Ref      => null,
+                  Ref_Ref       => null,
+                  Modif_Ref     => null,
+                  Match         => False,
+                  Par_Symbol    => null,
+                  Next          => null);
+               Entities_HTable.Set (New_Decl);
+               Entities_Count := Entities_Count + 1;
+            end;
 
          when 'e' | 'z' | 't' | 'p' | 'P' | 'k' | 'd' =>
             return;

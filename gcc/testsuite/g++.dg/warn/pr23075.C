@@ -6,4 +6,4 @@ int
 foo (void)
 {
   return;	// { dg-error "with no value" }
-}		// { dg-bogus "no return statement" }
+}		// { dg-warning "no return statement" }

@@ -4,7 +4,6 @@
 
 #include <stdarg.h>
 #include "runtime.h"
-#include "array.h"
 
 //static Lock debuglock;
 
@@ -88,9 +87,6 @@ go_vprintf(const char *s, va_list va)
 		case 'a':
 			runtime_printslice(va_arg(va, Slice));
 			break;
-		case 'c':
-			runtime_printbyte(va_arg(va, int32));
-			break;
 		case 'd':
 			runtime_printint(va_arg(va, int32));
 			break;
@@ -157,28 +153,21 @@ runtime_printbool(_Bool v)
 }
 
 void
-runtime_printbyte(int8 c)
-{
-	gwrite(&c, 1);
-}
-
-void
 runtime_printfloat(double v)
 {
 	byte buf[20];
 	int32 e, s, i, n;
 	float64 h;
 
-	if(ISNAN(v)) {
+	if(runtime_isNaN(v)) {
 		gwrite("NaN", 3);
 		return;
 	}
-	i = __builtin_isinf_sign(v);
-	if(i > 0) {
+	if(runtime_isInf(v, 1)) {
 		gwrite("+Inf", 4);
 		return;
 	}
-	if(i < 0) {
+	if(runtime_isInf(v, -1)) {
 		gwrite("-Inf", 4);
 		return;
 	}
@@ -304,11 +293,11 @@ runtime_printstring(String v)
 	// extern uint32 runtime_maxstring;
 
 	// if(v.len > runtime_maxstring) {
-	//	gwrite("[string too long]", 17);
-	//	return;
+	// 	gwrite("[invalid string]", 16);
+	// 	return;
 	// }
-	if(v.len > 0)
-		gwrite(v.str, v.len);
+	if(v.__length > 0)
+		gwrite(v.__data, v.__length);
 }
 
 void

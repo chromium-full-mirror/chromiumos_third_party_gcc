@@ -1,8 +1,7 @@
 /* { dg-do compile } */
-/* { dg-options "-ffast-math isa=4 -mhard-float -mgp64" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
-/* { dg-final { scan-assembler "\trsqrt.d\t" } } */
-/* { dg-final { scan-assembler "\trsqrt.s\t" } } */
+/* { dg-options "-O2 -ffast-math isa=4 -mhard-float -mgp64" } */
+/* { dg-final { scan-assembler "rsqrt.d" } } */
+/* { dg-final { scan-assembler "rsqrt.s" } } */
 
 extern double sqrt(double);
 extern float sqrtf(float);

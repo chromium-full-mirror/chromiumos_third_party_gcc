@@ -1,5 +1,4 @@
-/* { dg-options "-march=r4000 -mfix-r4000 -mgp64 -dp" } */
-/* { dg-skip-if "naming registers makes this a code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-march=r4000 -mfix-r4000 -mgp64 -O2 -dp" } */
 typedef long long int64_t;
 typedef unsigned long long uint64_t;
 NOMIPS16 int64_t foo (int64_t x, int64_t y) { return x * y; }

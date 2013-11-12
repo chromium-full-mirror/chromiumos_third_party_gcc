@@ -1,6 +1,7 @@
 // std::time_get, std::time_put implementation, generic version -*- C++ -*-
 
-// Copyright (C) 2001-2013 Free Software Foundation, Inc.
+// Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2009, 2010
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -44,10 +45,14 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	   const tm* __tm) const throw()
     {
       char* __old = setlocale(LC_ALL, 0);
-      const size_t __llen = strlen(__old) + 1;
-      char* __sav = new char[__llen];
-      memcpy(__sav, __old, __llen);
-      setlocale(LC_ALL, _M_name_timepunct);
+      char* __sav = NULL;
+      if (__old != NULL)
+        {
+          const size_t __llen = strlen(__old) + 1;
+          __sav = new char[__llen];
+          memcpy(__sav, __old, __llen);
+          setlocale(LC_ALL, _M_name_timepunct);
+        }
       const size_t __len = strftime(__s, __maxlen, __format, __tm);
       setlocale(LC_ALL, __sav);
       delete [] __sav;
@@ -129,10 +134,14 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	   const tm* __tm) const throw()
     {
       char* __old = setlocale(LC_ALL, 0);
-      const size_t __llen = strlen(__old) + 1;
-      char* __sav = new char[__llen];
-      memcpy(__sav, __old, __llen);
-      setlocale(LC_ALL, _M_name_timepunct);
+      char* __sav = NULL;
+      if (__old != NULL)
+        {
+          const size_t __llen = strlen(__old) + 1;
+          __sav = new char[__llen];
+          memcpy(__sav, __old, __llen);
+          setlocale(LC_ALL, _M_name_timepunct);
+        }
       const size_t __len = wcsftime(__s, __maxlen, __format, __tm);
       setlocale(LC_ALL, __sav);
       delete [] __sav;

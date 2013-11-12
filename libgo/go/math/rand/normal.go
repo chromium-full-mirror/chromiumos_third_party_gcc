@@ -63,6 +63,7 @@ func (r *Rand) NormFloat64() float64 {
 			return x
 		}
 	}
+	panic("unreachable")
 }
 
 var kn = [128]uint32{

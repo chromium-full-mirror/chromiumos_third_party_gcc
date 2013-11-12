@@ -1,5 +1,6 @@
 /* Tree browser.
-   Copyright (C) 2002-2013 Free Software Foundation, Inc.
+   Copyright (C) 2002, 2003, 2004, 2007, 2008, 2010
+   Free Software Foundation, Inc.
    Contributed by Sebastian Pop <s.pop@laposte.net>
 
 This file is part of GCC.
@@ -102,7 +103,7 @@ void browse_tree (tree);
 
 /* Static variables.  */
 static htab_t TB_up_ht;
-static vec<tree, va_gc> *TB_history_stack;
+static VEC(tree,gc) *TB_history_stack;
 static int TB_verbose = 1;
 
 
@@ -120,7 +121,7 @@ browse_tree (tree begin)
   fprintf (TB_OUT_FILE, "\nTree Browser\n");
 
 #define TB_SET_HEAD(N) do {                                           \
-  vec_safe_push (TB_history_stack, N);                                \
+  VEC_safe_push (tree, gc, TB_history_stack, N);                      \
   head = N;                                                           \
   if (TB_verbose)                                                     \
     if (head)                                                         \
@@ -870,10 +871,10 @@ find_node_with_code (tree *tp, int *walk_subtrees ATTRIBUTE_UNUSED,
 static tree
 TB_history_prev (void)
 {
-  if (!vec_safe_is_empty (TB_history_stack))
+  if (!VEC_empty (tree, TB_history_stack))
     {
-      tree last = TB_history_stack->last ();
-      TB_history_stack->pop ();
+      tree last = VEC_last (tree, TB_history_stack);
+      VEC_pop (tree, TB_history_stack);
       return last;
     }
   return NULL_TREE;

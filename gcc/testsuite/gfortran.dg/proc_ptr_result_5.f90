@@ -6,7 +6,7 @@
 
 program test
   procedure(real), pointer :: p
-  p => f()  ! { dg-error "Type/rank mismatch in function result" }
+  p => f()  ! { dg-error "Type/rank mismatch in return value" }
 contains
  function f()
    pointer :: f
@@ -17,3 +17,4 @@ contains
    f = .true._1
  end function f
 end program test
+

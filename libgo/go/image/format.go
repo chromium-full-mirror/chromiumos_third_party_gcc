@@ -39,7 +39,7 @@ type reader interface {
 	Peek(int) ([]byte, error)
 }
 
-// asReader converts an io.Reader to a reader.
+// AsReader converts an io.Reader to a reader.
 func asReader(r io.Reader) reader {
 	if rr, ok := r.(reader); ok {
 		return rr

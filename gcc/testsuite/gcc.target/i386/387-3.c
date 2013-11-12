@@ -2,7 +2,6 @@
 /* { dg-do compile } */
 /* { dg-options "-O2 -mfpmath=387 -mfancy-math-387" } */
 /* { dg-final { scan-assembler "fldpi" } } */
-/* { dg-require-effective-target large_long_double } */
 
 long double add_pi(long double x)
 {

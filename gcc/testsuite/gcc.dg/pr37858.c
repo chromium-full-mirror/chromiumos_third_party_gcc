@@ -1,7 +1,6 @@
 /* PR middle-end/37858 */
-/* ??? With -dv removed, this test is a bit silly.  */
 /* { dg-do compile } */
-/* { dg-options "-O2 -fdump-ipa-early_local_cleanups" } */
+/* { dg-options "-O2 -fdump-ipa-early_local_cleanups -dv" } */
 
 int
 main (void)

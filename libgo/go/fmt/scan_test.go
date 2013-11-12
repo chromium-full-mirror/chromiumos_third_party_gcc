@@ -626,7 +626,7 @@ func TestScanlnWithMiddleNewline(t *testing.T) {
 	}
 }
 
-// eofCounter is a special Reader that counts reads at end of file.
+// Special Reader that counts reads at end of file.
 type eofCounter struct {
 	reader   *strings.Reader
 	eofCount int
@@ -640,8 +640,8 @@ func (ec *eofCounter) Read(b []byte) (n int, err error) {
 	return
 }
 
-// TestEOF verifies that when we scan, we see at most EOF once per call to a
-// Scan function, and then only when it's really an EOF.
+// Verify that when we scan, we see at most EOF once per call to a Scan function,
+// and then only when it's really an EOF
 func TestEOF(t *testing.T) {
 	ec := &eofCounter{strings.NewReader("123\n"), 0}
 	var a int
@@ -668,7 +668,7 @@ func TestEOF(t *testing.T) {
 	}
 }
 
-// TestEOFAtEndOfInput verifies that we see an EOF error if we run out of input.
+// Verify that we see an EOF error if we run out of input.
 // This was a buglet: we used to get "expected integer".
 func TestEOFAtEndOfInput(t *testing.T) {
 	var i, j int
@@ -730,8 +730,7 @@ func TestEOFAllTypes(t *testing.T) {
 	}
 }
 
-// TestUnreadRuneWithBufio verifies that, at least when using bufio, successive
-// calls to Fscan do not lose runes.
+// Verify that, at least when using bufio, successive calls to Fscan do not lose runes.
 func TestUnreadRuneWithBufio(t *testing.T) {
 	r := bufio.NewReader(strings.NewReader("123αb"))
 	var i int
@@ -754,7 +753,7 @@ func TestUnreadRuneWithBufio(t *testing.T) {
 
 type TwoLines string
 
-// Scan attempts to read two lines into the object.  Scanln should prevent this
+// Attempt to read two lines into the object.  Scanln should prevent this
 // because it stops at newline; Scan and Scanf should be fine.
 func (t *TwoLines) Scan(state ScanState, verb rune) error {
 	chars := make([]rune, 0, 100)
@@ -811,34 +810,6 @@ func TestMultiLine(t *testing.T) {
 	}
 }
 
-// simpleReader is a strings.Reader that implements only Read, not ReadRune.
-// Good for testing readahead.
-type simpleReader struct {
-	sr *strings.Reader
-}
-
-func (s *simpleReader) Read(b []byte) (n int, err error) {
-	return s.sr.Read(b)
-}
-
-// TestLineByLineFscanf tests that Fscanf does not read past newline. Issue
-// 3481.
-func TestLineByLineFscanf(t *testing.T) {
-	r := &simpleReader{strings.NewReader("1\n2\n")}
-	var i, j int
-	n, err := Fscanf(r, "%v\n", &i)
-	if n != 1 || err != nil {
-		t.Fatalf("first read: %d %q", n, err)
-	}
-	n, err = Fscanf(r, "%v\n", &j)
-	if n != 1 || err != nil {
-		t.Fatalf("second read: %d %q", n, err)
-	}
-	if i != 1 || j != 2 {
-		t.Errorf("wrong values; wanted 1 2 got %d %d", i, j)
-	}
-}
-
 // RecursiveInt accepts a string matching %d.%d.%d....
 // and parses it into a linked list.
 // It allows us to benchmark recursive descent style scanners.
@@ -864,7 +835,7 @@ func (r *RecursiveInt) Scan(state ScanState, verb rune) (err error) {
 	return
 }
 
-// scanInts performs the same scanning task as RecursiveInt.Scan
+// Perform the same scanning task as RecursiveInt.Scan
 // but without recurring through scanner, so we can compare
 // performance more directly.
 func scanInts(r *RecursiveInt, b *bytes.Buffer) (err error) {

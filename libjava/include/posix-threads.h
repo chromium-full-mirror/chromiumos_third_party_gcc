@@ -79,7 +79,7 @@ typedef struct
 inline int
 _Jv_MutexCheckMonitor (_Jv_Mutex_t *mu)
 {
-  return (pthread_equal(mu->owner, pthread_self()) == 0);
+  return (mu->owner != pthread_self());
 }
 
 // Type identifying a POSIX thread.

@@ -66,23 +66,20 @@ func getTypeInfo(typ reflect.Type) (*typeInfo, error) {
 
 			// For embedded structs, embed its fields.
 			if f.Anonymous {
-				t := f.Type
-				if t.Kind() == reflect.Ptr {
-					t = t.Elem()
-				}
-				if t.Kind() == reflect.Struct {
-					inner, err := getTypeInfo(t)
-					if err != nil {
-						return nil, err
-					}
-					for _, finfo := range inner.fields {
-						finfo.idx = append([]int{i}, finfo.idx...)
-						if err := addFieldInfo(typ, tinfo, &finfo); err != nil {
-							return nil, err
-						}
-					}
+				if f.Type.Kind() != reflect.Struct {
 					continue
 				}
+				inner, err := getTypeInfo(f.Type)
+				if err != nil {
+					return nil, err
+				}
+				for _, finfo := range inner.fields {
+					finfo.idx = append([]int{i}, finfo.idx...)
+					if err := addFieldInfo(typ, tinfo, &finfo); err != nil {
+						return nil, err
+					}
+				}
+				continue
 			}
 
 			finfo, err := structFieldInfo(typ, &f)
@@ -153,9 +150,6 @@ func structFieldInfo(typ reflect.Type, f *reflect.StructField) (*fieldInfo, erro
 			// This will also catch multiple modes in a single field.
 			valid = false
 		}
-		if finfo.flags&fMode == fAny {
-			finfo.flags |= fElement
-		}
 		if finfo.flags&fOmitEmpty != 0 && finfo.flags&(fElement|fAttr) == 0 {
 			valid = false
 		}
@@ -192,19 +186,16 @@ func structFieldInfo(typ reflect.Type, f *reflect.StructField) (*fieldInfo, erro
 	}
 
 	// Prepare field name and parents.
-	parents := strings.Split(tag, ">")
-	if parents[0] == "" {
-		parents[0] = f.Name
+	tokens = strings.Split(tag, ">")
+	if tokens[0] == "" {
+		tokens[0] = f.Name
 	}
-	if parents[len(parents)-1] == "" {
+	if tokens[len(tokens)-1] == "" {
 		return nil, fmt.Errorf("xml: trailing '>' in field %s of type %s", f.Name, typ)
 	}
-	finfo.name = parents[len(parents)-1]
-	if len(parents) > 1 {
-		if (finfo.flags & fElement) == 0 {
-			return nil, fmt.Errorf("xml: %s chain not valid with %s flag", tag, strings.Join(tokens[1:], ","))
-		}
-		finfo.parents = parents[:len(parents)-1]
+	finfo.name = tokens[len(tokens)-1]
+	if len(tokens) > 1 {
+		finfo.parents = tokens[:len(tokens)-1]
 	}
 
 	// If the field type has an XMLName field, the names must match
@@ -268,9 +259,6 @@ Loop:
 	for i := range tinfo.fields {
 		oldf := &tinfo.fields[i]
 		if oldf.flags&fMode != newf.flags&fMode {
-			continue
-		}
-		if oldf.xmlns != "" && newf.xmlns != "" && oldf.xmlns != newf.xmlns {
 			continue
 		}
 		minl := min(len(newf.parents), len(oldf.parents))
@@ -338,23 +326,4 @@ type TagPathError struct {
 
 func (e *TagPathError) Error() string {
 	return fmt.Sprintf("%s field %q with tag %q conflicts with field %q with tag %q", e.Struct, e.Field1, e.Tag1, e.Field2, e.Tag2)
-}
-
-// value returns v's field value corresponding to finfo.
-// It's equivalent to v.FieldByIndex(finfo.idx), but initializes
-// and dereferences pointers as necessary.
-func (finfo *fieldInfo) value(v reflect.Value) reflect.Value {
-	for i, x := range finfo.idx {
-		if i > 0 {
-			t := v.Type()
-			if t.Kind() == reflect.Ptr && t.Elem().Kind() == reflect.Struct {
-				if v.IsNil() {
-					v.Set(reflect.New(v.Type().Elem()))
-				}
-				v = v.Elem()
-			}
-		}
-		v = v.Field(x)
-	}
-	return v
 }

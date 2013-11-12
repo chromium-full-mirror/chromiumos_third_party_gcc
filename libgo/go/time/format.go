@@ -6,17 +6,15 @@ package time
 
 import "errors"
 
-// These are predefined layouts for use in Time.Format and Time.Parse.
-// The reference time used in the layouts is:
+// These are predefined layouts for use in Time.Format.
+// The standard time used in the layouts is:
 //	Mon Jan 2 15:04:05 MST 2006
-// which is Unix time 1136239445. Since MST is GMT-0700,
-// the reference time can be thought of as
+// which is Unix time 1136243045. Since MST is GMT-0700,
+// the standard time can be thought of as
 //	01/02 03:04:05PM '06 -0700
-// To define your own format, write down what the reference time would look
+// To define your own format, write down what the standard time would look
 // like formatted your way; see the values of constants like ANSIC,
-// StampMicro or Kitchen for examples. The model is to demonstrate what the
-// reference time looks like so that the Format and Parse methods can apply
-// the same transformation to a general time value.
+// StampMicro or Kitchen for examples.
 //
 // Within the format string, an underscore _ represents a space that may be
 // replaced by a digit if the following number (a day) has two digits; for
@@ -59,74 +57,63 @@ const (
 )
 
 const (
-	_                 = iota
-	stdLongMonth      = iota + stdNeedDate  // "January"
-	stdMonth                                // "Jan"
-	stdNumMonth                             // "1"
-	stdZeroMonth                            // "01"
-	stdLongWeekDay                          // "Monday"
-	stdWeekDay                              // "Mon"
-	stdDay                                  // "2"
-	stdUnderDay                             // "_2"
-	stdZeroDay                              // "02"
-	stdHour           = iota + stdNeedClock // "15"
-	stdHour12                               // "3"
-	stdZeroHour12                           // "03"
-	stdMinute                               // "4"
-	stdZeroMinute                           // "04"
-	stdSecond                               // "5"
-	stdZeroSecond                           // "05"
-	stdLongYear       = iota + stdNeedDate  // "2006"
-	stdYear                                 // "06"
-	stdPM             = iota + stdNeedClock // "PM"
-	stdpm                                   // "pm"
-	stdTZ             = iota                // "MST"
-	stdISO8601TZ                            // "Z0700"  // prints Z for UTC
-	stdISO8601ColonTZ                       // "Z07:00" // prints Z for UTC
-	stdNumTZ                                // "-0700"  // always numeric
-	stdNumShortTZ                           // "-07"    // always numeric
-	stdNumColonTZ                           // "-07:00" // always numeric
-	stdFracSecond0                          // ".0", ".00", ... , trailing zeros included
-	stdFracSecond9                          // ".9", ".99", ..., trailing zeros omitted
-
-	stdNeedDate  = 1 << 8             // need month, day, year
-	stdNeedClock = 2 << 8             // need hour, minute, second
-	stdArgShift  = 16                 // extra argument in high bits, above low stdArgShift
-	stdMask      = 1<<stdArgShift - 1 // mask out argument
+	stdLongMonth      = "January"
+	stdMonth          = "Jan"
+	stdNumMonth       = "1"
+	stdZeroMonth      = "01"
+	stdLongWeekDay    = "Monday"
+	stdWeekDay        = "Mon"
+	stdDay            = "2"
+	stdUnderDay       = "_2"
+	stdZeroDay        = "02"
+	stdHour           = "15"
+	stdHour12         = "3"
+	stdZeroHour12     = "03"
+	stdMinute         = "4"
+	stdZeroMinute     = "04"
+	stdSecond         = "5"
+	stdZeroSecond     = "05"
+	stdLongYear       = "2006"
+	stdYear           = "06"
+	stdPM             = "PM"
+	stdpm             = "pm"
+	stdTZ             = "MST"
+	stdISO8601TZ      = "Z0700"  // prints Z for UTC
+	stdISO8601ColonTZ = "Z07:00" // prints Z for UTC
+	stdNumTZ          = "-0700"  // always numeric
+	stdNumShortTZ     = "-07"    // always numeric
+	stdNumColonTZ     = "-07:00" // always numeric
 )
-
-// std0x records the std values for "01", "02", ..., "06".
-var std0x = [...]int{stdZeroMonth, stdZeroDay, stdZeroHour12, stdZeroMinute, stdZeroSecond, stdYear}
 
 // nextStdChunk finds the first occurrence of a std string in
 // layout and returns the text before, the std string, and the text after.
-func nextStdChunk(layout string) (prefix string, std int, suffix string) {
+func nextStdChunk(layout string) (prefix, std, suffix string) {
 	for i := 0; i < len(layout); i++ {
-		switch c := int(layout[i]); c {
+		switch layout[i] {
 		case 'J': // January, Jan
-			if len(layout) >= i+3 && layout[i:i+3] == "Jan" {
-				if len(layout) >= i+7 && layout[i:i+7] == "January" {
-					return layout[0:i], stdLongMonth, layout[i+7:]
-				}
+			if len(layout) >= i+7 && layout[i:i+7] == stdLongMonth {
+				return layout[0:i], stdLongMonth, layout[i+7:]
+			}
+			if len(layout) >= i+3 && layout[i:i+3] == stdMonth {
 				return layout[0:i], stdMonth, layout[i+3:]
 			}
 
 		case 'M': // Monday, Mon, MST
+			if len(layout) >= i+6 && layout[i:i+6] == stdLongWeekDay {
+				return layout[0:i], stdLongWeekDay, layout[i+6:]
+			}
 			if len(layout) >= i+3 {
-				if layout[i:i+3] == "Mon" {
-					if len(layout) >= i+6 && layout[i:i+6] == "Monday" {
-						return layout[0:i], stdLongWeekDay, layout[i+6:]
-					}
+				if layout[i:i+3] == stdWeekDay {
 					return layout[0:i], stdWeekDay, layout[i+3:]
 				}
-				if layout[i:i+3] == "MST" {
+				if layout[i:i+3] == stdTZ {
 					return layout[0:i], stdTZ, layout[i+3:]
 				}
 			}
 
 		case '0': // 01, 02, 03, 04, 05, 06
 			if len(layout) >= i+2 && '1' <= layout[i+1] && layout[i+1] <= '6' {
-				return layout[0:i], std0x[layout[i+1]-'1'], layout[i+2:]
+				return layout[0:i], layout[i : i+2], layout[i+2:]
 			}
 
 		case '1': // 15, 1
@@ -136,7 +123,7 @@ func nextStdChunk(layout string) (prefix string, std int, suffix string) {
 			return layout[0:i], stdNumMonth, layout[i+1:]
 
 		case '2': // 2006, 2
-			if len(layout) >= i+4 && layout[i:i+4] == "2006" {
+			if len(layout) >= i+4 && layout[i:i+4] == stdLongYear {
 				return layout[0:i], stdLongYear, layout[i+4:]
 			}
 			return layout[0:i], stdDay, layout[i+1:]
@@ -146,41 +133,35 @@ func nextStdChunk(layout string) (prefix string, std int, suffix string) {
 				return layout[0:i], stdUnderDay, layout[i+2:]
 			}
 
-		case '3':
-			return layout[0:i], stdHour12, layout[i+1:]
-
-		case '4':
-			return layout[0:i], stdMinute, layout[i+1:]
-
-		case '5':
-			return layout[0:i], stdSecond, layout[i+1:]
+		case '3', '4', '5': // 3, 4, 5
+			return layout[0:i], layout[i : i+1], layout[i+1:]
 
 		case 'P': // PM
 			if len(layout) >= i+2 && layout[i+1] == 'M' {
-				return layout[0:i], stdPM, layout[i+2:]
+				return layout[0:i], layout[i : i+2], layout[i+2:]
 			}
 
 		case 'p': // pm
 			if len(layout) >= i+2 && layout[i+1] == 'm' {
-				return layout[0:i], stdpm, layout[i+2:]
+				return layout[0:i], layout[i : i+2], layout[i+2:]
 			}
 
 		case '-': // -0700, -07:00, -07
-			if len(layout) >= i+5 && layout[i:i+5] == "-0700" {
-				return layout[0:i], stdNumTZ, layout[i+5:]
+			if len(layout) >= i+5 && layout[i:i+5] == stdNumTZ {
+				return layout[0:i], layout[i : i+5], layout[i+5:]
 			}
-			if len(layout) >= i+6 && layout[i:i+6] == "-07:00" {
-				return layout[0:i], stdNumColonTZ, layout[i+6:]
+			if len(layout) >= i+6 && layout[i:i+6] == stdNumColonTZ {
+				return layout[0:i], layout[i : i+6], layout[i+6:]
 			}
-			if len(layout) >= i+3 && layout[i:i+3] == "-07" {
-				return layout[0:i], stdNumShortTZ, layout[i+3:]
+			if len(layout) >= i+3 && layout[i:i+3] == stdNumShortTZ {
+				return layout[0:i], layout[i : i+3], layout[i+3:]
 			}
 		case 'Z': // Z0700, Z07:00
-			if len(layout) >= i+5 && layout[i:i+5] == "Z0700" {
-				return layout[0:i], stdISO8601TZ, layout[i+5:]
+			if len(layout) >= i+5 && layout[i:i+5] == stdISO8601TZ {
+				return layout[0:i], layout[i : i+5], layout[i+5:]
 			}
-			if len(layout) >= i+6 && layout[i:i+6] == "Z07:00" {
-				return layout[0:i], stdISO8601ColonTZ, layout[i+6:]
+			if len(layout) >= i+6 && layout[i:i+6] == stdISO8601ColonTZ {
+				return layout[0:i], layout[i : i+6], layout[i+6:]
 			}
 		case '.': // .000 or .999 - repeated digits for fractional seconds.
 			if i+1 < len(layout) && (layout[i+1] == '0' || layout[i+1] == '9') {
@@ -191,17 +172,12 @@ func nextStdChunk(layout string) (prefix string, std int, suffix string) {
 				}
 				// String of digits must end here - only fractional second is all digits.
 				if !isDigit(layout, j) {
-					std := stdFracSecond0
-					if layout[i+1] == '9' {
-						std = stdFracSecond9
-					}
-					std |= (j - (i + 1)) << stdArgShift
-					return layout[0:i], std, layout[j:]
+					return layout[0:i], layout[i:j], layout[j:]
 				}
 			}
 		}
 	}
-	return layout, 0, ""
+	return layout, "", ""
 }
 
 var longDayNames = []string{
@@ -283,36 +259,27 @@ func lookup(tab []string, val string) (int, string, error) {
 	return -1, val, errBad
 }
 
-// appendUint appends the decimal form of x to b and returns the result.
-// If x is a single-digit number and pad != 0, appendUint inserts the pad byte
-// before the digit.
 // Duplicates functionality in strconv, but avoids dependency.
-func appendUint(b []byte, x uint, pad byte) []byte {
-	if x < 10 {
-		if pad != 0 {
-			b = append(b, pad)
-		}
-		return append(b, byte('0'+x))
-	}
-	if x < 100 {
-		b = append(b, byte('0'+x/10))
-		b = append(b, byte('0'+x%10))
-		return b
-	}
-
+func itoa(x int) string {
 	var buf [32]byte
 	n := len(buf)
 	if x == 0 {
-		return append(b, '0')
+		return "0"
 	}
-	for x >= 10 {
+	u := uint(x)
+	if x < 0 {
+		u = -u
+	}
+	for u > 0 {
 		n--
-		buf[n] = byte(x%10 + '0')
-		x /= 10
+		buf[n] = byte(u%10 + '0')
+		u /= 10
 	}
-	n--
-	buf[n] = byte(x + '0')
-	return append(b, buf[n:]...)
+	if x < 0 {
+		n--
+		buf[n] = '-'
+	}
+	return string(buf[n:])
 }
 
 // Never printed, just needs to be non-nil for return by atoi.
@@ -325,8 +292,7 @@ func atoi(s string) (x int, err error) {
 		neg = true
 		s = s[1:]
 	}
-	q, rem, err := leadingInt(s)
-	x = int(q)
+	x, rem, err := leadingInt(s)
 	if err != nil || rem != "" {
 		return 0, atoiError
 	}
@@ -336,30 +302,37 @@ func atoi(s string) (x int, err error) {
 	return x, nil
 }
 
-// formatNano appends a fractional second, as nanoseconds, to b
-// and returns the result.
-func formatNano(b []byte, nanosec uint, n int, trim bool) []byte {
-	u := nanosec
-	var buf [9]byte
-	for start := len(buf); start > 0; {
-		start--
-		buf[start] = byte(u%10 + '0')
-		u /= 10
+func pad(i int, padding string) string {
+	s := itoa(i)
+	if i < 10 {
+		s = padding + s
 	}
+	return s
+}
 
+func zeroPad(i int) string { return pad(i, "0") }
+
+// formatNano formats a fractional second, as nanoseconds.
+func formatNano(nanosec, n int, trim bool) string {
+	// User might give us bad data. Make sure it's positive and in range.
+	// They'll get nonsense output but it will have the right format.
+	s := itoa(int(uint(nanosec) % 1e9))
+	// Zero pad left without fmt.
+	if len(s) < 9 {
+		s = "000000000"[:9-len(s)] + s
+	}
 	if n > 9 {
 		n = 9
 	}
 	if trim {
-		for n > 0 && buf[n-1] == '0' {
+		for n > 0 && s[n-1] == '0' {
 			n--
 		}
 		if n == 0 {
-			return b
+			return ""
 		}
 	}
-	b = append(b, '.')
-	return append(b, buf[:n]...)
+	return "." + s[:n]
 }
 
 // String returns the time formatted using the format string
@@ -368,185 +341,181 @@ func (t Time) String() string {
 	return t.Format("2006-01-02 15:04:05.999999999 -0700 MST")
 }
 
+type buffer []byte
+
+func (b *buffer) WriteString(s string) {
+	*b = append(*b, s...)
+}
+
+func (b *buffer) String() string {
+	return string([]byte(*b))
+}
+
 // Format returns a textual representation of the time value formatted
-// according to layout, which defines the format by showing how the reference
-// time,
+// according to layout.  The layout defines the format by showing the
+// representation of the standard time,
 //	Mon Jan 2 15:04:05 -0700 MST 2006
-// would be displayed if it were the value; it serves as an example of the
-// desired output. The same display rules will then be applied to the time
-// value.
-// Predefined layouts ANSIC, UnixDate, RFC3339 and others describe standard
-// and convenient representations of the reference time. For more information
-// about the formats and the definition of the reference time, see the
-// documentation for ANSIC and the other constants defined by this package.
+// which is then used to describe the time to be formatted. Predefined
+// layouts ANSIC, UnixDate, RFC3339 and others describe standard
+// representations. For more information about the formats and the
+// definition of the standard time, see the documentation for ANSIC.
 func (t Time) Format(layout string) string {
 	var (
-		name, offset, abs = t.locabs()
-
 		year  int = -1
 		month Month
 		day   int
 		hour  int = -1
 		min   int
 		sec   int
-
-		b   []byte
-		buf [64]byte
+		b     buffer
 	)
-	max := len(layout) + 10
-	if max <= len(buf) {
-		b = buf[:0]
-	} else {
-		b = make([]byte, 0, max)
-	}
 	// Each iteration generates one std value.
-	for layout != "" {
+	for {
 		prefix, std, suffix := nextStdChunk(layout)
-		if prefix != "" {
-			b = append(b, prefix...)
-		}
-		if std == 0 {
+		b.WriteString(prefix)
+		if std == "" {
 			break
 		}
-		layout = suffix
 
 		// Compute year, month, day if needed.
-		if year < 0 && std&stdNeedDate != 0 {
-			year, month, day, _ = absDate(abs, true)
+		if year < 0 {
+			// Jan 01 02 2006
+			if a, z := std[0], std[len(std)-1]; a == 'J' || a == 'j' || z == '1' || z == '2' || z == '6' {
+				year, month, day = t.Date()
+			}
 		}
 
 		// Compute hour, minute, second if needed.
-		if hour < 0 && std&stdNeedClock != 0 {
-			hour, min, sec = absClock(abs)
+		if hour < 0 {
+			// 03 04 05 15 pm
+			if z := std[len(std)-1]; z == '3' || z == '4' || z == '5' || z == 'm' || z == 'M' {
+				hour, min, sec = t.Clock()
+			}
 		}
 
-		switch std & stdMask {
+		var p string
+		switch std {
 		case stdYear:
-			y := year
-			if y < 0 {
-				y = -y
-			}
-			b = appendUint(b, uint(y%100), '0')
+			p = zeroPad(year % 100)
 		case stdLongYear:
 			// Pad year to at least 4 digits.
-			y := year
+			p = itoa(year)
 			switch {
 			case year <= -1000:
-				b = append(b, '-')
-				y = -y
+				// ok
 			case year <= -100:
-				b = append(b, "-0"...)
-				y = -y
+				p = p[:1] + "0" + p[1:]
 			case year <= -10:
-				b = append(b, "-00"...)
-				y = -y
+				p = p[:1] + "00" + p[1:]
 			case year < 0:
-				b = append(b, "-000"...)
-				y = -y
+				p = p[:1] + "000" + p[1:]
 			case year < 10:
-				b = append(b, "000"...)
+				p = "000" + p
 			case year < 100:
-				b = append(b, "00"...)
+				p = "00" + p
 			case year < 1000:
-				b = append(b, '0')
+				p = "0" + p
 			}
-			b = appendUint(b, uint(y), 0)
 		case stdMonth:
-			b = append(b, month.String()[:3]...)
+			p = month.String()[:3]
 		case stdLongMonth:
-			m := month.String()
-			b = append(b, m...)
+			p = month.String()
 		case stdNumMonth:
-			b = appendUint(b, uint(month), 0)
+			p = itoa(int(month))
 		case stdZeroMonth:
-			b = appendUint(b, uint(month), '0')
+			p = zeroPad(int(month))
 		case stdWeekDay:
-			b = append(b, absWeekday(abs).String()[:3]...)
+			p = t.Weekday().String()[:3]
 		case stdLongWeekDay:
-			s := absWeekday(abs).String()
-			b = append(b, s...)
+			p = t.Weekday().String()
 		case stdDay:
-			b = appendUint(b, uint(day), 0)
+			p = itoa(day)
 		case stdUnderDay:
-			b = appendUint(b, uint(day), ' ')
+			p = pad(day, " ")
 		case stdZeroDay:
-			b = appendUint(b, uint(day), '0')
+			p = zeroPad(day)
 		case stdHour:
-			b = appendUint(b, uint(hour), '0')
+			p = zeroPad(hour)
 		case stdHour12:
 			// Noon is 12PM, midnight is 12AM.
 			hr := hour % 12
 			if hr == 0 {
 				hr = 12
 			}
-			b = appendUint(b, uint(hr), 0)
+			p = itoa(hr)
 		case stdZeroHour12:
 			// Noon is 12PM, midnight is 12AM.
 			hr := hour % 12
 			if hr == 0 {
 				hr = 12
 			}
-			b = appendUint(b, uint(hr), '0')
+			p = zeroPad(hr)
 		case stdMinute:
-			b = appendUint(b, uint(min), 0)
+			p = itoa(min)
 		case stdZeroMinute:
-			b = appendUint(b, uint(min), '0')
+			p = zeroPad(min)
 		case stdSecond:
-			b = appendUint(b, uint(sec), 0)
+			p = itoa(sec)
 		case stdZeroSecond:
-			b = appendUint(b, uint(sec), '0')
+			p = zeroPad(sec)
 		case stdPM:
 			if hour >= 12 {
-				b = append(b, "PM"...)
+				p = "PM"
 			} else {
-				b = append(b, "AM"...)
+				p = "AM"
 			}
 		case stdpm:
 			if hour >= 12 {
-				b = append(b, "pm"...)
+				p = "pm"
 			} else {
-				b = append(b, "am"...)
+				p = "am"
 			}
 		case stdISO8601TZ, stdISO8601ColonTZ, stdNumTZ, stdNumColonTZ:
 			// Ugly special case.  We cheat and take the "Z" variants
 			// to mean "the time zone as formatted for ISO 8601".
-			if offset == 0 && (std == stdISO8601TZ || std == stdISO8601ColonTZ) {
-				b = append(b, 'Z')
+			_, offset := t.Zone()
+			if offset == 0 && std[0] == 'Z' {
+				p = "Z"
 				break
 			}
 			zone := offset / 60 // convert to minutes
 			if zone < 0 {
-				b = append(b, '-')
+				p = "-"
 				zone = -zone
 			} else {
-				b = append(b, '+')
+				p = "+"
 			}
-			b = appendUint(b, uint(zone/60), '0')
+			p += zeroPad(zone / 60)
 			if std == stdISO8601ColonTZ || std == stdNumColonTZ {
-				b = append(b, ':')
+				p += ":"
 			}
-			b = appendUint(b, uint(zone%60), '0')
+			p += zeroPad(zone % 60)
 		case stdTZ:
+			name, offset := t.Zone()
 			if name != "" {
-				b = append(b, name...)
-				break
-			}
-			// No time zone known for this time, but we must print one.
-			// Use the -0700 format.
-			zone := offset / 60 // convert to minutes
-			if zone < 0 {
-				b = append(b, '-')
-				zone = -zone
+				p = name
 			} else {
-				b = append(b, '+')
+				// No time zone known for this time, but we must print one.
+				// Use the -0700 format.
+				zone := offset / 60 // convert to minutes
+				if zone < 0 {
+					p = "-"
+					zone = -zone
+				} else {
+					p = "+"
+				}
+				p += zeroPad(zone / 60)
+				p += zeroPad(zone % 60)
 			}
-			b = appendUint(b, uint(zone/60), '0')
-			b = appendUint(b, uint(zone%60), '0')
-		case stdFracSecond0, stdFracSecond9:
-			b = formatNano(b, uint(t.Nanosecond()), std>>stdArgShift, std&stdMask == stdFracSecond9)
+		default:
+			if len(std) >= 2 && (std[0:2] == ".0" || std[0:2] == ".9") {
+				p = formatNano(t.Nanosecond(), len(std)-1, std[1] == '9')
+			}
 		}
+		b.WriteString(p)
+		layout = suffix
 	}
-	return string(b)
+	return b.String()
 }
 
 var errBad = errors.New("bad value for field") // placeholder not passed to user
@@ -616,14 +585,14 @@ func skip(value, prefix string) (string, error) {
 	for len(prefix) > 0 {
 		if prefix[0] == ' ' {
 			if len(value) > 0 && value[0] != ' ' {
-				return value, errBad
+				return "", errBad
 			}
 			prefix = cutspace(prefix)
 			value = cutspace(value)
 			continue
 		}
 		if len(value) == 0 || value[0] != prefix[0] {
-			return value, errBad
+			return "", errBad
 		}
 		prefix = prefix[1:]
 		value = value[1:]
@@ -632,53 +601,20 @@ func skip(value, prefix string) (string, error) {
 }
 
 // Parse parses a formatted string and returns the time value it represents.
-// The layout  defines the format by showing how the reference time,
+// The layout defines the format by showing the representation of the
+// standard time,
 //	Mon Jan 2 15:04:05 -0700 MST 2006
-// would be interpreted if it were the value; it serves as an example of
-// the input format. The same interpretation will then be made to the
-// input string.
-// Predefined layouts ANSIC, UnixDate, RFC3339 and others describe standard
-// and convenient representations of the reference time. For more information
-// about the formats and the definition of the reference time, see the
-// documentation for ANSIC and the other constants defined by this package.
+// which is then used to describe the string to be parsed. Predefined layouts
+// ANSIC, UnixDate, RFC3339 and others describe standard representations. For
+// more information about the formats and the definition of the standard
+// time, see the documentation for ANSIC.
 //
 // Elements omitted from the value are assumed to be zero or, when
 // zero is impossible, one, so parsing "3:04pm" returns the time
-// corresponding to Jan 1, year 0, 15:04:00 UTC (note that because the year is
-// 0, this time is before the zero Time).
+// corresponding to Jan 1, year 0, 15:04:00 UTC.
 // Years must be in the range 0000..9999. The day of the week is checked
 // for syntax but it is otherwise ignored.
-//
-// In the absence of a time zone indicator, Parse returns a time in UTC.
-//
-// When parsing a time with a zone offset like -0700, if the offset corresponds
-// to a time zone used by the current location (Local), then Parse uses that
-// location and zone in the returned time. Otherwise it records the time as
-// being in a fabricated location with time fixed at the given zone offset.
-//
-// When parsing a time with a zone abbreviation like MST, if the zone abbreviation
-// has a defined offset in the current location, then that offset is used.
-// The zone abbreviation "UTC" is recognized as UTC regardless of location.
-// If the zone abbreviation is unknown, Parse records the time as being
-// in a fabricated location with the given zone abbreviation and a zero offset.
-// This choice means that such a time can be parse and reformatted with the
-// same layout losslessly, but the exact instant used in the representation will
-// differ by the actual zone offset. To avoid such problems, prefer time layouts
-// that use a numeric zone offset, or use ParseInLocation.
 func Parse(layout, value string) (Time, error) {
-	return parse(layout, value, UTC, Local)
-}
-
-// ParseInLocation is like Parse but differs in two important ways.
-// First, in the absence of time zone information, Parse interprets a time as UTC;
-// ParseInLocation interprets the time as in the given location.
-// Second, when given a zone offset or abbreviation, Parse tries to match it
-// against the Local location; ParseInLocation uses the given location.
-func ParseInLocation(layout, value string, loc *Location) (Time, error) {
-	return parse(layout, value, loc, loc)
-}
-
-func parse(layout, value string, defaultLocation, local *Location) (Time, error) {
 	alayout, avalue := layout, value
 	rangeErrString := "" // set if a value is out of range
 	amSet := false       // do we need to subtract 12 from the hour for midnight?
@@ -702,12 +638,11 @@ func parse(layout, value string, defaultLocation, local *Location) (Time, error)
 	for {
 		var err error
 		prefix, std, suffix := nextStdChunk(layout)
-		stdstr := layout[len(prefix) : len(layout)-len(suffix)]
 		value, err = skip(value, prefix)
 		if err != nil {
 			return Time{}, &ParseError{alayout, avalue, prefix, value, ""}
 		}
-		if std == 0 {
+		if len(std) == 0 {
 			if len(value) != 0 {
 				return Time{}, &ParseError{alayout, avalue, "", value, ": extra text: " + value}
 			}
@@ -715,7 +650,7 @@ func parse(layout, value string, defaultLocation, local *Location) (Time, error)
 		}
 		layout = suffix
 		var p string
-		switch std & stdMask {
+		switch std {
 		case stdYear:
 			if len(value) < 2 {
 				err = errBad
@@ -781,8 +716,7 @@ func parse(layout, value string, defaultLocation, local *Location) (Time, error)
 			// fractional second in the format?
 			if len(value) >= 2 && value[0] == '.' && isDigit(value, 1) {
 				_, std, _ := nextStdChunk(layout)
-				std &= stdMask
-				if std == stdFracSecond0 || std == stdFracSecond9 {
+				if len(std) > 0 && std[0] == '.' && isDigit(std, 1) {
 					// Fractional second in the layout; proceed normally
 					break
 				}
@@ -822,7 +756,7 @@ func parse(layout, value string, defaultLocation, local *Location) (Time, error)
 				err = errBad
 			}
 		case stdISO8601TZ, stdISO8601ColonTZ, stdNumTZ, stdNumShortTZ, stdNumColonTZ:
-			if (std == stdISO8601TZ || std == stdISO8601ColonTZ) && len(value) >= 1 && value[0] == 'Z' {
+			if std[0] == 'Z' && len(value) >= 1 && value[0] == 'Z' {
 				value = value[1:]
 				z = UTC
 				break
@@ -890,37 +824,21 @@ func parse(layout, value string, defaultLocation, local *Location) (Time, error)
 			}
 			// It's a valid format.
 			zoneName = p
-
-		case stdFracSecond0:
-			// stdFracSecond0 requires the exact number of digits as specified in
-			// the layout.
-			ndigit := 1 + (std >> stdArgShift)
-			if len(value) < ndigit {
+		default:
+			if len(value) < len(std) {
 				err = errBad
 				break
 			}
-			nsec, rangeErrString, err = parseNanoseconds(value, ndigit)
-			value = value[ndigit:]
-
-		case stdFracSecond9:
-			if len(value) < 2 || value[0] != '.' || value[1] < '0' || '9' < value[1] {
-				// Fractional second omitted.
-				break
+			if len(std) >= 2 && std[0:2] == ".0" {
+				nsec, rangeErrString, err = parseNanoseconds(value, len(std))
+				value = value[len(std):]
 			}
-			// Take any number of digits, even more than asked for,
-			// because it is what the stdSecond case would do.
-			i := 0
-			for i < 9 && i+1 < len(value) && '0' <= value[i+1] && value[i+1] <= '9' {
-				i++
-			}
-			nsec, rangeErrString, err = parseNanoseconds(value, 1+i)
-			value = value[1+i:]
 		}
 		if rangeErrString != "" {
-			return Time{}, &ParseError{alayout, avalue, stdstr, value, ": " + rangeErrString + " out of range"}
+			return Time{}, &ParseError{alayout, avalue, std, value, ": " + rangeErrString + " out of range"}
 		}
 		if err != nil {
-			return Time{}, &ParseError{alayout, avalue, stdstr, value, ""}
+			return Time{}, &ParseError{alayout, avalue, std, value, ""}
 		}
 	}
 	if pmSet && hour < 12 {
@@ -929,19 +847,20 @@ func parse(layout, value string, defaultLocation, local *Location) (Time, error)
 		hour = 0
 	}
 
+	// TODO: be more aggressive checking day?
 	if z != nil {
 		return Date(year, Month(month), day, hour, min, sec, nsec, z), nil
 	}
 
+	t := Date(year, Month(month), day, hour, min, sec, nsec, UTC)
 	if zoneOffset != -1 {
-		t := Date(year, Month(month), day, hour, min, sec, nsec, UTC)
 		t.sec -= int64(zoneOffset)
 
 		// Look for local zone with the given offset.
 		// If that zone was in effect at the given time, use it.
-		name, offset, _, _, _ := local.lookup(t.sec + internalToUnix)
+		name, offset, _, _, _ := Local.lookup(t.sec + internalToUnix)
 		if offset == zoneOffset && (zoneName == "" || name == zoneName) {
-			t.loc = local
+			t.loc = Local
 			return t, nil
 		}
 
@@ -951,14 +870,16 @@ func parse(layout, value string, defaultLocation, local *Location) (Time, error)
 	}
 
 	if zoneName != "" {
-		t := Date(year, Month(month), day, hour, min, sec, nsec, UTC)
 		// Look for local zone with the given offset.
 		// If that zone was in effect at the given time, use it.
-		offset, _, ok := local.lookupName(zoneName, t.sec+internalToUnix)
+		offset, _, ok := Local.lookupName(zoneName)
 		if ok {
-			t.sec -= int64(offset)
-			t.loc = local
-			return t, nil
+			name, off, _, _, _ := Local.lookup(t.sec + internalToUnix - int64(offset))
+			if name == zoneName && off == offset {
+				t.sec -= int64(offset)
+				t.loc = Local
+				return t, nil
+			}
 		}
 
 		// Otherwise, create fake zone with unknown offset.
@@ -966,8 +887,8 @@ func parse(layout, value string, defaultLocation, local *Location) (Time, error)
 		return t, nil
 	}
 
-	// Otherwise, fall back to default.
-	return Date(year, Month(month), day, hour, min, sec, nsec, defaultLocation), nil
+	// Otherwise, fall back to UTC.
+	return t, nil
 }
 
 func parseNanoseconds(value string, nbytes int) (ns int, rangeErrString string, err error) {
@@ -975,7 +896,8 @@ func parseNanoseconds(value string, nbytes int) (ns int, rangeErrString string, 
 		err = errBad
 		return
 	}
-	if ns, err = atoi(value[1:nbytes]); err != nil {
+	ns, err = atoi(value[1:nbytes])
+	if err != nil {
 		return
 	}
 	if ns < 0 || 1e9 <= ns {
@@ -995,18 +917,18 @@ func parseNanoseconds(value string, nbytes int) (ns int, rangeErrString string, 
 var errLeadingInt = errors.New("time: bad [0-9]*") // never printed
 
 // leadingInt consumes the leading [0-9]* from s.
-func leadingInt(s string) (x int64, rem string, err error) {
+func leadingInt(s string) (x int, rem string, err error) {
 	i := 0
 	for ; i < len(s); i++ {
 		c := s[i]
 		if c < '0' || c > '9' {
 			break
 		}
-		if x >= (1<<63-10)/10 {
+		if x >= (1<<31-10)/10 {
 			// overflow
 			return 0, "", errLeadingInt
 		}
-		x = x*10 + int64(c) - '0'
+		x = x*10 + int(c) - '0'
 	}
 	return x, s[i:], nil
 }
@@ -1051,7 +973,7 @@ func ParseDuration(s string) (Duration, error) {
 	for s != "" {
 		g := float64(0) // this element of the sequence
 
-		var x int64
+		var x int
 		var err error
 
 		// The next character must be [0-9.]

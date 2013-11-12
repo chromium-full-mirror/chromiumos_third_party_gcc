@@ -1,5 +1,5 @@
 /* This is a software fixed-point library.
-   Copyright (C) 2007-2013 Free Software Foundation, Inc.
+   Copyright (C) 2007, 2009, 2011 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -80,14 +80,15 @@ FIXED_SSADD (FIXED_C_TYPE a, FIXED_C_TYPE b)
   INT_C_TYPE x, y, z;
   memcpy (&x, &a, FIXED_SIZE);
   memcpy (&y, &b, FIXED_SIZE);
-  z = x + (UINT_C_TYPE) y;
+  z = x + y;
   if ((((x ^ y) >> I_F_BITS) & 1) == 0)
     {
       if (((z ^ x) >> I_F_BITS) & 1)
         {
-	  z = ((UINT_C_TYPE) 1) << I_F_BITS;
-	  if (x >= 0)
-	    z -= (UINT_C_TYPE) 1;
+          z = 1;
+          z = z << I_F_BITS;
+          if (x >= 0)
+            z--;
         }
     }
 #if HAVE_PADDING_BITS
@@ -151,14 +152,15 @@ FIXED_SSSUB (FIXED_C_TYPE a, FIXED_C_TYPE b)
   INT_C_TYPE x, y, z;
   memcpy (&x, &a, FIXED_SIZE);
   memcpy (&y, &b, FIXED_SIZE);
-  z = x - (UINT_C_TYPE) y;
+  z = x - y;
   if (((x ^ y) >> I_F_BITS) & 1)
     {
       if (((z ^ x) >> I_F_BITS) & 1)
         {
-	  z = ((UINT_C_TYPE) 1) << I_F_BITS;
-	  if (x >= 0)
-	    z -= (UINT_C_TYPE) 1;
+          z = 1;
+          z = z << I_F_BITS;
+          if (x >= 0)
+            z--;
         }
     }
 #if HAVE_PADDING_BITS
@@ -567,11 +569,16 @@ FIXED_SSNEG (FIXED_C_TYPE a)
   INT_C_TYPE x, y, z;
   memcpy (&y, &a, FIXED_SIZE);
   x = 0;
-  z = x - (UINT_C_TYPE) y;
+  z = x - y;
   if (((x ^ y) >> I_F_BITS) & 1)
     {
       if (((z ^ x) >> I_F_BITS) & 1)
-	z = (((UINT_C_TYPE) 1) << I_F_BITS) - 1;
+        {
+          z = 1;
+          z = z << I_F_BITS;
+          if (x >= 0)
+            z--;
+        }
     }
 #if HAVE_PADDING_BITS
   z = z << PADDING_BITS;
@@ -761,12 +768,11 @@ SATFRACT (FROM_FIXED_C_TYPE a)
 #if FROM_MODE_UNSIGNED == 0
   BIG_SINT_C_TYPE high, low;
   BIG_SINT_C_TYPE max_high, max_low;
-#if TO_MODE_UNSIGNED == 0
   BIG_SINT_C_TYPE min_high, min_low;
-#endif
 #else
   BIG_UINT_C_TYPE high, low;
   BIG_UINT_C_TYPE max_high, max_low;
+  BIG_UINT_C_TYPE min_high, min_low;
 #endif
 #if TO_FBITS > FROM_FBITS
   BIG_UINT_C_TYPE utemp;
@@ -813,12 +819,13 @@ SATFRACT (FROM_FIXED_C_TYPE a)
 #endif
 
 #if TO_MODE_UNSIGNED == 0
+  min_high = -1;
   stemp = (BIG_SINT_C_TYPE)1 << (BIG_WIDTH - 1);
   stemp = stemp >> (BIG_WIDTH - 1 - TO_I_F_BITS);
-#if FROM_MODE_UNSIGNED == 0
-  min_high = -1;
   min_low = stemp;
-#endif
+#else
+  min_high = 0;
+  min_low = 0;
 #endif
 
 #if FROM_MODE_UNSIGNED == 0 && TO_MODE_UNSIGNED == 0
@@ -957,7 +964,7 @@ FRACT (FROM_INT_C_TYPE a)
 #endif /* defined(FRACT) && FROM_TYPE == 1 && TO_TYPE == 4  */
 
 /* Signed int -> Fixed with saturation.  */
-#if defined(SATFRACT) && defined(L_satfract) && FROM_TYPE == 1 && TO_TYPE == 4
+#if defined(SATFRACT) && defined(L_satfract) &&FROM_TYPE == 1 && TO_TYPE == 4
 TO_FIXED_C_TYPE
 SATFRACT (FROM_INT_C_TYPE a)
 {
@@ -966,8 +973,8 @@ SATFRACT (FROM_INT_C_TYPE a)
   FROM_INT_C_TYPE x = a;
   BIG_SINT_C_TYPE high, low;
   BIG_SINT_C_TYPE max_high, max_low;
-#if TO_MODE_UNSIGNED == 0
   BIG_SINT_C_TYPE min_high, min_low;
+#if TO_MODE_UNSIGNED == 0
   BIG_SINT_C_TYPE stemp;
 #endif
 #if BIG_WIDTH != TO_FBITS
@@ -1008,7 +1015,12 @@ SATFRACT (FROM_INT_C_TYPE a)
   stemp = (BIG_SINT_C_TYPE)1 << (BIG_WIDTH - 1);
   stemp = stemp >> (BIG_WIDTH - 1 - TO_I_F_BITS);
   min_low = stemp;
+#else
+  min_high = 0;
+  min_low = 0;
+#endif
 
+#if TO_MODE_UNSIGNED == 0
   /* Signed -> Signed.  */
   if ((BIG_SINT_C_TYPE) high > (BIG_SINT_C_TYPE) max_high
       || ((BIG_SINT_C_TYPE) high == (BIG_SINT_C_TYPE) max_high

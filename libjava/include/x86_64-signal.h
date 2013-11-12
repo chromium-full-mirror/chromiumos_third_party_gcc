@@ -1,7 +1,7 @@
 // x86_64-signal.h - Catch runtime signals and turn them into exceptions
 // on an x86_64 based GNU/Linux system.
 
-/* Copyright (C) 2003, 2006, 2007, 2012  Free Software Foundation
+/* Copyright (C) 2003, 2006, 2007  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -47,10 +47,6 @@ do									\
 									\
   bool _is_64_bit = false;						\
 									\
-  /* Skip 67h address size prefix.  */					\
-  if (_rip[0] == 0x67)							\
-    _rip++;								\
-									\
   if ((_rip[0] & 0xf0) == 0x40)  /* REX byte present.  */		\
     {									\
       unsigned char _rex = _rip[0] & 0x0f;				\
@@ -68,10 +64,10 @@ do									\
 	{								\
 	  if (_is_64_bit)						\
 	    _min_value_dividend =					\
-	      _gregs[REG_RAX] == (greg_t)0x8000000000000000ULL;		\
+	      _gregs[REG_RAX] == (greg_t)0x8000000000000000UL;		\
 	  else								\
 	    _min_value_dividend =					\
-	      (_gregs[REG_RAX] & 0xffffffff) == (greg_t)0x80000000ULL;	\
+	      (_gregs[REG_RAX] & 0xffffffff) == (greg_t)0x80000000UL;	\
 	}								\
 									\
       if (_min_value_dividend)						\

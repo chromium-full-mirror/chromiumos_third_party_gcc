@@ -52,14 +52,6 @@ func dotest() bool {
 	return true
 }
 
-func endtest() {
-	if pclineTempDir != "" {
-		os.RemoveAll(pclineTempDir)
-		pclineTempDir = ""
-		pclinetestBinary = ""
-	}
-}
-
 func getTable(t *testing.T) *Table {
 	f, tab := crack(os.Args[0], t)
 	f.Close()
@@ -103,7 +95,6 @@ func TestLineFromAline(t *testing.T) {
 	if !dotest() {
 		return
 	}
-	defer endtest()
 
 	tab := getTable(t)
 
@@ -138,7 +129,7 @@ func TestLineFromAline(t *testing.T) {
 		if !ok {
 			t.Errorf("file %s starts on line %d", path, line)
 		} else if line != ll+1 {
-			t.Fatalf("expected next line of file %s to be %d, got %d", path, ll+1, line)
+			t.Errorf("expected next line of file %s to be %d, got %d", path, ll+1, line)
 		}
 		lastline[path] = line
 	}
@@ -151,7 +142,6 @@ func TestLineAline(t *testing.T) {
 	if !dotest() {
 		return
 	}
-	defer endtest()
 
 	tab := getTable(t)
 
@@ -193,7 +183,7 @@ func TestPCLine(t *testing.T) {
 	if !dotest() {
 		return
 	}
-	defer endtest()
+	defer os.RemoveAll(pclineTempDir)
 
 	f, tab := crack(pclinetestBinary, t)
 	text := f.Section(".text")

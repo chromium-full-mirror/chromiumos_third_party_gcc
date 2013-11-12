@@ -1,15 +1,15 @@
 /*							log1pl.c
  *
  *      Relative error logarithm
- *	Natural logarithm of 1+x for __float128 precision
+ *	Natural logarithm of 1+x, 128-bit long double precision
  *
  *
  *
  * SYNOPSIS:
  *
- * __float128 x, y, log1pl();
+ * long double x, y, log1pl();
  *
- * y = log1pq( x );
+ * y = log1pl( x );
  *
  *
  *
@@ -135,12 +135,6 @@ log1pq (__float128 xm1)
   if (((hx & 0x7fffffff) == 0)
       && (u.words32.w1 | u.words32.w2 | u.words32.w3) == 0)
     return xm1;
-
-  if ((hx & 0x7fffffff) < 0x3f8e0000)
-    {
-      if ((int) xm1 == 0)
-       return xm1;
-    }
 
   x = xm1 + 1.0Q;
 

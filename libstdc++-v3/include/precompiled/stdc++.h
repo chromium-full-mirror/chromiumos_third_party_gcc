@@ -1,6 +1,7 @@
 // C++ includes used for precompiling -*- C++ -*-
 
-// Copyright (C) 2003-2013 Free Software Foundation, Inc.
+// Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -48,7 +49,7 @@
 #include <cstring>
 #include <ctime>
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
 #include <ccomplex>
 #include <cfenv>
 #include <cinttypes>
@@ -94,7 +95,7 @@
 #include <valarray>
 #include <vector>
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
 #include <array>
 #include <atomic>
 #include <chrono>

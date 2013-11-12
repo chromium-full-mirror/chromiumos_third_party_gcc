@@ -6,7 +6,9 @@
 
 package syscall
 
-import "unsafe"
+import (
+	"unsafe"
+)
 
 // Round the length of a netlink message up to align it properly.
 func nlmAlignOf(msglen int) int {
@@ -19,8 +21,8 @@ func rtaAlignOf(attrlen int) int {
 	return (attrlen + RTA_ALIGNTO - 1) & ^(RTA_ALIGNTO - 1)
 }
 
-// NetlinkRouteRequest represents a request message to receive routing
-// and link states from the kernel.
+// NetlinkRouteRequest represents the request message to receive
+// routing and link states from the kernel.
 type NetlinkRouteRequest struct {
 	Header NlMsghdr
 	Data   RtGenmsg
@@ -47,131 +49,167 @@ func newNetlinkRouteRequest(proto, seq, family int) []byte {
 	return rr.toWireFormat()
 }
 
-// NetlinkRIB returns routing information base, as known as RIB, which
-// consists of network facility information, states and parameters.
+// NetlinkRIB returns routing information base, as known as RIB,
+// which consists of network facility information, states and
+// parameters.
 func NetlinkRIB(proto, family int) ([]byte, error) {
-	s, err := Socket(AF_NETLINK, SOCK_RAW, NETLINK_ROUTE)
-	if err != nil {
-		return nil, err
+	var (
+		lsanl SockaddrNetlink
+		tab   []byte
+	)
+
+	s, e := Socket(AF_NETLINK, SOCK_RAW, 0)
+	if e != nil {
+		return nil, e
 	}
 	defer Close(s)
-	lsa := &SockaddrNetlink{Family: AF_NETLINK}
-	if err := Bind(s, lsa); err != nil {
-		return nil, err
+
+	lsanl.Family = AF_NETLINK
+	e = Bind(s, &lsanl)
+	if e != nil {
+		return nil, e
 	}
-	wb := newNetlinkRouteRequest(proto, 1, family)
-	if err := Sendto(s, wb, 0, lsa); err != nil {
-		return nil, err
+
+	seq := 1
+	wb := newNetlinkRouteRequest(proto, seq, family)
+	e = Sendto(s, wb, 0, &lsanl)
+	if e != nil {
+		return nil, e
 	}
-	var tab []byte
-done:
+
 	for {
-		rb := make([]byte, Getpagesize())
-		nr, _, err := Recvfrom(s, rb, 0)
-		if err != nil {
-			return nil, err
+		var (
+			rb  []byte
+			nr  int
+			lsa Sockaddr
+		)
+
+		rb = make([]byte, Getpagesize())
+		nr, _, e = Recvfrom(s, rb, 0)
+		if e != nil {
+			return nil, e
 		}
 		if nr < NLMSG_HDRLEN {
 			return nil, EINVAL
 		}
 		rb = rb[:nr]
 		tab = append(tab, rb...)
-		msgs, err := ParseNetlinkMessage(rb)
-		if err != nil {
-			return nil, err
-		}
+
+		msgs, _ := ParseNetlinkMessage(rb)
 		for _, m := range msgs {
-			lsa, err := Getsockname(s)
-			if err != nil {
-				return nil, err
+			if lsa, e = Getsockname(s); e != nil {
+				return nil, e
 			}
 			switch v := lsa.(type) {
 			case *SockaddrNetlink:
-				if m.Header.Seq != 1 || m.Header.Pid != v.Pid {
+				if m.Header.Seq != uint32(seq) || m.Header.Pid != v.Pid {
 					return nil, EINVAL
 				}
 			default:
 				return nil, EINVAL
 			}
 			if m.Header.Type == NLMSG_DONE {
-				break done
+				goto done
 			}
 			if m.Header.Type == NLMSG_ERROR {
 				return nil, EINVAL
 			}
 		}
 	}
+
+done:
 	return tab, nil
 }
 
-// NetlinkMessage represents a netlink message.
+// NetlinkMessage represents the netlink message.
 type NetlinkMessage struct {
 	Header NlMsghdr
 	Data   []byte
 }
 
-// ParseNetlinkMessage parses b as an array of netlink messages and
-// returns the slice containing the NetlinkMessage structures.
-func ParseNetlinkMessage(b []byte) ([]NetlinkMessage, error) {
-	var msgs []NetlinkMessage
-	for len(b) >= NLMSG_HDRLEN {
-		h, dbuf, dlen, err := netlinkMessageHeaderAndData(b)
-		if err != nil {
-			return nil, err
+// ParseNetlinkMessage parses buf as netlink messages and returns
+// the slice containing the NetlinkMessage structs.
+func ParseNetlinkMessage(buf []byte) ([]NetlinkMessage, error) {
+	var (
+		h    *NlMsghdr
+		dbuf []byte
+		dlen int
+		e    error
+		msgs []NetlinkMessage
+	)
+
+	for len(buf) >= NLMSG_HDRLEN {
+		h, dbuf, dlen, e = netlinkMessageHeaderAndData(buf)
+		if e != nil {
+			break
 		}
-		m := NetlinkMessage{Header: *h, Data: dbuf[:int(h.Len)-NLMSG_HDRLEN]}
+		m := NetlinkMessage{}
+		m.Header = *h
+		m.Data = dbuf[:int(h.Len)-NLMSG_HDRLEN]
 		msgs = append(msgs, m)
-		b = b[dlen:]
+		buf = buf[dlen:]
 	}
-	return msgs, nil
+
+	return msgs, e
 }
 
-func netlinkMessageHeaderAndData(b []byte) (*NlMsghdr, []byte, int, error) {
-	h := (*NlMsghdr)(unsafe.Pointer(&b[0]))
-	if int(h.Len) < NLMSG_HDRLEN || int(h.Len) > len(b) {
+func netlinkMessageHeaderAndData(buf []byte) (*NlMsghdr, []byte, int, error) {
+	h := (*NlMsghdr)(unsafe.Pointer(&buf[0]))
+	if int(h.Len) < NLMSG_HDRLEN || int(h.Len) > len(buf) {
 		return nil, nil, 0, EINVAL
 	}
-	return h, b[NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
+	return h, buf[NLMSG_HDRLEN:], nlmAlignOf(int(h.Len)), nil
 }
 
-// NetlinkRouteAttr represents a netlink route attribute.
+// NetlinkRouteAttr represents the netlink route attribute.
 type NetlinkRouteAttr struct {
 	Attr  RtAttr
 	Value []byte
 }
 
-// ParseNetlinkRouteAttr parses m's payload as an array of netlink
-// route attributes and returns the slice containing the
-// NetlinkRouteAttr structures.
-func ParseNetlinkRouteAttr(m *NetlinkMessage) ([]NetlinkRouteAttr, error) {
-	var b []byte
-	switch m.Header.Type {
+// ParseNetlinkRouteAttr parses msg's payload as netlink route
+// attributes and returns the slice containing the NetlinkRouteAttr
+// structs.
+func ParseNetlinkRouteAttr(msg *NetlinkMessage) ([]NetlinkRouteAttr, error) {
+	var (
+		buf   []byte
+		a     *RtAttr
+		alen  int
+		vbuf  []byte
+		e     error
+		attrs []NetlinkRouteAttr
+	)
+
+	switch msg.Header.Type {
 	case RTM_NEWLINK, RTM_DELLINK:
-		b = m.Data[SizeofIfInfomsg:]
+		buf = msg.Data[SizeofIfInfomsg:]
 	case RTM_NEWADDR, RTM_DELADDR:
-		b = m.Data[SizeofIfAddrmsg:]
+		buf = msg.Data[SizeofIfAddrmsg:]
 	case RTM_NEWROUTE, RTM_DELROUTE:
-		b = m.Data[SizeofRtMsg:]
+		buf = msg.Data[SizeofRtMsg:]
 	default:
 		return nil, EINVAL
 	}
-	var attrs []NetlinkRouteAttr
-	for len(b) >= SizeofRtAttr {
-		a, vbuf, alen, err := netlinkRouteAttrAndValue(b)
-		if err != nil {
-			return nil, err
+
+	for len(buf) >= SizeofRtAttr {
+		a, vbuf, alen, e = netlinkRouteAttrAndValue(buf)
+		if e != nil {
+			break
 		}
-		ra := NetlinkRouteAttr{Attr: *a, Value: vbuf[:int(a.Len)-SizeofRtAttr]}
+		ra := NetlinkRouteAttr{}
+		ra.Attr = *a
+		ra.Value = vbuf[:int(a.Len)-SizeofRtAttr]
 		attrs = append(attrs, ra)
-		b = b[alen:]
+		buf = buf[alen:]
 	}
+
 	return attrs, nil
 }
 
-func netlinkRouteAttrAndValue(b []byte) (*RtAttr, []byte, int, error) {
-	a := (*RtAttr)(unsafe.Pointer(&b[0]))
-	if int(a.Len) < SizeofRtAttr || int(a.Len) > len(b) {
+func netlinkRouteAttrAndValue(buf []byte) (*RtAttr, []byte, int, error) {
+	h := (*RtAttr)(unsafe.Pointer(&buf[0]))
+	if int(h.Len) < SizeofRtAttr || int(h.Len) > len(buf) {
 		return nil, nil, 0, EINVAL
 	}
-	return a, b[SizeofRtAttr:], rtaAlignOf(int(a.Len)), nil
+	return h, buf[SizeofRtAttr:], rtaAlignOf(int(h.Len)), nil
 }

@@ -1,6 +1,8 @@
 ## Makefile for the GNU C++ Support library.
 ##
-## Copyright (C) 2000-2013 Free Software Foundation, Inc.
+## Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008,
+## 2009, 2010, 2011, 2012
+## Free Software Foundation, Inc.
 ##
 ## Process this file with automake to produce Makefile.in.
 ##
@@ -25,7 +27,11 @@ include $(top_srcdir)/fragment.am
 # Need this library to both be part of libstdc++.a, and installed
 # separately too.
 # 1) separate libsupc++.la
+if ENABLE_VTABLE_VERIFY
+toolexeclib_LTLIBRARIES = libsupc++.la libvtv_init.la libvtv_stubs.la
+else
 toolexeclib_LTLIBRARIES = libsupc++.la
+endif
 # 2) integrated libsupc++convenience.la that is to be a part of libstdc++.a
 noinst_LTLIBRARIES = libsupc++convenience.la
 
@@ -43,10 +49,75 @@ if GLIBCXX_HOSTED
 	cp-demangle.c
 endif
 
-sources = \
+if ENABLE_VTABLE_VERIFY
+    sources = \
 	array_type_info.cc \
 	atexit_arm.cc \
-	atexit_thread.cc \
+	bad_alloc.cc \
+	bad_cast.cc \
+	bad_typeid.cc \
+	class_type_info.cc \
+	del_op.cc \
+	del_opsz.cc \
+	del_opnt.cc \
+	del_opv.cc \
+	del_opvnt.cc \
+	dyncast.cc \
+	eh_alloc.cc \
+	eh_arm.cc \
+	eh_aux_runtime.cc \
+	eh_call.cc \
+	eh_catch.cc \
+	eh_exception.cc \
+	eh_globals.cc \
+	eh_personality.cc \
+	eh_ptr.cc \
+	eh_term_handler.cc \
+	eh_terminate.cc \
+	eh_tm.cc \
+	eh_throw.cc \
+	eh_type.cc \
+	eh_unex_handler.cc \
+	enum_type_info.cc \
+	function_type_info.cc \
+	fundamental_type_info.cc \
+	guard.cc \
+	guard_error.cc \
+	hash_bytes.cc \
+	nested_exception.cc \
+	new_handler.cc \
+	new_op.cc \
+	new_opnt.cc \
+	new_opv.cc \
+	new_opvnt.cc \
+	pbase_type_info.cc \
+	pmem_type_info.cc \
+	pointer_type_info.cc \
+	pure.cc \
+	si_class_type_info.cc \
+	tinfo.cc \
+	tinfo2.cc \
+	vec.cc \
+	vmi_class_type_info.cc \
+	vterminate.cc \
+        vtv_rts.cc \
+        vtv_malloc.cc \
+        vtv_utils.cc
+
+    vtv_init_sources = \
+        vtv_init.cc
+
+    vtv_stubs_sources = \
+        vtv_stubs.cc
+
+    libsupc___la_SOURCES = $(sources) $(c_sources)
+    libsupc__convenience_la_SOURCES = $(sources) $(c_sources)
+    libvtv_init_la_SOURCES = $(vtv_init_sources)
+    libvtv_stubs_la_SOURCES = $(vtv_stubs_sources)
+else
+    sources = \
+	array_type_info.cc \
+	atexit_arm.cc \
 	bad_alloc.cc \
 	bad_cast.cc \
 	bad_typeid.cc \
@@ -95,8 +166,9 @@ sources = \
 	vmi_class_type_info.cc \
 	vterminate.cc
 
-libsupc___la_SOURCES = $(sources) $(c_sources)
-libsupc__convenience_la_SOURCES = $(sources) $(c_sources)
+    libsupc___la_SOURCES = $(sources) $(c_sources)
+    libsupc__convenience_la_SOURCES = $(sources) $(c_sources)
+endif
 
 cp-demangle.c:
 	rm -f $@
@@ -123,11 +195,6 @@ guard.lo: guard.cc
 guard.o: guard.cc
 	$(CXXCOMPILE) -std=gnu++0x -c $<
 
-atexit_thread.lo: atexit_thread.cc
-	$(LTCXXCOMPILE) -std=gnu++0x -c $<
-atexit_thread.o: atexit_thread.cc
-	$(CXXCOMPILE) -std=gnu++0x -c $<
-
 nested_exception.lo: nested_exception.cc
 	$(LTCXXCOMPILE) -std=gnu++0x -c $<
 nested_exception.o: nested_exception.cc
@@ -141,7 +208,9 @@ nested_exception.o: nested_exception.cc
 AM_CXXFLAGS = \
 	$(glibcxx_lt_pic_flag) $(glibcxx_compiler_shared_flag) \
 	$(XTEMPLATE_FLAGS) \
-	$(WARN_CXXFLAGS) $(OPTIMIZE_CXXFLAGS)  $(CONFIG_CXXFLAGS) \
+	$(WARN_CXXFLAGS) \
+	$(OPTIMIZE_CXXFLAGS) \
+	$(CONFIG_CXXFLAGS) \
 	$($(@)_no_omit_frame_pointer)
 
 AM_MAKEFLAGS = \
@@ -185,14 +254,14 @@ LTCOMPILE = $(LIBTOOL) --tag CC --tag disable-shared $(LIBTOOLFLAGS) --mode=comp
 # placed after --tag CXX lest things CXX undo the affect of
 # disable-shared.
 
-# 2) Need to explicitly set LTCXXCOMPILE so that EXTRA_CXX_FLAGS is
+# 2) Need to explicitly set LTCXXCOMPILE so that AM_CXXFLAGS is
 # last. (That way, things like -O2 passed down from the toplevel can
 # be overridden by --enable-debug.)
 LTCXXCOMPILE = \
 	$(LIBTOOL) --tag CXX --tag disable-shared \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=compile $(CXX) $(TOPLEVEL_INCLUDES) \
-	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) $(EXTRA_CXX_FLAGS)
+	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS)
 
 LTLDFLAGS = $(shell $(SHELL) $(top_srcdir)/../libtool-ldflags $(LDFLAGS))
 

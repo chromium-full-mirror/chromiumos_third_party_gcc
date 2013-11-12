@@ -1,11 +1,11 @@
-// run
+// $G $D/$F.go && $L $F.$A && ./$A.out
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Test Implicit methods for embedded types and
-// mixed pointer and non-pointer receivers.
+// Implicit methods for embedded types.
+// Mixed pointer and non-pointer receivers.
 
 package main
 

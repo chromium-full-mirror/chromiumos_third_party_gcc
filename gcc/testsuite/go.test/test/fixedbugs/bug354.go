@@ -1,4 +1,4 @@
-// compile
+// $G $D/$F.go || echo BUG: bug354
 
 // Copyright 2011 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -7,7 +7,7 @@
 // issue 2086
 // was calling makeclosure twice on the closure
 
-package bug354
+package main
 
 type Inner struct {
 	F func() error

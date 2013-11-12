@@ -42,9 +42,6 @@ func LookPath(file string) (string, error) {
 		return "", &Error{file, err}
 	}
 	pathenv := os.Getenv("PATH")
-	if pathenv == "" {
-		return "", &Error{file, ErrNotFound}
-	}
 	for _, dir := range strings.Split(pathenv, ":") {
 		if dir == "" {
 			// Unix shell semantics: path element "" means "."

@@ -1,5 +1,6 @@
 /* Help friends in C++.
-   Copyright (C) 1997-2013 Free Software Foundation, Inc.
+   Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
+   2007, 2008, 2010, 2011  Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -24,6 +25,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree.h"
 #include "cp-tree.h"
 #include "flags.h"
+#include "output.h"
 #include "cgraph.h"
 
 /* Friend data structures are described in cp-tree.h.  */
@@ -166,8 +168,7 @@ add_friend (tree type, tree decl, bool complain)
 
   ctx = DECL_CONTEXT (decl);
   if (ctx && CLASS_TYPE_P (ctx) && !uses_template_parms (ctx))
-    perform_or_defer_access_check (TYPE_BINFO (ctx), decl, decl,
-				   tf_warning_or_error);
+    perform_or_defer_access_check (TYPE_BINFO (ctx), decl, decl);
 
   maybe_add_class_template_decl_list (type, decl, /*friend_p=*/1);
 
@@ -224,8 +225,7 @@ make_friend_class (tree type, tree friend_type, bool complain)
   int class_template_depth = template_class_depth (type);
   int friend_depth = processing_template_decl - class_template_depth;
 
-  if (! MAYBE_CLASS_TYPE_P (friend_type)
-      && TREE_CODE (friend_type) != TEMPLATE_TEMPLATE_PARM)
+  if (! MAYBE_CLASS_TYPE_P (friend_type))
     {
       /* N1791: If the type specifier in a friend declaration designates a
 	 (possibly cv-qualified) class type, that class is declared as a
@@ -233,15 +233,12 @@ make_friend_class (tree type, tree friend_type, bool complain)
 
          So don't complain in C++0x mode.  */
       if (cxx_dialect < cxx0x)
-	pedwarn (input_location, complain ? 0 : OPT_Wpedantic,
+	pedwarn (input_location, complain ? 0 : OPT_pedantic,
 		 "invalid type %qT declared %<friend%>", friend_type);
       return;
     }
 
   friend_type = cv_unqualified (friend_type);
-
-  if (check_for_bare_parameter_packs (friend_type))
-    return;
 
   if (friend_depth)
     /* If the TYPE is a template then it makes sense for it to be
@@ -350,8 +347,6 @@ make_friend_class (tree type, tree friend_type, bool complain)
       error ("template parameter type %qT declared %<friend%>", friend_type);
       return;
     }
-  else if (TREE_CODE (friend_type) == TEMPLATE_TEMPLATE_PARM)
-    friend_type = TYPE_NAME (friend_type);
   else if (!CLASSTYPE_TEMPLATE_INFO (friend_type))
     {
       /* template <class T> friend class A; where A is not a template */

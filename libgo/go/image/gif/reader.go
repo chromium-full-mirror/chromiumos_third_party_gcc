@@ -17,11 +17,6 @@ import (
 	"io"
 )
 
-var (
-	errNotEnough = errors.New("gif: not enough image data")
-	errTooMuch   = errors.New("gif: too much image data")
-)
-
 // If the io.Reader does not also have ReadByte, then decode will introduce its own buffering.
 type reader interface {
 	io.Reader
@@ -94,35 +89,29 @@ type decoder struct {
 // comprises (n, (n bytes)) blocks, with 1 <= n <= 255.  It is the
 // reader given to the LZW decoder, which is thus immune to the
 // blocking.  After the LZW decoder completes, there will be a 0-byte
-// block remaining (0, ()), which is consumed when checking that the
-// blockReader is exhausted.
+// block remaining (0, ()), but under normal execution blockReader
+// doesn't consume it, so it is handled in decode.
 type blockReader struct {
 	r     reader
 	slice []byte
-	err   error
 	tmp   [256]byte
 }
 
 func (b *blockReader) Read(p []byte) (int, error) {
-	if b.err != nil {
-		return 0, b.err
-	}
 	if len(p) == 0 {
 		return 0, nil
 	}
 	if len(b.slice) == 0 {
-		var blockLen uint8
-		blockLen, b.err = b.r.ReadByte()
-		if b.err != nil {
-			return 0, b.err
+		blockLen, err := b.r.ReadByte()
+		if err != nil {
+			return 0, err
 		}
 		if blockLen == 0 {
-			b.err = io.EOF
-			return 0, b.err
+			return 0, io.EOF
 		}
 		b.slice = b.tmp[0:blockLen]
-		if _, b.err = io.ReadFull(b.r, b.slice); b.err != nil {
-			return 0, b.err
+		if _, err = io.ReadFull(b.r, b.slice); err != nil {
+			return 0, err
 		}
 	}
 	n := copy(p, b.slice)
@@ -153,33 +142,35 @@ func (d *decoder) decode(r io.Reader, configOnly bool) error {
 		}
 	}
 
-	for {
-		c, err := d.r.ReadByte()
-		if err != nil {
-			return err
+Loop:
+	for err == nil {
+		var c byte
+		c, err = d.r.ReadByte()
+		if err == io.EOF {
+			break
 		}
 		switch c {
 		case sExtension:
-			if err = d.readExtension(); err != nil {
-				return err
-			}
+			err = d.readExtension()
 
 		case sImageDescriptor:
-			m, err := d.newImageFromDescriptor()
+			var m *image.Paletted
+			m, err = d.newImageFromDescriptor()
 			if err != nil {
-				return err
+				break
 			}
 			if d.imageFields&fColorMapFollows != 0 {
 				m.Palette, err = d.readColorMap()
 				if err != nil {
-					return err
+					break
 				}
 				// TODO: do we set transparency in this map too? That would be
 				// d.setTransparency(m.Palette)
 			} else {
 				m.Palette = d.globalColorMap
 			}
-			litWidth, err := d.r.ReadByte()
+			var litWidth uint8
+			litWidth, err = d.r.ReadByte()
 			if err != nil {
 				return err
 			}
@@ -187,27 +178,18 @@ func (d *decoder) decode(r io.Reader, configOnly bool) error {
 				return fmt.Errorf("gif: pixel size in decode out of range: %d", litWidth)
 			}
 			// A wonderfully Go-like piece of magic.
-			br := &blockReader{r: d.r}
-			lzwr := lzw.NewReader(br, lzw.LSB, int(litWidth))
+			lzwr := lzw.NewReader(&blockReader{r: d.r}, lzw.LSB, int(litWidth))
 			if _, err = io.ReadFull(lzwr, m.Pix); err != nil {
-				if err != io.ErrUnexpectedEOF {
-					return err
-				}
-				return errNotEnough
+				break
 			}
-			// Both lzwr and br should be exhausted. Reading from them
-			// should yield (0, io.EOF).
-			if n, err := lzwr.Read(d.tmp[:1]); n != 0 || err != io.EOF {
-				if err != nil {
-					return err
-				}
-				return errTooMuch
+
+			// There should be a "0" block remaining; drain that.
+			c, err = d.r.ReadByte()
+			if err != nil {
+				return err
 			}
-			if n, err := br.Read(d.tmp[:1]); n != 0 || err != io.EOF {
-				if err != nil {
-					return err
-				}
-				return errTooMuch
+			if c != 0 {
+				return errors.New("gif: extra data after image")
 			}
 
 			// Undo the interlacing if necessary.
@@ -220,15 +202,19 @@ func (d *decoder) decode(r io.Reader, configOnly bool) error {
 			d.delayTime = 0 // TODO: is this correct, or should we hold on to the value?
 
 		case sTrailer:
-			if len(d.image) == 0 {
-				return io.ErrUnexpectedEOF
-			}
-			return nil
+			break Loop
 
 		default:
-			return fmt.Errorf("gif: unknown block type: 0x%.2x", c)
+			err = fmt.Errorf("gif: unknown block type: 0x%.2x", c)
 		}
 	}
+	if err != nil {
+		return err
+	}
+	if len(d.image) == 0 {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
 }
 
 func (d *decoder) readHeaderAndScreenDescriptor() error {
@@ -318,6 +304,7 @@ func (d *decoder) readExtension() error {
 			return err
 		}
 	}
+	panic("unreachable")
 }
 
 func (d *decoder) readGraphicControl() error {
@@ -348,15 +335,7 @@ func (d *decoder) newImageFromDescriptor() (*image.Paletted, error) {
 	width := int(d.tmp[4]) + int(d.tmp[5])<<8
 	height := int(d.tmp[6]) + int(d.tmp[7])<<8
 	d.imageFields = d.tmp[8]
-
-	// The GIF89a spec, Section 20 (Image Descriptor) says:
-	// "Each image must fit within the boundaries of the Logical
-	// Screen, as defined in the Logical Screen Descriptor."
-	bounds := image.Rect(left, top, left+width, top+height)
-	if bounds != bounds.Intersect(image.Rect(0, 0, d.width, d.height)) {
-		return nil, errors.New("gif: frame bounds larger than image bounds")
-	}
-	return image.NewPaletted(bounds, nil), nil
+	return image.NewPaletted(image.Rect(left, top, left+width, top+height), nil), nil
 }
 
 func (d *decoder) readBlock() (int, error) {

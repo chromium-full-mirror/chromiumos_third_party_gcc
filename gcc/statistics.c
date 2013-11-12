@@ -1,5 +1,6 @@
 /* Optimization statistics functions.
-   Copyright (C) 2008-2013 Free Software Foundation, Inc.
+   Copyright (C) 2008, 2010
+   Free Software Foundation, Inc.
    Contributed by Richard Guenther  <rguenther@suse.de>
 
 This file is part of GCC.
@@ -141,7 +142,7 @@ statistics_fini_pass_2 (void **slot, void *data ATTRIBUTE_UNUSED)
 	     current_pass->static_pass_number,
 	     current_pass->name,
 	     counter->id, counter->val,
-	     current_function_name (),
+	     cfun ? IDENTIFIER_POINTER (DECL_NAME (cfun->decl)) : "(nofn)",
 	     count);
   else
     fprintf (statistics_dump_file,
@@ -149,7 +150,7 @@ statistics_fini_pass_2 (void **slot, void *data ATTRIBUTE_UNUSED)
 	     current_pass->static_pass_number,
 	     current_pass->name,
 	     counter->id,
-	     current_function_name (),
+	     cfun ? IDENTIFIER_POINTER (DECL_NAME (cfun->decl)) : "(nofn)",
 	     count);
   counter->prev_dumped_count = counter->count;
   return 1;
@@ -245,7 +246,7 @@ void
 statistics_early_init (void)
 {
   statistics_dump_nr = dump_register (".statistics", "statistics",
-				      "statistics", TDF_TREE, OPTGROUP_NONE);
+				      "statistics", TDF_TREE);
 }
 
 /* Init the statistics.  */
@@ -254,7 +255,7 @@ void
 statistics_init (void)
 {
   statistics_dump_file = dump_begin (statistics_dump_nr, NULL);
-  statistics_dump_flags = get_dump_file_info (statistics_dump_nr)->pflags;
+  statistics_dump_flags = get_dump_file_info (statistics_dump_nr)->flags;
 }
 
 /* Lookup or add a statistics counter in the hashtable HASH with ID, VAL
@@ -311,7 +312,7 @@ statistics_counter_event (struct function *fn, const char *id, int incr)
 	   current_pass->static_pass_number,
 	   current_pass->name,
 	   id,
-	   function_name (fn),
+	   fn ? IDENTIFIER_POINTER (DECL_NAME (fn->decl)) : "(nofn)",
 	   incr);
 }
 
@@ -341,5 +342,5 @@ statistics_histogram_event (struct function *fn, const char *id, int val)
 	   current_pass->static_pass_number,
 	   current_pass->name,
 	   id, val,
-	   function_name (fn));
+	   fn ? IDENTIFIER_POINTER (DECL_NAME (fn->decl)) : "(nofn)");
 }

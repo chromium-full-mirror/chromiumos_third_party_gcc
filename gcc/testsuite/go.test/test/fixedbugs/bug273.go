@@ -1,4 +1,4 @@
-// run
+// $G $D/$F.go && $L $F.$A && ./$A.out
 
 // Copyright 2010 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -8,15 +8,14 @@
 
 package main
 
+import "unsafe"
+
 var bug = false
 
 var minus1 = -1
-var five = 5
 var big int64 = 10 | 1<<32
 
-type block [1<<19]byte
-
-var g1 []block
+var g1 []int
 
 func shouldfail(f func(), desc string) {
 	defer func() { recover() }()
@@ -29,47 +28,55 @@ func shouldfail(f func(), desc string) {
 }
 
 func badlen() {
-	g1 = make([]block, minus1)
+	g1 = make([]int, minus1)
 }
 
 func biglen() {
-	g1 = make([]block, big)
+	g1 = make([]int, big)
 }
 
 func badcap() {
-	g1 = make([]block, 10, minus1)
+	g1 = make([]int, 10, minus1)
 }
 
 func badcap1() {
-	g1 = make([]block, 10, five)
+	g1 = make([]int, 10, 5)
 }
 
 func bigcap() {
-	g1 = make([]block, 10, big)
+	g1 = make([]int, 10, big)
 }
 
-var g3 map[block]block
+var g3 map[int]int
 func badmapcap() {
-	g3 = make(map[block]block, minus1)
+	g3 = make(map[int]int, minus1)
 }
 
 func bigmapcap() {
-	g3 = make(map[block]block, big)
+	g3 = make(map[int]int, big)
 }
 
-type cblock [1<<16-1]byte
-
-var g4 chan cblock
+var g4 chan int
 func badchancap() {
-	g4 = make(chan cblock, minus1)
+	g4 = make(chan int, minus1)
 }
 
 func bigchancap() {
-	g4 = make(chan cblock, big)
+	g4 = make(chan int, big)
 }
 
+const addrBits = unsafe.Sizeof((*byte)(nil))
+
+var g5 chan [1<<15]byte
 func overflowchan() {
-	g4 = make(chan cblock, 1<<30)
+	if addrBits == 32 {
+		g5 = make(chan [1<<15]byte, 1<<20)
+	} else {
+		// cannot overflow on 64-bit, because
+		// int is 32 bits and max chan value size
+		// in the implementation is 64 kB.
+		panic(1)
+	}
 }
 
 func main() {

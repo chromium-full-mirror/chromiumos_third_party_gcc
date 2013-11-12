@@ -1,4 +1,3 @@
-! { dg-do run { target { ! newlib } } }
   character(len=800) :: cwd
   integer :: unit
 

@@ -4,10 +4,7 @@
 
 package doc
 
-import (
-	"strings"
-	"unicode"
-)
+import "unicode"
 
 // firstSentenceLen returns the length of the first sentence in s.
 // The sentence ends after the first period followed by space and
@@ -27,12 +24,17 @@ func firstSentenceLen(s string) int {
 	return len(s)
 }
 
-// clean replaces each sequence of space, \n, \r, or \t characters
-// with a single space and removes any trailing and leading spaces.
-func clean(s string) string {
+// Synopsis returns a cleaned version of the first sentence in s.
+// That sentence ends after the first period followed by space and
+// not preceded by exactly one uppercase letter. The result string
+// has no \n, \r, or \t characters and uses only single spaces between
+// words.
+//
+func Synopsis(s string) string {
+	n := firstSentenceLen(s)
 	var b []byte
 	p := byte(' ')
-	for i := 0; i < len(s); i++ {
+	for i := 0; i < n; i++ {
 		q := s[i]
 		if q == '\n' || q == '\r' || q == '\t' {
 			q = ' '
@@ -47,27 +49,4 @@ func clean(s string) string {
 		b = b[0 : n-1]
 	}
 	return string(b)
-}
-
-// Synopsis returns a cleaned version of the first sentence in s.
-// That sentence ends after the first period followed by space and
-// not preceded by exactly one uppercase letter. The result string
-// has no \n, \r, or \t characters and uses only single spaces between
-// words. If s starts with any of the IllegalPrefixes, the result
-// is the empty string.
-//
-func Synopsis(s string) string {
-	s = clean(s[0:firstSentenceLen(s)])
-	for _, prefix := range IllegalPrefixes {
-		if strings.HasPrefix(strings.ToLower(s), prefix) {
-			return ""
-		}
-	}
-	return s
-}
-
-var IllegalPrefixes = []string{
-	"copyright",
-	"all rights",
-	"author",
 }

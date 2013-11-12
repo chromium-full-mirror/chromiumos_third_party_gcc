@@ -1,7 +1,8 @@
 /* The tracer pass for the GNU compiler.
    Contributed by Jan Hubicka, SuSE Labs.
    Adapted to work on GIMPLE instead of RTL by Robert Kidd, UIUC.
-   Copyright (C) 2001-2013 Free Software Foundation, Inc.
+   Copyright (C) 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008
+   Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -41,14 +42,16 @@
 #include "rtl.h"
 #include "hard-reg-set.h"
 #include "basic-block.h"
+#include "output.h"
+#include "cfglayout.h"
 #include "fibheap.h"
 #include "flags.h"
+#include "timevar.h"
 #include "params.h"
 #include "coverage.h"
 #include "tree-pass.h"
 #include "tree-flow.h"
 #include "tree-inline.h"
-#include "cfgloop.h"
 
 static int count_insns (basic_block);
 static bool ignore_bb_p (const_basic_block);
@@ -56,6 +59,7 @@ static bool better_p (const_edge, const_edge);
 static edge find_best_successor (basic_block);
 static edge find_best_predecessor (basic_block);
 static int find_trace (basic_block, basic_block *);
+static void tail_duplicate (void);
 
 /* Minimal outgoing edge probability considered for superblock formation.  */
 static int probability_cutoff;
@@ -68,18 +72,18 @@ sbitmap bb_seen;
 static inline void
 mark_bb_seen (basic_block bb)
 {
-  unsigned int size = SBITMAP_SIZE (bb_seen);
+  unsigned int size = SBITMAP_SIZE_BYTES (bb_seen) * 8;
 
   if ((unsigned int)bb->index >= size)
     bb_seen = sbitmap_resize (bb_seen, size * 2, 0);
 
-  bitmap_set_bit (bb_seen, bb->index);
+  SET_BIT (bb_seen, bb->index);
 }
 
 static inline bool
 bb_seen_p (basic_block bb)
 {
-  return bitmap_bit_p (bb_seen, bb->index);
+  return TEST_BIT (bb_seen, bb->index);
 }
 
 /* Return true if we should ignore the basic block for purposes of tracing.  */
@@ -220,7 +224,7 @@ find_trace (basic_block bb, basic_block *trace)
 /* Look for basic blocks in frequency order, construct traces and tail duplicate
    if profitable.  */
 
-static bool
+static void
 tail_duplicate (void)
 {
   fibnode_t *blocks = XCNEWVEC (fibnode_t, last_basic_block);
@@ -232,12 +236,11 @@ tail_duplicate (void)
   gcov_type cover_insns;
   int max_dup_insns;
   basic_block bb;
-  bool changed = false;
 
   /* Create an oversized sbitmap to reduce the chance that we need to
      resize it.  */
   bb_seen = sbitmap_alloc (last_basic_block * 2);
-  bitmap_clear (bb_seen);
+  sbitmap_zero (bb_seen);
   initialize_original_copy_tables ();
 
   if (profile_info && flag_branch_probabilities)
@@ -304,13 +307,7 @@ tail_duplicate (void)
 	    }
 	  traced_insns += bb2->frequency * counts [bb2->index];
 	  if (EDGE_COUNT (bb2->preds) > 1
-	      && can_duplicate_block_p (bb2)
-	      /* We have the tendency to duplicate the loop header
-	         of all do { } while loops.  Do not do that - it is
-		 not profitable and it might create a loop with multiple
-		 entries or at least rotate the loop.  */
-	      && (!current_loops
-		  || bb2->loop_father->header != bb2))
+	      && can_duplicate_block_p (bb2))
 	    {
 	      edge e;
 	      basic_block copy;
@@ -335,7 +332,6 @@ tail_duplicate (void)
 			 bb2->index, copy->index, copy->frequency);
 
 	      bb2 = copy;
-	      changed = true;
 	    }
 	  mark_bb_seen (bb2);
 	  bb = bb2;
@@ -357,8 +353,6 @@ tail_duplicate (void)
   free (trace);
   free (counts);
   fibheap_delete (heap);
-
-  return changed;
 }
 
 /* Main entry point to this file.  */
@@ -366,29 +360,25 @@ tail_duplicate (void)
 static unsigned int
 tracer (void)
 {
-  bool changed;
+  gcc_assert (current_ir_type () == IR_GIMPLE);
 
   if (n_basic_blocks <= NUM_FIXED_BLOCKS + 1)
     return 0;
 
   mark_dfs_back_edges ();
   if (dump_file)
-    brief_dump_cfg (dump_file, dump_flags);
+    dump_flow_info (dump_file, dump_flags);
 
   /* Trace formation is done on the fly inside tail_duplicate */
-  changed = tail_duplicate ();
-  if (changed)
-    {
-      free_dominance_info (CDI_DOMINATORS);
-      /* If we changed the CFG schedule loops for fixup by cleanup_cfg.  */
-      if (current_loops)
-	loops_state_set (LOOPS_NEED_FIXUP);
-    }
+  tail_duplicate ();
 
+  /* FIXME: We really only need to do this when we know tail duplication
+            has altered the CFG. */
+  free_dominance_info (CDI_DOMINATORS);
   if (dump_file)
-    brief_dump_cfg (dump_file, dump_flags);
+    dump_flow_info (dump_file, dump_flags);
 
-  return changed ? TODO_cleanup_cfg : 0;
+  return 0;
 }
 
 static bool
@@ -402,7 +392,6 @@ struct gimple_opt_pass pass_tracer =
  {
   GIMPLE_PASS,
   "tracer",                             /* name */
-  OPTGROUP_NONE,                        /* optinfo_flags */
   gate_tracer,                          /* gate */
   tracer,                               /* execute */
   NULL,                                 /* sub */

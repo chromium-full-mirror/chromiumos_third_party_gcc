@@ -1,5 +1,4 @@
-/* { dg-options "-march=octeon -mgp64" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-O -march=octeon -mgp64" } */
 /* { dg-final { scan-assembler-times "\texts\t" 5 } } */
 /* { dg-final { scan-assembler-not "\t(dsll|dsra)\t" } } */
 /* { dg-final { scan-assembler-not "\tsll\t" } } */

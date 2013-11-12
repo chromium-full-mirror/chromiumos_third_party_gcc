@@ -1,5 +1,4 @@
-/* { dg-options "-mgp64 (-mips16)" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-O -mgp64 (-mips16)" } */
 /* { dg-final { scan-assembler "\tdmult\t" } } */
 /* { dg-final { scan-assembler "\tmfhi\t" } } */
 /* { dg-final { scan-assembler "\tmflo\t" } } */

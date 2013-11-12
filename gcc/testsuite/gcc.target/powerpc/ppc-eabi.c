@@ -1,5 +1,4 @@
 /* PR target/16952 */
-/* { dg-do compile } */
-/* { dg-require-effective-target powerpc_eabi_ok } */
+/* { dg-do compile { target { powerpc*-*-linux* && ilp32 } } } */
 /* { dg-options "-meabi -mrelocatable" } */
 char *s = "boo";

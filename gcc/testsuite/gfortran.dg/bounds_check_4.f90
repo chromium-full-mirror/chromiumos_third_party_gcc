@@ -1,5 +1,3 @@
-! { dg-do run }
-! { dg-options "-fbounds-check" }
 subroutine foo(n,x)
   implicit none
   integer, intent(in) :: n

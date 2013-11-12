@@ -24,32 +24,30 @@ package sync
 typedef struct Sema Sema;
 struct Sema
 {
-	uint32 volatile*	addr;
-	G*	g;
-	int64	releasetime;
-	Sema*	prev;
-	Sema*	next;
+	uint32 volatile *addr;
+	G *g;
+	Sema *prev;
+	Sema *next;
 };
 
 typedef struct SemaRoot SemaRoot;
 struct SemaRoot
 {
-	Lock;
-	Sema*	head;
-	Sema*	tail;
+        Lock;
+	Sema *head;
+	Sema *tail;
 	// Number of waiters. Read w/o the lock.
-	uint32 volatile	nwait;
+	uint32 volatile nwait;
 };
 
 // Prime to not correlate with any user patterns.
 #define SEMTABLESZ 251
 
-struct semtable
+static union
 {
 	SemaRoot;
-	uint8 pad[CacheLineSize-sizeof(SemaRoot)];
-};
-static struct semtable semtable[SEMTABLESZ];
+	uint8 pad[CacheLineSize];
+} semtable[SEMTABLESZ];
 
 static SemaRoot*
 semroot(uint32 volatile *addr)
@@ -97,13 +95,13 @@ cansemacquire(uint32 volatile *addr)
 	return 0;
 }
 
-static void
-semacquireimpl(uint32 volatile *addr, int32 profile)
+void
+runtime_semacquire(uint32 volatile *addr)
 {
-	Sema s;	// Needs to be allocated on stack, otherwise garbage collector could deallocate it
+	G *g;
+	Sema s;
 	SemaRoot *root;
-	int64 t0;
-	
+
 	// Easy case.
 	if(cansemacquire(addr))
 		return;
@@ -114,13 +112,8 @@ semacquireimpl(uint32 volatile *addr, int32 profile)
 	//	enqueue itself as a waiter
 	//	sleep
 	//	(waiter descriptor is dequeued by signaler)
+	g = runtime_g();
 	root = semroot(addr);
-	t0 = 0;
-	s.releasetime = 0;
-	if(profile && runtime_blockprofilerate > 0) {
-		t0 = runtime_cputicks();
-		s.releasetime = -1;
-	}
 	for(;;) {
 
 		runtime_lock(root);
@@ -135,19 +128,13 @@ semacquireimpl(uint32 volatile *addr, int32 profile)
 		// Any semrelease after the cansemacquire knows we're waiting
 		// (we set nwait above), so go to sleep.
 		semqueue(root, addr, &s);
-		runtime_park(runtime_unlock, root, "semacquire");
-		if(cansemacquire(addr)) {
-			if(t0)
-				runtime_blockevent(s.releasetime - t0, 3);
+		g->status = Gwaiting;
+		g->waitreason = "semacquire";
+		runtime_unlock(root);
+		runtime_gosched();
+		if(cansemacquire(addr))
 			return;
-		}
 	}
-}
-
-void
-runtime_semacquire(uint32 volatile *addr)
-{
-	semacquireimpl(addr, 0);
 }
 
 void
@@ -181,15 +168,12 @@ runtime_semrelease(uint32 volatile *addr)
 		}
 	}
 	runtime_unlock(root);
-	if(s) {
-		if(s->releasetime)
-			s->releasetime = runtime_cputicks();
+	if(s)
 		runtime_ready(s->g);
-	}
 }
 
 func runtime_Semacquire(addr *uint32) {
-	semacquireimpl(addr, 1);
+	runtime_semacquire(addr);
 }
 
 func runtime_Semrelease(addr *uint32) {

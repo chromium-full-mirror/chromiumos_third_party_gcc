@@ -1,4 +1,5 @@
-/* Copyright (C) 2009-2013 Free Software Foundation, Inc.
+/* Copyright (C) 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Janne Blomqvist
 
 This file is part of the GNU Fortran runtime library (libgfortran).
@@ -27,71 +28,68 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 #include "io.h"
 
-struct stream_vtable
-{
-  ssize_t (* const read) (struct stream *, void *, ssize_t);
-  ssize_t (* const write) (struct stream *, const void *, ssize_t);
-  gfc_offset (* const seek) (struct stream *, gfc_offset, int);
-  gfc_offset (* const tell) (struct stream *);
-  gfc_offset (* const size) (struct stream *);
-  /* Avoid keyword truncate due to AIX namespace collision.  */
-  int (* const trunc) (struct stream *, gfc_offset);
-  int (* const flush) (struct stream *);
-  int (* const close) (struct stream *);
-};
 
 struct stream
 {
-  const struct stream_vtable *vptr;
+  ssize_t (*read) (struct stream *, void *, ssize_t);
+  ssize_t (*write) (struct stream *, const void *, ssize_t);
+  gfc_offset (*seek) (struct stream *, gfc_offset, int);
+  gfc_offset (*tell) (struct stream *);
+  gfc_offset (*size) (struct stream *);
+  /* Avoid keyword truncate due to AIX namespace collision.  */
+  int (*trunc) (struct stream *, gfc_offset);
+  int (*flush) (struct stream *);
+  int (*close) (struct stream *);
 };
+
 
 /* Inline functions for doing file I/O given a stream.  */
 static inline ssize_t
 sread (stream * s, void * buf, ssize_t nbyte)
 {
-  return s->vptr->read (s, buf, nbyte);
+  return s->read (s, buf, nbyte);
 }
 
 static inline ssize_t
 swrite (stream * s, const void * buf, ssize_t nbyte)
 {
-  return s->vptr->write (s, buf, nbyte);
+  return s->write (s, buf, nbyte);
 }
 
 static inline gfc_offset
 sseek (stream * s, gfc_offset offset, int whence)
 {
-  return s->vptr->seek (s, offset, whence);
+  return s->seek (s, offset, whence);
 }
 
 static inline gfc_offset
 stell (stream * s)
 {
-  return s->vptr->tell (s);
+  return s->tell (s);
 }
 
 static inline gfc_offset
 ssize (stream * s)
 {
-  return s->vptr->size (s);
+  return s->size (s);
 }
 
 static inline int
 struncate (stream * s, gfc_offset length)
 {
-  return s->vptr->trunc (s, length);
+  return s->trunc (s, length);
 }
 
 static inline int
 sflush (stream * s)
 {
-  return s->vptr->flush (s);
+  return s->flush (s);
 }
 
 static inline int
 sclose (stream * s)
 {
-  return s->vptr->close (s);
+  return s->close (s);
 }
 
 

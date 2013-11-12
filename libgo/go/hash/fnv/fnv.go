@@ -111,20 +111,44 @@ func (s *sum64a) BlockSize() int { return 1 }
 
 func (s *sum32) Sum(in []byte) []byte {
 	v := uint32(*s)
-	return append(in, byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+	in = append(in, byte(v>>24))
+	in = append(in, byte(v>>16))
+	in = append(in, byte(v>>8))
+	in = append(in, byte(v))
+	return in
 }
 
 func (s *sum32a) Sum(in []byte) []byte {
 	v := uint32(*s)
-	return append(in, byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+	in = append(in, byte(v>>24))
+	in = append(in, byte(v>>16))
+	in = append(in, byte(v>>8))
+	in = append(in, byte(v))
+	return in
 }
 
 func (s *sum64) Sum(in []byte) []byte {
 	v := uint64(*s)
-	return append(in, byte(v>>56), byte(v>>48), byte(v>>40), byte(v>>32), byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+	in = append(in, byte(v>>56))
+	in = append(in, byte(v>>48))
+	in = append(in, byte(v>>40))
+	in = append(in, byte(v>>32))
+	in = append(in, byte(v>>24))
+	in = append(in, byte(v>>16))
+	in = append(in, byte(v>>8))
+	in = append(in, byte(v))
+	return in
 }
 
 func (s *sum64a) Sum(in []byte) []byte {
 	v := uint64(*s)
-	return append(in, byte(v>>56), byte(v>>48), byte(v>>40), byte(v>>32), byte(v>>24), byte(v>>16), byte(v>>8), byte(v))
+	in = append(in, byte(v>>56))
+	in = append(in, byte(v>>48))
+	in = append(in, byte(v>>40))
+	in = append(in, byte(v>>32))
+	in = append(in, byte(v>>24))
+	in = append(in, byte(v>>16))
+	in = append(in, byte(v>>8))
+	in = append(in, byte(v))
+	return in
 }

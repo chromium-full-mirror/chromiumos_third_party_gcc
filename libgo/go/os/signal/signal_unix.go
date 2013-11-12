@@ -12,7 +12,6 @@ import (
 )
 
 // In assembly.
-func signal_disable(uint32)
 func signal_enable(uint32)
 func signal_recv() uint32
 
@@ -27,27 +26,13 @@ func init() {
 	go loop()
 }
 
-const (
-	numSig = 65 // max across all systems
-)
-
-func signum(sig os.Signal) int {
+func enableSignal(sig os.Signal) {
 	switch sig := sig.(type) {
+	case nil:
+		signal_enable(^uint32(0))
 	case syscall.Signal:
-		i := int(sig)
-		if i < 0 || i >= numSig {
-			return -1
-		}
-		return i
+		signal_enable(uint32(sig))
 	default:
-		return -1
+		// Can ignore: this signal (whatever it is) will never come in.
 	}
-}
-
-func enableSignal(sig int) {
-	signal_enable(uint32(sig))
-}
-
-func disableSignal(sig int) {
-	signal_disable(uint32(sig))
 }

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build darwin freebsd linux netbsd openbsd plan9
+// +build darwin freebsd linux netbsd openbsd
 
 // Unix cryptographically secure pseudorandom number
 // generator.
@@ -15,7 +15,6 @@ import (
 	"crypto/cipher"
 	"io"
 	"os"
-	"runtime"
 	"sync"
 	"time"
 )
@@ -23,13 +22,7 @@ import (
 // Easy implementation: read from /dev/urandom.
 // This is sufficient on Linux, OS X, and FreeBSD.
 
-func init() {
-	if runtime.GOOS == "plan9" {
-		Reader = newReader(nil)
-	} else {
-		Reader = &devReader{name: "/dev/urandom"}
-	}
-}
+func init() { Reader = &devReader{name: "/dev/urandom"} }
 
 // A devReader satisfies reads by reading the file named name.
 type devReader struct {
@@ -46,17 +39,14 @@ func (r *devReader) Read(b []byte) (n int, err error) {
 		if f == nil {
 			return 0, err
 		}
-		if runtime.GOOS == "plan9" {
-			r.f = f
-		} else {
-			r.f = bufio.NewReader(f)
-		}
+		r.f = bufio.NewReader(f)
 	}
 	return r.f.Read(b)
 }
 
 // Alternate pseudo-random implementation for use on
-// systems without a reliable /dev/urandom.
+// systems without a reliable /dev/urandom.  So far we
+// haven't needed it.
 
 // newReader returns a new pseudorandom generator that
 // seeds itself by reading from entropy.  If entropy == nil,

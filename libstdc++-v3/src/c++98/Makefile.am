@@ -1,6 +1,8 @@
 ## Makefile for the C++03 sources of the GNU C++ Standard library.
 ##
-## Copyright (C) 1997-2013 Free Software Foundation, Inc.
+## Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005
+## 2006, 2007, 2008, 2009, 2010, 2011, 2012
+## Free Software Foundation, Inc.
 ##
 ## This file is part of the libstdc++ version 3 distribution.
 ## Process this file with automake to produce Makefile.in.
@@ -80,6 +82,11 @@ c++locale.cc: ${glibcxx_srcdir}/$(CLOCALE_CC)
 basic_file.cc: ${glibcxx_srcdir}/$(BASIC_FILE_CC)
 	$(LN_S) ${glibcxx_srcdir}/$(BASIC_FILE_CC) ./$@ || true
 
+if ENABLE_PARALLEL
+parallel_sources = parallel_settings.cc
+else
+parallel_sources =
+endif
 
 if ENABLE_EXTERN_TEMPLATE
 XTEMPLATE_FLAGS = -fno-implicit-templates
@@ -101,8 +108,6 @@ XTEMPLATE_FLAGS =
 inst_sources =
 endif
 
-parallel_sources = parallel_settings.cc
-
 # Sources present in the src directory, always present.
 sources = \
 	bitmap_allocator.cc \
@@ -119,10 +124,6 @@ sources = \
 	ios_init.cc \
 	ios_locale.cc \
 	list.cc \
-	list-aux.cc \
-	list-aux-2.cc \
-	list_associated.cc \
-	list_associated-2.cc \
 	locale.cc \
 	locale_init.cc \
 	locale_facets.cc \
@@ -142,6 +143,18 @@ vpath % $(top_srcdir)/src/c++98
 
 libc__98convenience_la_SOURCES = $(sources)
 
+if ENABLE_VTABLE_VERIFY
+EXTRA_VTV_LDFLAGS = \
+        -Wl,-u_vtable_map_vars_start,-u_vtable_map_vars_end
+LIBVTV_FLAGS = \
+        -L$(top_builddir)/libsupc++/.libs --whole-archive -lvtv_init --no-whole-archive
+VTV_CXXFLAGS = -fvtable-verify=std $(EXTRA_VTV_LDFLAGS)
+else
+EXTRA_VTV_LDFLAGS =
+LIBVTV_FLAGS =
+VTV_CXXFLAGS =
+endif
+
 # Use special rules for the deprecated source files so that they find
 # deprecated include files.
 GLIBCXX_INCLUDE_DIR=$(glibcxx_builddir)/include
@@ -159,7 +172,7 @@ concept-inst.o: concept-inst.cc
 	$(CXXCOMPILE) -D_GLIBCXX_CONCEPT_CHECKS -fimplicit-templates -c $<
 
 # Use special rules for parallel mode compilation.
-PARALLEL_FLAGS = -D_GLIBCXX_PARALLEL 
+PARALLEL_FLAGS = -fopenmp -D_GLIBCXX_PARALLEL -I$(glibcxx_builddir)/../libgomp
 parallel_settings.lo: parallel_settings.cc
 	$(LTCXXCOMPILE) $(PARALLEL_FLAGS) -c $<
 parallel_settings.o: parallel_settings.cc
@@ -172,7 +185,7 @@ parallel_settings.o: parallel_settings.cc
 # as the occasion calls for it.
 AM_CXXFLAGS = \
 	$(glibcxx_lt_pic_flag) $(glibcxx_compiler_shared_flag) \
-	$(XTEMPLATE_FLAGS) \
+	$(XTEMPLATE_FLAGS) $(VTV_CXXFLAGS) \
 	$(WARN_CXXFLAGS) $(OPTIMIZE_CXXFLAGS) $(CONFIG_CXXFLAGS)
 
 AM_MAKEFLAGS = \
@@ -201,14 +214,14 @@ AM_MAKEFLAGS = \
 # placed after --tag CXX lest things CXX undo the affect of
 # disable-shared.
 
-# 2) Need to explicitly set LTCXXCOMPILE so that EXTRA_CXX_FLAGS is
+# 2) Need to explicitly set LTCXXCOMPILE so that AM_CXXFLAGS is
 # last. (That way, things like -O2 passed down from the toplevel can
 # be overridden by --enable-debug.)
 LTCXXCOMPILE = \
 	$(LIBTOOL) --tag CXX --tag disable-shared \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=compile $(CXX) $(TOPLEVEL_INCLUDES) \
-	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) $(EXTRA_CXX_FLAGS)
+	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS)
 
 LTLDFLAGS = $(shell $(SHELL) $(top_srcdir)/../libtool-ldflags $(LDFLAGS))
 
@@ -222,4 +235,5 @@ CXXLINK = \
 	$(LIBTOOL) --tag CXX --tag disable-shared \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=link $(CXX) \
+	$(LIBVTV_FLAGS) \
 	$(OPT_LDFLAGS) $(SECTION_LDFLAGS) $(AM_CXXFLAGS) $(LTLDFLAGS) -o $@

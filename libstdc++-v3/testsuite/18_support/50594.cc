@@ -1,6 +1,6 @@
 // { dg-options "-fwhole-program" }
 
-// Copyright (C) 2011-2013 Free Software Foundation, Inc.
+// Copyright (C) 2011 Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -26,7 +26,7 @@ bool user_new_called;
 bool user_delete_called;
 
 void* operator new(std::size_t n)
-#if __cplusplus < 201103L
+#ifndef __GXX_EXPERIMENTAL_CXX0X__
   throw(std::bad_alloc)
 #endif
 {
@@ -41,7 +41,7 @@ void* operator new(std::size_t n)
 }
 
 void operator delete(void* p)
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   noexcept
 #else
   throw()

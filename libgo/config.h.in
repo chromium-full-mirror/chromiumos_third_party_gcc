@@ -3,9 +3,6 @@
 /* Define if building universal (internal helper macro) */
 #undef AC_APPLE_UNIVERSAL_BUILD
 
-/* Define to 1 if you have the `accept4' function. */
-#undef HAVE_ACCEPT4
-
 /* Define to 1 if you have the `acosl' function. */
 #undef HAVE_ACOSL
 
@@ -156,9 +153,6 @@
 /* Define to 1 if you have the `openat' function. */
 #undef HAVE_OPENAT
 
-/* Define to 1 if you have the `pipe2' function. */
-#undef HAVE_PIPE2
-
 /* Define to 1 if you have the `renameat' function. */
 #undef HAVE_RENAMEAT
 
@@ -288,9 +282,6 @@
 
 /* Define to 1 if you have the <ustat.h> header file and it works. */
 #undef HAVE_USTAT_H
-
-/* Define to 1 if you have the `utimensat' function. */
-#undef HAVE_UTIMENSAT
 
 /* Define to 1 if you have the <utime.h> header file. */
 #undef HAVE_UTIME_H

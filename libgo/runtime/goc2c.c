@@ -30,10 +30,13 @@
 #include <string.h>
 #include <errno.h>
 
-/* Package path to use.  */
+/* Whether we're emitting for gcc */
+static int gcc;
+
+/* Package path to use; only meaningful for gcc */
 static const char *pkgpath;
 
-/* Package prefix to use.  */
+/* Package prefix to use; only meaningful for gcc */
 static const char *prefix;
 
 /* File and line number */
@@ -46,6 +49,53 @@ struct params {
 	char *name;
 	char *type;
 };
+
+/* index into type_table */
+enum {
+	Bool,
+	Float,
+	Int,
+	Uint,
+	Uintptr,
+	String,
+	Slice,
+	Eface,
+};
+
+static struct {
+	char *name;
+	int size;
+} type_table[] = {
+	/* variable sized first, for easy replacement */
+	/* order matches enum above */
+	/* default is 32-bit architecture sizes */
+	"bool",		1,
+	"float",	4,
+	"int",		4,
+	"uint",		4,
+	"uintptr",	4,
+	"String",	8,
+	"Slice",	12,
+	"Eface",	8,
+
+	/* fixed size */
+	"float32",	4,
+	"float64",	8,
+	"byte",		1,
+	"int8",		1,
+	"uint8",	1,
+	"int16",	2,
+	"uint16",	2,
+	"int32",	4,
+	"uint32",	4,
+	"int64",	8,
+	"uint64",	8,
+
+	NULL,
+};
+
+/* Fixed structure alignment (non-gcc only) */
+int structround = 4;
 
 char *argv0;
 
@@ -94,15 +144,6 @@ xrealloc(void *buf, unsigned int size)
 	void *ret = realloc(buf, size);
 	if (ret == NULL)
 		bad_mem();
-	return ret;
-}
-
-/* Copy a string into memory without fail.  */
-static char *
-xstrdup(const char *p)
-{
-	char *ret = xmalloc(strlen(p) + 1);
-	strcpy(ret, p);
 	return ret;
 }
 
@@ -310,29 +351,14 @@ read_type(void)
 	unsigned int len;
 
 	p = read_token_no_eof();
-	if (*p != '*') {
-		/* Convert the Go type "int" to the C type "intgo",
-		   and similarly for "uint".  */
-		if (strcmp(p, "int") == 0)
-			return xstrdup("intgo");
-		else if (strcmp(p, "uint") == 0)
-			return xstrdup("uintgo");
+	if (*p != '*')
 		return p;
-	}
 	op = p;
 	pointer_count = 0;
 	while (*p == '*') {
 		++pointer_count;
 		++p;
 	}
-
-	/* Convert the Go type "int" to the C type "intgo", and
-	   similarly for "uint".  */
-	if (strcmp(p, "int") == 0)
-	  p = (char *) "intgo";
-	else if (strcmp(p, "uint") == 0)
-	  p = (char *) "uintgo";
-
 	len = strlen(p);
 	q = xmalloc(len + pointer_count + 1);
 	memcpy(q, p, len);
@@ -346,19 +372,39 @@ read_type(void)
 	return q;
 }
 
+/* Return the size of the given type. */
+static int
+type_size(char *p)
+{
+	int i;
+
+	if(p[strlen(p)-1] == '*')
+		return type_table[Uintptr].size;
+
+	for(i=0; type_table[i].name; i++)
+		if(strcmp(type_table[i].name, p) == 0)
+			return type_table[i].size;
+	if(!gcc) {
+		sysfatal("%s:%ud: unknown type %s\n", file, lineno, p);
+	}
+	return 1;
+}
+
 /*
  * Read a list of parameters.  Each parameter is a name and a type.
  * The list ends with a ')'.  We have already read the '('.
  */
 static struct params *
-read_params()
+read_params(int *poffset)
 {
 	char *token;
 	struct params *ret, **pp, *p;
+	int offset, size, rnd;
 
 	ret = NULL;
 	pp = &ret;
 	token = read_token_no_eof();
+	offset = 0;
 	if (strcmp(token, ")") != 0) {
 		while (1) {
 			p = xmalloc(sizeof(struct params));
@@ -367,6 +413,14 @@ read_params()
 			p->next = NULL;
 			*pp = p;
 			pp = &p->next;
+
+			size = type_size(p->type);
+			rnd = size;
+			if(rnd > structround)
+				rnd = structround;
+			if(offset%rnd)
+				offset += rnd - offset%rnd;
+			offset += size;
 
 			token = read_token_no_eof();
 			if (strcmp(token, ",") != 0)
@@ -378,6 +432,8 @@ read_params()
 		sysfatal("%s:%ud: expected '('\n",
 			file, lineno);
 	}
+	if (poffset != NULL)
+		*poffset = offset;
 	return ret;
 }
 
@@ -386,7 +442,7 @@ read_params()
  * '{' character.  Returns 1 if it read a header, 0 at EOF.
  */
 static int
-read_func_header(char **name, struct params **params, struct params **rets)
+read_func_header(char **name, struct params **params, int *paramwid, struct params **rets)
 {
 	int lastline;
 	char *token;
@@ -418,13 +474,13 @@ read_func_header(char **name, struct params **params, struct params **rets)
 		sysfatal("%s:%ud: expected \"(\"\n",
 			file, lineno);
 	}
-	*params = read_params();
+	*params = read_params(paramwid);
 
 	token = read_token();
 	if (token == NULL || strcmp(token, "(") != 0)
 		*rets = NULL;
 	else {
-		*rets = read_params();
+		*rets = read_params(NULL);
 		token = read_token();
 	}
 	if (token == NULL || strcmp(token, "{") != 0) {
@@ -447,6 +503,43 @@ write_params(struct params *params, int *first)
 			printf(", ");
 		printf("%s %s", p->type, p->name);
 	}
+}
+
+/* Write a 6g function header.  */
+static void
+write_6g_func_header(char *package, char *name, struct params *params,
+		     int paramwid, struct params *rets)
+{
+	int first, n;
+
+	printf("void\n%s·%s(", package, name);
+	first = 1;
+	write_params(params, &first);
+
+	/* insert padding to align output struct */
+	if(rets != NULL && paramwid%structround != 0) {
+		n = structround - paramwid%structround;
+		if(n & 1)
+			printf(", uint8");
+		if(n & 2)
+			printf(", uint16");
+		if(n & 4)
+			printf(", uint32");
+	}
+
+	write_params(rets, &first);
+	printf(")\n{\n");
+}
+
+/* Write a 6g function trailer.  */
+static void
+write_6g_func_trailer(struct params *rets)
+{
+	struct params *p;
+
+	for (p = rets; p != NULL; p = p->next)
+		printf("\tFLUSH(&%s);\n", p->name);
+	printf("}\n");
 }
 
 /* Define the gcc function return type if necessary.  */
@@ -488,7 +581,7 @@ write_gcc_func_header(char *package, char *name, struct params *params,
 	printf(" %s_%s(", package, name);
 	first = 1;
 	write_params(params, &first);
-	printf(") __asm__ (GOSYM_PREFIX \"");
+	printf(") asm (\"");
 	if (pkgpath != NULL)
 	  printf("%s", pkgpath);
 	else if (prefix != NULL)
@@ -526,10 +619,14 @@ write_gcc_func_trailer(char *package, char *name, struct params *rets)
 
 /* Write out a function header.  */
 static void
-write_func_header(char *package, char *name, struct params *params, 
+write_func_header(char *package, char *name,
+		  struct params *params, int paramwid,
 		  struct params *rets)
 {
-	write_gcc_func_header(package, name, params, rets);
+	if (gcc)
+		write_gcc_func_header(package, name, params, rets);
+	else
+		write_6g_func_header(package, name, params, paramwid, rets);
 	printf("#line %d \"%s\"\n", lineno, file);
 }
 
@@ -538,7 +635,10 @@ static void
 write_func_trailer(char *package, char *name,
 		   struct params *rets)
 {
-	write_gcc_func_trailer(package, name, rets);
+	if (gcc)
+		write_gcc_func_trailer(package, name, rets);
+	else
+		write_6g_func_trailer(rets);
 }
 
 /*
@@ -613,11 +713,12 @@ process_file(void)
 {
 	char *package, *name;
 	struct params *params, *rets;
+	int paramwid;
 
 	package = read_package();
 	read_preprocessor_lines();
-	while (read_func_header(&name, &params, &rets)) {
-		write_func_header(package, name, params, rets);
+	while (read_func_header(&name, &params, &paramwid, &rets)) {
+		write_func_header(package, name, params, paramwid, rets);
 		copy_body();
 		write_func_trailer(package, name, rets);
 		free(name);
@@ -630,10 +731,10 @@ process_file(void)
 static void
 usage(void)
 {
-	sysfatal("Usage: goc2c [--go-pkgpath PKGPATH] [--go-prefix PREFIX] [file]\n");
+	sysfatal("Usage: goc2c [--6g | --gc] [--go-pkgpath PKGPATH] [--go-prefix PREFIX] [file]\n");
 }
 
-int
+void
 main(int argc, char **argv)
 {
 	char *goarch;
@@ -642,7 +743,11 @@ main(int argc, char **argv)
 	while(argc > 1 && argv[1][0] == '-') {
 		if(strcmp(argv[1], "-") == 0)
 			break;
-		if (strcmp(argv[1], "--go-pkgpath") == 0 && argc > 2) {
+		if(strcmp(argv[1], "--6g") == 0)
+			gcc = 0;
+		else if(strcmp(argv[1], "--gcc") == 0)
+			gcc = 1;
+		else if (strcmp(argv[1], "--go-pkgpath") == 0 && argc > 2) {
 			pkgpath = argv[2];
 			argc--;
 			argv++;
@@ -668,6 +773,18 @@ main(int argc, char **argv)
 	file = argv[1];
 	if(freopen(file, "r", stdin) == 0) {
 		sysfatal("open %s: %r\n", file);
+	}
+
+	if(!gcc) {
+		// 6g etc; update size table
+		goarch = getenv("GOARCH");
+		if(goarch != NULL && strcmp(goarch, "amd64") == 0) {
+			type_table[Uintptr].size = 8;
+			type_table[String].size = 16;
+			type_table[Slice].size = 8+4+4;
+			type_table[Eface].size = 8+8;
+			structround = 8;
+		}
 	}
 
 	printf("// AUTO-GENERATED by autogen.sh; DO NOT EDIT\n\n");

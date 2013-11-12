@@ -71,6 +71,7 @@ func tText(c context, s []byte) (context, int) {
 		}
 		k = j
 	}
+	panic("unreachable")
 }
 
 var elementContentType = [...]state{
@@ -429,6 +430,7 @@ func tCSS(c context, s []byte) (context, int) {
 		}
 		k = i + 1
 	}
+	panic("unreachable")
 }
 
 // tCSSStr is the context transition function for the CSS string and URL states.
@@ -469,6 +471,7 @@ func tCSSStr(c context, s []byte) (context, int) {
 		c, _ = tURL(c, decodeCSS(s[:i+1]))
 		k = i + 1
 	}
+	panic("unreachable")
 }
 
 // tError is the context transition function for the error state.

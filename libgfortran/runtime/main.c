@@ -1,4 +1,5 @@
-/* Copyright (C) 2002-2013 Free Software Foundation, Inc.
+/* Copyright (C) 2002-2003, 2005, 2007, 2009, 2011 
+   Free Software Foundation, Inc.
    Contributed by Andy Vaught and Paul Brook <paul@nowt.org>
 
 This file is part of the GNU Fortran runtime library (libgfortran).
@@ -162,7 +163,7 @@ find_addr2line (void)
 {
 #ifdef HAVE_ACCESS
 #define A2L_LEN 10
-  char *path = secure_getenv ("PATH");
+  char *path = getenv ("PATH");
   if (!path)
     return;
   size_t n = strlen (path);

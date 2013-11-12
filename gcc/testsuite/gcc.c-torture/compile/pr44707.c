@@ -1,5 +1,3 @@
-/* { dg-do compile { target powerpc-ibm-aix* } } */
-
 extern struct { int a, b, c, d; } v;
 extern int w;
 

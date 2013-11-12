@@ -1,6 +1,5 @@
 /* java.math.BigInteger -- Arbitary precision integers
-   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2005, 2006, 2007, 2010
-   Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2005, 2006, 2007  Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -65,8 +64,7 @@ import java.util.logging.Logger;
  */
 public class BigInteger extends Number implements Comparable<BigInteger>
 {
-  private static final Logger log = Configuration.DEBUG ?
-                        Logger.getLogger(BigInteger.class.getName()) : null;
+  private static final Logger log = Logger.getLogger(BigInteger.class.getName());
 
   /** All integers are stored in 2's-complement form.
    * If words == null, the ival is the value of this BigInteger.

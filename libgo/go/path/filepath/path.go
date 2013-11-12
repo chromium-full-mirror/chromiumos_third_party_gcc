@@ -13,45 +13,6 @@ import (
 	"strings"
 )
 
-// A lazybuf is a lazily constructed path buffer.
-// It supports append, reading previously appended bytes,
-// and retrieving the final string. It does not allocate a buffer
-// to hold the output until that output diverges from s.
-type lazybuf struct {
-	path       string
-	buf        []byte
-	w          int
-	volAndPath string
-	volLen     int
-}
-
-func (b *lazybuf) index(i int) byte {
-	if b.buf != nil {
-		return b.buf[i]
-	}
-	return b.path[i]
-}
-
-func (b *lazybuf) append(c byte) {
-	if b.buf == nil {
-		if b.w < len(b.path) && b.path[b.w] == c {
-			b.w++
-			return
-		}
-		b.buf = make([]byte, len(b.path))
-		copy(b.buf, b.path[:b.w])
-	}
-	b.buf[b.w] = c
-	b.w++
-}
-
-func (b *lazybuf) string() string {
-	if b.buf == nil {
-		return b.volAndPath[:b.volLen+b.w]
-	}
-	return b.volAndPath[:b.volLen] + string(b.buf[:b.w])
-}
-
 const (
 	Separator     = os.PathSeparator
 	ListSeparator = os.PathListSeparator
@@ -79,15 +40,14 @@ const (
 // Getting Dot-Dot Right,''
 // http://plan9.bell-labs.com/sys/doc/lexnames.html
 func Clean(path string) string {
-	originalPath := path
-	volLen := volumeNameLen(path)
-	path = path[volLen:]
+	vol := VolumeName(path)
+	path = path[len(vol):]
 	if path == "" {
-		if volLen > 1 && originalPath[1] != ':' {
+		if len(vol) > 1 && vol[1] != ':' {
 			// should be UNC
-			return FromSlash(originalPath)
+			return FromSlash(vol)
 		}
-		return originalPath + "."
+		return vol + "."
 	}
 	rooted := os.IsPathSeparator(path[0])
 
@@ -97,11 +57,11 @@ func Clean(path string) string {
 	//	dotdot is index in buf where .. must stop, either because
 	//		it is the leading slash or it is a leading ../../.. prefix.
 	n := len(path)
-	out := lazybuf{path: path, volAndPath: originalPath, volLen: volLen}
-	r, dotdot := 0, 0
+	buf := []byte(path)
+	r, w, dotdot := 0, 0, 0
 	if rooted {
-		out.append(Separator)
-		r, dotdot = 1, 1
+		buf[0] = Separator
+		r, w, dotdot = 1, 1, 1
 	}
 
 	for r < n {
@@ -116,40 +76,46 @@ func Clean(path string) string {
 			// .. element: remove to last separator
 			r += 2
 			switch {
-			case out.w > dotdot:
+			case w > dotdot:
 				// can backtrack
-				out.w--
-				for out.w > dotdot && !os.IsPathSeparator(out.index(out.w)) {
-					out.w--
+				w--
+				for w > dotdot && !os.IsPathSeparator(buf[w]) {
+					w--
 				}
 			case !rooted:
 				// cannot backtrack, but not rooted, so append .. element.
-				if out.w > 0 {
-					out.append(Separator)
+				if w > 0 {
+					buf[w] = Separator
+					w++
 				}
-				out.append('.')
-				out.append('.')
-				dotdot = out.w
+				buf[w] = '.'
+				w++
+				buf[w] = '.'
+				w++
+				dotdot = w
 			}
 		default:
 			// real path element.
 			// add slash if needed
-			if rooted && out.w != 1 || !rooted && out.w != 0 {
-				out.append(Separator)
+			if rooted && w != 1 || !rooted && w != 0 {
+				buf[w] = Separator
+				w++
 			}
 			// copy element
 			for ; r < n && !os.IsPathSeparator(path[r]); r++ {
-				out.append(path[r])
+				buf[w] = path[r]
+				w++
 			}
 		}
 	}
 
 	// Turn empty string into "."
-	if out.w == 0 {
-		out.append('.')
+	if w == 0 {
+		buf[w] = '.'
+		w++
 	}
 
-	return FromSlash(out.string())
+	return FromSlash(vol + string(buf[0:w]))
 }
 
 // ToSlash returns the result of replacing each separator character
@@ -176,7 +142,10 @@ func FromSlash(path string) string {
 // usually found in PATH or GOPATH environment variables.
 // Unlike strings.Split, SplitList returns an empty slice when passed an empty string.
 func SplitList(path string) []string {
-	return splitList(path)
+	if path == "" {
+		return []string{}
+	}
+	return strings.Split(path, string(ListSeparator))
 }
 
 // Split splits path immediately following the final Separator,
@@ -322,18 +291,13 @@ func Rel(basepath, targpath string) (string, error) {
 var SkipDir = errors.New("skip this directory")
 
 // WalkFunc is the type of the function called for each file or directory
-// visited by Walk. The path argument contains the argument to Walk as a
-// prefix; that is, if Walk is called with "dir", which is a directory
-// containing the file "a", the walk function will be called with argument
-// "dir/a". The info argument is the os.FileInfo for the named path.
-//
-// If there was a problem walking to the file or directory named by path, the
-// incoming error will describe the problem and the function can decide how
-// to handle that error (and Walk will not descend into that directory). If
-// an error is returned, processing stops. The sole exception is that if path
-// is a directory and the function returns the special value SkipDir, the
-// contents of the directory are skipped and processing continues as usual on
-// the next file.
+// visited by Walk.  If there was a problem walking to the file or directory
+// named by path, the incoming error will describe the problem and the
+// function can decide how to handle that error (and Walk will not descend
+// into that directory).  If an error is returned, processing stops.  The
+// sole exception is that if path is a directory and the function returns the
+// special value SkipDir, the contents of the directory are skipped
+// and processing continues as usual on the next file.
 type WalkFunc func(path string, info os.FileInfo, err error) error
 
 // walk recursively descends path, calling w.
@@ -371,7 +335,6 @@ func walk(path string, info os.FileInfo, walkFn WalkFunc) error {
 // and directories are filtered by walkFn. The files are walked in lexical
 // order, which makes the output deterministic but means that for very
 // large directories Walk can be inefficient.
-// Walk does not follow symbolic links.
 func Walk(root string, walkFn WalkFunc) error {
 	info, err := os.Lstat(root)
 	if err != nil {
@@ -434,8 +397,7 @@ func Base(path string) string {
 }
 
 // Dir returns all but the last element of path, typically the path's directory.
-// After dropping the final element, the path is Cleaned and trailing
-// slashes are removed.
+// Trailing path separators are removed before processing.
 // If the path is empty, Dir returns ".".
 // If the path consists entirely of separators, Dir returns a single separator.
 // The returned path does not end in a separator unless it is the root directory.
@@ -454,12 +416,4 @@ func Dir(path string) string {
 		dir = "."
 	}
 	return vol + dir
-}
-
-// VolumeName returns leading volume name.
-// Given "C:\foo\bar" it returns "C:" under windows.
-// Given "\\host\share\foo" it returns "\\host\share".
-// On other platforms it returns "".
-func VolumeName(path string) (v string) {
-	return path[:volumeNameLen(path)]
 }

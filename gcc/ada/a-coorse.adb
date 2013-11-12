@@ -319,7 +319,7 @@ package body Ada.Containers.Ordered_Sets is
 
    function Ceiling (Container : Set; Item : Element_Type) return Cursor is
       Node : constant Node_Access :=
-        Element_Keys.Ceiling (Container.Tree, Item);
+               Element_Keys.Ceiling (Container.Tree, Item);
    begin
       return (if Node = null then No_Element
               else Cursor'(Container'Unrestricted_Access, Node));
@@ -373,8 +373,9 @@ package body Ada.Containers.Ordered_Sets is
          L : Natural renames Tree.Lock;
       begin
          return R : constant Constant_Reference_Type :=
-           (Element => Position.Node.Element'Access,
-            Control => (Controlled with Container'Unrestricted_Access))
+                      (Element => Position.Node.Element'Access,
+                       Control =>
+                         (Controlled with Container'Unrestricted_Access))
          do
             B := B + 1;
             L := L + 1;
@@ -411,11 +412,11 @@ package body Ada.Containers.Ordered_Sets is
 
    function Copy_Node (Source : Node_Access) return Node_Access is
       Target : constant Node_Access :=
-        new Node_Type'(Parent  => null,
-                       Left    => null,
-                       Right   => null,
-                       Color   => Source.Color,
-                       Element => Source.Element);
+                 new Node_Type'(Parent  => null,
+                                Left    => null,
+                                Right   => null,
+                                Color   => Source.Color,
+                                Element => Source.Element);
    begin
       return Target;
    end Copy_Node;
@@ -492,7 +493,8 @@ package body Ada.Containers.Ordered_Sets is
    end Difference;
 
    function Difference (Left, Right : Set) return Set is
-      Tree : constant Tree_Type := Set_Ops.Difference (Left.Tree, Right.Tree);
+      Tree : constant Tree_Type :=
+               Set_Ops.Difference (Left.Tree, Right.Tree);
    begin
       return Set'(Controlled with Tree);
    end Difference;
@@ -600,7 +602,8 @@ package body Ada.Containers.Ordered_Sets is
    ----------
 
    function Find (Container : Set; Item : Element_Type) return Cursor is
-      Node : constant Node_Access := Element_Keys.Find (Container.Tree, Item);
+      Node : constant Node_Access :=
+               Element_Keys.Find (Container.Tree, Item);
    begin
       return (if Node = null then No_Element
               else Cursor'(Container'Unrestricted_Access, Node));
@@ -657,7 +660,8 @@ package body Ada.Containers.Ordered_Sets is
    -----------
 
    function Floor (Container : Set; Item : Element_Type) return Cursor is
-      Node : constant Node_Access := Element_Keys.Floor (Container.Tree, Item);
+      Node : constant Node_Access :=
+               Element_Keys.Floor (Container.Tree, Item);
    begin
       return (if Node = null then No_Element
               else Cursor'(Container'Unrestricted_Access, Node));
@@ -715,7 +719,8 @@ package body Ada.Containers.Ordered_Sets is
       -------------
 
       function Ceiling (Container : Set; Key : Key_Type) return Cursor is
-         Node : constant Node_Access := Key_Keys.Ceiling (Container.Tree, Key);
+         Node : constant Node_Access :=
+                  Key_Keys.Ceiling (Container.Tree, Key);
       begin
          return (if Node = null then No_Element
                  else Cursor'(Container'Unrestricted_Access, Node));
@@ -729,7 +734,8 @@ package body Ada.Containers.Ordered_Sets is
         (Container : aliased Set;
          Key       : Key_Type) return Constant_Reference_Type
       is
-         Node : constant Node_Access := Key_Keys.Find (Container.Tree, Key);
+         Node : constant Node_Access :=
+                  Key_Keys.Find (Container.Tree, Key);
 
       begin
          if Node = null then
@@ -742,8 +748,9 @@ package body Ada.Containers.Ordered_Sets is
             L : Natural renames Tree.Lock;
          begin
             return R : constant Constant_Reference_Type :=
-              (Element => Node.Element'Access,
-               Control => (Controlled with Container'Unrestricted_Access))
+                         (Element => Node.Element'Access,
+                          Control =>
+                            (Controlled with Container'Unrestricted_Access))
             do
                B := B + 1;
                L := L + 1;
@@ -781,7 +788,8 @@ package body Ada.Containers.Ordered_Sets is
       -------------
 
       function Element (Container : Set; Key : Key_Type) return Element_Type is
-         Node : constant Node_Access := Key_Keys.Find (Container.Tree, Key);
+         Node : constant Node_Access :=
+                  Key_Keys.Find (Container.Tree, Key);
 
       begin
          if Node = null then
@@ -921,7 +929,8 @@ package body Ada.Containers.Ordered_Sets is
         (Container : aliased in out Set;
          Key       : Key_Type) return Reference_Type
       is
-         Node : constant Node_Access := Key_Keys.Find (Container.Tree, Key);
+         Node : constant Node_Access :=
+                  Key_Keys.Find (Container.Tree, Key);
 
       begin
          if Node = null then
@@ -1206,7 +1215,7 @@ package body Ada.Containers.Ordered_Sets is
 
    function Intersection (Left, Right : Set) return Set is
       Tree : constant Tree_Type :=
-        Set_Ops.Intersection (Left.Tree, Right.Tree);
+               Set_Ops.Intersection (Left.Tree, Right.Tree);
    begin
       return Set'(Controlled with Tree);
    end Intersection;
@@ -1334,9 +1343,9 @@ package body Ada.Containers.Ordered_Sets is
       B := B + 1;
 
       return It : constant Iterator :=
-        Iterator'(Limited_Controlled with
-                    Container => Container'Unrestricted_Access,
-                    Node      => null);
+                    Iterator'(Limited_Controlled with
+                                Container => Container'Unrestricted_Access,
+                                Node      => null);
    end Iterate;
 
    function Iterate (Container : Set; Start : Cursor)
@@ -1381,9 +1390,9 @@ package body Ada.Containers.Ordered_Sets is
       B := B + 1;
 
       return It : constant Iterator :=
-        Iterator'(Limited_Controlled with
-                    Container => Container'Unrestricted_Access,
-                    Node      => Start.Node);
+                    Iterator'(Limited_Controlled with
+                                Container => Container'Unrestricted_Access,
+                                Node      => Start.Node);
    end Iterate;
 
    ----------
@@ -1476,7 +1485,7 @@ package body Ada.Containers.Ordered_Sets is
 
       declare
          Node : constant Node_Access :=
-           Tree_Operations.Next (Position.Node);
+                  Tree_Operations.Next (Position.Node);
       begin
          return (if Node = null then No_Element
                  else Cursor'(Position.Container, Node));
@@ -1535,7 +1544,7 @@ package body Ada.Containers.Ordered_Sets is
 
       declare
          Node : constant Node_Access :=
-           Tree_Operations.Previous (Position.Node);
+                  Tree_Operations.Previous (Position.Node);
       begin
          return (if Node = null then No_Element
                  else Cursor'(Position.Container, Node));
@@ -1661,7 +1670,7 @@ package body Ada.Containers.Ordered_Sets is
 
    procedure Replace (Container : in out Set; New_Item : Element_Type) is
       Node : constant Node_Access :=
-        Element_Keys.Find (Container.Tree, New_Item);
+               Element_Keys.Find (Container.Tree, New_Item);
 
    begin
       if Node = null then
@@ -1890,7 +1899,7 @@ package body Ada.Containers.Ordered_Sets is
 
    function Symmetric_Difference (Left, Right : Set) return Set is
       Tree : constant Tree_Type :=
-        Set_Ops.Symmetric_Difference (Left.Tree, Right.Tree);
+               Set_Ops.Symmetric_Difference (Left.Tree, Right.Tree);
    begin
       return Set'(Controlled with Tree);
    end Symmetric_Difference;
@@ -1920,7 +1929,7 @@ package body Ada.Containers.Ordered_Sets is
 
    function Union (Left, Right : Set) return Set is
       Tree : constant Tree_Type :=
-        Set_Ops.Union (Left.Tree, Right.Tree);
+               Set_Ops.Union (Left.Tree, Right.Tree);
    begin
       return Set'(Controlled with Tree);
    end Union;

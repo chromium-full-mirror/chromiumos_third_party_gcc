@@ -1,5 +1,5 @@
 // { dg-do assemble  }
-// { dg-options "-ftrack-macro-expansion=0" }
+// { dg-options "" }
 // prms-id: 10769
 
 #define PMF2PF(PMF) ((void (*)())(PMF))

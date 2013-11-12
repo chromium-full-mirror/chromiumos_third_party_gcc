@@ -1,7 +1,6 @@
 /* { dg-do compile } */
-/* { dg-options "-march=octeon" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
-/* { dg-final { scan-assembler-not "\txor" } } */
+/* { dg-options "-O2 -march=octeon" } */
+/* { dg-final { scan-assembler-not "xor" } } */
 
 unsigned
 m (unsigned e);

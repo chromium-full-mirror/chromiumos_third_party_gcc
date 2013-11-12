@@ -11,7 +11,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"io"
-	"sort"
 )
 
 // A Block represents a PEM encoded structure.
@@ -210,46 +209,26 @@ func (l *lineBreaker) Close() (err error) {
 	return
 }
 
-func writeHeader(out io.Writer, k, v string) error {
-	_, err := out.Write([]byte(k + ": " + v + "\n"))
-	return err
-}
-
-func Encode(out io.Writer, b *Block) error {
-	if _, err := out.Write(pemStart[1:]); err != nil {
-		return err
+func Encode(out io.Writer, b *Block) (err error) {
+	_, err = out.Write(pemStart[1:])
+	if err != nil {
+		return
 	}
-	if _, err := out.Write([]byte(b.Type + "-----\n")); err != nil {
-		return err
+	_, err = out.Write([]byte(b.Type + "-----\n"))
+	if err != nil {
+		return
 	}
 
 	if len(b.Headers) > 0 {
-		const procType = "Proc-Type"
-		h := make([]string, 0, len(b.Headers))
-		hasProcType := false
-		for k := range b.Headers {
-			if k == procType {
-				hasProcType = true
-				continue
-			}
-			h = append(h, k)
-		}
-		// The Proc-Type header must be written first.
-		// See RFC 1421, section 4.6.1.1
-		if hasProcType {
-			if err := writeHeader(out, procType, b.Headers[procType]); err != nil {
-				return err
+		for k, v := range b.Headers {
+			_, err = out.Write([]byte(k + ": " + v + "\n"))
+			if err != nil {
+				return
 			}
 		}
-		// For consistency of output, write other headers sorted by key.
-		sort.Strings(h)
-		for _, k := range h {
-			if err := writeHeader(out, k, b.Headers[k]); err != nil {
-				return err
-			}
-		}
-		if _, err := out.Write([]byte{'\n'}); err != nil {
-			return err
+		_, err = out.Write([]byte{'\n'})
+		if err != nil {
+			return
 		}
 	}
 
@@ -257,17 +236,19 @@ func Encode(out io.Writer, b *Block) error {
 	breaker.out = out
 
 	b64 := base64.NewEncoder(base64.StdEncoding, &breaker)
-	if _, err := b64.Write(b.Bytes); err != nil {
-		return err
+	_, err = b64.Write(b.Bytes)
+	if err != nil {
+		return
 	}
 	b64.Close()
 	breaker.Close()
 
-	if _, err := out.Write(pemEnd[1:]); err != nil {
-		return err
+	_, err = out.Write(pemEnd[1:])
+	if err != nil {
+		return
 	}
-	_, err := out.Write([]byte(b.Type + "-----\n"))
-	return err
+	_, err = out.Write([]byte(b.Type + "-----\n"))
+	return
 }
 
 func EncodeToMemory(b *Block) []byte {

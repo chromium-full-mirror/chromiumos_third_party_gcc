@@ -1,5 +1,5 @@
 /* Target Code for TI C6X
-   Copyright (C) 2010-2013 Free Software Foundation, Inc.
+   Copyright (C) 2010, 2011, 2012 Free Software Foundation, Inc.
    Contributed by Andrew Jenner <andrew@codesourcery.com>
    Contributed by Bernd Schmidt <bernds@codesourcery.com>
 
@@ -40,9 +40,10 @@
 #include "tm-preds.h"
 #include "tm-constrs.h"
 #include "df.h"
-#include "function.h"
+#include "integrate.h"
 #include "diagnostic-core.h"
 #include "cgraph.h"
+#include "cfglayout.h"
 #include "langhooks.h"
 #include "target.h"
 #include "target-def.h"
@@ -51,7 +52,6 @@
 #include "opts.h"
 #include "hw-doloop.h"
 #include "regrename.h"
-#include "dumpfile.h"
 
 /* Table of supported architecture variants.  */
 typedef struct
@@ -119,12 +119,14 @@ typedef struct
   unsigned int unit_mask;
 } c6x_sched_insn_info;
 
+DEF_VEC_O(c6x_sched_insn_info);
+DEF_VEC_ALLOC_O(c6x_sched_insn_info, heap);
 
 /* Record a c6x_sched_insn_info structure for every insn in the function.  */
-static vec<c6x_sched_insn_info> insn_info;
+static VEC(c6x_sched_insn_info, heap) *insn_info;
 
-#define INSN_INFO_LENGTH (insn_info).length ()
-#define INSN_INFO_ENTRY(N) (insn_info[(N)])
+#define INSN_INFO_LENGTH (VEC_length (c6x_sched_insn_info, insn_info))
+#define INSN_INFO_ENTRY(N) (*VEC_index (c6x_sched_insn_info, insn_info, (N)))
 
 static bool done_cfi_sections;
 
@@ -183,7 +185,7 @@ typedef int unit_req_table[2][UNIT_REQ_MAX];
 static unit_req_table unit_reqs;
 
 /* Register map for debugging.  */
-unsigned const dbx_register_map[FIRST_PSEUDO_REGISTER] =
+int const dbx_register_map[FIRST_PSEUDO_REGISTER] =
 {
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,	/* A0 - A15.  */
   37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,	/* A16 - A32.  */
@@ -733,8 +735,7 @@ c6x_initialize_trampoline (rtx tramp, tree fndecl, rtx cxt)
   tramp = XEXP (tramp, 0);
   emit_library_call (gen_rtx_SYMBOL_REF (Pmode, "__gnu_clear_cache"),
 		     LCT_NORMAL, VOIDmode, 2, tramp, Pmode,
-		     plus_constant (Pmode, tramp, TRAMPOLINE_SIZE),
-		     Pmode);
+		     plus_constant (tramp, TRAMPOLINE_SIZE), Pmode);
 #endif
 }
 
@@ -821,8 +822,7 @@ c6x_output_mi_thunk (FILE *file ATTRIBUTE_UNUSED,
       output_asm_insn ("ldw .d1t1 %3, %2", xops);
 
       /* Adjust the this parameter.  */
-      xops[0] = gen_rtx_MEM (Pmode, plus_constant (Pmode, a0tmp,
-						   vcall_offset));
+      xops[0] = gen_rtx_MEM (Pmode, plus_constant (a0tmp, vcall_offset));
       if (!memory_operand (xops[0], Pmode))
 	{
 	  rtx tmp2 = gen_rtx_REG (Pmode, REG_A1);
@@ -1969,7 +1969,7 @@ c6x_get_unit_specifier (rtx insn)
 {
   enum attr_units units;
 
-  if (insn_info.exists ())
+  if (insn_info)
     {
       int unit = INSN_INFO_ENTRY (INSN_UID (insn)).reservation;
       return c6x_unit_names[unit][0];
@@ -2021,7 +2021,7 @@ c6x_print_unit_specifier_field (FILE *file, rtx insn)
       return;
     }
 
-  if (insn_info.exists ())
+  if (insn_info)
     {
       int unit = INSN_INFO_ENTRY (INSN_UID (insn)).reservation;
       fputs (".", file);
@@ -2536,7 +2536,7 @@ must_reload_pic_reg_p (void)
 
   i = cgraph_local_info (current_function_decl);
 
-  if ((crtl->uses_pic_offset_table || !crtl->is_leaf) && !i->local)
+  if ((crtl->uses_pic_offset_table || !current_function_is_leaf) && !i->local)
     return true;
   return false;
 }
@@ -2550,7 +2550,7 @@ c6x_save_reg (unsigned int regno)
 	   && !fixed_regs[regno])
 	  || (regno == RETURN_ADDR_REGNO
 	      && (df_regs_ever_live_p (regno)
-		  || !crtl->is_leaf))
+		  || !current_function_is_leaf))
 	  || (regno == PIC_OFFSET_TABLE_REGNUM && must_reload_pic_reg_p ()));
 }
 
@@ -2641,7 +2641,7 @@ c6x_compute_frame_layout (struct c6x_frame *frame)
     offset += frame->nregs * 4;
 
   if (offset == 0 && size == 0 && crtl->outgoing_args_size == 0
-      && !crtl->is_leaf)
+      && !current_function_is_leaf)
     /* Don't use the bottom of the caller's frame if we have no
        allocation of our own and call other functions.  */
     frame->padding0 = frame->padding1 = 4;
@@ -3420,7 +3420,7 @@ try_rename_operands (rtx head, rtx tail, unit_req_table reqs, rtx insn,
   int i;
   unsigned tmp_mask;
   int best_reg, old_reg;
-  vec<du_head_p> involved_chains = vNULL;
+  VEC (du_head_p, heap) *involved_chains = NULL;
   unit_req_table new_reqs;
 
   for (i = 0, tmp_mask = op_mask; tmp_mask; i++)
@@ -3431,14 +3431,14 @@ try_rename_operands (rtx head, rtx tail, unit_req_table reqs, rtx insn,
       if (info->op_info[i].n_chains != 1)
 	goto out_fail;
       op_chain = regrename_chain_from_id (info->op_info[i].heads[0]->id);
-      involved_chains.safe_push (op_chain);
+      VEC_safe_push (du_head_p, heap, involved_chains, op_chain);
       tmp_mask &= ~(1 << i);
     }
 
-  if (involved_chains.length () > 1)
+  if (VEC_length (du_head_p, involved_chains) > 1)
     goto out_fail;
 
-  this_head = involved_chains[0];
+  this_head = VEC_index (du_head_p, involved_chains, 0);
   if (this_head->cannot_rename)
     goto out_fail;
 
@@ -3446,7 +3446,8 @@ try_rename_operands (rtx head, rtx tail, unit_req_table reqs, rtx insn,
     {
       unsigned int mask1, mask2, mask_changed;
       int count, side1, side2, req1, req2;
-      insn_rr_info *this_rr = &insn_rr[INSN_UID (chain->insn)];
+      insn_rr_info *this_rr = VEC_index (insn_rr_info, insn_rr,
+					 INSN_UID (chain->insn));
 
       count = get_unit_reqs (chain->insn, &req1, &side1, &req2, &side2);
 
@@ -3505,7 +3506,7 @@ try_rename_operands (rtx head, rtx tail, unit_req_table reqs, rtx insn,
     memcpy (reqs, new_reqs, sizeof (unit_req_table));
 
  out_fail:
-  involved_chains.release ();
+  VEC_free (du_head_p, heap, involved_chains);
 }
 
 /* Find insns in LOOP which would, if shifted to the other side
@@ -3552,7 +3553,7 @@ reshuffle_units (basic_block loop)
       if (!get_unit_operand_masks (insn, &mask1, &mask2))
 	continue;
 
-      info = &insn_rr[INSN_UID (insn)];
+      info = VEC_index (insn_rr_info, insn_rr, INSN_UID (insn));
       if (info->op_info == NULL)
 	continue;
 
@@ -3627,7 +3628,7 @@ typedef struct c6x_sched_context
 /* The current scheduling state.  */
 static struct c6x_sched_context ss;
 
-/* The following variable value is DFA state before issuing the first insn
+/* The following variable value is DFA state before issueing the first insn
    in the current clock cycle.  This is used in c6x_variable_issue for
    comparison with the state after issuing the last insn in a cycle.  */
 static state_t prev_cycle_state;
@@ -3704,7 +3705,7 @@ insn_set_clock (rtx insn, int cycle)
   unsigned uid = INSN_UID (insn);
 
   if (uid >= INSN_INFO_LENGTH)
-    insn_info.safe_grow (uid * 5 / 4 + 10);
+    VEC_safe_grow (c6x_sched_insn_info, heap, insn_info, uid * 5 / 4 + 10);
 
   INSN_INFO_ENTRY (uid).clock = cycle;
   INSN_INFO_ENTRY (uid).new_cond = NULL;
@@ -3909,13 +3910,6 @@ c6x_free_sched_context (void *_sc)
   free (_sc);
 }
 
-/* True if we are currently performing a preliminary scheduling
-   pass before modulo scheduling; we can't allow the scheduler to
-   modify instruction patterns using packetization assumptions,
-   since there will be another scheduling pass later if modulo
-   scheduling fails.  */
-static bool in_hwloop;
-
 /* Provide information about speculation capabilities, and set the
    DO_BACKTRACKING flag.  */
 static void
@@ -3927,8 +3921,6 @@ c6x_set_sched_flags (spec_info_t spec_info)
     {
       *flags |= DO_BACKTRACKING | DO_PREDICATION;
     }
-  if (in_hwloop)
-    *flags |= DONT_BREAK_DEPENDENCIES;
 
   spec_info->mask = 0;
 }
@@ -4358,7 +4350,7 @@ c6x_variable_issue (FILE *dump ATTRIBUTE_UNUSED,
     ss.last_scheduled_iter0 = insn;
   if (GET_CODE (PATTERN (insn)) != USE && GET_CODE (PATTERN (insn)) != CLOBBER)
     ss.issued_this_cycle++;
-  if (insn_info.exists ())
+  if (insn_info)
     {
       state_t st_after = alloca (dfa_state_size);
       int curr_clock = ss.curr_sched_clock;
@@ -5534,7 +5526,7 @@ hwloop_optimize (hwloop_info loop)
   gcc_assert (loop->incoming_dest == loop->head);
 
   entry_edge = NULL;
-  FOR_EACH_VEC_SAFE_ELT (loop->incoming, i, entry_edge)
+  FOR_EACH_VEC_ELT (edge, loop->incoming, i, entry_edge)
     if (entry_edge->flags & EDGE_FALLTHRU)
       break;
   if (entry_edge == NULL)
@@ -5542,11 +5534,9 @@ hwloop_optimize (hwloop_info loop)
 
   reshuffle_units (loop->head);
 
-  in_hwloop = true;
   schedule_ebbs_init ();
   schedule_ebb (BB_HEAD (loop->tail), loop->loop_end, true);
   schedule_ebbs_finish ();
-  in_hwloop = false;
 
   bb = loop->head;
   loop_earliest = bb_earliest_end_cycle (bb, loop->loop_end) + 1;
@@ -5774,7 +5764,7 @@ hwloop_optimize (hwloop_info loop)
 
   seq = get_insns ();
 
-  if (!single_succ_p (entry_bb) || vec_safe_length (loop->incoming) > 1)
+  if (!single_succ_p (entry_bb) || VEC_length (edge, loop->incoming) > 1)
     {
       basic_block new_bb;
       edge e;
@@ -5806,7 +5796,7 @@ hwloop_optimize (hwloop_info loop)
   end_sequence ();
 
   /* Make sure we don't try to schedule this loop again.  */
-  for (ix = 0; loop->blocks.iterate (ix, &bb); ix++)
+  for (ix = 0; VEC_iterate (basic_block, loop->blocks, ix, bb); ix++)
     bb->flags |= BB_DISABLE_SCHEDULE;
 
   return true;
@@ -5925,7 +5915,7 @@ c6x_reorg (void)
     {
       int sz = get_max_uid () * 3 / 2 + 1;
 
-      insn_info.create (sz);
+      insn_info = VEC_alloc (c6x_sched_insn_info, heap, sz);
     }
 
   /* Make sure the real-jump insns we create are not deleted.  When modulo-
@@ -5990,7 +5980,9 @@ c6x_function_end (FILE *file, const char *fname)
 {
   c6x_output_fn_unwind (file);
 
-  insn_info.release ();
+  if (insn_info)
+    VEC_free (c6x_sched_insn_info, heap, insn_info);
+  insn_info = NULL;
 
   if (!flag_inhibit_size_directive)
     ASM_OUTPUT_MEASURED_SIZE (file, fname);

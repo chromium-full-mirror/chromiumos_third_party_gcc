@@ -1,5 +1,6 @@
 /* CPU mode switching
-   Copyright (C) 1998-2013 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008,
+   2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -29,9 +30,11 @@ along with GCC; see the file COPYING3.  If not see
 #include "insn-config.h"
 #include "recog.h"
 #include "basic-block.h"
+#include "output.h"
 #include "tm_p.h"
 #include "function.h"
 #include "tree-pass.h"
+#include "timevar.h"
 #include "df.h"
 #include "emit-rtl.h"
 
@@ -147,10 +150,10 @@ make_preds_opaque (basic_block b, int j)
     {
       basic_block pb = e->src;
 
-      if (e->aux || ! bitmap_bit_p (transp[pb->index], j))
+      if (e->aux || ! TEST_BIT (transp[pb->index], j))
 	continue;
 
-      bitmap_clear_bit (transp[pb->index], j);
+      RESET_BIT (transp[pb->index], j);
       make_preds_opaque (pb, j);
     }
 }
@@ -241,7 +244,7 @@ create_pre_exit (int n_entities, int *entity_map, const int *num_modes)
 		int copy_start, copy_num;
 		int j;
 
-		if (NONDEBUG_INSN_P (return_copy))
+		if (INSN_P (return_copy))
 		  {
 		    /* When using SJLJ exceptions, the call to the
 		       unregister function is inserted between the
@@ -321,19 +324,9 @@ create_pre_exit (int n_entities, int *entity_map, const int *num_modes)
 			     && GET_CODE (SUBREG_REG (copy_reg)) == REG)
 		      copy_start = REGNO (SUBREG_REG (copy_reg));
 		    else
-		      {
-			/* When control reaches end of non-void function,
-			   there are no return copy insns at all.  This
-			   avoids an ice on that invalid function.  */
-			if (ret_start + nregs == ret_end)
-			  short_block = 1;
-			break;
-		      }
-		    if (!targetm.calls.function_value_regno_p (copy_start))
-		      {
-			last_insn = return_copy;
-			continue;
-		      }
+		      break;
+		    if (copy_start >= FIRST_PSEUDO_REGISTER)
+		      break;
 		    copy_num
 		      = hard_regno_nregs[copy_start][GET_MODE (copy_reg)];
 
@@ -351,16 +344,6 @@ create_pre_exit (int n_entities, int *entity_map, const int *num_modes)
 		      }
 		    if (j >= 0)
 		      {
-			/* __builtin_return emits a sequence of loads to all
-			   return registers.  One of them might require
-			   another mode than MODE_EXIT, even if it is
-			   unrelated to the return value, so we want to put
-			   the final mode switch after it.  */
-			if (maybe_builtin_apply
-			    && targetm.calls.function_value_regno_p
-			        (copy_start))
-			  forced_late_switch = 1;
-
 			/* For the SH4, floating point loads depend on fpscr,
 			   thus we might need to put the final mode switch
 			   after the return value copy.  That is still OK,
@@ -462,7 +445,7 @@ optimize_mode_switching (void)
   int i, j;
   int n_entities;
   int max_num_modes = 0;
-  bool emitted ATTRIBUTE_UNUSED = false;
+  bool emited ATTRIBUTE_UNUSED = false;
   basic_block post_entry ATTRIBUTE_UNUSED, pre_exit ATTRIBUTE_UNUSED;
 
   for (e = N_ENTITIES - 1, n_entities = 0; e >= 0; e--)
@@ -501,7 +484,7 @@ optimize_mode_switching (void)
   transp = sbitmap_vector_alloc (last_basic_block, n_entities);
   comp = sbitmap_vector_alloc (last_basic_block, n_entities);
 
-  bitmap_vector_ones (transp, last_basic_block);
+  sbitmap_vector_ones (transp, last_basic_block);
 
   for (j = n_entities - 1; j >= 0; j--)
     {
@@ -532,7 +515,7 @@ optimize_mode_switching (void)
 	      {
 		ptr = new_seginfo (no_mode, BB_HEAD (bb), bb->index, live_now);
 		add_seginfo (info + bb->index, ptr);
-		bitmap_clear_bit (transp[bb->index], j);
+		RESET_BIT (transp[bb->index], j);
 	      }
 	  }
 
@@ -549,10 +532,10 @@ optimize_mode_switching (void)
 		      last_mode = mode;
 		      ptr = new_seginfo (mode, insn, bb->index, live_now);
 		      add_seginfo (info + bb->index, ptr);
-		      bitmap_clear_bit (transp[bb->index], j);
+		      RESET_BIT (transp[bb->index], j);
 		    }
 #ifdef MODE_AFTER
-		  last_mode = MODE_AFTER (e, last_mode, insn);
+		  last_mode = MODE_AFTER (last_mode, insn);
 #endif
 		  /* Update LIVE_NOW.  */
 		  for (link = REG_NOTES (insn); link; link = XEXP (link, 1))
@@ -588,7 +571,7 @@ optimize_mode_switching (void)
 	       an extra check in make_preds_opaque.  We also
 	       need this to avoid confusing pre_edge_lcm when
 	       antic is cleared but transp and comp are set.  */
-	    bitmap_clear_bit (transp[bb->index], j);
+	    RESET_BIT (transp[bb->index], j);
 
 	    /* Insert a fake computing definition of MODE into entry
 	       blocks which compute no mode. This represents the mode on
@@ -610,8 +593,8 @@ optimize_mode_switching (void)
       sbitmap *insert;
 
       /* Set the anticipatable and computing arrays.  */
-      bitmap_vector_clear (antic, last_basic_block);
-      bitmap_vector_clear (comp, last_basic_block);
+      sbitmap_vector_zero (antic, last_basic_block);
+      sbitmap_vector_zero (comp, last_basic_block);
       for (j = n_entities - 1; j >= 0; j--)
 	{
 	  int m = current_mode[j] = MODE_PRIORITY_TO_MODE (entity_map[j], i);
@@ -620,10 +603,10 @@ optimize_mode_switching (void)
 	  FOR_EACH_BB (bb)
 	    {
 	      if (info[bb->index].seginfo->mode == m)
-		bitmap_set_bit (antic[bb->index], j);
+		SET_BIT (antic[bb->index], j);
 
 	      if (info[bb->index].computing == m)
-		bitmap_set_bit (comp[bb->index], j);
+		SET_BIT (comp[bb->index], j);
 	    }
 	}
 
@@ -631,7 +614,7 @@ optimize_mode_switching (void)
 	 placement mode switches to modes with priority I.  */
 
       FOR_EACH_BB (bb)
-	bitmap_not (kill[bb->index], transp[bb->index]);
+	sbitmap_not (kill[bb->index], transp[bb->index]);
       edge_list = pre_edge_lcm (n_entities, transp, comp, antic,
 				kill, &insert, &del);
 
@@ -657,7 +640,7 @@ optimize_mode_switching (void)
 
 	      eg->aux = 0;
 
-	      if (! bitmap_bit_p (insert[e], j))
+	      if (! TEST_BIT (insert[e], j))
 		continue;
 
 	      eg->aux = (void *)1;
@@ -684,7 +667,7 @@ optimize_mode_switching (void)
 	    }
 
 	  FOR_EACH_BB_REVERSE (bb)
-	    if (bitmap_bit_p (del[bb->index], j))
+	    if (TEST_BIT (del[bb->index], j))
 	      {
 		make_preds_opaque (bb, j);
 		/* Cancel the 'deleted' mode set.  */
@@ -721,7 +704,7 @@ optimize_mode_switching (void)
 		  /* Insert MODE_SET only if it is nonempty.  */
 		  if (mode_set != NULL_RTX)
 		    {
-		      emitted = true;
+		      emited = true;
 		      if (NOTE_INSN_BASIC_BLOCK_P (ptr->insn_ptr))
 			emit_insn_after (mode_set, ptr->insn_ptr);
 		      else
@@ -748,7 +731,7 @@ optimize_mode_switching (void)
 #if defined (MODE_ENTRY) && defined (MODE_EXIT)
   cleanup_cfg (CLEANUP_NO_INSN_DEL);
 #else
-  if (!need_commit && !emitted)
+  if (!need_commit && !emited)
     return 0;
 #endif
 
@@ -782,7 +765,6 @@ struct rtl_opt_pass pass_mode_switching =
  {
   RTL_PASS,
   "mode_sw",                            /* name */
-  OPTGROUP_NONE,                        /* optinfo_flags */
   gate_mode_switching,                  /* gate */
   rest_of_handle_mode_switching,        /* execute */
   NULL,                                 /* sub */

@@ -1,6 +1,6 @@
 // { dg-do compile }
 
-// Copyright (C) 2010-2013 Free Software Foundation, Inc.
+// Copyright (C) 2010, 2012 Free Software Foundation
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -30,8 +30,9 @@ void test01()
 {
   X* px = 0;
   std::tr1::shared_ptr<X> p1(px);   // { dg-error "here" }
-  // { dg-error "incomplete" "" { target *-*-* } 556 }
+  // { dg-error "incomplete" "" { target *-*-* } 563 }
 
   std::tr1::shared_ptr<X> p9(ap());  // { dg-error "here" }
-  // { dg-error "incomplete" "" { target *-*-* } 595 }
+  // { dg-error "incomplete" "" { target *-*-* } 602 }
+
 }

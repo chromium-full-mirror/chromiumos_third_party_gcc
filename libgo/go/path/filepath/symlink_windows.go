@@ -9,10 +9,7 @@ import (
 )
 
 func toShort(path string) (string, error) {
-	p, err := syscall.UTF16FromString(path)
-	if err != nil {
-		return "", err
-	}
+	p := syscall.StringToUTF16(path)
 	b := p // GetShortPathName says we can reuse buffer
 	n, err := syscall.GetShortPathName(&p[0], &b[0], uint32(len(b)))
 	if err != nil {
@@ -29,10 +26,7 @@ func toShort(path string) (string, error) {
 }
 
 func toLong(path string) (string, error) {
-	p, err := syscall.UTF16FromString(path)
-	if err != nil {
-		return "", err
-	}
+	p := syscall.StringToUTF16(path)
 	b := p // GetLongPathName says we can reuse buffer
 	n, err := syscall.GetLongPathName(&p[0], &b[0], uint32(len(b)))
 	if err != nil {

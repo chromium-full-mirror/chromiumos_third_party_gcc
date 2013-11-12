@@ -1,14 +1,14 @@
-/*							log10q.c
+/*							log10l.c
  *
- *	Common logarithm, 128-bit __float128 precision
+ *	Common logarithm, 128-bit long double precision
  *
  *
  *
  * SYNOPSIS:
  *
- * __float128 x, y, log10l();
+ * long double x, y, log10l();
  *
- * y = log10q( x );
+ * y = log10l( x );
  *
  *
  *

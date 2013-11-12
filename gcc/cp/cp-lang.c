@@ -1,5 +1,6 @@
 /* Language-dependent hooks for C++.
-   Copyright (C) 2001-2013 Free Software Foundation, Inc.
+   Copyright 2001, 2002, 2004, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Alexandre Oliva  <aoliva@redhat.com>
 
 This file is part of GCC.
@@ -76,6 +77,8 @@ static tree get_template_argument_pack_elems_folded (const_tree);
 #define LANG_HOOKS_GET_GENERIC_FUNCTION_DECL get_function_template_decl
 #undef LANG_HOOKS_DWARF_NAME
 #define LANG_HOOKS_DWARF_NAME cxx_dwarf_name
+#undef LANG_HOOKS_GET_VIRTUAL_FUNCTION_DECL
+#define LANG_HOOKS_GET_VIRTUAL_FUNCTION_DECL cp_get_virtual_function_decl
 #undef LANG_HOOKS_INIT_TS
 #define LANG_HOOKS_INIT_TS cp_init_ts
 #undef LANG_HOOKS_USER_CONV_FUNCTION
@@ -84,6 +87,14 @@ static tree get_template_argument_pack_elems_folded (const_tree);
 #define LANG_HOOKS_EH_PERSONALITY cp_eh_personality
 #undef LANG_HOOKS_EH_RUNTIME_TYPE
 #define LANG_HOOKS_EH_RUNTIME_TYPE build_eh_type_type
+#undef LANG_HOOKS_DECL_IS_BASE_FIELD
+#define LANG_HOOKS_DECL_IS_BASE_FIELD cp_decl_is_base_field
+#undef LANG_HOOKS_DECL_IS_CONSTRUCTOR
+#define LANG_HOOKS_DECL_IS_CONSTRUCTOR cp_decl_is_constructor
+#undef LANG_HOOKS_DECL_IS_DESTRUCTOR
+#define LANG_HOOKS_DECL_IS_DESTRUCTOR cp_decl_is_destructor
+#undef LANG_HOOKS_DECL_IS_CONST_MEMBER_FUNC
+#define LANG_HOOKS_DECL_IS_CONST_MEMBER_FUNC cp_decl_is_const_member_func
 
 
 /* LIPO support.  */
@@ -127,11 +138,11 @@ struct lang_hooks lang_hooks = LANG_HOOKS_INITIALIZER;
 /* The following function does something real, but only in Objective-C++.  */
 
 tree
-objcp_tsubst_copy_and_build (tree /*t*/,
-			     tree /*args*/,
-			     tsubst_flags_t /*complain*/,
-			     tree /*in_decl*/,
-			     bool /*function_p*/)
+objcp_tsubst_copy_and_build (tree t ATTRIBUTE_UNUSED,
+			     tree args ATTRIBUTE_UNUSED,
+			     tsubst_flags_t complain ATTRIBUTE_UNUSED,
+			     tree in_decl ATTRIBUTE_UNUSED,
+			     bool function_p ATTRIBUTE_UNUSED)
 {
   return NULL_TREE;
 }
@@ -150,7 +161,7 @@ cxx_dwarf_name (tree t, int verbosity)
   gcc_assert (DECL_P (t));
 
   if (DECL_NAME (t)
-      && (ANON_AGGRNAME_P (DECL_NAME (t)) || LAMBDA_TYPE_P (t)))
+      && (ANON_AGGRNAME_P (DECL_NAME (t)) || LAMBDANAME_P (DECL_NAME (t))))
     return NULL;
   if (verbosity >= 2)
     return decl_as_dwarf_string (t,

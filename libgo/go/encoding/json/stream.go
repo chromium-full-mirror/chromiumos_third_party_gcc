@@ -5,7 +5,6 @@
 package json
 
 import (
-	"bytes"
 	"errors"
 	"io"
 )
@@ -26,10 +25,6 @@ type Decoder struct {
 func NewDecoder(r io.Reader) *Decoder {
 	return &Decoder{r: r}
 }
-
-// UseNumber causes the Decoder to unmarshal a number into an interface{} as a
-// Number instead of as a float64.
-func (dec *Decoder) UseNumber() { dec.d.useNumber = true }
 
 // Decode reads the next JSON-encoded value from its
 // input and stores it in the value pointed to by v.
@@ -59,12 +54,6 @@ func (dec *Decoder) Decode(v interface{}) error {
 	return err
 }
 
-// Buffered returns a reader of the data remaining in the Decoder's
-// buffer. The reader is valid until the next call to Decode.
-func (dec *Decoder) Buffered() io.Reader {
-	return bytes.NewReader(dec.buf)
-}
-
 // readValue reads a JSON value into dec.buf.
 // It returns the length of the encoding.
 func (dec *Decoder) readValue() (int, error) {
@@ -85,7 +74,7 @@ Input:
 			// scanEnd is delayed one byte.
 			// We might block trying to get that byte from src,
 			// so instead invent a space byte.
-			if (v == scanEndObject || v == scanEndArray) && dec.scan.step(&dec.scan, ' ') == scanEnd {
+			if v == scanEndObject && dec.scan.step(&dec.scan, ' ') == scanEnd {
 				scanp += i + 1
 				break Input
 			}

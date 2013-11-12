@@ -6,9 +6,9 @@
 
 #pragma interface
 
-#include <java/lang/ReflectiveOperationException.h>
+#include <java/lang/Exception.h>
 
-class java::lang::NoSuchFieldException : public ::java::lang::ReflectiveOperationException
+class java::lang::NoSuchFieldException : public ::java::lang::Exception
 {
 
 public:

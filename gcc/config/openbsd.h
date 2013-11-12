@@ -1,5 +1,6 @@
 /* Base configuration file for all OpenBSD targets.
-   Copyright (C) 1999-2013 Free Software Foundation, Inc.
+   Copyright (C) 1999, 2000, 2004, 2005, 2007, 2009, 2010, 2011
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -144,10 +145,6 @@ while (0)
 #endif
 
 #define TARGET_POSIX_IO
-
-/* All new versions of OpenBSD have C99 functions.  */
-#define TARGET_C99_FUNCTIONS 1
-
 
 /* Runtime target specification.  */
 

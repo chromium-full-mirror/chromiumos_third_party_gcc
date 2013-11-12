@@ -1,7 +1,8 @@
 // { dg-do compile }
 // 1999-06-28 bkoz
 
-// Copyright (C) 1999-2013 Free Software Foundation, Inc.
+// Copyright (C) 1999, 2001, 2003, 2009, 2010, 2011
+// Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -33,7 +34,7 @@ void test01()
   typedef char_traits<char>::off_type off_type;
 
   typedef iterator<input_iterator_tag, char, off_type, char*,
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
     char>
 #else
     char&>

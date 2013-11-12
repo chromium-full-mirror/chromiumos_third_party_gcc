@@ -1,5 +1,5 @@
 /* Implementation of the MINLOC intrinsic
-   Copyright (C) 2002-2013 Free Software Foundation, Inc.
+   Copyright 2002, 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
 This file is part of the GNU Fortran runtime library (libgfortran).
@@ -80,7 +80,7 @@ minloc1_8_i8 (gfc_array_i8 * const restrict retarray,
 	extent[n] = 0;
     }
 
-  if (retarray->base_addr == NULL)
+  if (retarray->data == NULL)
     {
       size_t alloc_size, str;
 
@@ -101,7 +101,7 @@ minloc1_8_i8 (gfc_array_i8 * const restrict retarray,
       alloc_size = sizeof (GFC_INTEGER_8) * GFC_DESCRIPTOR_STRIDE(retarray,rank-1)
     		   * extent[rank-1];
 
-      retarray->base_addr = xmalloc (alloc_size);
+      retarray->data = internal_malloc_size (alloc_size);
       if (alloc_size == 0)
 	{
 	  /* Make sure we have a zero-sized array.  */
@@ -131,8 +131,8 @@ minloc1_8_i8 (gfc_array_i8 * const restrict retarray,
 	return;
     }
 
-  base = array->base_addr;
-  dest = retarray->base_addr;
+  base = array->data;
+  dest = retarray->data;
 
   continue_loop = 1;
   while (continue_loop)
@@ -243,7 +243,7 @@ mminloc1_8_i8 (gfc_array_i8 * const restrict retarray,
   if (len <= 0)
     return;
 
-  mbase = mask->base_addr;
+  mbase = mask->data;
 
   mask_kind = GFC_DESCRIPTOR_SIZE (mask);
 
@@ -279,7 +279,7 @@ mminloc1_8_i8 (gfc_array_i8 * const restrict retarray,
 	extent[n] = 0;
     }
 
-  if (retarray->base_addr == NULL)
+  if (retarray->data == NULL)
     {
       size_t alloc_size, str;
 
@@ -307,7 +307,7 @@ mminloc1_8_i8 (gfc_array_i8 * const restrict retarray,
 	  return;
 	}
       else
-	retarray->base_addr = xmalloc (alloc_size);
+	retarray->data = internal_malloc_size (alloc_size);
 
     }
   else
@@ -332,8 +332,8 @@ mminloc1_8_i8 (gfc_array_i8 * const restrict retarray,
 	return;
     }
 
-  dest = retarray->base_addr;
-  base = array->base_addr;
+  dest = retarray->data;
+  base = array->data;
 
   while (base)
     {
@@ -354,8 +354,12 @@ mminloc1_8_i8 (gfc_array_i8 * const restrict retarray,
 	GFC_INTEGER_8 result2 = 0;
 #endif
 	result = 0;
-	for (n = 0; n < len; n++, src += delta, msrc += mdelta)
+	if (len <= 0)
+	  *dest = 0;
+	else
 	  {
+	    for (n = 0; n < len; n++, src += delta, msrc += mdelta)
+	      {
 
 		if (*msrc)
 		  {
@@ -383,8 +387,9 @@ mminloc1_8_i8 (gfc_array_i8 * const restrict retarray,
 		    minval = *src;
 		    result = (GFC_INTEGER_8)n + 1;
 		  }
+	      }
+	    *dest = result;
 	  }
-	*dest = result;
       }
       /* Advance to the next element.  */
       count[0]++;
@@ -467,7 +472,7 @@ sminloc1_8_i8 (gfc_array_i8 * const restrict retarray,
 	extent[n] = 0;
     }
 
-  if (retarray->base_addr == NULL)
+  if (retarray->data == NULL)
     {
       size_t alloc_size, str;
 
@@ -495,7 +500,7 @@ sminloc1_8_i8 (gfc_array_i8 * const restrict retarray,
 	  return;
 	}
       else
-	retarray->base_addr = xmalloc (alloc_size);
+	retarray->data = internal_malloc_size (alloc_size);
     }
   else
     {
@@ -527,7 +532,7 @@ sminloc1_8_i8 (gfc_array_i8 * const restrict retarray,
       dstride[n] = GFC_DESCRIPTOR_STRIDE(retarray,n);
     }
 
-  dest = retarray->base_addr;
+  dest = retarray->data;
 
   while(1)
     {

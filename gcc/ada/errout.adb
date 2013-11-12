@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2013, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2012, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -821,7 +821,9 @@ package body Errout is
       --  with a comma space separator (eliminating a possible (style) or
       --  info prefix).
 
-      if Error_Msg_Line_Length /= 0 and then Continuation then
+      if Error_Msg_Line_Length /= 0
+        and then Continuation
+      then
          Cur_Msg := Errors.Last;
 
          declare
@@ -892,24 +894,12 @@ package body Errout is
               Msg_Buffer (M .. Msglen);
             Newl := Newl + Msglen - M + 1;
             Errors.Table (Cur_Msg).Text := new String'(Newm (1 .. Newl));
-
-            --  Update warning msg flag and message doc char if needed
-
-            if Is_Warning_Msg then
-               if not Errors.Table (Cur_Msg).Warn then
-                  Errors.Table (Cur_Msg).Warn := True;
-                  Errors.Table (Cur_Msg).Warn_Chr := Warning_Msg_Char;
-
-               elsif Warning_Msg_Char /= ' ' then
-                  Errors.Table (Cur_Msg).Warn_Chr := Warning_Msg_Char;
-               end if;
-            end if;
          end;
 
          return;
       end if;
 
-      --  Here we build a new error object
+      --  Otherwise build error message object for new message
 
       Errors.Append
         ((Text     => new String'(Msg_Buffer (1 .. Msglen)),
@@ -921,7 +911,6 @@ package body Errout is
           Line     => Get_Physical_Line_Number (Sptr),
           Col      => Get_Column_Number (Sptr),
           Warn     => Is_Warning_Msg,
-          Warn_Chr => Warning_Msg_Char,
           Style    => Is_Style_Msg,
           Serious  => Is_Serious_Error,
           Uncond   => Is_Unconditional_Msg,
@@ -1457,15 +1446,6 @@ package body Errout is
 
       return S;
    end First_Sloc;
-
-   -----------------------
-   -- Get_Ignore_Errors --
-   -----------------------
-
-   function Get_Ignore_Errors return Boolean is
-   begin
-      return Errors_Must_Be_Ignored;
-   end Get_Ignore_Errors;
 
    ----------------
    -- Initialize --
@@ -2465,7 +2445,7 @@ package body Errout is
          if Sloc (Error_Msg_Node_1) > Standard_Location then
             declare
                Iloc : constant Source_Ptr :=
-                 Instantiation_Location (Sloc (Error_Msg_Node_1));
+                        Instantiation_Location (Sloc (Error_Msg_Node_1));
 
             begin
                if Iloc /= No_Location
@@ -2675,40 +2655,6 @@ package body Errout is
       C : Character;   -- Current character
       P : Natural;     -- Current index;
 
-      procedure Set_Msg_Insertion_Warning;
-      --  Deal with ? ?? ?x? ?X? insertion sequences
-
-      -------------------------------
-      -- Set_Msg_Insertion_Warning --
-      -------------------------------
-
-      procedure Set_Msg_Insertion_Warning is
-      begin
-         Warning_Msg_Char := ' ';
-
-         if P <= Text'Last and then Text (P) = '?' then
-            if Warning_Doc_Switch then
-               Warning_Msg_Char := '?';
-            end if;
-
-            P := P + 1;
-
-         elsif P + 1 <= Text'Last
-           and then (Text (P) in 'a' .. 'z'
-                      or else
-                     Text (P) in 'A' .. 'Z')
-           and then Text (P + 1) = '?'
-         then
-            if Warning_Doc_Switch then
-               Warning_Msg_Char := Text (P);
-            end if;
-
-            P := P + 2;
-         end if;
-      end Set_Msg_Insertion_Warning;
-
-   --  Start of processing for Set_Msg_Text
-
    begin
       Manual_Quote_Mode := False;
       Is_Unconditional_Msg := False;
@@ -2779,16 +2725,10 @@ package body Errout is
                Is_Unconditional_Msg := True;
 
             when '?' =>
-               Set_Msg_Insertion_Warning;
+               null; -- already dealt with
 
             when '<' =>
-
-               --  If tagging of messages is enabled, and this is a warning,
-               --  then it is treated as being [enabled by default].
-
-               if Error_Msg_Warn and Warning_Doc_Switch then
-                  Warning_Msg_Char := '?';
-               end if;
+               null; -- already dealt with
 
             when '|' =>
                null; -- already dealt with
@@ -2998,7 +2938,7 @@ package body Errout is
                   if Is_Itype (Ent) then
                      declare
                         Assoc : constant Node_Id :=
-                          Associated_Node_For_Itype (Ent);
+                                  Associated_Node_For_Itype (Ent);
 
                      begin
                         if Nkind (Assoc) in N_Subprogram_Specification then

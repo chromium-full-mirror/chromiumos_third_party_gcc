@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2013, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2012, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -70,10 +70,7 @@ package body Sprint is
    --  or for Print_Generated_Code (-gnatG) or Dump_Generated_Code (-gnatD).
 
    Dump_Freeze_Null : Boolean;
-   --  Set True if empty freeze nodes and non-source null statements output.
-   --  Note that freeze nodes containing freeze actions are always output,
-   --  as are freeze nodes for itypes, which in general have the effect of
-   --  causing elaboration of the itype.
+   --  Set True if freeze nodes and non-source null statements output
 
    Freeze_Indent : Int := 0;
    --  Keep track of freeze indent level (controls output of blank lines before
@@ -1162,19 +1159,10 @@ package body Sprint is
 
          when N_Case_Expression =>
             declare
-               Has_Parens : constant Boolean := Paren_Count (Node) > 0;
-               Alt        : Node_Id;
+               Alt : Node_Id;
 
             begin
-               --  The syntax for case_expression does not include parentheses,
-               --  but sometimes parentheses are required, so unconditionally
-               --  generate them here unless already present.
-
-               if not Has_Parens then
-                  Write_Char ('(');
-               end if;
-
-               Write_Str_With_Col_Check_Sloc ("case ");
+               Write_Str_With_Col_Check_Sloc ("(case ");
                Sprint_Node (Expression (Node));
                Write_Str_With_Col_Check (" is");
 
@@ -1186,9 +1174,7 @@ package body Sprint is
                   Write_Char (',');
                end loop;
 
-               if not Has_Parens then
-                  Write_Char (')');
-               end if;
+               Write_Char (')');
             end;
 
          when N_Case_Expression_Alternative =>
@@ -1333,6 +1319,27 @@ package body Sprint is
             Write_Indent_Str ("else");
             Sprint_Indented_List (Else_Statements (Node));
             Write_Indent_Str ("end select;");
+
+         when N_Conditional_Expression =>
+            declare
+               Condition : constant Node_Id := First (Expressions (Node));
+               Then_Expr : constant Node_Id := Next (Condition);
+
+            begin
+               Write_Str_With_Col_Check_Sloc ("(if ");
+               Sprint_Node (Condition);
+               Write_Str_With_Col_Check (" then ");
+
+               --  Defense against junk here!
+
+               if Present (Then_Expr) then
+                  Sprint_Node (Then_Expr);
+                  Write_Str_With_Col_Check (" else ");
+                  Sprint_Node (Next (Then_Expr));
+               end if;
+
+               Write_Char (')');
+            end;
 
          when N_Constrained_Array_Definition =>
             Write_Str_With_Col_Check_Sloc ("array ");
@@ -1830,15 +1837,7 @@ package body Sprint is
             if Dump_Original_Only then
                null;
 
-            --  A freeze node is output if it has some effect (i.e. non-empty
-            --  actions, or freeze node for an itype, which causes elaboration
-            --  of the itype), and is also always output if Dump_Freeze_Null
-            --  is set True.
-
-            elsif Present (Actions (Node))
-              or else Is_Itype (Entity (Node))
-              or else Dump_Freeze_Null
-            then
+            elsif Present (Actions (Node)) or else Dump_Freeze_Null then
                Write_Indent;
                Write_Rewrite_Str ("<<<");
                Write_Str_With_Col_Check_Sloc ("freeze ");
@@ -1978,40 +1977,6 @@ package body Sprint is
          when N_Identifier =>
             Set_Debug_Sloc;
             Write_Id (Node);
-
-         when N_If_Expression =>
-            declare
-               Has_Parens : constant Boolean := Paren_Count (Node) > 0;
-               Condition  : constant Node_Id := First (Expressions (Node));
-               Then_Expr  : constant Node_Id := Next (Condition);
-
-            begin
-               --  The syntax for if_expression does not include parentheses,
-               --  but sometimes parentheses are required, so unconditionally
-               --  generate them here unless already present.
-
-               if not Has_Parens then
-                  Write_Char ('(');
-               end if;
-               Write_Str_With_Col_Check_Sloc ("if ");
-               Sprint_Node (Condition);
-               Write_Str_With_Col_Check (" then ");
-
-               --  Defense against junk here!
-
-               if Present (Then_Expr) then
-                  Sprint_Node (Then_Expr);
-
-                  if Present (Next (Then_Expr)) then
-                     Write_Str_With_Col_Check (" else ");
-                     Sprint_Node (Next (Then_Expr));
-                  end if;
-               end if;
-
-               if not Has_Parens then
-                  Write_Char (')');
-               end if;
-            end;
 
          when N_If_Statement =>
             Write_Indent_Str_Sloc ("if ");
@@ -4095,7 +4060,7 @@ package body Sprint is
 
                   when E_Modular_Integer_Type =>
                      Write_Header;
-                     Write_Str ("mod ");
+                     Write_Str (" mod ");
                      Write_Uint_With_Col_Check (Modulus (Typ), Auto);
 
                   --  Floating point types and subtypes
@@ -4145,7 +4110,7 @@ package body Sprint is
 
                   --  Record subtypes
 
-                  when E_Record_Subtype | E_Record_Subtype_With_Private =>
+                  when E_Record_Subtype =>
                      Write_Header (False);
                      Write_Str ("record");
                      Indent_Begin;
@@ -4170,7 +4135,7 @@ package body Sprint is
 
                   when E_Class_Wide_Type    |
                        E_Class_Wide_Subtype =>
-                     Write_Header (Ekind (Typ) = E_Class_Wide_Type);
+                     Write_Header;
                      Write_Name_With_Col_Check (Chars (Etype (Typ)));
                      Write_Str ("'Class");
 

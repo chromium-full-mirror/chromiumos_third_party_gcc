@@ -1,5 +1,5 @@
 /* Next Runtime (ABI-2) private.
-   Copyright (C) 2011-2013 Free Software Foundation, Inc.
+   Copyright (C) 2011 Free Software Foundation, Inc.
 
    Contributed by Iain Sandoe and based, in part, on an implementation in
    'branches/apple/trunk' contributed by Apple Computer Inc.
@@ -32,10 +32,10 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree.h"
 
 #ifdef OBJCPLUS
-#include "cp/cp-tree.h"
+#include "cp-tree.h"
 #else
-#include "c/c-tree.h"
-#include "c/c-lang.h"
+#include "c-tree.h"
+#include "c-lang.h"
 #endif
 #include "langhooks.h"
 #include "c-family/c-objc.h"
@@ -208,8 +208,8 @@ static tree next_runtime_abi_02_get_class_super_ref (location_t, struct imp_entr
 static tree next_runtime_abi_02_get_category_super_ref (location_t, struct imp_entry *, bool);
 
 static tree next_runtime_abi_02_receiver_is_class_object (tree);
-static void next_runtime_abi_02_get_arg_type_list_base (vec<tree, va_gc> **,
-							tree, int, int);
+static void next_runtime_abi_02_get_arg_type_list_base (VEC(tree,gc) **, tree,
+							int, int);
 static tree next_runtime_abi_02_build_objc_method_call (location_t, tree, tree,
 							tree, tree, tree, int);
 static bool next_runtime_abi_02_setup_const_string_class_decl (void);
@@ -1015,6 +1015,8 @@ typedef struct GTY(()) ident_data_tuple {
   tree ident;
   tree data;
 } ident_data_tuple ;
+DEF_VEC_O(ident_data_tuple);
+DEF_VEC_ALLOC_O(ident_data_tuple, gc);
 
 /* This routine creates a file scope static variable of type 'Class'
    to hold the address of a class.  */
@@ -1036,7 +1038,7 @@ build_v2_class_reference_decl (tree ident)
    ident is replaced with address of the class metadata (of type
    'Class') in the output routine.  */
 
-static GTY (()) vec<ident_data_tuple, va_gc> *classrefs;
+static GTY (()) VEC (ident_data_tuple, gc) * classrefs;
 
 static tree
 objc_v2_get_class_reference (tree ident)
@@ -1047,7 +1049,7 @@ objc_v2_get_class_reference (tree ident)
     {
       int count;
       ident_data_tuple *ref;
-      FOR_EACH_VEC_ELT (*classrefs, count, ref)
+      FOR_EACH_VEC_ELT (ident_data_tuple, classrefs, count, ref)
 	{
 	  if (ref->ident == ident)
 	    {
@@ -1059,14 +1061,14 @@ objc_v2_get_class_reference (tree ident)
     }
   else
     /* Somewhat arbitrary initial provision.  */
-    vec_alloc (classrefs, 16);
+    classrefs = VEC_alloc (ident_data_tuple, gc, 16);
 
   /* We come here if we don't find the entry - or if the table was yet
      to be created.  */
   decl = build_v2_class_reference_decl (ident);
   e.ident = ident;
   e.data = decl;
-  vec_safe_push (classrefs, e);
+  VEC_safe_push (ident_data_tuple, gc, classrefs, &e);
   return decl;
 }
 
@@ -1078,17 +1080,17 @@ next_runtime_abi_02_get_class_reference (tree ident)
   else
     {
       /* We fall back to using objc_getClass ().  */
-      vec<tree, va_gc> *v;
-      vec_alloc (v, 1);
+      VEC(tree,gc) *vec =  VEC_alloc (tree, gc, 1);
       tree t;
       /* ??? add_class_reference (ident); - is pointless, since the
          system lib does not export the equivalent symbols.  Maybe we
          need to build a class ref anyway.  */
       t = my_build_string_pointer (IDENTIFIER_LENGTH (ident) + 1,
 				   IDENTIFIER_POINTER (ident));
-      v->quick_push (t);
-      t = build_function_call_vec (input_location, objc_get_class_decl, v, 0);
-      vec_free (v);
+      VEC_quick_push (tree, vec, t);
+      t = build_function_call_vec (input_location, objc_get_class_decl,
+				   vec, NULL);
+      VEC_free (tree, gc, vec);
       return t;
     }
 }
@@ -1101,9 +1103,8 @@ next_runtime_abi_02_get_class_reference (tree ident)
    prototype.  */
 
 static void
-next_runtime_abi_02_get_arg_type_list_base (vec<tree, va_gc> **argtypes,
-					    tree meth, int context,
-					    int superflag)
+next_runtime_abi_02_get_arg_type_list_base (VEC(tree,gc) **argtypes, tree meth,
+					    int context, int superflag)
 {
   tree receiver_type;
 
@@ -1114,11 +1115,12 @@ next_runtime_abi_02_get_arg_type_list_base (vec<tree, va_gc> **argtypes,
   else
     receiver_type = objc_object_type;
 
-  vec_safe_push (*argtypes, receiver_type);
+  VEC_safe_push (tree, gc, *argtypes, receiver_type);
   /* Selector type - will eventually change to `int'.  */
-  vec_safe_push (*argtypes,
-		 superflag ? objc_v2_super_selector_type
-		           : objc_v2_selector_type);
+  VEC_safe_push (tree, gc, *argtypes,
+		 (superflag
+		  ? objc_v2_super_selector_type
+		  : objc_v2_selector_type));
 }
 
 /* TODO: Merge this with the message refs.  */
@@ -1199,8 +1201,10 @@ typedef struct GTY(()) msgref_entry {
   tree selname;
   tree refdecl;
 } msgref_entry;
+DEF_VEC_O(msgref_entry);
+DEF_VEC_ALLOC_O(msgref_entry, gc);
 
-static GTY (()) vec<msgref_entry, va_gc> *msgrefs;
+static GTY (()) VEC (msgref_entry, gc) * msgrefs;
 
 /* Build the list of (objc_msgSend_fixup_xxx, selector name), used
    later on to initialize the table of 'struct message_ref_t'
@@ -1215,13 +1219,13 @@ build_v2_selector_messenger_reference (tree sel_name, tree message_func_decl)
     {
       int count;
       msgref_entry *ref;
-      FOR_EACH_VEC_ELT (*msgrefs, count, ref)
+      FOR_EACH_VEC_ELT (msgref_entry, msgrefs, count, ref)
 	if (ref->func == message_func_decl && ref->selname == sel_name)
 	  return ref->refdecl;
     }
   else
     /* Somewhat arbitrary initial provision.  */
-    vec_alloc (msgrefs, 32);
+    msgrefs = VEC_alloc (msgref_entry, gc, 32);
 
   /* We come here if we don't find a match or at the start.  */
   decl = build_v2_message_reference_decl (sel_name,
@@ -1229,7 +1233,7 @@ build_v2_selector_messenger_reference (tree sel_name, tree message_func_decl)
   e.func = message_func_decl;
   e.selname = sel_name;
   e.refdecl = decl;
-  vec_safe_push (msgrefs, e);
+  VEC_safe_push (msgref_entry, gc, msgrefs, &e);
   return decl;
 }
 
@@ -1254,7 +1258,9 @@ typedef struct GTY(()) prot_list_entry {
   tree id;
   tree refdecl;
 } prot_list_entry;
-static GTY (()) vec<prot_list_entry, va_gc> *protrefs;
+DEF_VEC_O(prot_list_entry);
+DEF_VEC_ALLOC_O(prot_list_entry, gc);
+static GTY (()) VEC (prot_list_entry, gc) * protrefs;
 
 static tree
 objc_v2_get_protocol_reference (tree ident)
@@ -1265,7 +1271,7 @@ objc_v2_get_protocol_reference (tree ident)
     {
       int count;
       prot_list_entry *ref;
-      FOR_EACH_VEC_ELT (*protrefs, count, ref)
+      FOR_EACH_VEC_ELT (prot_list_entry, protrefs, count, ref)
 	{
 	  if (ref->id == ident)
 	    {
@@ -1277,14 +1283,14 @@ objc_v2_get_protocol_reference (tree ident)
     }
   else
     /* Somewhat arbitrary initial provision.  */
-    vec_alloc (protrefs, 32);
+    protrefs = VEC_alloc (prot_list_entry, gc, 32);
 
   /* We come here if we don't find the entry - or if the table was yet
      to be created.  */
   decl = build_v2_protocollist_ref_decl (ident);
   e.id = ident;
   e.refdecl = decl;
-  vec_safe_push (protrefs, e);
+  VEC_safe_push (prot_list_entry, gc, protrefs, &e);
   return decl;
 }
 
@@ -1430,8 +1436,8 @@ build_v2_superclass_ref_decl (tree ident, bool inst)
   return decl;
 }
 
-static GTY (()) vec<ident_data_tuple, va_gc> *class_super_refs;
-static GTY (()) vec<ident_data_tuple, va_gc> *metaclass_super_refs;
+static GTY (()) VEC (ident_data_tuple, gc) * class_super_refs;
+static GTY (()) VEC (ident_data_tuple, gc) * metaclass_super_refs;
 
 static tree
 next_runtime_abi_02_get_class_super_ref (location_t loc ATTRIBUTE_UNUSED,
@@ -1440,14 +1446,14 @@ next_runtime_abi_02_get_class_super_ref (location_t loc ATTRIBUTE_UNUSED,
   tree decl;
   ident_data_tuple e;
   tree id = CLASS_NAME (imp->imp_context);
-  vec<ident_data_tuple, va_gc> *list = inst_meth  ? class_super_refs
+  VEC (ident_data_tuple, gc) *list = inst_meth  ? class_super_refs
 						: metaclass_super_refs;
 
   if (list)
     {
       int count;
       ident_data_tuple *ref;
-      FOR_EACH_VEC_ELT (*list, count, ref)
+      FOR_EACH_VEC_ELT (ident_data_tuple, list, count, ref)
 	{
 	  if (ref->ident == id)
 	    {
@@ -1461,22 +1467,16 @@ next_runtime_abi_02_get_class_super_ref (location_t loc ATTRIBUTE_UNUSED,
     {
       /* Somewhat arbitrary initial provision.  */
       if (inst_meth)
-	{
-	  vec_alloc (class_super_refs, 16);
-	  list = class_super_refs;
-	}
+        list = class_super_refs = VEC_alloc (ident_data_tuple, gc, 16);
       else
-	{
-	  vec_alloc (metaclass_super_refs, 16);
-	  list = metaclass_super_refs;
-	}
+        list = metaclass_super_refs = VEC_alloc (ident_data_tuple, gc, 16);
     }
   /* We come here if we don't find the entry - or if the table was yet
      to be created.  */
   decl = build_v2_superclass_ref_decl (id, inst_meth);
   e.ident = id;
   e.data = decl;
-  vec_safe_push (list, e);
+  VEC_safe_push (ident_data_tuple, gc, list, &e);
   return decl;
 }
 
@@ -1509,6 +1509,7 @@ next_runtime_abi_02_get_category_super_ref (location_t loc ATTRIBUTE_UNUSED,
   /* ??? Do we need to add the class ref anway for zero-link?  */
   /* else do it the slow way.  */
   super_class = (inst_meth ? objc_get_class_decl : objc_get_meta_class_decl);
+  /* assemble_external (super_class); */
   super_name = my_build_string_pointer (IDENTIFIER_LENGTH (super_name) + 1,
 					IDENTIFIER_POINTER (super_name));
   /* super_class = objc_get{Meta}Class("CLASS_SUPER_NAME"); */
@@ -1522,12 +1523,13 @@ next_runtime_abi_02_receiver_is_class_object (tree receiver)
 {
   if (TREE_CODE (receiver) == VAR_DECL
       && IS_CLASS (TREE_TYPE (receiver))
-      && vec_safe_length (classrefs))
+      && classrefs
+      && VEC_length (ident_data_tuple, classrefs))
     {
       int count;
       ident_data_tuple *ref;
       /* The receiver is a variable created by build_class_reference_decl.  */
-      FOR_EACH_VEC_ELT (*classrefs, count, ref)
+      FOR_EACH_VEC_ELT (ident_data_tuple, classrefs, count, ref)
 	if (ref->data == receiver)
 	  return ref->ident;
     }
@@ -1625,7 +1627,7 @@ build_v2_build_objc_method_call (int super_flag, tree method_prototype,
       if (TREE_CODE (ret_type) == RECORD_TYPE
 	  || TREE_CODE (ret_type) == UNION_TYPE)
 	{
-	  vec<constructor_elt, va_gc> *rtt = NULL;
+	  VEC(constructor_elt,gc) *rtt = NULL;
 	  /* ??? CHECKME. hmmm..... think we need something more
 	     here.  */
 	  CONSTRUCTOR_APPEND_ELT (rtt, NULL_TREE, NULL_TREE);
@@ -1747,7 +1749,7 @@ next_runtime_abi_02_build_const_string_constructor (location_t loc, tree string,
 						   int length)
 {
   tree constructor, fields, var;
-  vec<constructor_elt, va_gc> *v = NULL;
+  VEC(constructor_elt,gc) *v = NULL;
 
   /* NeXT: (NSConstantString *) & ((__builtin_ObjCString) { isa, string, length }) */
   fields = TYPE_FIELDS (internal_const_str_type);
@@ -1895,12 +1897,12 @@ void build_v2_message_ref_translation_table (void)
   int count;
   msgref_entry *ref;
 
-  if (!vec_safe_length (msgrefs))
+  if (!msgrefs || !VEC_length (msgref_entry,msgrefs))
     return;
 
-  FOR_EACH_VEC_ELT (*msgrefs, count, ref)
+  FOR_EACH_VEC_ELT (msgref_entry, msgrefs, count, ref)
     {
-      vec<constructor_elt, va_gc> *initializer;
+      VEC(constructor_elt,gc) *initializer;
       tree expr, constructor;
       tree struct_type = TREE_TYPE (ref->refdecl);
       location_t loc = DECL_SOURCE_LOCATION (ref->refdecl);
@@ -1928,10 +1930,10 @@ build_v2_classrefs_table (void)
   int count;
   ident_data_tuple *ref;
 
-  if (!vec_safe_length (classrefs))
+  if (!classrefs || !VEC_length (ident_data_tuple, classrefs))
     return;
 
-  FOR_EACH_VEC_ELT (*classrefs, count, ref)
+  FOR_EACH_VEC_ELT (ident_data_tuple, classrefs, count, ref)
     {
       tree expr = ref->ident;
       tree decl = ref->data;
@@ -1959,13 +1961,13 @@ build_v2_super_classrefs_table (bool metaclass)
 {
   int count;
   ident_data_tuple *ref;
-  vec<ident_data_tuple, va_gc> *list = metaclass  ? metaclass_super_refs
+  VEC (ident_data_tuple, gc) *list = metaclass  ? metaclass_super_refs
 						: class_super_refs;
 
-  if (!vec_safe_length (list))
+  if (!list || !VEC_length (ident_data_tuple, list))
     return;
 
-  FOR_EACH_VEC_ELT (*list, count, ref)
+  FOR_EACH_VEC_ELT (ident_data_tuple, list, count, ref)
     {
       tree expr = ref->ident;
       tree decl = ref->data;
@@ -1985,15 +1987,17 @@ build_v2_super_classrefs_table (bool metaclass)
 /* Add the global class meta-data declaration to the list which later
    on ends up in the __class_list section.  */
 
-static GTY(()) vec<tree, va_gc> *class_list;
+static GTY(()) VEC(tree,gc) *class_list;
 
 static void
 objc_v2_add_to_class_list (tree global_class_decl)
 {
-  vec_safe_push (class_list, global_class_decl);
+  if (!class_list)
+    class_list = VEC_alloc (tree, gc, imp_count?imp_count:1);
+  VEC_safe_push (tree, gc, class_list, global_class_decl);
 }
 
-static GTY(()) vec<tree, va_gc> *nonlazy_class_list;
+static GTY(()) VEC(tree,gc) *nonlazy_class_list;
 
 /* Add the global class meta-data declaration to the list which later
    on ends up in the __nonlazy_class section.  */
@@ -2001,10 +2005,12 @@ static GTY(()) vec<tree, va_gc> *nonlazy_class_list;
 static void
 objc_v2_add_to_nonlazy_class_list (tree global_class_decl)
 {
-  vec_safe_push (nonlazy_class_list, global_class_decl);
+  if (!nonlazy_class_list)
+    nonlazy_class_list = VEC_alloc (tree, gc, imp_count?imp_count:1);
+  VEC_safe_push (tree, gc, nonlazy_class_list, global_class_decl);
 }
 
-static GTY(()) vec<tree, va_gc> *category_list;
+static GTY(()) VEC(tree,gc) *category_list;
 
 /* Add the category meta-data declaration to the list which later on
    ends up in the __nonlazy_category section.  */
@@ -2012,10 +2018,12 @@ static GTY(()) vec<tree, va_gc> *category_list;
 static void
 objc_v2_add_to_category_list (tree decl)
 {
-  vec_safe_push (category_list, decl);
+  if (!category_list)
+    category_list = VEC_alloc (tree, gc, cat_count?cat_count:1);
+  VEC_safe_push (tree, gc, category_list, decl);
 }
 
-static GTY(()) vec<tree, va_gc> *nonlazy_category_list;
+static GTY(()) VEC(tree,gc) *nonlazy_category_list;
 
 /* Add the category meta-data declaration to the list which later on
    ends up in the __category_list section.  */
@@ -2023,7 +2031,9 @@ static GTY(()) vec<tree, va_gc> *nonlazy_category_list;
 static void
 objc_v2_add_to_nonlazy_category_list (tree decl)
 {
-  vec_safe_push (nonlazy_category_list, decl);
+  if (!nonlazy_category_list)
+    nonlazy_category_list = VEC_alloc (tree, gc, cat_count?cat_count:1);
+  VEC_safe_push (tree, gc, nonlazy_category_list, decl);
 }
 
 static bool
@@ -2045,16 +2055,16 @@ has_load_impl (tree clsmeth)
    all @implemented {class,category} meta-data.  */
 
 static void
-build_v2_address_table (vec<tree, va_gc> *src, const char *nam, tree attr)
+build_v2_address_table (VEC(tree,gc) *src, const char *nam, tree attr)
 {
   int count=0;
   tree type, decl, expr;
-  vec<constructor_elt, va_gc> *initlist = NULL;
+  VEC(constructor_elt,gc) *initlist = NULL;
 
-  if (!vec_safe_length (src))
+  if (!src || !VEC_length(tree,src))
     return;
 
-  FOR_EACH_VEC_ELT (*src, count, decl)
+  FOR_EACH_VEC_ELT (tree, src, count, decl)
     {
 #ifndef OBJCPLUS
       tree purpose = build_int_cst (NULL_TREE, count);
@@ -2089,7 +2099,7 @@ build_v2_protocol_list_translation_table (void)
   if (!protrefs)
     return;
 
-  FOR_EACH_VEC_ELT (*protrefs, count, ref)
+  FOR_EACH_VEC_ELT (prot_list_entry, protrefs, count, ref)
     {
       char buf[BUFSIZE];
       tree expr;
@@ -2103,7 +2113,7 @@ build_v2_protocol_list_translation_table (void)
   /* TODO: Maybe we could explicitly delete the vec. now?  */
 }
 
-static GTY (()) vec<prot_list_entry, va_gc> *protlist;
+static GTY (()) VEC (prot_list_entry, gc) * protlist;
 
 /* Add the local protocol meta-data declaration to the list which
    later on ends up in the __protocol_list section.  */
@@ -2114,10 +2124,10 @@ objc_add_to_protocol_list (tree protocol_interface_decl, tree protocol_decl)
   prot_list_entry e;
   if (!protlist)
     /* Arbitrary init count.  */
-    vec_alloc (protlist, 32);
+    protlist = VEC_alloc (prot_list_entry, gc, 32);
   e.id = protocol_interface_decl;
   e.refdecl = protocol_decl;
-  vec_safe_push (protlist, e);
+  VEC_safe_push (prot_list_entry, gc, protlist, &e);
 }
 
 /* Build the __protocol_list section table containing address of all
@@ -2128,10 +2138,10 @@ build_v2_protocol_list_address_table (void)
 {
   int count;
   prot_list_entry *ref;
-  if (!vec_safe_length (protlist))
+  if (!protlist || !VEC_length (prot_list_entry, protlist))
     return;
 
-  FOR_EACH_VEC_ELT (*protlist, count, ref)
+  FOR_EACH_VEC_ELT (prot_list_entry, protlist, count, ref)
     {
       tree decl, expr;
       char buf[BUFSIZE];
@@ -2156,7 +2166,7 @@ generate_v2_protocol_list (tree i_or_p, tree klass_ctxt)
 {
   tree refs_decl, lproto, e, plist, ptempl_p_t;
   int size = 0;
-  vec<constructor_elt, va_gc> *initlist = NULL;
+  VEC(constructor_elt,gc) *initlist = NULL;
   char buf[BUFSIZE];
 
   if (TREE_CODE (i_or_p) == CLASS_INTERFACE_TYPE
@@ -2234,10 +2244,10 @@ generate_v2_protocol_list (tree i_or_p, tree klass_ctxt)
 static tree
 build_v2_descriptor_table_initializer (tree type, tree entries)
 {
-  vec<constructor_elt, va_gc> *initlist = NULL;
+  VEC(constructor_elt,gc) *initlist = NULL;
   do
     {
-      vec<constructor_elt, va_gc> *eltlist = NULL;
+      VEC(constructor_elt,gc) *eltlist = NULL;
       CONSTRUCTOR_APPEND_ELT (eltlist, NULL_TREE,
 			      build_selector (METHOD_SEL_NAME (entries)));
       CONSTRUCTOR_APPEND_ELT (eltlist, NULL_TREE,
@@ -2292,7 +2302,7 @@ generate_v2_meth_descriptor_table (tree chain, tree protocol,
 {
   tree method_list_template, initlist, decl, methods;
   int size, entsize;
-  vec<constructor_elt, va_gc> *v = NULL;
+  VEC(constructor_elt,gc) *v = NULL;
   char buf[BUFSIZE];
 
   if (!chain || !prefix)
@@ -2336,7 +2346,7 @@ static tree
 build_v2_property_table_initializer (tree type, tree context)
 {
   tree x;
-  vec<constructor_elt, va_gc> *inits = NULL;
+  VEC(constructor_elt,gc) *inits = NULL;
   if (TREE_CODE (context) == PROTOCOL_INTERFACE_TYPE)
     x = CLASS_PROPERTY_DECL (context);
   else
@@ -2344,7 +2354,7 @@ build_v2_property_table_initializer (tree type, tree context)
 
   for (; x; x = TREE_CHAIN (x))
     {
-      vec<constructor_elt, va_gc> *elemlist = NULL;
+      VEC(constructor_elt,gc) *elemlist = NULL;
       /* NOTE! sections where property name/attribute go MUST change
 	 later.  */
       tree attribute, name_ident = PROPERTY_NAME (x);
@@ -2403,7 +2413,7 @@ generate_v2_property_table (tree context, tree klass_ctxt)
 {
   tree x, decl, initlist, property_list_template;
   bool is_proto = false;
-  vec<constructor_elt, va_gc> *inits = NULL;
+  VEC(constructor_elt,gc) *inits = NULL;
   int init_val, size = 0;
   char buf[BUFSIZE];
 
@@ -2459,7 +2469,7 @@ build_v2_protocol_initializer (tree type, tree protocol_name, tree protocol_list
 {
   tree expr, ttyp;
   location_t loc;
-  vec<constructor_elt, va_gc> *inits = NULL;
+  VEC(constructor_elt,gc) *inits = NULL;
 
   /* TODO: find a better representation of location from the inputs.  */
   loc = UNKNOWN_LOCATION;
@@ -2606,7 +2616,7 @@ static tree
 generate_v2_dispatch_table (tree chain, const char *name, tree attr)
 {
   tree decl, method_list_template, initlist;
-  vec<constructor_elt, va_gc> *v = NULL;
+  VEC(constructor_elt,gc) *v = NULL;
   int size, init_val;
 
   if (!chain || !name || !(size = list_length (chain)))
@@ -2640,7 +2650,7 @@ build_v2_category_initializer (tree type, tree cat_name, tree class_name,
 				location_t loc)
 {
   tree expr, ltyp;
-  vec<constructor_elt, va_gc> *v = NULL;
+  VEC(constructor_elt,gc) *v = NULL;
 
   CONSTRUCTOR_APPEND_ELT (v, NULL_TREE, cat_name);
   CONSTRUCTOR_APPEND_ELT (v, NULL_TREE, class_name);
@@ -2757,8 +2767,10 @@ typedef struct GTY(()) ivarref_entry
   tree decl;
   tree offset;
 } ivarref_entry;
+DEF_VEC_O(ivarref_entry);
+DEF_VEC_ALLOC_O(ivarref_entry, gc);
 
-static GTY (()) vec<ivarref_entry, va_gc> *ivar_offset_refs;
+static GTY (()) VEC (ivarref_entry, gc) * ivar_offset_refs;
 
 static tree
 ivar_offset_ref (tree class_name, tree field_decl)
@@ -2775,13 +2787,13 @@ ivar_offset_ref (tree class_name, tree field_decl)
     {
       int count;
       ivarref_entry *ref;
-      FOR_EACH_VEC_ELT (*ivar_offset_refs, count, ref)
+      FOR_EACH_VEC_ELT (ivarref_entry, ivar_offset_refs, count, ref)
 	if (DECL_NAME (ref->decl) == field_decl_id)
 	  return ref->decl;
     }
   else
     /* Somewhat arbitrary initial provision.  */
-    vec_alloc (ivar_offset_refs, 32);
+    ivar_offset_refs = VEC_alloc (ivarref_entry, gc, 32);
 
   /* We come here if we don't find a match or at the start.  */
   global_var = (TREE_PUBLIC (field_decl) || TREE_PROTECTED (field_decl));
@@ -2795,7 +2807,7 @@ ivar_offset_ref (tree class_name, tree field_decl)
 
   e.decl = decl;
   e.offset = byte_position (field_decl);
-  vec_safe_push (ivar_offset_refs, e);
+  VEC_safe_push (ivarref_entry, gc, ivar_offset_refs, &e);
   return decl;
 }
 
@@ -2807,11 +2819,11 @@ ivar_offset_ref (tree class_name, tree field_decl)
 static tree
 build_v2_ivar_list_initializer (tree class_name, tree type, tree field_decl)
 {
-  vec<constructor_elt, va_gc> *inits = NULL;
+  VEC(constructor_elt,gc) *inits = NULL;
 
   do
     {
-      vec<constructor_elt, va_gc> *ivar = NULL;
+      VEC(constructor_elt,gc) *ivar = NULL;
       int val;
       tree id;
 
@@ -2903,7 +2915,7 @@ static tree
 generate_v2_ivars_list (tree chain, const char *name, tree attr, tree templ)
 {
   tree decl, initlist, ivar_list_template;
-  vec<constructor_elt, va_gc> *inits = NULL;
+  VEC(constructor_elt,gc) *inits = NULL;
   int size, ivar_t_size;
 
   if (!chain || !name || !(size = ivar_list_length (chain)))
@@ -2936,7 +2948,7 @@ static tree
 build_v2_class_t_initializer (tree type, tree isa, tree superclass,
 			      tree ro, tree cache, tree vtable)
 {
-  vec<constructor_elt, va_gc> *initlist = NULL;
+  VEC(constructor_elt,gc) *initlist = NULL;
 
   /* isa */
   CONSTRUCTOR_APPEND_ELT (initlist, NULL_TREE, isa);
@@ -2974,7 +2986,7 @@ build_v2_class_ro_t_initializer (tree type, tree name,
 {
   tree expr, unsigned_char_star, ltyp;
   location_t loc;
-  vec<constructor_elt, va_gc> *initlist = NULL;
+  VEC(constructor_elt,gc) *initlist = NULL;
 
   /* TODO: fish out the real location from somewhere.  */
   loc = UNKNOWN_LOCATION;
@@ -3048,7 +3060,7 @@ build_v2_class_ro_t_initializer (tree type, tree name,
   return objc_build_constructor (type, initlist);
 }
 
-static GTY (()) vec<ident_data_tuple, va_gc> *ehtype_list;
+static GTY (()) VEC (ident_data_tuple, gc) * ehtype_list;
 
 /* Record a name as needing a catcher.  */
 static void
@@ -3060,18 +3072,18 @@ objc_v2_add_to_ehtype_list (tree name)
       int count = 0;
       ident_data_tuple *ref;
 
-      FOR_EACH_VEC_ELT (*ehtype_list, count, ref)
+      FOR_EACH_VEC_ELT (ident_data_tuple, ehtype_list, count, ref)
 	if (ref->ident == name)
 	  return; /* Already entered.  */
      }
   else
     /* Arbitrary initial count.  */
-    vec_alloc (ehtype_list, 8);
+    ehtype_list = VEC_alloc (ident_data_tuple, gc, 8);
 
   /* Not found, or new list.  */
   e.ident = name;
   e.data = NULL_TREE;
-  vec_safe_push (ehtype_list, e);
+  VEC_safe_push (ident_data_tuple, gc, ehtype_list, &e);
 }
 
 static void
@@ -3322,10 +3334,10 @@ build_v2_ivar_offset_ref_table (void)
   int count;
   ivarref_entry *ref;
 
-  if (!vec_safe_length (ivar_offset_refs))
+  if (!ivar_offset_refs || !VEC_length (ivarref_entry, ivar_offset_refs))
     return;
 
-  FOR_EACH_VEC_ELT (*ivar_offset_refs, count, ref)
+  FOR_EACH_VEC_ELT (ivarref_entry, ivar_offset_refs, count, ref)
     finish_var_decl (ref->decl, ref->offset);
 }
 
@@ -3335,7 +3347,7 @@ static void
 generate_v2_objc_image_info (void)
 {
   tree decl, array_type;
-  vec<constructor_elt, va_gc> *v = NULL;
+  VEC(constructor_elt,gc) *v = NULL;
   int flags =
 	((flag_replace_objc_classes && imp_count ? 1 : 0)
 	  | (flag_objc_gc ? 2 : 0));
@@ -3456,7 +3468,7 @@ build_v2_ehtype_template (void)
 static tree
 objc2_build_ehtype_initializer (tree name, tree cls)
 {
-  vec<constructor_elt, va_gc> *initlist = NULL;
+  VEC(constructor_elt,gc) *initlist = NULL;
   tree addr, offs;
 
   /* This is done the same way as c++, missing the two first entries
@@ -3544,10 +3556,10 @@ static void build_v2_eh_catch_objects (void)
   int count=0;
   ident_data_tuple *ref;
 
-  if (!vec_safe_length (ehtype_list))
+  if (!ehtype_list || !VEC_length (ident_data_tuple, ehtype_list))
     return;
 
-  FOR_EACH_VEC_ELT (*ehtype_list, count, ref)
+  FOR_EACH_VEC_ELT (ident_data_tuple, ehtype_list, count, ref)
     {
       char buf[BUFSIZE];
       bool impl = is_implemented (ref->ident);
@@ -3568,10 +3580,10 @@ lookup_ehtype_ref (tree id)
   int count=0;
   ident_data_tuple *ref;
 
-  if (!vec_safe_length (ehtype_list))
+  if (!ehtype_list || !VEC_length (ident_data_tuple, ehtype_list))
     return NULL_TREE;
 
-  FOR_EACH_VEC_ELT (*ehtype_list, count, ref)
+  FOR_EACH_VEC_ELT (ident_data_tuple, ehtype_list, count, ref)
     if (ref->ident == id)
       return ref->data;
   return NULL_TREE;
@@ -3651,11 +3663,10 @@ build_throw_stmt (location_t loc, tree throw_expr, bool rethrown)
   else
     {
       /* Throw like the others...  */
-      vec<tree, va_gc> *parms;
-      vec_alloc (parms, 1);
-      parms->quick_push (throw_expr);
-      t = build_function_call_vec (loc, objc_exception_throw_decl, parms, 0);
-      vec_free (parms);
+      VEC(tree, gc) *parms = VEC_alloc (tree, gc, 1);
+      VEC_quick_push (tree, parms, throw_expr);
+      t = build_function_call_vec (loc, objc_exception_throw_decl, parms, NULL);
+      VEC_free (tree, gc, parms);
     }
   return add_stmt (t);
 }

@@ -1,5 +1,5 @@
 /* Definitions of target machine GNU compiler. 32bit VMS version.
-   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+   Copyright (C) 2009, 2010 Free Software Foundation, Inc.
    Contributed by Douglas B Rupp (rupp@gnat.com).
 
 This file is part of GCC.
@@ -23,11 +23,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "coretypes.h"
 #include "tree.h"
 #include "vms-protos.h"
-#include "ggc.h"
-#include "target.h"
-#include "output.h"
 #include "tm.h"
-#include "dwarf2out.h"
+#include "ggc.h"
 
 /* Correlation of standard CRTL names with DECCRTL function names.  */
 
@@ -38,46 +35,18 @@ along with GCC; see the file COPYING3.  If not see
 /* If long pointer are enabled, use _NAME64 instead.  */
 #define VMS_CRTL_64	(1 << 1)
 
-/* Prepend s/f before the name.  To be applied after the previous rule.
-   use 's' for S float, 'f' for IEEE 32.  */
-#define VMS_CRTL_FLOAT32  (1 << 2)
+/* Use tNAME instead.  To be applied after the previous rule.  */
+#define VMS_CRTL_FLOAT  (1 << 2)
 
-/* Prepend t/g/d before the name.  To be applied after the previous rule.
-   use 'g' for VAX G float, 'd' for VAX D float, 't' for IEEE 64.  */
-#define VMS_CRTL_FLOAT64  (1 << 3)
-
-/* Prepend d before the name, only if using VAX fp.  */
-#define VMS_CRTL_FLOAT64_VAXD  (1 << 4)
-
-/* Prepend x before the name for if 128 bit long doubles are enabled.  This
-   concern mostly 'printf'-like functions.  */
-#define VMS_CRTL_FLOAT128 (1 << 5)
-
-/* From xxx, create xxx, xxxf, xxxl using MATH$XXX_T, MATH$XXX_S
-   and MATH$XXX{_X} if DPML is used.  */
-#define VMS_CRTL_DPML (1 << 6)
-
-/* Together with DPML, it means that all variant (ie xxx, xxxf and xxxl) are
-   overridden by decc.  Without DPML, it means this is a variant (ie xxxf
-   or xxxl) of a function.  */
-#define VMS_CRTL_NODPML (1 << 7)
-
-/* Prepend __bsd44_ before the name.  To be applied after the P64
+/* Prepend __bsd44__ before the name.  To be applied after the P64
    rule.  */
-#define VMS_CRTL_BSD44	(1 << 8)
+#define VMS_CRTL_BSD44	(1 << 3)
 
-/* Define only in 32 bits mode, as this has no 64 bit variants.
-   Concerns getopt/getarg.  */
-#define VMS_CRTL_32ONLY (1 << 9)
+/* Prepend x before the name for printf like functions.  */
+#define VMS_CRTL_PRNTF	(1 << 4)
 
-/* GLobal data prefix (ga_, gl_...)  */
-#define VMS_CRTL_G_MASK (7 << 10)
-#define VMS_CRTL_G_NONE (0 << 10)
-#define VMS_CRTL_GA	(1 << 10)
-#define VMS_CRTL_GL	(2 << 10)
-
-/* Append '_2'.  Not compatible with 64.  */
-#define VMS_CRTL_FLOATV2 (1 << 13)
+/* Prepend ga_ for global data.  */
+#define VMS_CRTL_GLOBAL (1 << 5)
 
 struct vms_crtl_name
 {
@@ -99,12 +68,12 @@ static const struct vms_crtl_name vms_crtl_names[] =
 
 #define NBR_CRTL_NAMES (sizeof (vms_crtl_names) / sizeof (*vms_crtl_names))
 
-/* List of aliased identifiers.  They must be persistent across gc.  */
+/* List of aliased identifiers.  They must be persistant accross gc.  */
 
-static GTY(()) vec<tree, va_gc> *aliases_id;
+static GTY(()) VEC(tree,gc) *aliases_id;
 
 /* Add a CRTL translation.  This simply use the transparent alias
-   mechanism, which is platform independent and works with the
+   mechanism, which is platform independant and works with the
    #pragma extern_prefix (which set the assembler name).  */
 
 static void
@@ -113,14 +82,14 @@ vms_add_crtl_xlat (const char *name, size_t nlen,
 {
   tree targ;
 
-  /* printf ("vms crtl: %.*s -> %.*s\n", nlen, name, id_len, id_str); */
-
   targ = get_identifier_with_length (name, nlen);
   gcc_assert (!IDENTIFIER_TRANSPARENT_ALIAS (targ));
   IDENTIFIER_TRANSPARENT_ALIAS (targ) = 1;
   TREE_CHAIN (targ) = get_identifier_with_length (id_str, id_len);
 
-  vec_safe_push (aliases_id, targ);
+  VEC_safe_push (tree, gc, aliases_id, targ);
+
+  /* printf ("vms: %s (%p) -> %.*s\n", name, targ, id_len, id_str); */
 }
 
 /* Do VMS specific stuff on builtins: disable the ones that are not
@@ -145,48 +114,7 @@ vms_patch_builtins (void)
       const struct vms_crtl_name *n = &vms_crtl_names[i];
       char res[VMS_CRTL_MAXLEN + 3 + 9 + 1 + 1];
       int rlen;
-      int nlen = strlen (n->name);
-
-      /* Discard 32ONLY if using 64 bit pointers.  */
-      if ((n->flags & VMS_CRTL_32ONLY)
-	  && flag_vms_pointer_size == VMS_POINTER_SIZE_64)
-	continue;
-
-      /* Handle DPML unless overridden by decc.  */
-      if ((n->flags & VMS_CRTL_DPML)
-	  && !(n->flags & VMS_CRTL_NODPML))
-	{
-	  const char *p;
-          char alt[VMS_CRTL_MAXLEN + 3];
-
-	  memcpy (res, "MATH$", 5);
-	  rlen = 5;
-	  for (p = n->name; *p; p++)
-	    res[rlen++] = TOUPPER (*p);
-	  res[rlen++] = '_';
-	  res[rlen++] = 'T';
-
-	  /* Double version.  */
-	  if (!(n->flags & VMS_CRTL_FLOAT64))
-	    vms_add_crtl_xlat (n->name, nlen, res, rlen);
-
-	  /* Float version.  */
-	  res[rlen - 1] = 'S';
-	  memcpy (alt, n->name, nlen);
-	  alt[nlen] = 'f';
-	  vms_add_crtl_xlat (alt, nlen + 1, res, rlen);
-
-	  /* Long double version.  */
-	  res[rlen - 1] = (LONG_DOUBLE_TYPE_SIZE == 128 ? 'X' : 'T');
-	  alt[nlen] = 'l';
-	  vms_add_crtl_xlat (alt, nlen + 1, res, rlen);
-
-	  if (!(n->flags & (VMS_CRTL_FLOAT32 | VMS_CRTL_FLOAT64)))
-	    continue;
-	}
-
-      if (n->flags & VMS_CRTL_FLOAT64_VAXD)
-	continue;
+      int nlen;
 
       /* Add the dec-c prefix.  */
       memcpy (res, "decc$", 5);
@@ -194,49 +122,27 @@ vms_patch_builtins (void)
 
       if (n->flags & VMS_CRTL_BSD44)
         {
-          memcpy (res + rlen, "__bsd44_", 8);
-          rlen += 8;
+          memcpy (res + rlen, "__bsd44__", 9);
+          rlen += 9;
         }
 
-      if ((n->flags & VMS_CRTL_G_MASK) != VMS_CRTL_G_NONE)
+      if (n->flags & VMS_CRTL_GLOBAL)
         {
-	  res[rlen++] = 'g';
-	  switch (n->flags & VMS_CRTL_G_MASK)
-	    {
-	    case VMS_CRTL_GA:
-	      res[rlen++] = 'a';
-	      break;
-	    case VMS_CRTL_GL:
-	      res[rlen++] = 'l';
-	      break;
-	    default:
-	      gcc_unreachable ();
-	    }
-	  res[rlen++] = '_';
+          memcpy (res + rlen, "ga_", 3);
+          rlen += 3;
         }
 
-      if (n->flags & VMS_CRTL_FLOAT32)
-        res[rlen++] = 'f';
-
-      if (n->flags & VMS_CRTL_FLOAT64)
+      if (n->flags & VMS_CRTL_FLOAT)
         res[rlen++] = 't';
 
-      if ((n->flags & VMS_CRTL_FLOAT128) && LONG_DOUBLE_TYPE_SIZE == 128)
+      if (n->flags & VMS_CRTL_PRNTF)
         res[rlen++] = 'x';
 
+      nlen = strlen (n->name);
       memcpy (res + rlen, n->name, nlen);
 
       if ((n->flags & VMS_CRTL_64) == 0)
-	{
-	  rlen += nlen;
-
-	  if (n->flags & VMS_CRTL_FLOATV2)
-	    {
-	      res[rlen++] = '_';
-	      res[rlen++] = '2';
-	    }
-	  vms_add_crtl_xlat (n->name, nlen, res, rlen);
-	}
+        vms_add_crtl_xlat (n->name, nlen, res, rlen + nlen);
       else
         {
           char alt[VMS_CRTL_MAXLEN + 3];
@@ -253,11 +159,9 @@ vms_patch_builtins (void)
           alt[1 + nlen + 2] = 0;
           vms_add_crtl_xlat (alt, nlen + 3, res, rlen + nlen);
 
-          use_64 = (((n->flags & VMS_CRTL_64)
-                     && flag_vms_pointer_size == VMS_POINTER_SIZE_64)
+          use_64 = (((n->flags & VMS_CRTL_64) && POINTER_SIZE == 64)
                     || ((n->flags & VMS_CRTL_MALLOC)
-                        && flag_vms_malloc64
-                        && flag_vms_pointer_size != VMS_POINTER_SIZE_NONE));
+                        && TARGET_MALLOC64));
           if (!use_64)
             vms_add_crtl_xlat (n->name, nlen, res, rlen + nlen);
 
@@ -285,45 +189,6 @@ vms_function_section (tree decl ATTRIBUTE_UNUSED,
                       bool exit ATTRIBUTE_UNUSED)
 {
   return NULL;
-}
-
-/* Additionnal VMS specific code for start_function.  */
-
-/* Must be kept in sync with libgcc/config/vms/vms-ucrt0.c  */
-#define VMS_MAIN_FLAGS_SYMBOL "__gcc_main_flags"
-#define MAIN_FLAG_64BIT (1 << 0)
-#define MAIN_FLAG_POSIX (1 << 1)
-
-void
-vms_start_function (const char *fnname)
-{
-#if VMS_DEBUGGING_INFO
-  if (vms_debug_main
-      && debug_info_level > DINFO_LEVEL_NONE
-      && strncmp (vms_debug_main, fnname, strlen (vms_debug_main)) == 0)
-    {
-      targetm.asm_out.globalize_label (asm_out_file, VMS_DEBUG_MAIN_POINTER);
-      ASM_OUTPUT_DEF (asm_out_file, VMS_DEBUG_MAIN_POINTER, fnname);
-      dwarf2out_vms_debug_main_pointer ();
-      vms_debug_main = 0;
-    }
-#endif
-
-  /* Registers flags used for function main.  This is necessary for
-     crt0 code.  */
-  if (strcmp (fnname, "main") == 0)
-    {
-      unsigned int flags = 0;
-
-      if (flag_vms_pointer_size == VMS_POINTER_SIZE_64)
-	flags |= MAIN_FLAG_64BIT;
-      if (!flag_vms_return_codes)
-	flags |= MAIN_FLAG_POSIX;
-
-      targetm.asm_out.globalize_label (asm_out_file, VMS_MAIN_FLAGS_SYMBOL);
-      assemble_name (asm_out_file, VMS_MAIN_FLAGS_SYMBOL);
-      fprintf (asm_out_file, " = %u\n", flags);
-    }
 }
 
 #include "gt-vms.h"

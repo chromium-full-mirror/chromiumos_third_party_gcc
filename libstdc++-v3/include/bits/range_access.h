@@ -1,6 +1,6 @@
 // <range_access.h> -*- C++ -*-
 
-// Copyright (C) 2010-2013 Free Software Foundation, Inc.
+// Copyright (C) 2010 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -32,7 +32,7 @@
 
 #pragma GCC system_header
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
 
 namespace std _GLIBCXX_VISIBILITY(default)
 {
@@ -100,6 +100,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 _GLIBCXX_END_NAMESPACE_VERSION
 } // namespace
 
-#endif // C++11
+#endif // __GXX_EXPERIMENTAL_CXX0X__
 
 #endif // _GLIBCXX_RANGE_ACCESS_H

@@ -23,10 +23,6 @@ Boston, MA 02110-1301, USA.  */
 
 #include <stdlib.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* Define the complex type corresponding to __float128
    ("_Complex __float128" is not allowed) */
 typedef _Complex float __attribute__((mode(TC))) __complex128;
@@ -192,9 +188,5 @@ __quadmath_nth (conjq (__complex128 __z))
 {
   return __extension__ ~__z;
 }
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif

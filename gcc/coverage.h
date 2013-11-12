@@ -1,5 +1,6 @@
 /* coverage.h - Defines data exported from coverage.c
-   Copyright (C) 1998-2013 Free Software Foundation, Inc.
+   Copyright (C) 1998, 1999, 2000, 2001, 2003, 2004, 2005, 2007, 2008
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -44,7 +45,12 @@ extern int coverage_counter_alloc (unsigned /*counter*/, unsigned/*num*/);
 extern tree tree_coverage_counter_ref (unsigned /*counter*/, unsigned/*num*/);
 /* Use a counter address from the most recent allocation.  */
 extern tree tree_coverage_counter_addr (unsigned /*counter*/, unsigned/*num*/);
-
+/* Get the load latency info for the current file and line */
+extern gcov_pmu_ll_info_t *get_coverage_pmu_latency (const char*,
+                                                     gcov_unsigned_t);
+/* Get the load latency info for the current file and line */
+extern gcov_pmu_brm_info_t *
+get_coverage_pmu_branch_mispredict (const char*, gcov_unsigned_t);
 /* Get all the counters for the current function.  */
 extern gcov_type *get_coverage_counts (unsigned /*counter*/,
 				       unsigned /*expected*/,
@@ -55,8 +61,7 @@ extern gcov_type *get_coverage_counts (unsigned /*counter*/,
 extern gcov_type *get_coverage_counts_no_warn (struct function *, 
                                                unsigned /*counter*/, unsigned *);
 
-extern struct cgraph_node * find_func_by_global_id (unsigned HOST_WIDE_INT gid,
-						    bool);
+extern struct cgraph_node * find_func_by_global_id (unsigned HOST_WIDE_INT gid);
 
 /* All the coverage counters are supposed to be allocated by the time
    coverage_end_function is called. However, direct-call counters are
@@ -70,19 +75,17 @@ extern void coverage_dc_end_function (void);
    is present in the coverage internal data structures.  */
 extern bool coverage_function_present (unsigned fn_ident);
 
+/* True if there is PMU data present in this compilation. */
+extern bool pmu_data_present (void);
+
 extern tree get_gcov_type (void);
 extern tree get_gcov_unsigned_t (void);
-extern tree get_const_string_type (void);
 
 /* Mark this module as containing asm statements.  */
 extern void coverage_has_asm_stmt (void);
 
-extern bool incompatible_cl_args (struct gcov_module_info *,
-				  struct gcov_module_info *);
-
 /* Defined in tree-profile.c.  */
 extern void tree_init_instrumentation_sampling (void);
 extern void tree_init_dyn_ipa_parameters (void);
-extern void tree_init_instrumentation (void);
 
 #endif

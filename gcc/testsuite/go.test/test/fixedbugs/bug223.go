@@ -1,4 +1,4 @@
-// errorcheck
+// (! $G $D/$F.go) | grep 'initialization loop' >/dev/null || echo BUG: bug223
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -18,4 +18,4 @@ func f() {
 	}
 }
 
-var m = map[string]F{"f": f} // ERROR "initialization loop|depends upon itself"
+var m = map[string]F{"f": f}

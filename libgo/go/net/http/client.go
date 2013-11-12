@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // HTTP client. See RFC 2616.
-//
+// 
 // This is the high-level Client interface.
 // The low-level implementation is in transport.go.
 
@@ -19,16 +19,12 @@ import (
 	"strings"
 )
 
-// A Client is an HTTP client. Its zero value (DefaultClient) is a
-// usable client that uses DefaultTransport.
+// A Client is an HTTP client. Its zero value (DefaultClient) is a usable client
+// that uses DefaultTransport.
 //
-// The Client's Transport typically has internal state (cached TCP
-// connections), so Clients should be reused instead of created as
+// The Client's Transport typically has internal state (cached
+// TCP connections), so Clients should be reused instead of created as
 // needed. Clients are safe for concurrent use by multiple goroutines.
-//
-// A Client is higher-level than a RoundTripper (such as Transport)
-// and additionally handles HTTP details such as cookies and
-// redirects.
 type Client struct {
 	// Transport specifies the mechanism by which individual
 	// HTTP requests are made.
@@ -37,19 +33,18 @@ type Client struct {
 
 	// CheckRedirect specifies the policy for handling redirects.
 	// If CheckRedirect is not nil, the client calls it before
-	// following an HTTP redirect. The arguments req and via are
-	// the upcoming request and the requests made already, oldest
-	// first. If CheckRedirect returns an error, the Client's Get
-	// method returns both the previous Response and
-	// CheckRedirect's error (wrapped in a url.Error) instead of
+	// following an HTTP redirect. The arguments req and via
+	// are the upcoming request and the requests made already,
+	// oldest first. If CheckRedirect returns an error, the client
+	// returns that error (wrapped in a url.Error) instead of
 	// issuing the Request req.
 	//
 	// If CheckRedirect is nil, the Client uses its default policy,
 	// which is to stop after 10 consecutive requests.
 	CheckRedirect func(req *Request, via []*Request) error
 
-	// Jar specifies the cookie jar.
-	// If Jar is nil, cookies are not sent in requests and ignored
+	// Jar specifies the cookie jar. 
+	// If Jar is nil, cookies are not sent in requests and ignored 
 	// in responses.
 	Jar CookieJar
 }
@@ -91,24 +86,6 @@ type readClose struct {
 	io.Closer
 }
 
-func (c *Client) send(req *Request) (*Response, error) {
-	if c.Jar != nil {
-		for _, cookie := range c.Jar.Cookies(req.URL) {
-			req.AddCookie(cookie)
-		}
-	}
-	resp, err := send(req, c.Transport)
-	if err != nil {
-		return nil, err
-	}
-	if c.Jar != nil {
-		if rc := resp.Cookies(); len(rc) > 0 {
-			c.Jar.SetCookies(req.URL, rc)
-		}
-	}
-	return resp, err
-}
-
 // Do sends an HTTP request and returns an HTTP response, following
 // policy (e.g. redirects, cookies, auth) as configured on the client.
 //
@@ -118,7 +95,7 @@ func (c *Client) send(req *Request) (*Response, error) {
 //
 // When err is nil, resp always contains a non-nil resp.Body.
 //
-// Callers should close resp.Body when done reading from it. If
+// Callers should close res.Body when done reading from it. If
 // resp.Body is not closed, the Client's underlying RoundTripper
 // (typically Transport) may not be able to re-use a persistent TCP
 // connection to the server for a subsequent "keep-alive" request.
@@ -126,12 +103,9 @@ func (c *Client) send(req *Request) (*Response, error) {
 // Generally Get, Post, or PostForm will be used instead of Do.
 func (c *Client) Do(req *Request) (resp *Response, err error) {
 	if req.Method == "GET" || req.Method == "HEAD" {
-		return c.doFollowingRedirects(req, shouldRedirectGet)
+		return c.doFollowingRedirects(req)
 	}
-	if req.Method == "POST" || req.Method == "PUT" {
-		return c.doFollowingRedirects(req, shouldRedirectPost)
-	}
-	return c.send(req)
+	return send(req, c.Transport)
 }
 
 // send issues an HTTP request.
@@ -175,19 +149,9 @@ func send(req *Request, t RoundTripper) (resp *Response, err error) {
 
 // True if the specified HTTP status code is one for which the Get utility should
 // automatically redirect.
-func shouldRedirectGet(statusCode int) bool {
+func shouldRedirect(statusCode int) bool {
 	switch statusCode {
 	case StatusMovedPermanently, StatusFound, StatusSeeOther, StatusTemporaryRedirect:
-		return true
-	}
-	return false
-}
-
-// True if the specified HTTP status code is one for which the Post utility should
-// automatically redirect.
-func shouldRedirectPost(statusCode int) bool {
-	switch statusCode {
-	case StatusFound, StatusSeeOther:
 		return true
 	}
 	return false
@@ -233,10 +197,12 @@ func (c *Client) Get(url string) (resp *Response, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.doFollowingRedirects(req, shouldRedirectGet)
+	return c.doFollowingRedirects(req)
 }
 
-func (c *Client) doFollowingRedirects(ireq *Request, shouldRedirect func(int) bool) (resp *Response, err error) {
+func (c *Client) doFollowingRedirects(ireq *Request) (resp *Response, err error) {
+	// TODO: if/when we add cookie support, the redirected request shouldn't
+	// necessarily supply the same cookies as the original.
 	var base *url.URL
 	redirectChecker := c.CheckRedirect
 	if redirectChecker == nil {
@@ -248,16 +214,17 @@ func (c *Client) doFollowingRedirects(ireq *Request, shouldRedirect func(int) bo
 		return nil, errors.New("http: nil Request.URL")
 	}
 
+	jar := c.Jar
+	if jar == nil {
+		jar = blackHoleJar{}
+	}
+
 	req := ireq
 	urlStr := "" // next relative or absolute URL to fetch (after first request)
-	redirectFailed := false
 	for redirect := 0; ; redirect++ {
 		if redirect != 0 {
 			req = new(Request)
 			req.Method = ireq.Method
-			if ireq.Method == "POST" || ireq.Method == "PUT" {
-				req.Method = "GET"
-			}
 			req.Header = make(Header)
 			req.URL, err = base.Parse(urlStr)
 			if err != nil {
@@ -272,15 +239,20 @@ func (c *Client) doFollowingRedirects(ireq *Request, shouldRedirect func(int) bo
 
 				err = redirectChecker(req, via)
 				if err != nil {
-					redirectFailed = true
 					break
 				}
 			}
 		}
 
+		for _, cookie := range jar.Cookies(req.URL) {
+			req.AddCookie(cookie)
+		}
 		urlStr = req.URL.String()
-		if resp, err = c.send(req); err != nil {
+		if resp, err = send(req, c.Transport); err != nil {
 			break
+		}
+		if c := resp.Cookies(); len(c) > 0 {
+			jar.SetCookies(req.URL, c)
 		}
 
 		if shouldRedirect(resp.StatusCode) {
@@ -296,24 +268,16 @@ func (c *Client) doFollowingRedirects(ireq *Request, shouldRedirect func(int) bo
 		return
 	}
 
+	if resp != nil {
+		resp.Body.Close()
+	}
+
 	method := ireq.Method
-	urlErr := &url.Error{
+	return nil, &url.Error{
 		Op:  method[0:1] + strings.ToLower(method[1:]),
 		URL: urlStr,
 		Err: err,
 	}
-
-	if redirectFailed {
-		// Special case for Go 1 compatibility: return both the response
-		// and an error if the CheckRedirect function failed.
-		// See http://golang.org/issue/3795
-		return resp, urlErr
-	}
-
-	if resp != nil {
-		resp.Body.Close()
-	}
-	return nil, urlErr
 }
 
 func defaultCheckRedirect(req *Request, via []*Request) error {
@@ -341,7 +305,16 @@ func (c *Client) Post(url string, bodyType string, body io.Reader) (resp *Respon
 		return nil, err
 	}
 	req.Header.Set("Content-Type", bodyType)
-	return c.doFollowingRedirects(req, shouldRedirectPost)
+	if c.Jar != nil {
+		for _, cookie := range c.Jar.Cookies(req.URL) {
+			req.AddCookie(cookie)
+		}
+	}
+	resp, err = send(req, c.Transport)
+	if err == nil && c.Jar != nil {
+		c.Jar.SetCookies(req.URL, resp.Cookies())
+	}
+	return
 }
 
 // PostForm issues a POST to the specified URL, with data's keys and
@@ -355,7 +328,7 @@ func PostForm(url string, data url.Values) (resp *Response, err error) {
 	return DefaultClient.PostForm(url, data)
 }
 
-// PostForm issues a POST to the specified URL,
+// PostForm issues a POST to the specified URL, 
 // with data's keys and values urlencoded as the request body.
 //
 // When err is nil, resp always contains a non-nil resp.Body.
@@ -391,5 +364,5 @@ func (c *Client) Head(url string) (resp *Response, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return c.doFollowingRedirects(req, shouldRedirectGet)
+	return c.doFollowingRedirects(req)
 }

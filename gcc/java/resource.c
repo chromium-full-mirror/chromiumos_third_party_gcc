@@ -1,5 +1,6 @@
 /* Functions related to building resource files.
-   Copyright (C) 1996-2013 Free Software Foundation, Inc.
+   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
+   2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -29,6 +30,7 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include "jcf.h"
 #include "diagnostic-core.h"
 #include "toplev.h"
+#include "output.h"
 #include "parse.h"
 #include "function.h"
 #include "ggc.h"
@@ -36,13 +38,13 @@ The Free Software Foundation is independent of Sun Microsystems, Inc.  */
 #include "cgraph.h"
 
 /* A list of all the resources files.  */
-static GTY(()) vec<tree, va_gc> *resources;
+static GTY(()) VEC(tree,gc) *resources;
 
 void
 compile_resource_data (const char *name, const char *buffer, int length)
 {
   tree rtype, field = NULL_TREE, data_type, rinit, data, decl;
-  vec<constructor_elt, va_gc> *v = NULL;
+  VEC(constructor_elt,gc) *v = NULL;
 
   data_type = build_prim_array_type (unsigned_byte_type_node,
 				     strlen (name) + length);
@@ -79,7 +81,7 @@ compile_resource_data (const char *name, const char *buffer, int length)
   rest_of_decl_compilation (decl, global_bindings_p (), 0);
   varpool_finalize_decl (decl);
 
-  vec_safe_push (resources, decl);
+  VEC_safe_push (tree, gc, resources, decl);
 }
 
 void
@@ -99,7 +101,7 @@ write_resource_constructor (tree *list_p)
   register_resource_fn = t;
 
   /* Write out entries in the same order in which they were defined.  */
-  FOR_EACH_VEC_ELT (*resources, ix, decl)
+  FOR_EACH_VEC_ELT (tree, resources, ix, decl)
     {
       t = build_fold_addr_expr (decl);
       t = build_call_expr (register_resource_fn, 1, t);

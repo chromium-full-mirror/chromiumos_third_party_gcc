@@ -1,6 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "isa_rev>=2 -mgp32" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-O isa_rev>=2 -mgp32" } */
 /* { dg-final { scan-assembler "\tins\t" } } */
 
 struct

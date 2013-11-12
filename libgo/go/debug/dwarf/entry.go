@@ -40,7 +40,7 @@ func (d *Data) parseAbbrev(off uint32) (abbrevTable, error) {
 	} else {
 		data = data[off:]
 	}
-	b := makeBuf(d, unknownFormat{}, "abbrev", 0, data)
+	b := makeBuf(d, nil, "abbrev", 0, data)
 
 	// Error handling is simplified by the buf getters
 	// returning an endless stream of 0s after an error.
@@ -190,16 +190,13 @@ func (b *buf) entry(atab abbrevTable, ubase Offset) *Entry {
 		case formFlag:
 			val = b.uint8() == 1
 		case formFlagPresent:
-			// The attribute is implicitly indicated as present, and no value is
-			// encoded in the debugging information entry itself.
 			val = true
 
 		// lineptr, loclistptr, macptr, rangelistptr
 		case formSecOffset:
-			is64, known := b.format.dwarf64()
-			if !known {
+			if b.u == nil {
 				b.error("unknown size for DW_FORM_sec_offset")
-			} else if is64 {
+			} else if b.u.dwarf64 {
 				val = Offset(b.uint64())
 			} else {
 				val = Offset(b.uint32())
@@ -207,20 +204,14 @@ func (b *buf) entry(atab abbrevTable, ubase Offset) *Entry {
 
 		// reference to other entry
 		case formRefAddr:
-			vers := b.format.version()
-			if vers == 0 {
+			if b.u == nil {
 				b.error("unknown version for DW_FORM_ref_addr")
-			} else if vers == 2 {
+			} else if b.u.version == 2 {
 				val = Offset(b.addr())
+			} else if b.u.dwarf64 {
+				val = Offset(b.uint64())
 			} else {
-				is64, known := b.format.dwarf64()
-				if !known {
-					b.error("unknown size for DW_FORM_ref_addr")
-				} else if is64 {
-					val = Offset(b.uint64())
-				} else {
-					val = Offset(b.uint32())
-				}
+				val = Offset(b.uint32())
 			}
 		case formRef1:
 			val = Offset(b.uint8()) + ubase
@@ -243,7 +234,7 @@ func (b *buf) entry(atab abbrevTable, ubase Offset) *Entry {
 			if b.err != nil {
 				return nil
 			}
-			b1 := makeBuf(b.dwarf, unknownFormat{}, "str", 0, b.dwarf.str)
+			b1 := makeBuf(b.dwarf, b.u, "str", 0, b.dwarf.str)
 			b1.skip(int(off))
 			val = b1.string()
 			if b1.err != nil {

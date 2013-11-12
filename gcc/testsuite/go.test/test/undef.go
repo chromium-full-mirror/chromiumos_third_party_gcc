@@ -1,11 +1,10 @@
-// errorcheck
+// errchk $G -e $D/$F.go
 
 // Copyright 2010 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Test line numbers in error messages.
-// Does not compile.
+// Check line numbers in error messages.
 
 package main
 

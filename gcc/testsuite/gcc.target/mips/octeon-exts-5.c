@@ -1,7 +1,6 @@
 /* -mel version of octeon-exts-2.c.  */
 /* { dg-do compile } */
-/* { dg-options "-march=octeon -mel" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-O -march=octeon -mel" } */
 /* { dg-final { scan-assembler-times "\texts\t" 4 } } */
 
 struct bar

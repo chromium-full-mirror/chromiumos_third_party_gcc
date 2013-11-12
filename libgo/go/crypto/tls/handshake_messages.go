@@ -18,8 +18,6 @@ type clientHelloMsg struct {
 	ocspStapling       bool
 	supportedCurves    []uint16
 	supportedPoints    []uint8
-	ticketSupported    bool
-	sessionTicket      []uint8
 }
 
 func (m *clientHelloMsg) equal(i interface{}) bool {
@@ -38,9 +36,7 @@ func (m *clientHelloMsg) equal(i interface{}) bool {
 		m.serverName == m1.serverName &&
 		m.ocspStapling == m1.ocspStapling &&
 		eqUint16s(m.supportedCurves, m1.supportedCurves) &&
-		bytes.Equal(m.supportedPoints, m1.supportedPoints) &&
-		m.ticketSupported == m1.ticketSupported &&
-		bytes.Equal(m.sessionTicket, m1.sessionTicket)
+		bytes.Equal(m.supportedPoints, m1.supportedPoints)
 }
 
 func (m *clientHelloMsg) marshal() []byte {
@@ -68,10 +64,6 @@ func (m *clientHelloMsg) marshal() []byte {
 	}
 	if len(m.supportedPoints) > 0 {
 		extensionsLength += 1 + len(m.supportedPoints)
-		numExtensions++
-	}
-	if m.ticketSupported {
-		extensionsLength += len(m.sessionTicket)
 		numExtensions++
 	}
 	if numExtensions > 0 {
@@ -188,17 +180,6 @@ func (m *clientHelloMsg) marshal() []byte {
 			z = z[1:]
 		}
 	}
-	if m.ticketSupported {
-		// http://tools.ietf.org/html/rfc5077#section-3.2
-		z[0] = byte(extensionSessionTicket >> 8)
-		z[1] = byte(extensionSessionTicket)
-		l := len(m.sessionTicket)
-		z[2] = byte(l >> 8)
-		z[3] = byte(l)
-		z = z[4:]
-		copy(z, m.sessionTicket)
-		z = z[len(m.sessionTicket):]
-	}
 
 	m.raw = x
 
@@ -247,8 +228,6 @@ func (m *clientHelloMsg) unmarshal(data []byte) bool {
 	m.nextProtoNeg = false
 	m.serverName = ""
 	m.ocspStapling = false
-	m.ticketSupported = false
-	m.sessionTicket = nil
 
 	if len(data) == 0 {
 		// ClientHello is optionally followed by extension data
@@ -332,10 +311,6 @@ func (m *clientHelloMsg) unmarshal(data []byte) bool {
 			}
 			m.supportedPoints = make([]uint8, l)
 			copy(m.supportedPoints, data[1:])
-		case extensionSessionTicket:
-			// http://tools.ietf.org/html/rfc5077#section-3.2
-			m.ticketSupported = true
-			m.sessionTicket = data[:length]
 		}
 		data = data[length:]
 	}
@@ -353,7 +328,6 @@ type serverHelloMsg struct {
 	nextProtoNeg      bool
 	nextProtos        []string
 	ocspStapling      bool
-	ticketSupported   bool
 }
 
 func (m *serverHelloMsg) equal(i interface{}) bool {
@@ -370,8 +344,7 @@ func (m *serverHelloMsg) equal(i interface{}) bool {
 		m.compressionMethod == m1.compressionMethod &&
 		m.nextProtoNeg == m1.nextProtoNeg &&
 		eqStrings(m.nextProtos, m1.nextProtos) &&
-		m.ocspStapling == m1.ocspStapling &&
-		m.ticketSupported == m1.ticketSupported
+		m.ocspStapling == m1.ocspStapling
 }
 
 func (m *serverHelloMsg) marshal() []byte {
@@ -393,9 +366,6 @@ func (m *serverHelloMsg) marshal() []byte {
 		extensionsLength += nextProtoLen
 	}
 	if m.ocspStapling {
-		numExtensions++
-	}
-	if m.ticketSupported {
 		numExtensions++
 	}
 	if numExtensions > 0 {
@@ -446,11 +416,6 @@ func (m *serverHelloMsg) marshal() []byte {
 		z[1] = byte(extensionStatusRequest)
 		z = z[4:]
 	}
-	if m.ticketSupported {
-		z[0] = byte(extensionSessionTicket >> 8)
-		z[1] = byte(extensionSessionTicket)
-		z = z[4:]
-	}
 
 	m.raw = x
 
@@ -480,7 +445,6 @@ func (m *serverHelloMsg) unmarshal(data []byte) bool {
 	m.nextProtoNeg = false
 	m.nextProtos = nil
 	m.ocspStapling = false
-	m.ticketSupported = false
 
 	if len(data) == 0 {
 		// ServerHello is optionally followed by extension data
@@ -510,14 +474,14 @@ func (m *serverHelloMsg) unmarshal(data []byte) bool {
 		switch extension {
 		case extensionNextProtoNeg:
 			m.nextProtoNeg = true
-			d := data[:length]
+			d := data
 			for len(d) > 0 {
 				l := int(d[0])
 				d = d[1:]
 				if l == 0 || l > len(d) {
 					return false
 				}
-				m.nextProtos = append(m.nextProtos, string(d[:l]))
+				m.nextProtos = append(m.nextProtos, string(d[0:l]))
 				d = d[l:]
 			}
 		case extensionStatusRequest:
@@ -525,11 +489,6 @@ func (m *serverHelloMsg) unmarshal(data []byte) bool {
 				return false
 			}
 			m.ocspStapling = true
-		case extensionSessionTicket:
-			if length > 0 {
-				return false
-			}
-			m.ticketSupported = true
 		}
 		data = data[length:]
 	}
@@ -1067,65 +1026,6 @@ func (m *certificateVerifyMsg) unmarshal(data []byte) bool {
 	}
 
 	m.signature = data[6:]
-
-	return true
-}
-
-type newSessionTicketMsg struct {
-	raw    []byte
-	ticket []byte
-}
-
-func (m *newSessionTicketMsg) equal(i interface{}) bool {
-	m1, ok := i.(*newSessionTicketMsg)
-	if !ok {
-		return false
-	}
-
-	return bytes.Equal(m.raw, m1.raw) &&
-		bytes.Equal(m.ticket, m1.ticket)
-}
-
-func (m *newSessionTicketMsg) marshal() (x []byte) {
-	if m.raw != nil {
-		return m.raw
-	}
-
-	// See http://tools.ietf.org/html/rfc5077#section-3.3
-	ticketLen := len(m.ticket)
-	length := 2 + 4 + ticketLen
-	x = make([]byte, 4+length)
-	x[0] = typeNewSessionTicket
-	x[1] = uint8(length >> 16)
-	x[2] = uint8(length >> 8)
-	x[3] = uint8(length)
-	x[8] = uint8(ticketLen >> 8)
-	x[9] = uint8(ticketLen)
-	copy(x[10:], m.ticket)
-
-	m.raw = x
-
-	return
-}
-
-func (m *newSessionTicketMsg) unmarshal(data []byte) bool {
-	m.raw = data
-
-	if len(data) < 10 {
-		return false
-	}
-
-	length := uint32(data[1])<<16 | uint32(data[2])<<8 | uint32(data[3])
-	if uint32(len(data))-4 != length {
-		return false
-	}
-
-	ticketLen := int(data[8])<<8 + int(data[9])
-	if len(data)-10 != ticketLen {
-		return false
-	}
-
-	m.ticket = data[10:]
 
 	return true
 }

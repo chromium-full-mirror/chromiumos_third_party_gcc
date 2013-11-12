@@ -1,5 +1,7 @@
 /* Perform simple optimizations to clean up the result of reload.
-   Copyright (C) 1987-2013 Free Software Foundation, Inc.
+   Copyright (C) 1987, 1988, 1989, 1992, 1993, 1994, 1995, 1996, 1997,
+   1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009,
+   2010, 2011 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -36,18 +38,20 @@ along with GCC; see the file COPYING3.  If not see
 #include "basic-block.h"
 #include "reload.h"
 #include "recog.h"
+#include "output.h"
 #include "cselib.h"
 #include "diagnostic-core.h"
 #include "except.h"
 #include "tree.h"
 #include "target.h"
+#include "timevar.h"
 #include "tree-pass.h"
 #include "df.h"
 #include "dbgcnt.h"
 
 static int reload_cse_noop_set_p (rtx);
-static bool reload_cse_simplify (rtx, rtx);
-static void reload_cse_regs_1 (void);
+static void reload_cse_simplify (rtx, rtx);
+static void reload_cse_regs_1 (rtx);
 static int reload_cse_simplify_set (rtx, rtx);
 static int reload_cse_simplify_operands (rtx, rtx);
 
@@ -60,19 +64,18 @@ static void move2add_note_store (rtx, const_rtx, void *);
 
 /* Call cse / combine like post-reload optimization phases.
    FIRST is the first instruction.  */
-
-static void
+void
 reload_cse_regs (rtx first ATTRIBUTE_UNUSED)
 {
   bool moves_converted;
-  reload_cse_regs_1 ();
+  reload_cse_regs_1 (first);
   reload_combine ();
   moves_converted = reload_cse_move2add (first);
   if (flag_expensive_optimizations)
     {
       if (moves_converted)
 	reload_combine ();
-      reload_cse_regs_1 ();
+      reload_cse_regs_1 (first);
     }
 }
 
@@ -86,13 +89,11 @@ reload_cse_noop_set_p (rtx set)
   return rtx_equal_for_cselib_p (SET_DEST (set), SET_SRC (set));
 }
 
-/* Try to simplify INSN.  Return true if the CFG may have changed.  */
-static bool
+/* Try to simplify INSN.  */
+static void
 reload_cse_simplify (rtx insn, rtx testreg)
 {
   rtx body = PATTERN (insn);
-  basic_block insn_bb = BLOCK_FOR_INSN (insn);
-  unsigned insn_bb_succs = EDGE_COUNT (insn_bb->succs);
 
   if (GET_CODE (body) == SET)
     {
@@ -113,8 +114,7 @@ reload_cse_simplify (rtx insn, rtx testreg)
 	    value = 0;
 	  if (check_for_inc_dec (insn))
 	    delete_insn_and_edges (insn);
-	  /* We're done with this insn.  */
-	  goto done;
+	  return;
 	}
 
       if (count > 0)
@@ -167,7 +167,7 @@ reload_cse_simplify (rtx insn, rtx testreg)
 	  if (check_for_inc_dec (insn))
 	    delete_insn_and_edges (insn);
 	  /* We're done with this insn.  */
-	  goto done;
+	  return;
 	}
 
       /* It's not a no-op, but we can try to simplify it.  */
@@ -180,9 +180,6 @@ reload_cse_simplify (rtx insn, rtx testreg)
       else
 	reload_cse_simplify_operands (insn, testreg);
     }
-
-done:
-  return (EDGE_COUNT (insn_bb->succs) != insn_bb_succs);
 }
 
 /* Do a very simple CSE pass over the hard registers.
@@ -203,30 +200,25 @@ done:
    if possible, much like an optional reload would.  */
 
 static void
-reload_cse_regs_1 (void)
+reload_cse_regs_1 (rtx first)
 {
-  bool cfg_changed = false;
-  basic_block bb;
   rtx insn;
   rtx testreg = gen_rtx_REG (VOIDmode, -1);
 
   cselib_init (CSELIB_RECORD_MEMORY);
   init_alias_analysis ();
 
-  FOR_EACH_BB (bb)
-    FOR_BB_INSNS (bb, insn)
-      {
-	if (INSN_P (insn))
-	  cfg_changed |= reload_cse_simplify (insn, testreg);
+  for (insn = first; insn; insn = NEXT_INSN (insn))
+    {
+      if (INSN_P (insn))
+	reload_cse_simplify (insn, testreg);
 
-	cselib_process_insn (insn);
-      }
+      cselib_process_insn (insn);
+    }
 
   /* Clean up.  */
   end_alias_analysis ();
   cselib_finish ();
-  if (cfg_changed)
-    cleanup_cfg (0);
 }
 
 /* Try to simplify a single SET instruction.  SET is the set pattern.
@@ -690,7 +682,7 @@ struct reg_use
   /* Points to the memory reference enclosing the use, if any, NULL_RTX
      otherwise.  */
   rtx containing_mem;
-  /* Location of the register within INSN.  */
+  /* Location of the register withing INSN.  */
   rtx *usep;
   /* The reverse uid of the insn.  */
   int ruid;
@@ -1365,10 +1357,8 @@ reload_combine (void)
 	  for (link = CALL_INSN_FUNCTION_USAGE (insn); link;
 	       link = XEXP (link, 1))
 	    {
-	      rtx setuse = XEXP (link, 0);
-	      rtx usage_rtx = XEXP (setuse, 0);
-	      if ((GET_CODE (setuse) == USE || GET_CODE (setuse) == CLOBBER)
-		  && REG_P (usage_rtx))
+	      rtx usage_rtx = XEXP (XEXP (link, 0), 0);
+	      if (REG_P (usage_rtx))
 	        {
 		  unsigned int i;
 		  unsigned int start_reg = REGNO (usage_rtx);
@@ -2287,9 +2277,8 @@ rest_of_handle_postreload (void)
   reload_cse_regs (get_insns ());
   /* Reload_cse_regs can eliminate potentially-trapping MEMs.
      Remove any EH edges associated with them.  */
-  if (cfun->can_throw_non_call_exceptions
-      && purge_all_dead_edges ())
-    cleanup_cfg (0);
+  if (cfun->can_throw_non_call_exceptions)
+    purge_all_dead_edges ();
 
   return 0;
 }
@@ -2299,7 +2288,6 @@ struct rtl_opt_pass pass_postreload_cse =
  {
   RTL_PASS,
   "postreload",                         /* name */
-  OPTGROUP_NONE,                        /* optinfo_flags */
   gate_handle_postreload,               /* gate */
   rest_of_handle_postreload,            /* execute */
   NULL,                                 /* sub */

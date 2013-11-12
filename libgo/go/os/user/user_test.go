@@ -5,34 +5,41 @@
 package user
 
 import (
+	"os"
 	"runtime"
 	"testing"
 )
 
-func check(t *testing.T) {
+func skip(t *testing.T) bool {
 	if !implemented {
-		t.Skip("user: not implemented; skipping tests")
+		t.Logf("user: not implemented; skipping tests")
+		return true
 	}
+
 	switch runtime.GOOS {
 	case "linux", "freebsd", "darwin", "windows":
-		// test supported
-	default:
-		t.Skipf("user: Lookup not implemented on %q; skipping test", runtime.GOOS)
+		return false
 	}
+
+	t.Logf("user: Lookup not implemented on %s; skipping test", runtime.GOOS)
+	return true
 }
 
 func TestCurrent(t *testing.T) {
-	check(t)
+	if skip(t) {
+		return
+	}
 
 	u, err := Current()
 	if err != nil {
 		t.Fatalf("Current: %v", err)
 	}
-	if u.HomeDir == "" {
-		t.Errorf("didn't get a HomeDir")
+	fi, err := os.Stat(u.HomeDir)
+	if err != nil || !fi.IsDir() {
+		t.Errorf("expected a valid HomeDir; stat(%q): err=%v", u.HomeDir, err)
 	}
 	if u.Username == "" {
-		t.Errorf("didn't get a username")
+		t.Fatalf("didn't get a username")
 	}
 }
 
@@ -48,7 +55,8 @@ func compare(t *testing.T, want, got *User) {
 	}
 	// TODO(brainman): fix it once we know how.
 	if runtime.GOOS == "windows" {
-		t.Skip("skipping Gid and HomeDir comparisons")
+		t.Log("skipping Gid and HomeDir comparisons")
+		return
 	}
 	if want.Gid != got.Gid {
 		t.Errorf("got Gid=%q; want %q", got.Gid, want.Gid)
@@ -59,7 +67,9 @@ func compare(t *testing.T, want, got *User) {
 }
 
 func TestLookup(t *testing.T) {
-	check(t)
+	if skip(t) {
+		return
+	}
 
 	want, err := Current()
 	if err != nil {
@@ -73,7 +83,9 @@ func TestLookup(t *testing.T) {
 }
 
 func TestLookupId(t *testing.T) {
-	check(t)
+	if skip(t) {
+		return
+	}
 
 	want, err := Current()
 	if err != nil {

@@ -1,4 +1,4 @@
-/* { dg-do compile } */
+/* { dg-do run } */
 /* { dg-require-effective-target lp64 } */
 /* { dg-options "-mpatch-functions-for-instrumentation" } */
 
@@ -8,8 +8,7 @@
 /* { dg-final { scan-assembler ".byte\t0xeb,0x09(.*).byte\t0x90" } } */
 /* { dg-final { scan-assembler "ret(.*).byte\t0x90(.*).byte\t0x90" } } */
 
-int main()
-{
+int main(int argc, char **argv) {
   int x = 0;
   return 0;
 }

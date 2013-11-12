@@ -1,4 +1,4 @@
-/* { dg-options "-Wparentheses -ftrack-macro-expansion=0" } */
+/* { dg-options "-Wparentheses" } */
 
 extern void f2 (int);
 

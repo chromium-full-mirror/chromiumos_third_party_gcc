@@ -24,13 +24,7 @@ $(error Unsupported file type: $o)
 endif
 endif
 
-$(base)$(objext): $o $(base).vis
-	$(gcc_compile) -c -xassembler-with-cpp -include $*.vis $<
-
-$(base).vis: $(base)_s$(objext)
-	$(gen-hide-list)
-
-$(base)_s$(objext): $o
-	$(gcc_s_compile) -c -xassembler-with-cpp $<
+$(base)$(objext): $o
+	$(gcc_compile) -c -xassembler-with-cpp $<
 
 endif

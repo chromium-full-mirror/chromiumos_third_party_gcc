@@ -1,7 +1,6 @@
 /* If we AND in DI mode (i.e. replace the order of TRUNCATE and AND) then we
    can remove the TRUNCATE.  */
-/* { dg-options "-mgp64" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-O -mgp64" } */
 /* { dg-final { scan-assembler-not "\tsll\t\[^\n\]*,0" } } */
 
 struct s

@@ -1,6 +1,6 @@
 // Allocator traits -*- C++ -*-
 
-// Copyright (C) 2011-2013 Free Software Foundation, Inc.
+// Copyright (C) 2011, 2012 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -31,18 +31,25 @@
 
 #pragma GCC system_header
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
 # include <bits/move.h>
 # include <bits/alloc_traits.h>
 #else
 # include <bits/allocator.h>  // for __alloc_swap
 #endif
 
+namespace std _GLIBCXX_VISIBILITY(default)
+{
+_GLIBCXX_BEGIN_NAMESPACE_VERSION
+  template<typename> struct allocator;
+_GLIBCXX_END_NAMESPACE_VERSION
+} // namespace
+
 namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
 {
 _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   template<typename _Alloc>
     struct __allocator_always_compares_equal
     { static const bool value = false; };
@@ -66,24 +73,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   template<typename _Tp, typename _Array>
     const bool
     __allocator_always_compares_equal<array_allocator<_Tp, _Array>>::value;
-
-  template<typename> struct bitmap_allocator;
-
-  template<typename _Tp>
-    struct __allocator_always_compares_equal<bitmap_allocator<_Tp>>
-    { static const bool value = true; };
-
-  template<typename _Tp>
-    const bool __allocator_always_compares_equal<bitmap_allocator<_Tp>>::value;
-
-  template<typename> struct malloc_allocator;
-
-  template<typename _Tp>
-    struct __allocator_always_compares_equal<malloc_allocator<_Tp>>
-    { static const bool value = true; };
-
-  template<typename _Tp>
-    const bool __allocator_always_compares_equal<malloc_allocator<_Tp>>::value;
 
   template<typename> struct mt_allocator;
 
@@ -119,18 +108,17 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 */
 template<typename _Alloc>
   struct __alloc_traits
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
   : std::allocator_traits<_Alloc>
 #endif
   {
     typedef _Alloc allocator_type;
-#if __cplusplus >= 201103L
+#ifdef __GXX_EXPERIMENTAL_CXX0X__
     typedef std::allocator_traits<_Alloc>           _Base_type;
     typedef typename _Base_type::value_type         value_type;
     typedef typename _Base_type::pointer            pointer;
     typedef typename _Base_type::const_pointer      const_pointer;
     typedef typename _Base_type::size_type          size_type;
-    typedef typename _Base_type::difference_type    difference_type;
     // C++0x allocators do not define reference or const_reference
     typedef value_type&                             reference;
     typedef const value_type&                       const_reference;
@@ -202,7 +190,6 @@ template<typename _Alloc>
     typedef typename _Alloc::reference              reference;
     typedef typename _Alloc::const_reference        const_reference;
     typedef typename _Alloc::size_type              size_type;
-    typedef typename _Alloc::difference_type        difference_type;
 
     static pointer
     allocate(_Alloc& __a, size_type __n)
@@ -237,6 +224,6 @@ template<typename _Alloc>
   };
 
 _GLIBCXX_END_NAMESPACE_VERSION
-} // namespace std
+} // namespace
 
 #endif

@@ -1,5 +1,5 @@
 /* VMManagementFactory.java - VM interface for obtaining system beans.
-   Copyright (C) 2006, 2010  Free Software Foundation, Inc.
+   Copyright (C) 2006 Free Software Foundation
 
 This file is part of GNU Classpath.
 
@@ -47,8 +47,6 @@ package java.lang.management;
  */
 final class VMManagementFactory
 {
-
-  private VMManagementFactory() {} // Prohibits instantiation.
 
   /**
    * Return a list of the names of the currently available

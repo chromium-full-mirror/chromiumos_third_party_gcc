@@ -20,7 +20,6 @@ public:
   AssertionError(jlong);
   AssertionError(jfloat);
   AssertionError(jdouble);
-  AssertionError(::java::lang::String *, ::java::lang::Throwable *);
 private:
   static const jlong serialVersionUID = -5013299493970297370LL;
 public:

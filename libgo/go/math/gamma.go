@@ -110,26 +110,19 @@ func stirling(x float64) float64 {
 	return y
 }
 
-// Gamma returns the Gamma function of x.
+// Gamma(x) returns the Gamma function of x.
 //
 // Special cases are:
-//	Gamma(+Inf) = +Inf
-//	Gamma(+0) = +Inf
-//	Gamma(-0) = -Inf
-//	Gamma(x) = NaN for integer x < 0
-//	Gamma(-Inf) = NaN
+//	Gamma(±Inf) = ±Inf
 //	Gamma(NaN) = NaN
+// Large values overflow to +Inf.
+// Zero and negative integer arguments return ±Inf.
 func Gamma(x float64) float64 {
 	const Euler = 0.57721566490153286060651209008240243104215933593992 // A001620
 	// special cases
 	switch {
-	case isNegInt(x) || IsInf(x, -1) || IsNaN(x):
-		return NaN()
-	case x == 0:
-		if Signbit(x) {
-			return Inf(-1)
-		}
-		return Inf(1)
+	case IsInf(x, -1) || IsNaN(x):
+		return x
 	case x < -170.5674972726612 || x > 171.61447887182298:
 		return Inf(1)
 	}
@@ -191,12 +184,4 @@ small:
 		return Inf(1)
 	}
 	return z / ((1 + Euler*x) * x)
-}
-
-func isNegInt(x float64) bool {
-	if x < 0 {
-		_, xf := Modf(x)
-		return xf == 0
-	}
-	return false
 }

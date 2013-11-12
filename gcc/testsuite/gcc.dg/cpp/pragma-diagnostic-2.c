@@ -6,8 +6,8 @@
 void f (unsigned);
 
 #define CODE_WITH_WARNING \
-  int a; /* { dg-message "was declared here" } */	 \
-  f (a)	 /* { dg-warning "used uninitialized" } */
+  int a; /* { dg-message "expansion|declared here" } */  \
+  f (a)	 /* { dg-message "expansion" } */
 
 #pragma GCC diagnostic ignored "-Wuninitialized"
 
@@ -24,5 +24,11 @@ g (void)
 void
 h (void)
 {
-  CODE_WITH_WARNING; /* { dg-message "in expansion of macro 'CODE_WITH_WARNING'" } */
+  CODE_WITH_WARNING;		/* { dg-message "expanded" } */
 }
+
+/*
+  { dg-message "some warnings being treated as errors" "" {target *-*-*} 0 }
+*/
+
+/* { dg-error "uninitialized" "" { target *-*-* } { 10 } } */

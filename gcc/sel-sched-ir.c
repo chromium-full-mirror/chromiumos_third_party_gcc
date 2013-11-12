@@ -1,5 +1,6 @@
 /* Instruction scheduling pass.  Selective scheduler and pipeliner.
-   Copyright (C) 2006-2013 Free Software Foundation, Inc.
+   Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -34,6 +35,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "recog.h"
 #include "params.h"
 #include "target.h"
+#include "timevar.h"
+#include "tree-pass.h"
 #include "sched-int.h"
 #include "ggc.h"
 #include "tree.h"
@@ -48,12 +51,10 @@ along with GCC; see the file COPYING3.  If not see
 #include "sel-sched-dump.h"
 
 /* A vector holding bb info for whole scheduling pass.  */
-vec<sel_global_bb_info_def>
-    sel_global_bb_info = vNULL;
+VEC(sel_global_bb_info_def, heap) *sel_global_bb_info = NULL;
 
 /* A vector holding bb info.  */
-vec<sel_region_bb_info_def>
-    sel_region_bb_info = vNULL;
+VEC(sel_region_bb_info_def, heap) *sel_region_bb_info = NULL;
 
 /* A pool for allocating all lists.  */
 alloc_pool sched_lists_pool;
@@ -69,7 +70,7 @@ struct loop *current_loop_nest;
 
 /* LOOP_NESTS is a vector containing the corresponding loop nest for
    each region.  */
-static vec<loop_p> loop_nests = vNULL;
+static VEC(loop_p, heap) *loop_nests = NULL;
 
 /* Saves blocks already in loop regions, indexed by bb->index.  */
 static sbitmap bbs_in_loop_rgns = NULL;
@@ -148,7 +149,7 @@ static expr_t set_insn_init (expr_t, vinsn_t, int);
 
 static void cfg_preds (basic_block, insn_t **, int *);
 static void prepare_insn_expr (insn_t, int);
-static void free_history_vect (vec<expr_history_def> &);
+static void free_history_vect (VEC (expr_history_def, heap) **);
 
 static void move_bb_info (basic_block, basic_block);
 static void remove_empty_bb (basic_block, bool);
@@ -262,7 +263,7 @@ init_fence_for_scheduling (fence_t f)
 /* Add new fence consisting of INSN and STATE to the list pointed to by LP.  */
 static void
 flist_add (flist_t *lp, insn_t insn, state_t state, deps_t dc, void *tc,
-           insn_t last_scheduled_insn, vec<rtx, va_gc> *executing_insns,
+           insn_t last_scheduled_insn, VEC(rtx,gc) *executing_insns,
            int *ready_ticks, int ready_ticks_size, insn_t sched_next,
            int cycle, int cycle_issued_insns, int issue_more,
            bool starts_cycle_p, bool after_stall_p)
@@ -587,7 +588,7 @@ fence_clear (fence_t f)
 
   if (tc != NULL)
     delete_target_context (tc);
-  vec_free (FENCE_EXECUTING_INSNS (f));
+  VEC_free (rtx, gc, FENCE_EXECUTING_INSNS (f));
   free (FENCE_READY_TICKS (f));
   FENCE_READY_TICKS (f) = NULL;
 }
@@ -637,7 +638,7 @@ init_fences (insn_t old_fence)
 static void
 merge_fences (fence_t f, insn_t insn,
 	      state_t state, deps_t dc, void *tc,
-              rtx last_scheduled_insn, vec<rtx, va_gc> *executing_insns,
+              rtx last_scheduled_insn, VEC(rtx, gc) *executing_insns,
               int *ready_ticks, int ready_ticks_size,
 	      rtx sched_next, int cycle, int issue_more, bool after_stall_p)
 {
@@ -670,11 +671,11 @@ merge_fences (fence_t f, insn_t insn,
 
       FENCE_LAST_SCHEDULED_INSN (f) = NULL;
       FENCE_ISSUE_MORE (f) = issue_rate;
-      vec_free (executing_insns);
+      VEC_free (rtx, gc, executing_insns);
       free (ready_ticks);
       if (FENCE_EXECUTING_INSNS (f))
-        FENCE_EXECUTING_INSNS (f)->block_remove (0,
-					  FENCE_EXECUTING_INSNS (f)->length ());
+        VEC_block_remove (rtx, FENCE_EXECUTING_INSNS (f), 0,
+                          VEC_length (rtx, FENCE_EXECUTING_INSNS (f)));
       if (FENCE_READY_TICKS (f))
         memset (FENCE_READY_TICKS (f), 0, FENCE_READY_TICKS_SIZE (f));
     }
@@ -758,13 +759,13 @@ merge_fences (fence_t f, insn_t insn,
           {
             reset_deps_context (FENCE_DC (f));
             delete_deps_context (dc);
-            vec_free (executing_insns);
+            VEC_free (rtx, gc, executing_insns);
             free (ready_ticks);
 
             FENCE_CYCLE (f) = MAX (FENCE_CYCLE (f), cycle);
             if (FENCE_EXECUTING_INSNS (f))
-              FENCE_EXECUTING_INSNS (f)->block_remove (0,
-                                FENCE_EXECUTING_INSNS (f)->length ());
+              VEC_block_remove (rtx, FENCE_EXECUTING_INSNS (f), 0,
+                                VEC_length (rtx, FENCE_EXECUTING_INSNS (f)));
             if (FENCE_READY_TICKS (f))
               memset (FENCE_READY_TICKS (f), 0, FENCE_READY_TICKS_SIZE (f));
           }
@@ -773,7 +774,7 @@ merge_fences (fence_t f, insn_t insn,
             {
               delete_deps_context (FENCE_DC (f));
               FENCE_DC (f) = dc;
-              vec_free (FENCE_EXECUTING_INSNS (f));
+              VEC_free (rtx, gc, FENCE_EXECUTING_INSNS (f));
               FENCE_EXECUTING_INSNS (f) = executing_insns;
               free (FENCE_READY_TICKS (f));
               FENCE_READY_TICKS (f) = ready_ticks;
@@ -784,7 +785,7 @@ merge_fences (fence_t f, insn_t insn,
             {
               /* Leave DC and CYCLE untouched.  */
               delete_deps_context (dc);
-              vec_free (executing_insns);
+              VEC_free (rtx, gc, executing_insns);
               free (ready_ticks);
             }
     }
@@ -803,7 +804,7 @@ merge_fences (fence_t f, insn_t insn,
 static void
 add_to_fences (flist_tail_t new_fences, insn_t insn,
                state_t state, deps_t dc, void *tc, rtx last_scheduled_insn,
-               vec<rtx, va_gc> *executing_insns, int *ready_ticks,
+               VEC(rtx, gc) *executing_insns, int *ready_ticks,
                int ready_ticks_size, rtx sched_next, int cycle,
                int cycle_issued_insns, int issue_rate,
 	       bool starts_cycle_p, bool after_stall_p)
@@ -887,7 +888,7 @@ add_dirty_fence_to_fences (flist_tail_t new_fences, insn_t succ, fence_t fence)
                  create_copy_of_deps_context (FENCE_DC (fence)),
                  create_copy_of_target_context (FENCE_TC (fence)),
                  FENCE_LAST_SCHEDULED_INSN (fence),
-		 vec_safe_copy (FENCE_EXECUTING_INSNS (fence)),
+                 VEC_copy (rtx, gc, FENCE_EXECUTING_INSNS (fence)),
                  new_ready_ticks,
                  FENCE_READY_TICKS_SIZE (fence),
                  FENCE_SCHED_NEXT (fence),
@@ -955,13 +956,7 @@ return_regset_to_pool (regset rs)
 static int
 cmp_v_in_regset_pool (const void *x, const void *xx)
 {
-  uintptr_t r1 = (uintptr_t) *((const regset *) x);
-  uintptr_t r2 = (uintptr_t) *((const regset *) xx);
-  if (r1 > r2)
-    return 1;
-  else if (r1 < r2)
-    return -1;
-  gcc_unreachable ();
+  return *((const regset *) x) - *((const regset *) xx);
 }
 #endif
 
@@ -1439,12 +1434,12 @@ sel_move_insn (expr_t expr, int seqno, insn_t after)
    the search has stopped, such that inserting the new element at INDP will
    retain VECT's sort order.  */
 static bool
-find_in_history_vect_1 (vec<expr_history_def> vect,
+find_in_history_vect_1 (VEC(expr_history_def, heap) *vect,
                         unsigned uid, vinsn_t new_vinsn,
                         bool compare_vinsns, int *indp)
 {
   expr_history_def *arr;
-  int i, j, len = vect.length ();
+  int i, j, len = VEC_length (expr_history_def, vect);
 
   if (len == 0)
     {
@@ -1452,7 +1447,7 @@ find_in_history_vect_1 (vec<expr_history_def> vect,
       return false;
     }
 
-  arr = vect.address ();
+  arr = VEC_address (expr_history_def, vect);
   i = 0, j = len - 1;
 
   while (i <= j)
@@ -1484,7 +1479,7 @@ find_in_history_vect_1 (vec<expr_history_def> vect,
    the position found or -1, if no such value is in vector.
    Search also for UIDs of insn's originators, if ORIGINATORS_P is true.  */
 int
-find_in_history_vect (vec<expr_history_def> vect, rtx insn,
+find_in_history_vect (VEC(expr_history_def, heap) *vect, rtx insn,
                       vinsn_t new_vinsn, bool originators_p)
 {
   int ind;
@@ -1511,12 +1506,12 @@ find_in_history_vect (vec<expr_history_def> vect, rtx insn,
    UID/NEW_EXPR_VINSN pair.  TYPE, OLD_EXPR_VINSN and SPEC_DS save
    the history of a transformation.  */
 void
-insert_in_history_vect (vec<expr_history_def> *pvect,
+insert_in_history_vect (VEC (expr_history_def, heap) **pvect,
                         unsigned uid, enum local_trans_type type,
                         vinsn_t old_expr_vinsn, vinsn_t new_expr_vinsn,
                         ds_t spec_ds)
 {
-  vec<expr_history_def> vect = *pvect;
+  VEC(expr_history_def, heap) *vect = *pvect;
   expr_history_def temp;
   bool res;
   int ind;
@@ -1525,7 +1520,7 @@ insert_in_history_vect (vec<expr_history_def> *pvect,
 
   if (res)
     {
-      expr_history_def *phist = &vect[ind];
+      expr_history_def *phist = VEC_index (expr_history_def, vect, ind);
 
       /* It is possible that speculation types of expressions that were
          propagated through different paths will be different here.  In this
@@ -1543,39 +1538,42 @@ insert_in_history_vect (vec<expr_history_def> *pvect,
 
   vinsn_attach (old_expr_vinsn);
   vinsn_attach (new_expr_vinsn);
-  vect.safe_insert (ind, temp);
+  VEC_safe_insert (expr_history_def, heap, vect, ind, &temp);
   *pvect = vect;
 }
 
 /* Free history vector PVECT.  */
 static void
-free_history_vect (vec<expr_history_def> &pvect)
+free_history_vect (VEC (expr_history_def, heap) **pvect)
 {
   unsigned i;
   expr_history_def *phist;
 
-  if (! pvect.exists ())
+  if (! *pvect)
     return;
 
-  for (i = 0; pvect.iterate (i, &phist); i++)
+  for (i = 0;
+       VEC_iterate (expr_history_def, *pvect, i, phist);
+       i++)
     {
       vinsn_detach (phist->old_expr_vinsn);
       vinsn_detach (phist->new_expr_vinsn);
     }
 
-  pvect.release ();
+  VEC_free (expr_history_def, heap, *pvect);
+  *pvect = NULL;
 }
 
 /* Merge vector FROM to PVECT.  */
 static void
-merge_history_vect (vec<expr_history_def> *pvect,
-		    vec<expr_history_def> from)
+merge_history_vect (VEC (expr_history_def, heap) **pvect,
+		    VEC (expr_history_def, heap) *from)
 {
   expr_history_def *phist;
   int i;
 
   /* We keep this vector sorted.  */
-  for (i = 0; from.iterate (i, &phist); i++)
+  for (i = 0; VEC_iterate (expr_history_def, from, i, phist); i++)
     insert_in_history_vect (pvect, phist->uid, phist->type,
                             phist->old_expr_vinsn, phist->new_expr_vinsn,
                             phist->spec_ds);
@@ -1617,8 +1615,7 @@ static void
 init_expr (expr_t expr, vinsn_t vi, int spec, int use, int priority,
 	   int sched_times, int orig_bb_index, ds_t spec_done_ds,
 	   ds_t spec_to_check_ds, int orig_sched_cycle,
-	   vec<expr_history_def> history,
-	   signed char target_available,
+	   VEC(expr_history_def, heap) *history, signed char target_available,
            bool was_substituted, bool was_renamed, bool needs_spec_check_p,
            bool cant_move)
 {
@@ -1635,10 +1632,10 @@ init_expr (expr_t expr, vinsn_t vi, int spec, int use, int priority,
   EXPR_SPEC_DONE_DS (expr) = spec_done_ds;
   EXPR_SPEC_TO_CHECK_DS (expr) = spec_to_check_ds;
 
-  if (history.exists ())
+  if (history)
     EXPR_HISTORY_OF_CHANGES (expr) = history;
   else
-    EXPR_HISTORY_OF_CHANGES (expr).create (0);
+    EXPR_HISTORY_OF_CHANGES (expr) = NULL;
 
   EXPR_TARGET_AVAILABLE (expr) = target_available;
   EXPR_WAS_SUBSTITUTED (expr) = was_substituted;
@@ -1651,16 +1648,16 @@ init_expr (expr_t expr, vinsn_t vi, int spec, int use, int priority,
 void
 copy_expr (expr_t to, expr_t from)
 {
-  vec<expr_history_def> temp = vNULL;
+  VEC(expr_history_def, heap) *temp = NULL;
 
-  if (EXPR_HISTORY_OF_CHANGES (from).exists ())
+  if (EXPR_HISTORY_OF_CHANGES (from))
     {
       unsigned i;
       expr_history_def *phist;
 
-      temp = EXPR_HISTORY_OF_CHANGES (from).copy ();
+      temp = VEC_copy (expr_history_def, heap, EXPR_HISTORY_OF_CHANGES (from));
       for (i = 0;
-           temp.iterate (i, &phist);
+           VEC_iterate (expr_history_def, temp, i, phist);
            i++)
         {
           vinsn_attach (phist->old_expr_vinsn);
@@ -1685,8 +1682,7 @@ copy_expr_onside (expr_t to, expr_t from)
 {
   init_expr (to, EXPR_VINSN (from), EXPR_SPEC (from), EXPR_USEFULNESS (from),
 	     EXPR_PRIORITY (from), EXPR_SCHED_TIMES (from), 0,
-	     EXPR_SPEC_DONE_DS (from), EXPR_SPEC_TO_CHECK_DS (from), 0,
-	     vNULL,
+	     EXPR_SPEC_DONE_DS (from), EXPR_SPEC_TO_CHECK_DS (from), 0, NULL,
 	     EXPR_TARGET_AVAILABLE (from), EXPR_WAS_SUBSTITUTED (from),
 	     EXPR_WAS_RENAMED (from), EXPR_NEEDS_SPEC_CHECK_P (from),
              EXPR_CANT_MOVE (from));
@@ -1718,7 +1714,7 @@ prepare_insn_expr (insn_t insn, int seqno)
   if (ds)
     EXPR_SPEC_DONE_DS (expr) = ds_get_max_dep_weak (ds);
 
-  free_history_vect (EXPR_HISTORY_OF_CHANGES (expr));
+  free_history_vect (&EXPR_HISTORY_OF_CHANGES (expr));
 }
 
 /* Update target_available bits when merging exprs TO and FROM.  SPLIT_POINT
@@ -1866,12 +1862,8 @@ merge_expr (expr_t to, expr_t from, insn_t split_point)
   /* Make sure that speculative pattern is propagated into exprs that
      have non-speculative one.  This will provide us with consistent
      speculative bits and speculative patterns inside expr.  */
-  if ((EXPR_SPEC_DONE_DS (from) != 0
-       && EXPR_SPEC_DONE_DS (to) == 0)
-      /* Do likewise for volatile insns, so that we always retain
-	 the may_trap_p bit on the resulting expression.  */
-      || (VINSN_MAY_TRAP_P (EXPR_VINSN (from))
-	  && !VINSN_MAY_TRAP_P (EXPR_VINSN (to))))
+  if (EXPR_SPEC_DONE_DS (to) == 0
+      && EXPR_SPEC_DONE_DS (from) != 0)
     change_vinsn_in_expr (to, EXPR_VINSN (from));
 
   merge_expr_data (to, from, split_point);
@@ -1886,7 +1878,7 @@ clear_expr (expr_t expr)
   vinsn_detach (EXPR_VINSN (expr));
   EXPR_VINSN (expr) = NULL;
 
-  free_history_vect (EXPR_HISTORY_OF_CHANGES (expr));
+  free_history_vect (&EXPR_HISTORY_OF_CHANGES (expr));
 }
 
 /* For a given LV_SET, mark EXPR having unavailable target register.  */
@@ -2785,14 +2777,14 @@ sched_scan (const struct sched_scan_info_def *ssi, bb_vec_t bbs)
     ssi->extend_bb ();
 
   if (ssi->init_bb)
-    FOR_EACH_VEC_ELT (bbs, i, bb)
+    FOR_EACH_VEC_ELT (basic_block, bbs, i, bb)
       ssi->init_bb (bb);
 
   if (ssi->extend_insn)
     ssi->extend_insn ();
 
   if (ssi->init_insn)
-    FOR_EACH_VEC_ELT (bbs, i, bb)
+    FOR_EACH_VEC_ELT (basic_block, bbs, i, bb)
       {
 	rtx insn;
 
@@ -3007,8 +2999,8 @@ init_global_and_expr_for_insn (insn_t insn)
     /* Initialize INSN's expr.  */
     init_expr (INSN_EXPR (insn), vinsn_create (insn, force_unique_p), 0,
 	       REG_BR_PROB_BASE, INSN_PRIORITY (insn), 0, BLOCK_NUM (insn),
-	       spec_done_ds, 0, 0, vNULL, true,
-	       false, false, false, CANT_MOVE (insn));
+	       spec_done_ds, 0, 0, NULL, true, false, false, false,
+               CANT_MOVE (insn));
   }
 
   init_first_time_insn_data (insn);
@@ -3069,10 +3061,10 @@ sel_finish_global_and_expr (void)
     bb_vec_t bbs;
     int i;
 
-    bbs.create (current_nr_blocks);
+    bbs = VEC_alloc (basic_block, heap, current_nr_blocks);
 
     for (i = 0; i < current_nr_blocks; i++)
-      bbs.quick_push (BASIC_BLOCK (BB_TO_BLOCK (i)));
+      VEC_quick_push (basic_block, bbs, BASIC_BLOCK (BB_TO_BLOCK (i)));
 
     /* Clear AV_SETs and INSN_EXPRs.  */
     {
@@ -3087,7 +3079,7 @@ sel_finish_global_and_expr (void)
       sched_scan (&ssi, bbs);
     }
 
-    bbs.release ();
+    VEC_free (basic_block, heap, bbs);
   }
 
   finish_insns ();
@@ -3189,7 +3181,7 @@ has_dependence_note_reg_set (int regno)
 	  || reg_last->clobbers != NULL)
 	*dsp = (*dsp & ~SPECULATIVE) | DEP_OUTPUT;
 
-      if (reg_last->uses || reg_last->implicit_sets)
+      if (reg_last->uses)
 	*dsp = (*dsp & ~SPECULATIVE) | DEP_ANTI;
     }
 }
@@ -3209,7 +3201,7 @@ has_dependence_note_reg_clobber (int regno)
       if (reg_last->sets)
 	*dsp = (*dsp & ~SPECULATIVE) | DEP_OUTPUT;
 
-      if (reg_last->uses || reg_last->implicit_sets)
+      if (reg_last->uses)
 	*dsp = (*dsp & ~SPECULATIVE) | DEP_ANTI;
     }
 }
@@ -3229,7 +3221,7 @@ has_dependence_note_reg_use (int regno)
       if (reg_last->sets)
 	*dsp = (*dsp & ~SPECULATIVE) | DEP_TRUE;
 
-      if (reg_last->clobbers || reg_last->implicit_sets)
+      if (reg_last->clobbers)
 	*dsp = (*dsp & ~SPECULATIVE) | DEP_ANTI;
 
       /* Merge BE_IN_SPEC bits into *DSP when the dependency producer
@@ -3567,7 +3559,7 @@ insn_sid (insn_t insn)
 bool
 sel_insn_is_speculation_check (rtx insn)
 {
-  return s_i_d.exists () && !! INSN_SPEC_CHECKED_DS (insn);
+  return s_i_d && !! INSN_SPEC_CHECKED_DS (insn);
 }
 
 /* Extracts machine mode MODE and destination location DST_LOC
@@ -3669,7 +3661,7 @@ static bool
 maybe_tidy_empty_bb (basic_block bb)
 {
   basic_block succ_bb, pred_bb, note_bb;
-  vec<basic_block> dom_bbs;
+  VEC (basic_block, heap) *dom_bbs;
   edge e;
   edge_iterator ei;
   bool rescan_p;
@@ -3721,7 +3713,7 @@ maybe_tidy_empty_bb (basic_block bb)
   succ_bb = single_succ (bb);
   rescan_p = true;
   pred_bb = NULL;
-  dom_bbs.create (0);
+  dom_bbs = NULL;
 
   /* Save a pred/succ from the current region to attach the notes to.  */
   note_bb = NULL;
@@ -3753,7 +3745,7 @@ maybe_tidy_empty_bb (basic_block bb)
 		 sel_redirect_edge_and_branch will take care of it.  */
 	      if (e->dest != bb
 		  && single_pred_p (e->dest))
-		dom_bbs.safe_push (e->dest);
+		VEC_safe_push (basic_block, heap, dom_bbs, e->dest);
               sel_redirect_edge_and_branch (e, succ_bb);
               rescan_p = true;
               break;
@@ -3788,11 +3780,11 @@ maybe_tidy_empty_bb (basic_block bb)
       remove_empty_bb (bb, true);
     }
 
-  if (!dom_bbs.is_empty ())
+  if (!VEC_empty (basic_block, dom_bbs))
     {
-      dom_bbs.safe_push (succ_bb);
+      VEC_safe_push (basic_block, heap, dom_bbs, succ_bb);
       iterate_fix_dominators (CDI_DOMINATORS, dom_bbs, false);
-      dom_bbs.release ();
+      VEC_free (basic_block, heap, dom_bbs);
     }
 
   return true;
@@ -4104,14 +4096,16 @@ get_seqno_by_preds (rtx insn)
 void
 sel_extend_global_bb_info (void)
 {
-  sel_global_bb_info.safe_grow_cleared (last_basic_block);
+  VEC_safe_grow_cleared (sel_global_bb_info_def, heap, sel_global_bb_info,
+			 last_basic_block);
 }
 
 /* Extend region-scope data structures for basic blocks.  */
 static void
 extend_region_bb_info (void)
 {
-  sel_region_bb_info.safe_grow_cleared (last_basic_block);
+  VEC_safe_grow_cleared (sel_region_bb_info_def, heap, sel_region_bb_info,
+			 last_basic_block);
 }
 
 /* Extend all data structures to fit for all basic blocks.  */
@@ -4126,19 +4120,19 @@ extend_bb_info (void)
 void
 sel_finish_global_bb_info (void)
 {
-  sel_global_bb_info.release ();
+  VEC_free (sel_global_bb_info_def, heap, sel_global_bb_info);
 }
 
 /* Finalize region-scope data structures for basic blocks.  */
 static void
 finish_region_bb_info (void)
 {
-  sel_region_bb_info.release ();
+  VEC_free (sel_region_bb_info_def, heap, sel_region_bb_info);
 }
 
 
 /* Data for each insn in current region.  */
-vec<sel_insn_data_def> s_i_d = vNULL;
+VEC (sel_insn_data_def, heap) *s_i_d = NULL;
 
 /* Extend data structures for insns from current region.  */
 static void
@@ -4150,8 +4144,10 @@ extend_insn_data (void)
   sched_deps_init (false);
 
   /* Extend data structures for insns from current region.  */
-  reserve = (sched_max_luid + 1 - s_i_d.length ());
-  if (reserve > 0 && ! s_i_d.space (reserve))
+  reserve = (sched_max_luid + 1
+             - VEC_length (sel_insn_data_def, s_i_d));
+  if (reserve > 0
+      && ! VEC_space (sel_insn_data_def, s_i_d, reserve))
     {
       int size;
 
@@ -4161,7 +4157,7 @@ extend_insn_data (void)
         size = 3 * sched_max_luid / 2;
 
 
-      s_i_d.safe_grow_cleared (size);
+      VEC_safe_grow_cleared (sel_insn_data_def, heap, s_i_d, size);
     }
 }
 
@@ -4173,9 +4169,9 @@ finish_insns (void)
 
   /* Clear here all dependence contexts that may have left from insns that were
      removed during the scheduling.  */
-  for (i = 0; i < s_i_d.length (); i++)
+  for (i = 0; i < VEC_length (sel_insn_data_def, s_i_d); i++)
     {
-      sel_insn_data_def *sid_entry = &s_i_d[i];
+      sel_insn_data_def *sid_entry = VEC_index (sel_insn_data_def, s_i_d, i);
 
       if (sid_entry->live)
         return_regset_to_pool (sid_entry->live);
@@ -4196,7 +4192,7 @@ finish_insns (void)
         }
     }
 
-  s_i_d.release ();
+  VEC_free (sel_insn_data_def, heap, s_i_d);
 }
 
 /* A proxy to pass initialization data to init_insn ().  */
@@ -4255,8 +4251,7 @@ static void
 init_simplejump_data (insn_t insn)
 {
   init_expr (INSN_EXPR (insn), vinsn_create (insn, false), 0,
-	     REG_BR_PROB_BASE, 0, 0, 0, 0, 0, 0,
-	     vNULL, true, false, false,
+	     REG_BR_PROB_BASE, 0, 0, 0, 0, 0, 0, NULL, true, false, false,
 	     false, true);
   INSN_SEQNO (insn) = get_seqno_for_a_jump (insn);
   init_first_time_insn_data (insn);
@@ -4506,8 +4501,7 @@ get_av_level (insn_t insn)
 
 /* The basic block that already has been processed by the sched_data_update (),
    but hasn't been in sel_add_bb () yet.  */
-static vec<basic_block>
-    last_added_blocks = vNULL;
+static VEC (basic_block, heap) *last_added_blocks = NULL;
 
 /* A pool for allocating successor infos.  */
 static struct
@@ -4709,9 +4703,9 @@ alloc_succs_info (void)
         gcc_unreachable ();
 
       i = ++succs_info_pool.top;
-      succs_info_pool.stack[i].succs_ok.create (10);
-      succs_info_pool.stack[i].succs_other.create (10);
-      succs_info_pool.stack[i].probs_ok.create (10);
+      succs_info_pool.stack[i].succs_ok = VEC_alloc (rtx, heap, 10);
+      succs_info_pool.stack[i].succs_other = VEC_alloc (rtx, heap, 10);
+      succs_info_pool.stack[i].probs_ok = VEC_alloc (int, heap, 10);
     }
   else
     succs_info_pool.top++;
@@ -4728,9 +4722,12 @@ free_succs_info (struct succs_info * sinfo)
   succs_info_pool.top--;
 
   /* Clear stale info.  */
-  sinfo->succs_ok.block_remove (0, sinfo->succs_ok.length ());
-  sinfo->succs_other.block_remove (0, sinfo->succs_other.length ());
-  sinfo->probs_ok.block_remove (0, sinfo->probs_ok.length ());
+  VEC_block_remove (rtx, sinfo->succs_ok,
+                    0, VEC_length (rtx, sinfo->succs_ok));
+  VEC_block_remove (rtx, sinfo->succs_other,
+                    0, VEC_length (rtx, sinfo->succs_other));
+  VEC_block_remove (int, sinfo->probs_ok,
+                    0, VEC_length (int, sinfo->probs_ok));
   sinfo->all_prob = 0;
   sinfo->succs_ok_n = 0;
   sinfo->all_succs_n = 0;
@@ -4754,15 +4751,17 @@ compute_succs_info (insn_t insn, short flags)
 
       if (current_flags & flags)
         {
-          sinfo->succs_ok.safe_push (succ);
-          sinfo->probs_ok.safe_push (
-		    /* FIXME: Improve calculation when skipping
-                       inner loop to exits.  */
-                    si.bb_end ? si.e1->probability : REG_BR_PROB_BASE);
+          VEC_safe_push (rtx, heap, sinfo->succs_ok, succ);
+          VEC_safe_push (int, heap, sinfo->probs_ok,
+                         /* FIXME: Improve calculation when skipping
+                            inner loop to exits.  */
+                         (si.bb_end
+                          ? si.e1->probability
+                          : REG_BR_PROB_BASE));
           sinfo->succs_ok_n++;
         }
       else
-        sinfo->succs_other.safe_push (succ);
+        VEC_safe_push (rtx, heap, sinfo->succs_other, succ);
 
       /* Compute all_prob.  */
       if (!si.bb_end)
@@ -4969,18 +4968,18 @@ return_bb_to_pool (basic_block bb)
 
   /* It turns out that current cfg infrastructure does not support
      reuse of basic blocks.  Don't bother for now.  */
-  /*bb_note_pool.safe_push (note);*/
+  /*VEC_safe_push (rtx, heap, bb_note_pool, note);*/
 }
 
 /* Get a bb_note from pool or return NULL_RTX if pool is empty.  */
 static rtx
 get_bb_note_from_pool (void)
 {
-  if (bb_note_pool.is_empty ())
+  if (VEC_empty (rtx, bb_note_pool))
     return NULL_RTX;
   else
     {
-      rtx note = bb_note_pool.pop ();
+      rtx note = VEC_pop (rtx, bb_note_pool);
 
       PREV_INSN (note) = NULL_RTX;
       NEXT_INSN (note) = NULL_RTX;
@@ -4993,7 +4992,7 @@ get_bb_note_from_pool (void)
 void
 free_bb_note_pool (void)
 {
-  bb_note_pool.release ();
+  VEC_free (rtx, heap, bb_note_pool);
 }
 
 /* Setup scheduler pool and successor structure.  */
@@ -5020,11 +5019,11 @@ free_sched_pools (void)
 
   free_alloc_pool (sched_lists_pool);
   gcc_assert (succs_info_pool.top == -1);
-  for (i = 0; i <= succs_info_pool.max_top; i++)
+  for (i = 0; i < succs_info_pool.max_top; i++)
     {
-      succs_info_pool.stack[i].succs_ok.release ();
-      succs_info_pool.stack[i].succs_other.release ();
-      succs_info_pool.stack[i].probs_ok.release ();
+      VEC_free (rtx, heap, succs_info_pool.stack[i].succs_ok);
+      VEC_free (rtx, heap, succs_info_pool.stack[i].succs_other);
+      VEC_free (int, heap, succs_info_pool.stack[i].probs_ok);
     }
   free (succs_info_pool.stack);
 }
@@ -5063,7 +5062,7 @@ find_place_to_insert_bb (basic_block bb, int rgn)
             break;
         }
 
-      /* We skipped the right block, so we increase i.  We accommodate
+      /* We skipped the right block, so we increase i.  We accomodate
          it for increasing by step later, so we decrease i.  */
       return (i + 1) - 1;
     }
@@ -5191,12 +5190,13 @@ sel_add_bb (basic_block bb)
   /* When bb is passed explicitly, the vector should contain
      the only element that equals to bb; otherwise, the vector
      should not be NULL.  */
-  gcc_assert (last_added_blocks.exists ());
+  gcc_assert (last_added_blocks != NULL);
 
   if (bb != NULL)
     {
-      gcc_assert (last_added_blocks.length () == 1
-                  && last_added_blocks[0] == bb);
+      gcc_assert (VEC_length (basic_block, last_added_blocks) == 1
+                  && VEC_index (basic_block,
+                                last_added_blocks, 0) == bb);
       add_block_to_current_region (bb);
 
       /* We associate creating/deleting data sets with the first insn
@@ -5204,7 +5204,7 @@ sel_add_bb (basic_block bb)
       if (!sel_bb_empty_p (bb) && BB_LV_SET (bb) == NULL)
 	create_initial_data_sets (bb);
 
-      last_added_blocks.release ();
+      VEC_free (basic_block, heap, last_added_blocks);
     }
   else
     /* BB is NULL - process LAST_ADDED_BLOCKS instead.  */
@@ -5213,7 +5213,7 @@ sel_add_bb (basic_block bb)
       basic_block temp_bb = NULL;
 
       for (i = 0;
-           last_added_blocks.iterate (i, &bb); i++)
+           VEC_iterate (basic_block, last_added_blocks, i, bb); i++)
         {
           add_block_to_current_region (bb);
           temp_bb = bb;
@@ -5224,7 +5224,7 @@ sel_add_bb (basic_block bb)
       gcc_assert (temp_bb != NULL);
       bb = temp_bb;
 
-      last_added_blocks.release ();
+      VEC_free (basic_block, heap, last_added_blocks);
     }
 
   rgn_setup_region (CONTAINING_RGN (bb->index));
@@ -5341,7 +5341,7 @@ sel_create_basic_block (void *headp, void *endp, basic_block after)
   insn_t new_bb_note;
 
   gcc_assert (flag_sel_sched_pipelining_outer_loops
-              || !last_added_blocks.exists ());
+              || last_added_blocks == NULL);
 
   new_bb_note = get_bb_note_from_pool ();
 
@@ -5354,7 +5354,7 @@ sel_create_basic_block (void *headp, void *endp, basic_block after)
       new_bb->aux = NULL;
     }
 
-  last_added_blocks.safe_push (new_bb);
+  VEC_safe_push (basic_block, heap, last_added_blocks, new_bb);
 
   return new_bb;
 }
@@ -5485,7 +5485,7 @@ sel_split_edge (edge e)
       /* Some of the basic blocks might not have been added to the loop.
          Add them here, until this is fixed in force_fallthru.  */
       for (i = 0;
-           last_added_blocks.iterate (i, &bb); i++)
+           VEC_iterate (basic_block, last_added_blocks, i, bb); i++)
         if (!bb->loop_father)
           {
             add_bb_to_loop (bb, e->dest->loop_father);
@@ -5519,10 +5519,10 @@ sel_create_empty_bb (basic_block after)
 
   /* We'll explicitly initialize NEW_BB via sel_init_only_bb () a bit
      later.  */
-  gcc_assert (last_added_blocks.length () == 1
-	      && last_added_blocks[0] == new_bb);
+  gcc_assert (VEC_length (basic_block, last_added_blocks) == 1
+	      && VEC_index (basic_block, last_added_blocks, 0) == new_bb);
 
-  last_added_blocks.release ();
+  VEC_free (basic_block, heap, last_added_blocks);
   return new_bb;
 }
 
@@ -5636,7 +5636,7 @@ sel_redirect_edge_and_branch (edge e, basic_block to)
 
   redirected = redirect_edge_and_branch (e, to);
 
-  gcc_assert (redirected && !last_added_blocks.exists ());
+  gcc_assert (redirected && last_added_blocks == NULL);
 
   /* When we've redirected a latch edge, update the header.  */
   if (latch_edge_p)
@@ -6003,7 +6003,7 @@ make_region_from_loop (struct loop *loop)
   new_rgn_number = sel_create_new_region ();
 
   sel_add_block_to_region (preheader_block, &bb_ord_index, new_rgn_number);
-  bitmap_set_bit (bbs_in_loop_rgns, preheader_block->index);
+  SET_BIT (bbs_in_loop_rgns, preheader_block->index);
 
   for (i = 0; i < loop->num_nodes; i++)
     {
@@ -6014,11 +6014,11 @@ make_region_from_loop (struct loop *loop)
 
       gcc_assert (new_rgn_number >= 0);
 
-      if (! bitmap_bit_p (bbs_in_loop_rgns, loop_blocks[i]->index))
+      if (! TEST_BIT (bbs_in_loop_rgns, loop_blocks[i]->index))
 	{
 	  sel_add_block_to_region (loop_blocks[i], &bb_ord_index,
                                    new_rgn_number);
-	  bitmap_set_bit (bbs_in_loop_rgns, loop_blocks[i]->index);
+	  SET_BIT (bbs_in_loop_rgns, loop_blocks[i]->index);
 	}
     }
 
@@ -6030,7 +6030,7 @@ make_region_from_loop (struct loop *loop)
 
 /* Create a new region from preheader blocks LOOP_BLOCKS.  */
 void
-make_region_from_loop_preheader (vec<basic_block> *&loop_blocks)
+make_region_from_loop_preheader (VEC(basic_block, heap) **loop_blocks)
 {
   unsigned int i;
   int new_rgn_number = -1;
@@ -6041,14 +6041,15 @@ make_region_from_loop_preheader (vec<basic_block> *&loop_blocks)
 
   new_rgn_number = sel_create_new_region ();
 
-  FOR_EACH_VEC_ELT (*loop_blocks, i, bb)
+  FOR_EACH_VEC_ELT (basic_block, *loop_blocks, i, bb)
     {
       gcc_assert (new_rgn_number >= 0);
 
       sel_add_block_to_region (bb, &bb_ord_index, new_rgn_number);
     }
 
-  vec_free (loop_blocks);
+  VEC_free (basic_block, heap, *loop_blocks);
+  gcc_assert (*loop_blocks == NULL);
 }
 
 
@@ -6063,7 +6064,7 @@ make_regions_from_loop_nest (struct loop *loop)
 
   /* Traverse all inner nodes of the loop.  */
   for (cur_loop = loop->inner; cur_loop; cur_loop = cur_loop->next)
-    if (! bitmap_bit_p (bbs_in_loop_rgns, cur_loop->header->index))
+    if (! TEST_BIT (bbs_in_loop_rgns, cur_loop->header->index))
       return false;
 
   /* At this moment all regular inner loops should have been pipelined.
@@ -6073,7 +6074,7 @@ make_regions_from_loop_nest (struct loop *loop)
   if (rgn_number < 0)
     return false;
 
-  loop_nests.safe_push (loop);
+  VEC_safe_push (loop_p, heap, loop_nests, loop);
   return true;
 }
 
@@ -6089,7 +6090,7 @@ sel_init_pipelining (void)
   current_loop_nest = NULL;
 
   bbs_in_loop_rgns = sbitmap_alloc (last_basic_block);
-  bitmap_clear (bbs_in_loop_rgns);
+  sbitmap_zero (bbs_in_loop_rgns);
 
   recompute_rev_top_order ();
 }
@@ -6100,8 +6101,8 @@ get_loop_nest_for_rgn (unsigned int rgn)
 {
   /* Regions created with extend_rgns don't have corresponding loop nests,
      because they don't represent loops.  */
-  if (rgn < loop_nests.length ())
-    return loop_nests[rgn];
+  if (rgn < VEC_length (loop_p, loop_nests))
+    return VEC_index (loop_p, loop_nests, rgn);
   else
     return NULL;
 }
@@ -6123,7 +6124,7 @@ considered_for_pipelining_p (struct loop *loop)
     {
       int rgn = CONTAINING_RGN (loop->latch->index);
 
-      gcc_assert ((unsigned) rgn < loop_nests.length ());
+      gcc_assert ((unsigned) rgn < VEC_length (loop_p, loop_nests));
       return true;
     }
 
@@ -6177,10 +6178,10 @@ make_regions_from_the_rest (void)
     {
       degree[bb->index] = 0;
 
-      if (!bitmap_bit_p (bbs_in_loop_rgns, bb->index))
+      if (!TEST_BIT (bbs_in_loop_rgns, bb->index))
 	{
 	  FOR_EACH_EDGE (e, ei, bb->preds)
-	    if (!bitmap_bit_p (bbs_in_loop_rgns, e->src->index))
+	    if (!TEST_BIT (bbs_in_loop_rgns, e->src->index))
 	      degree[bb->index]++;
 	}
       else
@@ -6219,7 +6220,7 @@ void sel_finish_pipelining (void)
 
   loop_optimizer_finalize ();
 
-  loop_nests.release ();
+  VEC_free (loop_p, heap, loop_nests);
 
   free (rev_top_order_index);
   rev_top_order_index = NULL;
@@ -6262,20 +6263,19 @@ sel_add_loop_preheaders (bb_vec_t *bbs)
 {
   int i;
   basic_block bb;
-  vec<basic_block> *preheader_blocks
+  VEC(basic_block, heap) *preheader_blocks
     = LOOP_PREHEADER_BLOCKS (current_loop_nest);
 
-  if (!preheader_blocks)
-    return;
-
-  for (i = 0; preheader_blocks->iterate (i, &bb); i++)
+  for (i = 0;
+       VEC_iterate (basic_block, preheader_blocks, i, bb);
+       i++)
     {
-      bbs->safe_push (bb);
-      last_added_blocks.safe_push (bb);
+      VEC_safe_push (basic_block, heap, *bbs, bb);
+      VEC_safe_push (basic_block, heap, last_added_blocks, bb);
       sel_add_bb (bb);
     }
 
-  vec_free (preheader_blocks);
+  VEC_free (basic_block, heap, preheader_blocks);
 }
 
 /* While pipelining outer loops, returns TRUE if BB is a loop preheader.
@@ -6346,13 +6346,11 @@ sel_remove_loop_preheader (void)
   int cur_rgn = CONTAINING_RGN (BB_TO_BLOCK (0));
   basic_block bb;
   bool all_empty_p = true;
-  vec<basic_block> *preheader_blocks
+  VEC(basic_block, heap) *preheader_blocks
     = LOOP_PREHEADER_BLOCKS (loop_outer (current_loop_nest));
 
-  vec_check_alloc (preheader_blocks, 0);
-
   gcc_assert (current_loop_nest);
-  old_len = preheader_blocks->length ();
+  old_len = VEC_length (basic_block, preheader_blocks);
 
   /* Add blocks that aren't within the current loop to PREHEADER_BLOCKS.  */
   for (i = 0; i < RGN_NR_BLOCKS (cur_rgn); i++)
@@ -6363,16 +6361,18 @@ sel_remove_loop_preheader (void)
 	 corresponding loop, then it should be a preheader.  */
       if (sel_is_loop_preheader_p (bb))
         {
-          preheader_blocks->safe_push (bb);
+          VEC_safe_push (basic_block, heap, preheader_blocks, bb);
           if (BB_END (bb) != bb_note (bb))
             all_empty_p = false;
         }
     }
 
   /* Remove these blocks only after iterating over the whole region.  */
-  for (i = preheader_blocks->length () - 1; i >= old_len; i--)
+  for (i = VEC_length (basic_block, preheader_blocks) - 1;
+       i >= old_len;
+       i--)
     {
-      bb =  (*preheader_blocks)[i];
+      bb =  VEC_index (basic_block, preheader_blocks, i);
       sel_remove_bb (bb, false);
     }
 
@@ -6380,12 +6380,12 @@ sel_remove_loop_preheader (void)
     {
       if (!all_empty_p)
         /* Immediately create new region from preheader.  */
-        make_region_from_loop_preheader (preheader_blocks);
+        make_region_from_loop_preheader (&preheader_blocks);
       else
         {
           /* If all preheader blocks are empty - dont create new empty region.
              Instead, remove them completely.  */
-          FOR_EACH_VEC_ELT (*preheader_blocks, i, bb)
+          FOR_EACH_VEC_ELT (basic_block, preheader_blocks, i, bb)
             {
               edge e;
               edge_iterator ei;
@@ -6420,7 +6420,7 @@ sel_remove_loop_preheader (void)
                                                             next_bb));
             }
         }
-      vec_free (preheader_blocks);
+      VEC_free (basic_block, heap, preheader_blocks);
     }
   else
     /* Store preheader within the father's loop structure.  */

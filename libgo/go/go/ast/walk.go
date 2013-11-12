@@ -158,9 +158,7 @@ func Walk(v Visitor, node Node) {
 		Walk(v, n.Fields)
 
 	case *FuncType:
-		if n.Params != nil {
-			Walk(v, n.Params)
-		}
+		Walk(v, n.Params)
 		if n.Results != nil {
 			Walk(v, n.Results)
 		}

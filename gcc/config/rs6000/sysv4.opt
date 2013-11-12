@@ -1,6 +1,7 @@
 ; SYSV4 options for PPC port.
 ;
-; Copyright (C) 2005-2013 Free Software Foundation, Inc.
+; Copyright (C) 2005, 2007, 2008, 2009, 2010, 2011
+; Free Software Foundation, Inc.
 ; Contributed by Aldy Hernandez <aldy@quesejoda.com>.
 ;
 ; This file is part of GCC.
@@ -48,12 +49,12 @@ Target Report Var(TARGET_NO_BITFIELD_TYPE) Save
 Align to the base type of the bit-field
 
 mstrict-align
-Target Report Mask(STRICT_ALIGN) Var(rs6000_isa_flags)
+Target Report Mask(STRICT_ALIGN)
 Align to the base type of the bit-field
 Don't assume that unaligned accesses are handled by the system
 
 mrelocatable
-Target Report Mask(RELOCATABLE) Var(rs6000_isa_flags)
+Target Report Mask(RELOCATABLE)
 Produce code relocatable at runtime
 
 mrelocatable-lib
@@ -61,19 +62,19 @@ Target
 Produce code relocatable at runtime
 
 mlittle-endian
-Target Report RejectNegative Mask(LITTLE_ENDIAN) Var(rs6000_isa_flags)
+Target Report RejectNegative Mask(LITTLE_ENDIAN)
 Produce little endian code
 
 mlittle
-Target Report RejectNegative Mask(LITTLE_ENDIAN) Var(rs6000_isa_flags)
+Target Report RejectNegative Mask(LITTLE_ENDIAN) MaskExists
 Produce little endian code
 
 mbig-endian
-Target Report RejectNegative InverseMask(LITTLE_ENDIAN) Var(rs6000_isa_flags)
+Target Report RejectNegative InverseMask(LITTLE_ENDIAN)
 Produce big endian code
 
 mbig
-Target Report RejectNegative InverseMask(LITTLE_ENDIAN) Var(rs6000_isa_flags)
+Target Report RejectNegative InverseMask(LITTLE_ENDIAN)
 Produce big endian code
 
 ;; FIXME: This does nothing.  What should be done?
@@ -95,7 +96,7 @@ Target RejectNegative
 no description yet
 
 meabi
-Target Report Mask(EABI) Var(rs6000_isa_flags)
+Target Report Mask(EABI)
 Use EABI
 
 mbit-word
@@ -137,11 +138,11 @@ Target RejectNegative
 no description yet
 
 m64
-Target Report RejectNegative Negative(m32) Mask(64BIT) Var(rs6000_isa_flags)
+Target Report RejectNegative Negative(m32) Mask(64BIT)
 Generate 64-bit code
 
 m32
-Target Report RejectNegative Negative(m64) InverseMask(64BIT) Var(rs6000_isa_flags)
+Target Report RejectNegative Negative(m64) InverseMask(64BIT)
 Generate 32-bit code
 
 mnewlib

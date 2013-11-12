@@ -3,7 +3,7 @@
    C++ equivalent of gcc/testsuite/gcc.dg/Wsign-conversion.c  */
 
 // { dg-do compile } 
-// { dg-options "-fsigned-char -Wsign-conversion -ftrack-macro-expansion=0" } 
+// { dg-options "-fsigned-char -Wsign-conversion" } 
 #include <limits.h>
 
 void fsc (signed char sc);

@@ -2,22 +2,27 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
+include ../../../src/Make.inc
+
 ALL=\
 	parser\
 	peano\
 	tree\
 	tree2\
 
-all: $(ALL)
+all: $(addsuffix .out, $(ALL))
 
-%: %.go
-	go build $*.go stats.go
+%.$O: %.go stats.go
+	$(GC) $(GCFLAGS) $(GCIMPORTS) $*.go stats.go
 
-%.bench: %
-	time ./$*
+%.out: %.$O
+	$(LD) -o $@ $*.$O
+
+%.bench: %.out
+	time ./$*.out
 
 bench: $(addsuffix .bench, $(ALL))
 
 clean:
-	rm -f $(ALL)
+	rm -f *.[$(OS)] $(addsuffix .out, $(ALL))
 

@@ -1,6 +1,6 @@
 // class template regex -*- C++ -*-
 
-// Copyright (C) 2010-2013 Free Software Foundation, Inc.
+// Copyright (C) 2010, 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -32,11 +32,6 @@
 
 namespace std _GLIBCXX_VISIBILITY(default)
 {
-/**
- * @addtogroup regex
- * @{
- */
-
 namespace regex_constants
 {
 _GLIBCXX_BEGIN_NAMESPACE_VERSION
@@ -65,60 +60,60 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     };
 
   /** The expression contained an invalid collating element name. */
-  constexpr error_type error_collate(_S_error_collate);
+  static constexpr error_type error_collate(_S_error_collate);
 
   /** The expression contained an invalid character class name. */
-  constexpr error_type error_ctype(_S_error_ctype);
+  static constexpr error_type error_ctype(_S_error_ctype);
 
   /**
    * The expression contained an invalid escaped character, or a trailing
    * escape.
    */
-  constexpr error_type error_escape(_S_error_escape);
+  static constexpr error_type error_escape(_S_error_escape);
 
   /** The expression contained an invalid back reference. */
-  constexpr error_type error_backref(_S_error_backref);
+  static constexpr error_type error_backref(_S_error_backref);
 
   /** The expression contained mismatched [ and ]. */
-  constexpr error_type error_brack(_S_error_brack);
+  static constexpr error_type error_brack(_S_error_brack);
 
   /** The expression contained mismatched ( and ). */
-  constexpr error_type error_paren(_S_error_paren);
+  static constexpr error_type error_paren(_S_error_paren);
 
   /** The expression contained mismatched { and } */
-  constexpr error_type error_brace(_S_error_brace);
+  static constexpr error_type error_brace(_S_error_brace);
 
   /** The expression contained an invalid range in a {} expression. */
-  constexpr error_type error_badbrace(_S_error_badbrace);
+  static constexpr error_type error_badbrace(_S_error_badbrace);
 
   /**
    * The expression contained an invalid character range,
    * such as [b-a] in most encodings.
    */
-  constexpr error_type error_range(_S_error_range);
+  static constexpr error_type error_range(_S_error_range);
 
   /**
    * There was insufficient memory to convert the expression into a
    * finite state machine.
    */
-  constexpr error_type error_space(_S_error_space);
+  static constexpr error_type error_space(_S_error_space);
 
   /**
    * One of <em>*?+{</em> was not preceded by a valid regular expression.
    */
-  constexpr error_type error_badrepeat(_S_error_badrepeat);
+  static constexpr error_type error_badrepeat(_S_error_badrepeat);
 
   /**
    * The complexity of an attempted match against a regular expression
    * exceeded a pre-set level.
    */
-  constexpr error_type error_complexity(_S_error_complexity);
+  static constexpr error_type error_complexity(_S_error_complexity);
 
   /**
    * There was insufficient memory to determine whether the
    * regular expression could match the specified character sequence.
    */
-  constexpr error_type error_stack(_S_error_stack);
+  static constexpr error_type error_stack(_S_error_stack);
 
   //@}
 _GLIBCXX_END_NAMESPACE_VERSION
@@ -158,7 +153,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     { return _M_code; }
   };
 
-  //@} // group regex
 
   void
   __throw_regex_error(regex_constants::error_type __ecode);

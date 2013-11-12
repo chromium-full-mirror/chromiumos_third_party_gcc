@@ -1,4 +1,3 @@
-! { dg-do run }
 program aint_anint_1
     
   implicit none

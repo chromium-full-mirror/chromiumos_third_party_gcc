@@ -22,6 +22,3 @@ int main()
   if (i[0] != 3) abort();
   return 0;
 }
-
-/* Ignore a warning that is irrelevant to the purpose of this test.  */
-/* { dg-prune-output ".*GCC vector returned by reference.*" } */

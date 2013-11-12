@@ -77,9 +77,9 @@ func revcomp(data []byte) {
 	}
 }
 
-func BenchmarkRevcomp(b *testing.B) {
-	b.SetBytes(int64(len(fastabytes)))
+func BenchmarkRevcomp25M(b *testing.B) {
+	b.SetBytes(int64(len(fasta25m)))
 	for i := 0; i < b.N; i++ {
-		revcomp(fastabytes)
+		revcomp(fasta25m)
 	}
 }

@@ -1,4 +1,4 @@
-;; Copyright (C) 2011-2013 Free Software Foundation, Inc.
+;; Copyright 2011 Free Software Foundation, Inc.
 ;;
 ;; This file is part of GCC.
 ;;
@@ -374,8 +374,6 @@
   "TARGET_32BIT && arm_arch6"
   "ssat%?\\t%0, #16, %2%S1"
   [(set_attr "predicable" "yes")
-   (set_attr "insn" "sat")
-   (set_attr "shift" "1")
    (set_attr "type" "alu_shift")])
 
 (define_insn "arm_usatsihi"
@@ -383,5 +381,4 @@
 	(us_truncate:HI (match_operand:SI 1 "s_register_operand")))]
   "TARGET_INT_SIMD"
   "usat%?\\t%0, #16, %1"
-  [(set_attr "predicable" "yes")
-   (set_attr "insn" "sat")])
+  [(set_attr "predicable" "yes")])

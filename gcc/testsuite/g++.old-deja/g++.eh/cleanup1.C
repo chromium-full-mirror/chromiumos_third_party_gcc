@@ -2,12 +2,6 @@
 // Bug: obj gets destroyed twice because the fixups for the return are
 // inside its cleanup region.
 
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-#define NOEXCEPT_FALSE noexcept (false)
-#else
-#define NOEXCEPT_FALSE
-#endif
-
 extern "C" int printf (const char *, ...);
 
 int d;
@@ -15,7 +9,7 @@ int d;
 struct myExc { };
 
 struct myExcRaiser {
-  ~myExcRaiser() NOEXCEPT_FALSE { throw myExc(); }
+  ~myExcRaiser() { throw myExc(); }
 };
 
 struct stackObj {

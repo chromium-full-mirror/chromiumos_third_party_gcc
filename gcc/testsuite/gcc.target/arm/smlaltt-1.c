@@ -11,4 +11,4 @@ foo (long long x, int in1, int in2)
   return x + b * a;
 }
 
-/* { dg-final { scan-assembler "smlaltt\\t" { xfail *-*-* } } } */
+/* { dg-final { scan-assembler "smlaltt\\t" } } */

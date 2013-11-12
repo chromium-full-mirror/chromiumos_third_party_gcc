@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-O2" } */
 /* { dg-final { scan-assembler-not "\tlbu\t" } } */
 
 #include <string.h>

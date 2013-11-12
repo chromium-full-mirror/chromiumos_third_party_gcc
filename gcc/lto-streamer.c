@@ -1,7 +1,7 @@
 /* Miscellaneous utilities for GIMPLE streaming.  Things that are used
    in both input and output are here.
 
-   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+   Copyright 2009, 2010 Free Software Foundation, Inc.
    Contributed by Doug Kwan <dougkwan@google.com>
 
 This file is part of GCC.
@@ -39,7 +39,7 @@ along with GCC; see the file COPYING3.  If not see
 /* Statistics gathered during LTO, WPA and LTRANS.  */
 struct lto_stats_d lto_stats;
 
-/* LTO uses bitmaps with different life-times.  So use a separate
+/* LTO uses bitmaps with different life-times.  So use a seperate
    obstack for all LTO bitmaps.  */
 static bitmap_obstack lto_obstack;
 static bool lto_obstack_initialized;
@@ -180,10 +180,12 @@ lto_get_section_name (int section_type, const char *name, struct lto_file_decl_d
 /* Show various memory usage statistics related to LTO.  */
 
 void
-print_lto_report (const char *s)
+print_lto_report (void)
 {
+  const char *s = (flag_lto) ? "LTO" : (flag_wpa) ? "WPA" : "LTRANS";
   unsigned i;
 
+  fprintf (stderr, "%s statistics\n", s);
   fprintf (stderr, "[%s] # of input files: "
 	   HOST_WIDE_INT_PRINT_UNSIGNED "\n", s, lto_stats.num_input_files);
 
@@ -194,6 +196,9 @@ print_lto_report (const char *s)
   fprintf (stderr, "[%s] # of function bodies: "
 	   HOST_WIDE_INT_PRINT_UNSIGNED "\n", s,
 	   lto_stats.num_function_bodies);
+
+  fprintf (stderr, "[%s] ", s);
+  print_gimple_types_stats ();
 
   for (i = 0; i < NUM_TREE_CODES; i++)
     if (lto_stats.num_trees[i])
@@ -223,9 +228,9 @@ print_lto_report (const char *s)
 	       HOST_WIDE_INT_PRINT_UNSIGNED "\n", s,
 	       lto_stats.num_output_files);
 
-      fprintf (stderr, "[%s] # of output symtab nodes: "
+      fprintf (stderr, "[%s] # of output cgraph nodes: "
 	       HOST_WIDE_INT_PRINT_UNSIGNED "\n", s,
-	       lto_stats.num_output_symtab_nodes);
+	       lto_stats.num_output_cgraph_nodes);
 
       fprintf (stderr, "[%s] # callgraph partitions: "
 	       HOST_WIDE_INT_PRINT_UNSIGNED "\n", s,
@@ -387,6 +392,4 @@ lto_streamer_hooks_init (void)
   streamer_hooks_init ();
   streamer_hooks.write_tree = lto_output_tree;
   streamer_hooks.read_tree = lto_input_tree;
-  streamer_hooks.input_location = lto_input_location;
-  streamer_hooks.output_location = lto_output_location;
 }

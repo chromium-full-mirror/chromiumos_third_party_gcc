@@ -1,5 +1,7 @@
-/* Printing of RTL in "slim", mnemonic like form.
-   Copyright (C) 1992-2013 Free Software Foundation, Inc.
+/* Instruction scheduling pass.
+   Copyright (C) 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
+   2002, 2003, 2004, 2005, 2006, 2007, 2008, 2010
+   Free Software Foundation, Inc.
    Contributed by Michael Tiemann (tiemann@cygnus.com) Enhanced by,
    and currently maintained by, Jim Wilson (wilson@cygnus.com)
 
@@ -18,52 +20,57 @@ for more details.
 You should have received a copy of the GNU General Public License
 along with GCC; see the file COPYING3.  If not see
 <http://www.gnu.org/licenses/>.  */
-
-/* Historically this form of RTL dumping was introduced along with
-   the Haifa instruction scheduling pass, hence the name of this file.
-   But there is nothing in this file left that is scheduler-specific.  */
 
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
 #include "tm.h"
 #include "rtl.h"
-#include "tree.h"	/* FIXME: To dump INSN_VAR_LOCATION_DECL.  */
+#include "obstack.h"
+#include "hard-reg-set.h"
 #include "basic-block.h"
-#include "dumpfile.h"	/* for the TDF_* flags */
-#include "pretty-print.h"
+#include "insn-attr.h"
+#include "sched-int.h"
+#include "tree-pass.h"
 
-/* The functions in this file try to print RTL in a form resembling assembler
-   mnemonics.  Because this form is more concise than the "traditional" form
-   of RTL printing in Lisp-style, the form printed by this file is called
-   "slim".  RTL dumps in slim format can be obtained by appending the "-slim"
-   option to -fdump-rtl-<pass>.  Control flow graph output as a DOT file is
-   always printed in slim form.
+static char *safe_concat (char *, char *, const char *);
 
-   The normal interface to the functionality provided in this pretty-printer
-   is through the dump_*_slim functions to print to a stream, or via the
-   print_*_slim functions to print into a user's pretty-printer.
-   
-   It is also possible to obtain a string for a single pattern as a string
-   pointer, via str_pattern_slim, but this usage is discouraged.  */
+#define BUF_LEN 2048
 
-/* A pretty-printer for slim rtl printing.  */
-static bool rtl_slim_pp_initialized = false;
-static pretty_printer rtl_slim_pp;
+static char *
+safe_concat (char *buf, char *cur, const char *str)
+{
+  char *end = buf + BUF_LEN - 2;	/* Leave room for null.  */
+  int c;
 
-/* This recognizes rtx'en classified as expressions.  These are always
+  if (cur > end)
+    {
+      *end = '\0';
+      return end;
+    }
+
+  while (cur < end && (c = *str++) != '\0')
+    *cur++ = c;
+
+  *cur = '\0';
+  return cur;
+}
+
+/* This recognizes rtx, I classified as expressions.  These are always
    represent some action on values or results of other expression, that
    may be stored in objects representing values.  */
 
 static void
-print_exp (pretty_printer *pp, const_rtx x, int verbose)
+print_exp (char *buf, const_rtx x, int verbose)
 {
+  char tmp[BUF_LEN];
   const char *st[4];
-  const char *fun;
+  char *cur = buf;
+  const char *fun = (char *) 0;
+  const char *sep;
   rtx op[4];
   int i;
 
-  fun = (char *) 0;
   for (i = 0; i < 4; i++)
     {
       st[i] = (char *) 0;
@@ -105,15 +112,6 @@ print_exp (pretty_printer *pp, const_rtx x, int verbose)
     case NEG:
       st[0] = "-";
       op[0] = XEXP (x, 0);
-      break;
-    case FMA:
-      st[0] = "{";
-      op[0] = XEXP (x, 0);
-      st[1] = "*";
-      op[1] = XEXP (x, 1);
-      st[2] = "+";
-      op[2] = XEXP (x, 2);
-      st[3] = "}";
       break;
     case MULT:
       op[0] = XEXP (x, 0);
@@ -204,19 +202,26 @@ print_exp (pretty_printer *pp, const_rtx x, int verbose)
       st[1] = ">->";
       op[1] = XEXP (x, 1);
       break;
-    case NE:
+    case ABS:
+      fun = "abs";
       op[0] = XEXP (x, 0);
-      st[1] = "!=";
-      op[1] = XEXP (x, 1);
+      break;
+    case SQRT:
+      fun = "sqrt";
+      op[0] = XEXP (x, 0);
+      break;
+    case FFS:
+      fun = "ffs";
+      op[0] = XEXP (x, 0);
       break;
     case EQ:
       op[0] = XEXP (x, 0);
       st[1] = "==";
       op[1] = XEXP (x, 1);
       break;
-    case GE:
+    case NE:
       op[0] = XEXP (x, 0);
-      st[1] = ">=";
+      st[1] = "!=";
       op[1] = XEXP (x, 1);
       break;
     case GT:
@@ -224,14 +229,39 @@ print_exp (pretty_printer *pp, const_rtx x, int verbose)
       st[1] = ">";
       op[1] = XEXP (x, 1);
       break;
-    case LE:
+    case GTU:
+      fun = "gtu";
       op[0] = XEXP (x, 0);
-      st[1] = "<=";
       op[1] = XEXP (x, 1);
       break;
     case LT:
       op[0] = XEXP (x, 0);
       st[1] = "<";
+      op[1] = XEXP (x, 1);
+      break;
+    case LTU:
+      fun = "ltu";
+      op[0] = XEXP (x, 0);
+      op[1] = XEXP (x, 1);
+      break;
+    case GE:
+      op[0] = XEXP (x, 0);
+      st[1] = ">=";
+      op[1] = XEXP (x, 1);
+      break;
+    case GEU:
+      fun = "geu";
+      op[0] = XEXP (x, 0);
+      op[1] = XEXP (x, 1);
+      break;
+    case LE:
+      op[0] = XEXP (x, 0);
+      st[1] = "<=";
+      op[1] = XEXP (x, 1);
+      break;
+    case LEU:
+      fun = "leu";
+      op[0] = XEXP (x, 0);
       op[1] = XEXP (x, 1);
       break;
     case SIGN_EXTRACT:
@@ -341,157 +371,174 @@ print_exp (pretty_printer *pp, const_rtx x, int verbose)
     case UNSPEC:
     case UNSPEC_VOLATILE:
       {
-	pp_string (pp, "unspec");
+	cur = safe_concat (buf, cur, "unspec");
 	if (GET_CODE (x) == UNSPEC_VOLATILE)
-	  pp_string (pp, "/v");
-	pp_character (pp, '[');
+	  cur = safe_concat (buf, cur, "/v");
+	cur = safe_concat (buf, cur, "[");
+	sep = "";
 	for (i = 0; i < XVECLEN (x, 0); i++)
 	  {
-	    if (i != 0)
-	      pp_character (pp, ',');
-	    print_pattern (pp, XVECEXP (x, 0, i), verbose);
+	    print_pattern (tmp, XVECEXP (x, 0, i), verbose);
+	    cur = safe_concat (buf, cur, sep);
+	    cur = safe_concat (buf, cur, tmp);
+	    sep = ",";
 	  }
-	pp_string (pp, "] ");
-	pp_decimal_int (pp, XINT (x, 1));
+	cur = safe_concat (buf, cur, "] ");
+	sprintf (tmp, "%d", XINT (x, 1));
+	cur = safe_concat (buf, cur, tmp);
       }
       break;
     default:
-      {
-	/* Most unhandled codes can be printed as pseudo-functions.  */
-        if (GET_RTX_CLASS (GET_CODE (x)) == RTX_UNARY)
-	  {
-	    fun = GET_RTX_NAME (GET_CODE (x));
-	    op[0] = XEXP (x, 0);
-	  }
-        else if (GET_RTX_CLASS (GET_CODE (x)) == RTX_COMPARE
-		 || GET_RTX_CLASS (GET_CODE (x)) == RTX_COMM_COMPARE
-		 || GET_RTX_CLASS (GET_CODE (x)) == RTX_BIN_ARITH
-		 || GET_RTX_CLASS (GET_CODE (x)) == RTX_COMM_ARITH)
-	  {
-	    fun = GET_RTX_NAME (GET_CODE (x));
-	    op[0] = XEXP (x, 0);
-	    op[1] = XEXP (x, 1);
-	  }
-        else if (GET_RTX_CLASS (GET_CODE (x)) == RTX_TERNARY)
-	  {
-	    fun = GET_RTX_NAME (GET_CODE (x));
-	    op[0] = XEXP (x, 0);
-	    op[1] = XEXP (x, 1);
-	    op[2] = XEXP (x, 2);
-	  }
-	else
-	  /* Give up, just print the RTX name.  */
-	  st[0] = GET_RTX_NAME (GET_CODE (x));
-      }
+      /* If (verbose) debug_rtx (x);  */
+      st[0] = GET_RTX_NAME (GET_CODE (x));
       break;
     }
 
   /* Print this as a function?  */
   if (fun)
     {
-      pp_string (pp, fun);
-      pp_character (pp, '(');
+      cur = safe_concat (buf, cur, fun);
+      cur = safe_concat (buf, cur, "(");
     }
 
   for (i = 0; i < 4; i++)
     {
       if (st[i])
-        pp_string (pp, st[i]);
+	cur = safe_concat (buf, cur, st[i]);
 
       if (op[i])
 	{
 	  if (fun && i != 0)
-	    pp_character (pp, ',');
-	  print_value (pp, op[i], verbose);
+	    cur = safe_concat (buf, cur, ",");
+
+	  print_value (tmp, op[i], verbose);
+	  cur = safe_concat (buf, cur, tmp);
 	}
     }
 
   if (fun)
-    pp_character (pp, ')');
+    cur = safe_concat (buf, cur, ")");
 }		/* print_exp */
 
 /* Prints rtxes, I customarily classified as values.  They're constants,
    registers, labels, symbols and memory accesses.  */
 
 void
-print_value (pretty_printer *pp, const_rtx x, int verbose)
+print_value (char *buf, const_rtx x, int verbose)
 {
-  char tmp[1024];
+  char t[BUF_LEN];
+  char *cur = buf;
 
   if (!x)
     {
-      pp_string (pp, "(nil)");
+      safe_concat (buf, buf, "(nil)");
       return;
     }
   switch (GET_CODE (x))
     {
     case CONST_INT:
-      pp_scalar (pp, HOST_WIDE_INT_PRINT_HEX,
-		 (unsigned HOST_WIDE_INT) INTVAL (x));
+      sprintf (t, HOST_WIDE_INT_PRINT_HEX,
+	       (unsigned HOST_WIDE_INT) INTVAL (x));
+      cur = safe_concat (buf, cur, t);
       break;
     case CONST_DOUBLE:
       if (FLOAT_MODE_P (GET_MODE (x)))
-	{
-	  real_to_decimal (tmp, CONST_DOUBLE_REAL_VALUE (x),
-			   sizeof (tmp), 0, 1);
-	  pp_string (pp, tmp);
-	}
+	real_to_decimal (t, CONST_DOUBLE_REAL_VALUE (x), sizeof (t), 0, 1);
       else
-	pp_printf (pp, "<%wx,%wx>",
-		   (unsigned HOST_WIDE_INT) CONST_DOUBLE_LOW (x),
-		   (unsigned HOST_WIDE_INT) CONST_DOUBLE_HIGH (x));
+	sprintf (t,
+		 "<" HOST_WIDE_INT_PRINT_HEX "," HOST_WIDE_INT_PRINT_HEX ">",
+		 (unsigned HOST_WIDE_INT) CONST_DOUBLE_LOW (x),
+		 (unsigned HOST_WIDE_INT) CONST_DOUBLE_HIGH (x));
+      cur = safe_concat (buf, cur, t);
       break;
     case CONST_FIXED:
-      fixed_to_decimal (tmp, CONST_FIXED_VALUE (x), sizeof (tmp));
-      pp_string (pp, tmp);
+      fixed_to_decimal (t, CONST_FIXED_VALUE (x), sizeof (t));
+      cur = safe_concat (buf, cur, t);
       break;
     case CONST_STRING:
-      pp_printf (pp, "\"%s\"", XSTR (x, 0));
+      cur = safe_concat (buf, cur, "\"");
+      cur = safe_concat (buf, cur, XSTR (x, 0));
+      cur = safe_concat (buf, cur, "\"");
       break;
     case SYMBOL_REF:
-      pp_printf (pp, "`%s'", XSTR (x, 0));
+      cur = safe_concat (buf, cur, "`");
+      cur = safe_concat (buf, cur, XSTR (x, 0));
+      cur = safe_concat (buf, cur, "'");
       break;
     case LABEL_REF:
-      pp_printf (pp, "L%d", INSN_UID (XEXP (x, 0)));
+      sprintf (t, "L%d", INSN_UID (XEXP (x, 0)));
+      cur = safe_concat (buf, cur, t);
       break;
     case CONST:
+      print_value (t, XEXP (x, 0), verbose);
+      cur = safe_concat (buf, cur, "const(");
+      cur = safe_concat (buf, cur, t);
+      cur = safe_concat (buf, cur, ")");
+      break;
     case HIGH:
-    case STRICT_LOW_PART:
-      pp_printf (pp, "%s(", GET_RTX_NAME (GET_CODE (x)));
-      print_value (pp, XEXP (x, 0), verbose);
-      pp_character (pp, ')');
+      print_value (t, XEXP (x, 0), verbose);
+      cur = safe_concat (buf, cur, "high(");
+      cur = safe_concat (buf, cur, t);
+      cur = safe_concat (buf, cur, ")");
       break;
     case REG:
       if (REGNO (x) < FIRST_PSEUDO_REGISTER)
 	{
-	  if (ISDIGIT (reg_names[REGNO (x)][0]))
-	    pp_character (pp, '%');
-	  pp_string (pp, reg_names[REGNO (x)]);
+	  int c = reg_names[REGNO (x)][0];
+	  if (ISDIGIT (c))
+	    cur = safe_concat (buf, cur, "%");
+
+	  cur = safe_concat (buf, cur, reg_names[REGNO (x)]);
 	}
       else
-	pp_printf (pp, "r%d", REGNO (x));
-      if (verbose)
-	pp_printf (pp, ":%s", GET_MODE_NAME (GET_MODE (x)));
+	{
+	  sprintf (t, "r%d", REGNO (x));
+	  cur = safe_concat (buf, cur, t);
+	}
+      if (verbose
+#ifdef INSN_SCHEDULING
+	  && !current_sched_info
+#endif
+	 )
+	{
+	  sprintf (t, ":%s", GET_MODE_NAME (GET_MODE (x)));
+	  cur = safe_concat (buf, cur, t);
+	}
       break;
     case SUBREG:
-      print_value (pp, SUBREG_REG (x), verbose);
-      pp_printf (pp, "#%d", SUBREG_BYTE (x));
+      print_value (t, SUBREG_REG (x), verbose);
+      cur = safe_concat (buf, cur, t);
+      sprintf (t, "#%d", SUBREG_BYTE (x));
+      cur = safe_concat (buf, cur, t);
+      break;
+    case STRICT_LOW_PART:
+      print_value (t, XEXP (x, 0), verbose);
+      cur = safe_concat (buf, cur, "strict_low_part(");
+      cur = safe_concat (buf, cur, t);
+      cur = safe_concat (buf, cur, ")");
       break;
     case SCRATCH:
+      cur = safe_concat (buf, cur, "scratch");
+      break;
     case CC0:
+      cur = safe_concat (buf, cur, "cc0");
+      break;
     case PC:
-      pp_string (pp, GET_RTX_NAME (GET_CODE (x)));
+      cur = safe_concat (buf, cur, "pc");
       break;
     case MEM:
-      pp_character (pp, '[');
-      print_value (pp, XEXP (x, 0), verbose);
-      pp_character (pp, ']');
+      print_value (t, XEXP (x, 0), verbose);
+      cur = safe_concat (buf, cur, "[");
+      cur = safe_concat (buf, cur, t);
+      cur = safe_concat (buf, cur, "]");
       break;
     case DEBUG_EXPR:
-      pp_printf (pp, "D#%i", DEBUG_TEMP_UID (DEBUG_EXPR_TREE_DECL (x)));
+      sprintf (t, "D#%i", DEBUG_TEMP_UID (DEBUG_EXPR_TREE_DECL (x)));
+      cur = safe_concat (buf, cur, t);
       break;
     default:
-      print_exp (pp, x, verbose);
+      print_exp (t, x, verbose);
+      cur = safe_concat (buf, cur, t);
       break;
     }
 }				/* print_value */
@@ -499,371 +546,299 @@ print_value (pretty_printer *pp, const_rtx x, int verbose)
 /* The next step in insn detalization, its pattern recognition.  */
 
 void
-print_pattern (pretty_printer *pp, const_rtx x, int verbose)
+print_pattern (char *buf, const_rtx x, int verbose)
 {
-  if (! x)
-    {
-      pp_string (pp, "(nil)");
-      return;
-    }
+  char t1[BUF_LEN], t2[BUF_LEN], t3[BUF_LEN];
 
   switch (GET_CODE (x))
     {
     case SET:
-      print_value (pp, SET_DEST (x), verbose);
-      pp_character (pp, '=');
-      print_value (pp, SET_SRC (x), verbose);
+      print_value (t1, SET_DEST (x), verbose);
+      print_value (t2, SET_SRC (x), verbose);
+      sprintf (buf, "%s=%s", t1, t2);
       break;
     case RETURN:
+      sprintf (buf, "return");
+      break;
     case SIMPLE_RETURN:
-    case EH_RETURN:
-      pp_string (pp, GET_RTX_NAME (GET_CODE (x)));
+      sprintf (buf, "simple_return");
       break;
     case CALL:
-      print_exp (pp, x, verbose);
+      print_exp (buf, x, verbose);
       break;
     case CLOBBER:
+      print_value (t1, XEXP (x, 0), verbose);
+      sprintf (buf, "clobber %s", t1);
+      break;
     case USE:
-      pp_printf (pp, "%s ", GET_RTX_NAME (GET_CODE (x)));
-      print_value (pp, XEXP (x, 0), verbose);
+      print_value (t1, XEXP (x, 0), verbose);
+      sprintf (buf, "use %s", t1);
       break;
     case VAR_LOCATION:
-      pp_string (pp, "loc ");
-      print_value (pp, PAT_VAR_LOCATION_LOC (x), verbose);
+      print_value (t1, PAT_VAR_LOCATION_LOC (x), verbose);
+      sprintf (buf, "loc %s", t1);
       break;
     case COND_EXEC:
-      pp_character (pp, '(');
       if (GET_CODE (COND_EXEC_TEST (x)) == NE
 	  && XEXP (COND_EXEC_TEST (x), 1) == const0_rtx)
-	print_value (pp, XEXP (COND_EXEC_TEST (x), 0), verbose);
+	print_value (t1, XEXP (COND_EXEC_TEST (x), 0), verbose);
       else if (GET_CODE (COND_EXEC_TEST (x)) == EQ
 	       && XEXP (COND_EXEC_TEST (x), 1) == const0_rtx)
 	{
-	  pp_character (pp, '!');
-	  print_value (pp, XEXP (COND_EXEC_TEST (x), 0), verbose);
+	  t1[0] = '!';
+	  print_value (t1 + 1, XEXP (COND_EXEC_TEST (x), 0), verbose);
 	}
       else
-	print_value (pp, COND_EXEC_TEST (x), verbose);
-      pp_string (pp, ") ");
-      print_pattern (pp, COND_EXEC_CODE (x), verbose);
+	print_value (t1, COND_EXEC_TEST (x), verbose);
+      print_pattern (t2, COND_EXEC_CODE (x), verbose);
+      sprintf (buf, "(%s) %s", t1, t2);
       break;
     case PARALLEL:
       {
 	int i;
 
-	pp_character (pp, '{');
+	sprintf (t1, "{");
 	for (i = 0; i < XVECLEN (x, 0); i++)
 	  {
-	    print_pattern (pp, XVECEXP (x, 0, i), verbose);
-	    pp_character (pp, ';');
+	    print_pattern (t2, XVECEXP (x, 0, i), verbose);
+	    sprintf (t3, "%s%s;", t1, t2);
+	    strcpy (t1, t3);
 	  }
-	pp_character (pp, '}');
+	sprintf (buf, "%s}", t1);
       }
       break;
     case SEQUENCE:
-      {
-	int i;
-
-	pp_string (pp, "sequence{");
-	for (i = 0; i < XVECLEN (x, 0); i++)
-	  {
-	    print_pattern (pp, XVECEXP (x, 0, i), verbose);
-	    pp_character (pp, ';');
-	  }
-	pp_character (pp, '}');
-      }
-      break;
+      /* Should never see SEQUENCE codes until after reorg.  */
+      gcc_unreachable ();
     case ASM_INPUT:
-      pp_printf (pp, "asm {%s}", XSTR (x, 0));
+      sprintf (buf, "asm {%s}", XSTR (x, 0));
       break;
     case ADDR_VEC:
       /* Fall through.  */
     case ADDR_DIFF_VEC:
-      print_value (pp, XEXP (x, 0), verbose);
+      print_value (buf, XEXP (x, 0), verbose);
       break;
     case TRAP_IF:
-      pp_string (pp, "trap_if ");
-      print_value (pp, TRAP_CONDITION (x), verbose);
+      print_value (t1, TRAP_CONDITION (x), verbose);
+      sprintf (buf, "trap_if %s", t1);
       break;
     case UNSPEC:
+      {
+	int i;
+
+	sprintf (t1, "unspec{");
+	for (i = 0; i < XVECLEN (x, 0); i++)
+	  {
+	    print_pattern (t2, XVECEXP (x, 0, i), verbose);
+	    sprintf (t3, "%s%s;", t1, t2);
+	    strcpy (t1, t3);
+	  }
+	sprintf (buf, "%s}", t1);
+      }
+      break;
     case UNSPEC_VOLATILE:
-      /* Fallthru -- leave UNSPECs to print_exp.  */
+      {
+	int i;
+
+	sprintf (t1, "unspec/v{");
+	for (i = 0; i < XVECLEN (x, 0); i++)
+	  {
+	    print_pattern (t2, XVECEXP (x, 0, i), verbose);
+	    sprintf (t3, "%s%s;", t1, t2);
+	    strcpy (t1, t3);
+	  }
+	sprintf (buf, "%s}", t1);
+      }
+      break;
     default:
-      print_value (pp, x, verbose);
+      print_value (buf, x, verbose);
     }
 }				/* print_pattern */
 
-/* This is the main function in slim rtl visualization mechanism.
-
-   X is an insn, to be printed into PP.
-
-   This function tries to print it properly in human-readable form,
-   resembling assembler mnemonics (instead of the older Lisp-style
-   form).
-
-   If VERBOSE is TRUE, insns are printed with more complete (but
-   longer) pattern names and with extra information, and prefixed
-   with their INSN_UIDs.  */
+/* This is the main function in rtl visualization mechanism. It
+   accepts an rtx and tries to recognize it as an insn, then prints it
+   properly in human readable form, resembling assembler mnemonics.
+   For every insn it prints its UID and BB the insn belongs too.
+   (Probably the last "option" should be extended somehow, since it
+   depends now on sched.c inner variables ...)  */
 
 void
-print_insn (pretty_printer *pp, const_rtx x, int verbose)
+print_insn (char *buf, const_rtx x, int verbose)
 {
-  if (verbose)
-    {
-      /* Blech, pretty-print can't print integers with a specified width.  */
-      char uid_prefix[32];
-      snprintf (uid_prefix, sizeof uid_prefix, " %4d: ", INSN_UID (x));
-      pp_string (pp, uid_prefix);
-    }
+  char t[BUF_LEN];
+  const_rtx insn = x;
 
   switch (GET_CODE (x))
     {
     case INSN:
-      print_pattern (pp, PATTERN (x), verbose);
+      print_pattern (t, PATTERN (x), verbose);
+#ifdef INSN_SCHEDULING
+      if (verbose && current_sched_info)
+	sprintf (buf, "%s: %s", (*current_sched_info->print_insn) (x, 1),
+		 t);
+      else
+#endif
+	sprintf (buf, " %4d %s", INSN_UID (x), t);
       break;
 
     case DEBUG_INSN:
       {
 	const char *name = "?";
 
-	if (DECL_P (INSN_VAR_LOCATION_DECL (x)))
+	if (DECL_P (INSN_VAR_LOCATION_DECL (insn)))
 	  {
-	    tree id = DECL_NAME (INSN_VAR_LOCATION_DECL (x));
+	    tree id = DECL_NAME (INSN_VAR_LOCATION_DECL (insn));
 	    char idbuf[32];
 	    if (id)
 	      name = IDENTIFIER_POINTER (id);
-	    else if (TREE_CODE (INSN_VAR_LOCATION_DECL (x))
+	    else if (TREE_CODE (INSN_VAR_LOCATION_DECL (insn))
 		     == DEBUG_EXPR_DECL)
 	      {
 		sprintf (idbuf, "D#%i",
-			 DEBUG_TEMP_UID (INSN_VAR_LOCATION_DECL (x)));
+			 DEBUG_TEMP_UID (INSN_VAR_LOCATION_DECL (insn)));
 		name = idbuf;
 	      }
 	    else
 	      {
 		sprintf (idbuf, "D.%i",
-			 DECL_UID (INSN_VAR_LOCATION_DECL (x)));
+			 DECL_UID (INSN_VAR_LOCATION_DECL (insn)));
 		name = idbuf;
 	      }
 	  }
-	pp_printf (pp, "debug %s => ", name);
-	if (VAR_LOC_UNKNOWN_P (INSN_VAR_LOCATION_LOC (x)))
-	  pp_string (pp, "optimized away");
+	if (VAR_LOC_UNKNOWN_P (INSN_VAR_LOCATION_LOC (insn)))
+	  sprintf (buf, " %4d: debug %s optimized away", INSN_UID (insn), name);
 	else
-	  print_pattern (pp, INSN_VAR_LOCATION_LOC (x), verbose);
+	  {
+	    print_pattern (t, INSN_VAR_LOCATION_LOC (insn), verbose);
+	    sprintf (buf, " %4d: debug %s => %s", INSN_UID (insn), name, t);
+	  }
       }
       break;
 
     case JUMP_INSN:
-      print_pattern (pp, PATTERN (x), verbose);
+      print_pattern (t, PATTERN (x), verbose);
+#ifdef INSN_SCHEDULING
+      if (verbose && current_sched_info)
+	sprintf (buf, "%s: jump %s", (*current_sched_info->print_insn) (x, 1),
+		 t);
+      else
+#endif
+	sprintf (buf, " %4d %s", INSN_UID (x), t);
       break;
     case CALL_INSN:
-      if (GET_CODE (PATTERN (x)) == PARALLEL)
-        print_pattern (pp, XVECEXP (PATTERN (x), 0, 0), verbose);
+      x = PATTERN (insn);
+      if (GET_CODE (x) == PARALLEL)
+	{
+	  x = XVECEXP (x, 0, 0);
+	  print_pattern (t, x, verbose);
+	}
       else
-	print_pattern (pp, PATTERN (x), verbose);
+	strcpy (t, "call <...>");
+#ifdef INSN_SCHEDULING
+      if (verbose && current_sched_info)
+	sprintf (buf, "%s: %s", (*current_sched_info->print_insn) (insn, 1), t);
+      else
+#endif
+	sprintf (buf, " %4d %s", INSN_UID (insn), t);
       break;
     case CODE_LABEL:
-      pp_printf (pp, "L%d:", INSN_UID (x));
+      sprintf (buf, "L%d:", INSN_UID (x));
       break;
     case BARRIER:
-      pp_string (pp, "barrier");
+      sprintf (buf, "i%4d: barrier", INSN_UID (x));
       break;
     case NOTE:
-      {
-	pp_string (pp, GET_NOTE_INSN_NAME (NOTE_KIND (x)));
-	switch (NOTE_KIND (x))
-	  {
-	  case NOTE_INSN_EH_REGION_BEG:
-	  case NOTE_INSN_EH_REGION_END:
-	    pp_printf (pp, " %d", NOTE_EH_HANDLER (x));
-	    break;
-
-	  case NOTE_INSN_BLOCK_BEG:
-	  case NOTE_INSN_BLOCK_END:
-	    pp_printf (pp, " %d", BLOCK_NUMBER (NOTE_BLOCK (x)));
-	    break;
-
-	  case NOTE_INSN_BASIC_BLOCK:
-	    pp_printf (pp, " %d", NOTE_BASIC_BLOCK (x)->index);
-	    break;
-
-	  case NOTE_INSN_DELETED_LABEL:
-	  case NOTE_INSN_DELETED_DEBUG_LABEL:
-	    {
-	      const char *label = NOTE_DELETED_LABEL_NAME (x);
-	      if (label == NULL)
-		label = "";
-	      pp_printf (pp, " (\"%s\")", label);
-	    }
-	    break;
-
-	  case NOTE_INSN_VAR_LOCATION:
-	  case NOTE_INSN_CALL_ARG_LOCATION:
-	    pp_character (pp, '{');
-	    print_pattern (pp, NOTE_VAR_LOCATION (x), verbose);
-	    pp_character (pp, '}');
-	    break;
-
-	  default:
-	    break;
-	  }
-	break;
-      }
+      sprintf (buf, " %4d %s", INSN_UID (x),
+	       GET_NOTE_INSN_NAME (NOTE_KIND (x)));
+      break;
     default:
-      gcc_unreachable ();
+      sprintf (buf, "i%4d  <What %s?>", INSN_UID (x),
+	       GET_RTX_NAME (GET_CODE (x)));
     }
 }				/* print_insn */
-
-/* Pretty-print a slim dump of X (an insn) to PP, including any register
-   note attached to the instruction.  */
-
-static void
-print_insn_with_notes (pretty_printer *pp, const_rtx x)
-{
-  pp_string (pp, print_rtx_head);
-  print_insn (pp, x, 1);
-  pp_newline (pp);
-  if (INSN_P (x) && REG_NOTES (x))
-    for (rtx note = REG_NOTES (x); note; note = XEXP (note, 1))
-      {
-	pp_printf (pp, "%s      %s ", print_rtx_head,
-		   GET_REG_NOTE_NAME (REG_NOTE_KIND (note)));
-	print_pattern (pp, XEXP (note, 0), 1);
-	pp_newline (pp);
-      }
-}
-
-/* Return a pretty-print buffer set up to print to file F.  */
-
-static pretty_printer *
-init_rtl_slim_pretty_print (FILE *f)
-{
-  if (! rtl_slim_pp_initialized)
-    {
-      pp_construct (&rtl_slim_pp, /*prefix=*/NULL, /*linewidth=*/0);
-      rtl_slim_pp_initialized = true;
-    }
-  else
-    /* Clean out any data that str_insn_slim may have left here.  */
-    pp_clear_output_area (&rtl_slim_pp);
-
-  rtl_slim_pp.buffer->stream = f;
-  return &rtl_slim_pp;
-}
-
-/* Print X, an RTL value node, to file F in slim format.  Include
-   additional information if VERBOSE is nonzero.
-
-   Value nodes are constants, registers, labels, symbols and
-   memory.  */
-
-void
-dump_value_slim (FILE *f, const_rtx x, int verbose)
-{
-  pretty_printer *pp = init_rtl_slim_pretty_print (f);
-  print_value (pp, x, verbose);
-  pp_flush (pp);
-}
 
 /* Emit a slim dump of X (an insn) to the file F, including any register
    note attached to the instruction.  */
 void
-dump_insn_slim (FILE *f, const_rtx x)
+dump_insn_slim (FILE *f, rtx x)
 {
-  pretty_printer *pp = init_rtl_slim_pretty_print (f);
-  print_insn_with_notes (pp, x);
-  pp_flush (pp);
+  char t[BUF_LEN + 32];
+  rtx note;
+
+  print_insn (t, x, 1);
+  fputs (t, f);
+  putc ('\n', f);
+  if (INSN_P (x) && REG_NOTES (x))
+    for (note = REG_NOTES (x); note; note = XEXP (note, 1))
+      {
+        print_value (t, XEXP (note, 0), 1);
+	fprintf (f, "      %s: %s\n",
+		 GET_REG_NOTE_NAME (REG_NOTE_KIND (note)), t);
+      }
+}
+
+/* Emit a slim dump of X (an insn) to stderr.  */
+DEBUG_FUNCTION void
+debug_insn_slim (rtx x)
+{
+  dump_insn_slim (stderr, x);
+}
+
+/* Provide a slim dump the instruction chain starting at FIRST to F, honoring
+   the dump flags given in FLAGS.  Currently, TDF_BLOCKS and TDF_DETAILS
+   include more information on the basic blocks.  */
+void
+print_rtl_slim_with_bb (FILE *f, rtx first, int flags)
+{
+  print_rtl_slim (f, first, NULL, -1, flags);
 }
 
 /* Same as above, but stop at LAST or when COUNT == 0.
    If COUNT < 0 it will stop only at LAST or NULL rtx.  */
-
 void
-dump_rtl_slim (FILE *f, const_rtx first, const_rtx last,
-	       int count, int flags ATTRIBUTE_UNUSED)
+print_rtl_slim (FILE *f, rtx first, rtx last, int count, int flags)
 {
-  const_rtx insn, tail;
-  pretty_printer *pp = init_rtl_slim_pretty_print (f);
+  basic_block current_bb = NULL;
+  rtx insn, tail;
 
   tail = last ? NEXT_INSN (last) : NULL_RTX;
   for (insn = first;
        (insn != NULL) && (insn != tail) && (count != 0);
        insn = NEXT_INSN (insn))
     {
-      print_insn_with_notes (pp, insn);
+      if ((flags & TDF_BLOCKS)
+	  && (INSN_P (insn) || NOTE_P (insn))
+	  && BLOCK_FOR_INSN (insn)
+	  && !current_bb)
+	{
+	  current_bb = BLOCK_FOR_INSN (insn);
+	  dump_bb_info (current_bb, true, false, flags, ";; ", f);
+	}
+
+      dump_insn_slim (f, insn);
+
+      if ((flags & TDF_BLOCKS)
+	  && current_bb
+	  && insn == BB_END (current_bb))
+	{
+	  dump_bb_info (current_bb, false, true, flags, ";; ", f);
+	  current_bb = NULL;
+	}
       if (count > 0)
         count--;
     }
-
-  pp_flush (pp);
 }
 
-/* Dumps basic block BB to pretty-printer PP in slim form and without and
-   no indentation, for use as a label of a DOT graph record-node.  */
-
-void
-rtl_dump_bb_for_graph (pretty_printer *pp, basic_block bb)
-{
-  rtx insn;
-  bool first = true;
-
-  /* TODO: inter-bb stuff.  */
-  FOR_BB_INSNS (bb, insn)
-    {
-      if (! first)
-	{
-	  pp_character (pp, '|');
-	  pp_write_text_to_stream (pp);
-	}
-      first = false;
-      print_insn_with_notes (pp, insn);
-      pp_write_text_as_dot_label_to_stream (pp, /*for_record=*/true);
-    }
-}
-
-/* Pretty-print pattern X of some insn in non-verbose mode.
-   Return a string pointer to the pretty-printer buffer.
-
-   This function is only exported exists only to accommodate some older users
-   of the slim RTL pretty printers.  Please do not use it for new code.  */
-
-const char *
-str_pattern_slim (const_rtx x)
-{
-  pretty_printer *pp = init_rtl_slim_pretty_print (NULL);
-  print_pattern (pp, x, 0);
-  return pp_base_formatted_text (pp);
-}
-
-/* Emit a slim dump of X (an insn) to stderr.  */
-extern void debug_insn_slim (const_rtx);
 DEBUG_FUNCTION void
-debug_insn_slim (const_rtx x)
+debug_bb_slim (struct basic_block_def *bb)
 {
-  dump_insn_slim (stderr, x);
+  print_rtl_slim (stderr, BB_HEAD (bb), BB_END (bb), -1, 32);
 }
 
-/* Same as above, but using dump_rtl_slim.  */
-extern void debug_rtl_slim (FILE *, const_rtx, const_rtx, int, int);
-DEBUG_FUNCTION void
-debug_rtl_slim (const_rtx first, const_rtx last, int count, int flags)
-{
-  dump_rtl_slim (stderr, first, last, count, flags);
-}
-
-extern void debug_bb_slim (basic_block);
-DEBUG_FUNCTION void
-debug_bb_slim (basic_block bb)
-{
-  dump_bb (stderr, bb, 0, TDF_SLIM | TDF_BLOCKS);
-}
-
-extern void debug_bb_n_slim (int);
 DEBUG_FUNCTION void
 debug_bb_n_slim (int n)
 {
-  basic_block bb = BASIC_BLOCK (n);
+  struct basic_block_def *bb = BASIC_BLOCK (n);
   debug_bb_slim (bb);
 }
 

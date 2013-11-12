@@ -1,4 +1,3 @@
-! { dg-do run }
   real :: a(30), b(10, 10), m
   real, allocatable :: c(:), d(:, :)
   integer :: e(30), f(10, 10), n

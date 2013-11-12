@@ -1,10 +1,8 @@
-// run
+// $G $D/$F.go && $L $F.$A && ./$A.out
 
 // Copyright 2010 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-
-// Test variadic functions and calls (dot-dot-dot).
 
 package main
 
@@ -58,10 +56,6 @@ func (*T) Sum(args ...int) int { return sum(args...) }
 
 type U struct {
 	*T
-}
-
-type I interface {
-	Sum(...int) int
 }
 
 func main() {
@@ -211,14 +205,7 @@ func main() {
 		println("i(=u).Sum", x)
 		panic("fail")
 	}
-	var s struct {
-		I
-	}
-	s.I = &u
-	if x := s.Sum(2, 3, 5, 8); x != 18 {
-		println("s{&u}.Sum", x)
-		panic("fail")
-	}
+	/* TODO(rsc): Enable once nested method expressions work.
 	if x := (*U).Sum(&U{}, 1, 3, 5, 2); x != 11 {
 		println("(*U).Sum", x)
 		panic("fail")
@@ -227,4 +214,5 @@ func main() {
 		println("U.Sum", x)
 		panic("fail")
 	}
+	*/
 }

@@ -1,5 +1,5 @@
 /* VMFile.java -- Class for methods natively accessing files
-   Copyright (C) 2004, 2006, 2010  Free Software Foundation, Inc.
+   Copyright (C) 2004, 2006  Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -50,7 +50,6 @@ import gnu.java.io.PlatformHelper;
  */
 final class VMFile
 {
-
   // FIXME: We support only case sensitive filesystems currently.
   static final boolean IS_CASE_SENSITIVE = true;
   static final boolean IS_DOS_8_3 = false;
@@ -63,113 +62,105 @@ final class VMFile
       }
   }
 
-  private VMFile() {} // Prohibits instantiation.
-
-  /**
+  /*
    * This native method does the actual work of getting the last file
    * modification time.  It also does the existence check to avoid the
-   * overhead of a call to exists().
+   * overhead of a call to exists()
    */
   static native long lastModified(String path);
 
-  /**
+  /*
    * This native method sets the permissions to make the file read only.
-   *
-   * @return true if file exists and the operation completed successfully
    */
   static native boolean setReadOnly(String path);
 
   /**
-   * This method is used to create a temporary file.
+   * This method is used to create a temporary file
    */
   static native boolean create(String path) throws IOException;
 
-  /**
+  /*
    * This native function actually produces the list of files in this
-   * directory.
-   *
-   * @return null if dirpath does not exist or is not a directory;
-   * null or empty array if the directory is unreadable; an array of
-   * file names in the directory otherwise.
+   * directory
    */
   static native synchronized String[] list(String dirpath);
 
-  /**
+  /*
    * This native method actually performs the rename.
    */
   static native boolean renameTo(String targetpath, String destpath);
 
-  /**
+  /*
    * This native method actually determines the length of the file and
-   * handles the existence check.
+   * handles the existence check
    */
   static native long length(String path);
 
-  /**
+  /*
    * This native method does the actual checking of file existence.
    */
   static native boolean exists(String path);
 
-  /**
-   * This native method handles the actual deleting of the file.
+  /*
+   * This native method handles the actual deleting of the file
    */
   static native boolean delete(String path);
 
-  /**
+  /*
    * This method does the actual setting of the modification time.
    */
   static native boolean setLastModified(String path, long time);
 
-  /**
-   * This native method actually creates the directory.
+  /*
+   * This native method actually creates the directory
    */
   static native boolean mkdir(String dirpath);
 
   /**
    * Gets the total bytes of the filesystem named by path.
    */
-  static native long getTotalSpace(String path);
+  public static native long getTotalSpace(String path);
 
   /**
    * Gets the total free bytes of the filesystem named by path.
    */
-  static native long getFreeSpace(String path);
+  public static native long getFreeSpace(String path);
 
   /**
    * Gets the available bytes of the filesystem named by path.
    */
-  static native long getUsableSpace(String path);
+  public static native long getUsableSpace(String path);
 
   /**
    * Set the read permission of the file.
    */
-  static synchronized native boolean setReadable(String path,
-                                                 boolean readable,
-                                                 boolean ownerOnly);
+  public static synchronized native boolean setReadable(String path,
+                                                        boolean readable,
+                                                        boolean ownerOnly);
 
   /**
    * Set the write permission of the file.
    */
-  static synchronized native boolean setWritable(String path,
-                                                 boolean writable,
-                                                 boolean ownerOnly);
+  public static synchronized native boolean setWritable(String path,
+                                                        boolean writable,
+                                                        boolean ownerOnly);
 
   /**
    * Set the execute permission of the file.
    */
-  static synchronized native boolean setExecutable(String path,
-                                                   boolean executable,
-                                                   boolean ownerOnly);
+  public static synchronized native boolean setExecutable(String path,
+                                                          boolean executable,
+                                                          boolean ownerOnly);
 
-  /**
+  /*
    * This native method does the actual check of whether or not a file
    * is a plain file or not.  It also handles the existence check to
-   * eliminate the overhead of a call to exists().
+   * eliminate the overhead of a call to exists()
    */
   static native boolean isFile(String path);
 
   /**
-   * This native method checks file permissions for writing.
+   * This native method checks file permissions for writing
    */
   static synchronized native boolean canWrite(String path);
 
@@ -179,23 +170,19 @@ final class VMFile
   static native boolean canWriteDirectory(String path);
 
   /**
-   * This native method checks file permissions for reading.
-   * It also handles the existence check to eliminate the overhead of
-   * a call to exists().
+   * This native method checks file permissions for reading
    */
   static synchronized native boolean canRead(String path);
 
   /**
-   * This native method checks file permissions for execution.
-   * It also handles the existence check to eliminate the overhead of
-   * a call to exists().
+   * This native method checks file permissions for execution
    */
   static synchronized native boolean canExecute(String path);
 
-  /**
+  /*
    * This method does the actual check of whether or not a file is a
-   * directory or not.  It also handles the existence check to eliminate
-   * the overhead of a call to exists().
+   * directory or not.  It also handle the existence check to eliminate
+   * the overhead of a call to exists()
    */
   static native boolean isDirectory(String dirpath);
 
@@ -372,9 +359,9 @@ final class VMFile
    * <p>
    * Note that this method, unlike the other methods which return path
    * names, can throw an IOException.  This is because native method
-   * might be required in order to resolve the canonical path.
+   * might be required in order to resolve the canonical path
    *
    * @exception IOException If an error occurs
    */
-  static native String toCanonicalForm(String path) throws IOException;
+  public static native String toCanonicalForm(String path) throws IOException;
 }

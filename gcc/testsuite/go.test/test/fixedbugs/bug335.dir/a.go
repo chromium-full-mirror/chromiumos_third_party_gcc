@@ -4,8 +4,6 @@
 
 package a
 
-type T interface{}
+import "./b"
 
-func f() T { return nil }
-
-var Foo T = f()
+var Bar = b.Foo

@@ -21,4 +21,5 @@ program main
   use test_common_binding_labels_2 ! { dg-error "does not match" }
   use test_common_binding_labels_2_main
 end program main
-! { dg-final { cleanup-modules "test_common_binding_labels_2" } }
+
+! { dg-final { cleanup-modules "test_common_binding_labels_2_main test_common_binding_labels_2" } }

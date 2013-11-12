@@ -54,16 +54,7 @@ func PlainAuth(identity, username, password, host string) Auth {
 
 func (a *plainAuth) Start(server *ServerInfo) (string, []byte, error) {
 	if !server.TLS {
-		advertised := false
-		for _, mechanism := range server.Auth {
-			if mechanism == "PLAIN" {
-				advertised = true
-				break
-			}
-		}
-		if !advertised {
-			return "", nil, errors.New("unencrypted connection")
-		}
+		return "", nil, errors.New("unencrypted connection")
 	}
 	if server.Name != a.host {
 		return "", nil, errors.New("wrong host name")

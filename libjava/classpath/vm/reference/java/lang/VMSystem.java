@@ -1,5 +1,5 @@
 /* VMSystem.java -- helper for java.lang.system
-   Copyright (C) 1998, 2002, 2004, 2010  Free Software Foundation, Inc.
+   Copyright (C) 1998, 2002, 2004 Free Software Foundation
 
 This file is part of GNU Classpath.
 
@@ -56,9 +56,6 @@ import java.io.PrintStream;
  */
 final class VMSystem
 {
-
-  private VMSystem() {} // Prohibits instantiation.
-
   /**
    * Copy one array onto another from <code>src[srcStart]</code> ...
    * <code>src[srcStart+len-1]</code> to <code>dest[destStart]</code> ...
@@ -98,6 +95,15 @@ final class VMSystem
   static native int identityHashCode(Object o);
 
   /**
+   * Convert a library name to its platform-specific variant.
+   *
+   * @param libname the library name, as used in <code>loadLibrary</code>
+   * @return the platform-specific mangling of the name
+   * @XXX Add this method
+  static native String mapLibraryName(String libname);
+   */
+
+  /**
    * Set {@link System#in} to a new InputStream.
    *
    * @param in the new InputStream
@@ -129,7 +135,10 @@ final class VMSystem
    * @return the current time
    * @see java.util.Date
    */
-  static native long currentTimeMillis();
+   public static long currentTimeMillis()
+   {
+     return nanoTime() / 1000000L;
+   }
 
   /**
    * <p>
@@ -156,7 +165,7 @@ final class VMSystem
    * @return the time of a system timer in nanoseconds.
    * @since 1.5
    */
-  static native long nanoTime();
+  public static native long nanoTime();
 
   /**
    * Returns a list of 'name=value' pairs representing the current environment

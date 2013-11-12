@@ -4,23 +4,24 @@
    Use of this source code is governed by a BSD-style
    license that can be found in the LICENSE file.  */
 
+#include "go-string.h"
 #include "go-panic.h"
 #include "runtime.h"
 #include "arch.h"
 #include "malloc.h"
 
-String
-__go_string_slice (String s, intgo start, intgo end)
+struct __go_string
+__go_string_slice (struct __go_string s, int start, int end)
 {
-  intgo len;
-  String ret;
+  int len;
+  struct __go_string ret;
 
-  len = s.len;
+  len = s.__length;
   if (end == -1)
     end = len;
   if (start > len || end < start || end > len)
     runtime_panicstring ("string index out of bounds");
-  ret.str = s.str + start;
-  ret.len = end - start;
+  ret.__data = s.__data + start;
+  ret.__length = end - start;
   return ret;
 }

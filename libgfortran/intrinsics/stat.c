@@ -1,5 +1,6 @@
 /* Implementation of the STAT and FSTAT intrinsics.
-   Copyright (C) 2004-2013 Free Software Foundation, Inc.
+   Copyright (C) 2004, 2005, 2006, 2007, 2009, 2011 
+   Free Software Foundation, Inc.
    Contributed by Steven G. Kargl <kargls@comcast.net>.
 
 This file is part of the GNU Fortran runtime library (libgfortran).
@@ -89,54 +90,54 @@ stat_i4_sub_0 (char *name, gfc_array_i4 *sarray, GFC_INTEGER_4 *status,
       index_type stride = GFC_DESCRIPTOR_STRIDE(sarray,0);
 
       /* Device ID  */
-      sarray->base_addr[0 * stride] = sb.st_dev;
+      sarray->data[0 * stride] = sb.st_dev;
 
       /* Inode number  */
-      sarray->base_addr[1 * stride] = sb.st_ino;
+      sarray->data[1 * stride] = sb.st_ino;
 
       /* File mode  */
-      sarray->base_addr[2 * stride] = sb.st_mode;
+      sarray->data[2 * stride] = sb.st_mode;
 
       /* Number of (hard) links  */
-      sarray->base_addr[3 * stride] = sb.st_nlink;
+      sarray->data[3 * stride] = sb.st_nlink;
 
       /* Owner's uid  */
-      sarray->base_addr[4 * stride] = sb.st_uid;
+      sarray->data[4 * stride] = sb.st_uid;
 
       /* Owner's gid  */
-      sarray->base_addr[5 * stride] = sb.st_gid;
+      sarray->data[5 * stride] = sb.st_gid;
 
       /* ID of device containing directory entry for file (0 if not available) */
 #if HAVE_STRUCT_STAT_ST_RDEV
-      sarray->base_addr[6 * stride] = sb.st_rdev;
+      sarray->data[6 * stride] = sb.st_rdev;
 #else
-      sarray->base_addr[6 * stride] = 0;
+      sarray->data[6 * stride] = 0;
 #endif
 
       /* File size (bytes)  */
-      sarray->base_addr[7 * stride] = sb.st_size;
+      sarray->data[7 * stride] = sb.st_size;
 
       /* Last access time  */
-      sarray->base_addr[8 * stride] = sb.st_atime;
+      sarray->data[8 * stride] = sb.st_atime;
 
       /* Last modification time  */
-      sarray->base_addr[9 * stride] = sb.st_mtime;
+      sarray->data[9 * stride] = sb.st_mtime;
 
       /* Last file status change time  */
-      sarray->base_addr[10 * stride] = sb.st_ctime;
+      sarray->data[10 * stride] = sb.st_ctime;
 
       /* Preferred I/O block size (-1 if not available)  */
 #if HAVE_STRUCT_STAT_ST_BLKSIZE
-      sarray->base_addr[11 * stride] = sb.st_blksize;
+      sarray->data[11 * stride] = sb.st_blksize;
 #else
-      sarray->base_addr[11 * stride] = -1;
+      sarray->data[11 * stride] = -1;
 #endif
 
       /* Number of blocks allocated (-1 if not available)  */
 #if HAVE_STRUCT_STAT_ST_BLOCKS
-      sarray->base_addr[12 * stride] = sb.st_blocks;
+      sarray->data[12 * stride] = sb.st_blocks;
 #else
-      sarray->base_addr[12 * stride] = -1;
+      sarray->data[12 * stride] = -1;
 #endif
     }
 
@@ -210,54 +211,54 @@ stat_i8_sub_0 (char *name, gfc_array_i8 *sarray, GFC_INTEGER_8 *status,
       index_type stride = GFC_DESCRIPTOR_STRIDE(sarray,0);
 
       /* Device ID  */
-      sarray->base_addr[0] = sb.st_dev;
+      sarray->data[0] = sb.st_dev;
 
       /* Inode number  */
-      sarray->base_addr[stride] = sb.st_ino;
+      sarray->data[stride] = sb.st_ino;
 
       /* File mode  */
-      sarray->base_addr[2 * stride] = sb.st_mode;
+      sarray->data[2 * stride] = sb.st_mode;
 
       /* Number of (hard) links  */
-      sarray->base_addr[3 * stride] = sb.st_nlink;
+      sarray->data[3 * stride] = sb.st_nlink;
 
       /* Owner's uid  */
-      sarray->base_addr[4 * stride] = sb.st_uid;
+      sarray->data[4 * stride] = sb.st_uid;
 
       /* Owner's gid  */
-      sarray->base_addr[5 * stride] = sb.st_gid;
+      sarray->data[5 * stride] = sb.st_gid;
 
       /* ID of device containing directory entry for file (0 if not available) */
 #if HAVE_STRUCT_STAT_ST_RDEV
-      sarray->base_addr[6 * stride] = sb.st_rdev;
+      sarray->data[6 * stride] = sb.st_rdev;
 #else
-      sarray->base_addr[6 * stride] = 0;
+      sarray->data[6 * stride] = 0;
 #endif
 
       /* File size (bytes)  */
-      sarray->base_addr[7 * stride] = sb.st_size;
+      sarray->data[7 * stride] = sb.st_size;
 
       /* Last access time  */
-      sarray->base_addr[8 * stride] = sb.st_atime;
+      sarray->data[8 * stride] = sb.st_atime;
 
       /* Last modification time  */
-      sarray->base_addr[9 * stride] = sb.st_mtime;
+      sarray->data[9 * stride] = sb.st_mtime;
 
       /* Last file status change time  */
-      sarray->base_addr[10 * stride] = sb.st_ctime;
+      sarray->data[10 * stride] = sb.st_ctime;
 
       /* Preferred I/O block size (-1 if not available)  */
 #if HAVE_STRUCT_STAT_ST_BLKSIZE
-      sarray->base_addr[11 * stride] = sb.st_blksize;
+      sarray->data[11 * stride] = sb.st_blksize;
 #else
-      sarray->base_addr[11 * stride] = -1;
+      sarray->data[11 * stride] = -1;
 #endif
 
       /* Number of blocks allocated (-1 if not available)  */
 #if HAVE_STRUCT_STAT_ST_BLOCKS
-      sarray->base_addr[12 * stride] = sb.st_blocks;
+      sarray->data[12 * stride] = sb.st_blocks;
 #else
-      sarray->base_addr[12 * stride] = -1;
+      sarray->data[12 * stride] = -1;
 #endif
     }
 
@@ -391,54 +392,54 @@ fstat_i4_sub (GFC_INTEGER_4 *unit, gfc_array_i4 *sarray, GFC_INTEGER_4 *status)
       index_type stride = GFC_DESCRIPTOR_STRIDE(sarray,0);
 
       /* Device ID  */
-      sarray->base_addr[0 * stride] = sb.st_dev;
+      sarray->data[0 * stride] = sb.st_dev;
 
       /* Inode number  */
-      sarray->base_addr[1 * stride] = sb.st_ino;
+      sarray->data[1 * stride] = sb.st_ino;
 
       /* File mode  */
-      sarray->base_addr[2 * stride] = sb.st_mode;
+      sarray->data[2 * stride] = sb.st_mode;
 
       /* Number of (hard) links  */
-      sarray->base_addr[3 * stride] = sb.st_nlink;
+      sarray->data[3 * stride] = sb.st_nlink;
 
       /* Owner's uid  */
-      sarray->base_addr[4 * stride] = sb.st_uid;
+      sarray->data[4 * stride] = sb.st_uid;
 
       /* Owner's gid  */
-      sarray->base_addr[5 * stride] = sb.st_gid;
+      sarray->data[5 * stride] = sb.st_gid;
 
       /* ID of device containing directory entry for file (0 if not available) */
 #if HAVE_STRUCT_STAT_ST_RDEV
-      sarray->base_addr[6 * stride] = sb.st_rdev;
+      sarray->data[6 * stride] = sb.st_rdev;
 #else
-      sarray->base_addr[6 * stride] = 0;
+      sarray->data[6 * stride] = 0;
 #endif
 
       /* File size (bytes)  */
-      sarray->base_addr[7 * stride] = sb.st_size;
+      sarray->data[7 * stride] = sb.st_size;
 
       /* Last access time  */
-      sarray->base_addr[8 * stride] = sb.st_atime;
+      sarray->data[8 * stride] = sb.st_atime;
 
       /* Last modification time  */
-      sarray->base_addr[9 * stride] = sb.st_mtime;
+      sarray->data[9 * stride] = sb.st_mtime;
 
       /* Last file status change time  */
-      sarray->base_addr[10 * stride] = sb.st_ctime;
+      sarray->data[10 * stride] = sb.st_ctime;
 
       /* Preferred I/O block size (-1 if not available)  */
 #if HAVE_STRUCT_STAT_ST_BLKSIZE
-      sarray->base_addr[11 * stride] = sb.st_blksize;
+      sarray->data[11 * stride] = sb.st_blksize;
 #else
-      sarray->base_addr[11 * stride] = -1;
+      sarray->data[11 * stride] = -1;
 #endif
 
       /* Number of blocks allocated (-1 if not available)  */
 #if HAVE_STRUCT_STAT_ST_BLOCKS
-      sarray->base_addr[12 * stride] = sb.st_blocks;
+      sarray->data[12 * stride] = sb.st_blocks;
 #else
-      sarray->base_addr[12 * stride] = -1;
+      sarray->data[12 * stride] = -1;
 #endif
     }
 
@@ -474,54 +475,54 @@ fstat_i8_sub (GFC_INTEGER_8 *unit, gfc_array_i8 *sarray, GFC_INTEGER_8 *status)
       index_type stride = GFC_DESCRIPTOR_STRIDE(sarray,0);
 
       /* Device ID  */
-      sarray->base_addr[0] = sb.st_dev;
+      sarray->data[0] = sb.st_dev;
 
       /* Inode number  */
-      sarray->base_addr[stride] = sb.st_ino;
+      sarray->data[stride] = sb.st_ino;
 
       /* File mode  */
-      sarray->base_addr[2 * stride] = sb.st_mode;
+      sarray->data[2 * stride] = sb.st_mode;
 
       /* Number of (hard) links  */
-      sarray->base_addr[3 * stride] = sb.st_nlink;
+      sarray->data[3 * stride] = sb.st_nlink;
 
       /* Owner's uid  */
-      sarray->base_addr[4 * stride] = sb.st_uid;
+      sarray->data[4 * stride] = sb.st_uid;
 
       /* Owner's gid  */
-      sarray->base_addr[5 * stride] = sb.st_gid;
+      sarray->data[5 * stride] = sb.st_gid;
 
       /* ID of device containing directory entry for file (0 if not available) */
 #if HAVE_STRUCT_STAT_ST_RDEV
-      sarray->base_addr[6 * stride] = sb.st_rdev;
+      sarray->data[6 * stride] = sb.st_rdev;
 #else
-      sarray->base_addr[6 * stride] = 0;
+      sarray->data[6 * stride] = 0;
 #endif
 
       /* File size (bytes)  */
-      sarray->base_addr[7 * stride] = sb.st_size;
+      sarray->data[7 * stride] = sb.st_size;
 
       /* Last access time  */
-      sarray->base_addr[8 * stride] = sb.st_atime;
+      sarray->data[8 * stride] = sb.st_atime;
 
       /* Last modification time  */
-      sarray->base_addr[9 * stride] = sb.st_mtime;
+      sarray->data[9 * stride] = sb.st_mtime;
 
       /* Last file status change time  */
-      sarray->base_addr[10 * stride] = sb.st_ctime;
+      sarray->data[10 * stride] = sb.st_ctime;
 
       /* Preferred I/O block size (-1 if not available)  */
 #if HAVE_STRUCT_STAT_ST_BLKSIZE
-      sarray->base_addr[11 * stride] = sb.st_blksize;
+      sarray->data[11 * stride] = sb.st_blksize;
 #else
-      sarray->base_addr[11 * stride] = -1;
+      sarray->data[11 * stride] = -1;
 #endif
 
       /* Number of blocks allocated (-1 if not available)  */
 #if HAVE_STRUCT_STAT_ST_BLOCKS
-      sarray->base_addr[12 * stride] = sb.st_blocks;
+      sarray->data[12 * stride] = sb.st_blocks;
 #else
-      sarray->base_addr[12 * stride] = -1;
+      sarray->data[12 * stride] = -1;
 #endif
     }
 

@@ -145,8 +145,7 @@ int foo (char *buf, size_t n, const char *fmt, ...)
  return memcmp (buf, ".CD\0AAAA", sizeof (buf)) != 0;]),
 [ssp_have_usable_vsnprintf=define],
 [ssp_have_usable_vsnprintf=undef],
-# Google-local: Assume this always works if cross-compiling.
-[ssp_have_usable_vsnprintf=define])
+[ssp_have_usable_vsnprintf=undef])
 if test "x$ssp_have_usable_vsnprintf" = xdefine; then
   AC_MSG_RESULT(yes)
   AC_DEFINE([HAVE_USABLE_VSNPRINTF],[1],[vsnprintf is present and works])

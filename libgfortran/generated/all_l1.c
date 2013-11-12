@@ -1,5 +1,5 @@
 /* Implementation of the ALL intrinsic
-   Copyright (C) 2002-2013 Free Software Foundation, Inc.
+   Copyright 2002, 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
 This file is part of the GNU Fortran runtime library (libgfortran).
@@ -83,7 +83,7 @@ all_l1 (gfc_array_l1 * const restrict retarray,
 	extent[n] = 0;
     }
 
-  if (retarray->base_addr == NULL)
+  if (retarray->data == NULL)
     {
       size_t alloc_size, str;
 
@@ -111,7 +111,7 @@ all_l1 (gfc_array_l1 * const restrict retarray,
 	  return;
 	}
       else
-	retarray->base_addr = xmalloc (alloc_size);
+	retarray->data = internal_malloc_size (alloc_size);
     }
   else
     {
@@ -145,7 +145,7 @@ all_l1 (gfc_array_l1 * const restrict retarray,
 	return;
     }
 
-  base = array->base_addr;
+  base = array->data;
 
   if (src_kind == 1 || src_kind == 2 || src_kind == 4 || src_kind == 8
 #ifdef HAVE_GFC_LOGICAL_16
@@ -159,7 +159,7 @@ all_l1 (gfc_array_l1 * const restrict retarray,
   else
     internal_error (NULL, "Funny sized logical array in ALL intrinsic");
 
-  dest = retarray->base_addr;
+  dest = retarray->data;
 
   continue_loop = 1;
   while (continue_loop)

@@ -1,5 +1,6 @@
 ;; Predicate definitions for Tilera TILE-Gx.
-;; Copyright (C) 2011-2013 Free Software Foundation, Inc.
+;; Copyright (C) 2011, 2012
+;; Free Software Foundation, Inc.
 ;; Contributed by Walter Lee (walt@tilera.com)
 ;;
 ;; This file is part of GCC.
@@ -79,14 +80,11 @@
 	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW1_LAST")
 	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW2_LAST")
 	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW1_LAST_PCREL")
-	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW2_LAST_PCREL")
 	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW0_LAST_GOT")
 	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW1_LAST_GOT")
 	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW1_LAST_TLS_GD")
 	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW1_LAST_TLS_IE")
-	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW1_LAST_TLS_LE")
-	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW1_LAST_PLT_PCREL")
-	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW2_LAST_PLT_PCREL"))))
+	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW1_LAST_TLS_LE"))))
 
 ;; Returns 1 if OP is an unspec wrapper for a symbol, got, or tls
 ;; reference.
@@ -98,13 +96,10 @@
 	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW2")
 	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW3")
 	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW0_PCREL")
-	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW1_PCREL")
 	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW0_GOT")
 	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW0_TLS_GD")
 	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW0_TLS_IE")
-	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW0_TLS_LE")
-	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW0_PLT_PCREL")
-	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW1_PLT_PCREL"))))
+	    (match_test "XINT (XEXP (op,0), 1) == UNSPEC_HW0_TLS_LE"))))
 
 ;; Return 1 if OP is a 8-element vector constant with identical signed
 ;; 8-bit elements or any register.

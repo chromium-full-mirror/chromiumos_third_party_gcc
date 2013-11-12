@@ -296,7 +296,7 @@ package body Prj is
          when Makefile =>
             return Extend_Name (Source_File_Name, Makefile_Dependency_Suffix);
 
-         when ALI_File | ALI_Closure =>
+         when ALI_File =>
             return Extend_Name (Source_File_Name, ALI_Dependency_Suffix);
       end case;
    end Dependency_Name;
@@ -461,11 +461,6 @@ package body Prj is
          if Iter.Current = No_Source then
             Iter.Language := Iter.Language.Next;
             Language_Changed (Iter);
-
-         elsif not Iter.Locally_Removed
-           and then Iter.Current.Locally_Removed
-         then
-            Next (Iter);
          end if;
       end if;
    end Language_Changed;
@@ -478,8 +473,7 @@ package body Prj is
      (In_Tree           : Project_Tree_Ref;
       Project           : Project_Id := No_Project;
       Language          : Name_Id := No_Name;
-      Encapsulated_Libs : Boolean := True;
-      Locally_Removed   : Boolean := True) return Source_Iterator
+      Encapsulated_Libs : Boolean := True) return Source_Iterator
    is
       Iter : Source_Iterator;
    begin
@@ -490,8 +484,7 @@ package body Prj is
          Language_Name     => Language,
          Language          => No_Language_Index,
          Current           => No_Source,
-         Encapsulated_Libs => Encapsulated_Libs,
-         Locally_Removed   => Locally_Removed);
+         Encapsulated_Libs => Encapsulated_Libs);
 
       if Project /= null then
          while Iter.Project /= null
@@ -528,14 +521,7 @@ package body Prj is
 
    procedure Next (Iter : in out Source_Iterator) is
    begin
-      loop
-         Iter.Current := Iter.Current.Next_In_Lang;
-
-         exit when Iter.Locally_Removed
-           or else Iter.Current = No_Source
-           or else not Iter.Current.Locally_Removed;
-      end loop;
-
+      Iter.Current := Iter.Current.Next_In_Lang;
       if Iter.Current = No_Source then
          Iter.Language := Iter.Language.Next;
          Language_Changed (Iter);
@@ -577,7 +563,7 @@ package body Prj is
            new Ada.Containers.Ordered_Sets (Element_Type => Name_Id);
 
          Seen_Name : Name_Id_Set.Set;
-         --  This set is needed to ensure that we do not handle the same
+         --  This set is needed to ensure that we do not haandle the same
          --  project twice in the context of aggregate libraries.
 
          procedure Recursive_Check
@@ -598,63 +584,8 @@ package body Prj is
             In_Aggregate_Lib      : Boolean;
             From_Encapsulated_Lib : Boolean)
          is
-
-            function Has_Sources (P : Project_Id) return Boolean;
-            --  Returns True if P has sources
-
-            function Get_From_Tree (P : Project_Id) return Project_Id;
-            --  Get project P from Tree. If P has no sources get another
-            --  instance of this project with sources. If P has sources,
-            --  returns it.
-
-            -----------------
-            -- Has_Sources --
-            -----------------
-
-            function Has_Sources (P : Project_Id) return Boolean is
-               Lang : Language_Ptr;
-
-            begin
-               Lang := P.Languages;
-               while Lang /= No_Language_Index loop
-                  if Lang.First_Source /= No_Source then
-                     return True;
-                  end if;
-
-                  Lang := Lang.Next;
-               end loop;
-
-               return False;
-            end Has_Sources;
-
-            -------------------
-            -- Get_From_Tree --
-            -------------------
-
-            function Get_From_Tree (P : Project_Id) return Project_Id is
-               List : Project_List := Tree.Projects;
-
-            begin
-               if not Has_Sources (P) then
-                  while List /= null loop
-                     if List.Project.Name = P.Name
-                       and then Has_Sources (List.Project)
-                     then
-                        return List.Project;
-                     end if;
-
-                     List := List.Next;
-                  end loop;
-               end if;
-
-               return P;
-            end Get_From_Tree;
-
-            --  Local variables
-
             List : Project_List;
-
-         --  Start of processing for Recursive_Check
+            T    : Project_Tree_Ref;
 
          begin
             if not Seen_Name.Contains (Project.Name) then
@@ -666,7 +597,7 @@ package body Prj is
 
                if not Imported_First then
                   Action
-                    (Get_From_Tree (Project),
+                    (Project,
                      Tree,
                      Project_Context'(In_Aggregate_Lib, From_Encapsulated_Lib),
                      With_State);
@@ -709,20 +640,23 @@ package body Prj is
                         --  of the aggregate library.
 
                         if Project.Qualifier = Aggregate_Library then
+                           T := Tree;
                            Recursive_Check
-                             (Agg.Project, Tree,
+                             (Agg.Project, T,
                               True,
                               From_Encapsulated_Lib
                                 or else
                                   Project.Standalone_Library = Encapsulated);
 
                         else
+                           T := Agg.Tree;
+
                            --  Use a new context as we want to returns the same
                            --  project in different project tree for aggregated
                            --  projects.
 
                            Recursive_Check_Context
-                             (Agg.Project, Agg.Tree, False, False);
+                             (Agg.Project, T, False, False);
                         end if;
 
                         Agg := Agg.Next;
@@ -732,7 +666,7 @@ package body Prj is
 
                if Imported_First then
                   Action
-                    (Get_From_Tree (Project),
+                    (Project,
                      Tree,
                      Project_Context'(In_Aggregate_Lib, From_Encapsulated_Lib),
                      With_State);

@@ -1,4 +1,4 @@
-// compile
+// $G $D/$F.go || echo BUG: bug393
 
 // Copyright 2012 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -7,7 +7,7 @@
 // issue 2672
 // was trying binary search with an interface type
 
-package bug393
+package main
 
 func f(x interface{}) int {
 	switch x {

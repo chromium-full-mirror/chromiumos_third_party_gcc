@@ -1,5 +1,4 @@
-/* { dg-options "-mips1 -mfix-r4000 -dp -EB" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-mips1 -mfix-r4000 -O2 -dp -EB" } */
 typedef unsigned int uint32_t;
 typedef unsigned long long uint64_t;
 NOMIPS16 uint32_t foo (uint32_t x, uint32_t y) { return ((uint64_t) x * y) >> 32; }

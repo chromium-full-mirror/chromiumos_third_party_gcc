@@ -1,5 +1,7 @@
 /* Calculate branch probabilities, and basic block execution counts.
-   Copyright (C) 1990-2013 Free Software Foundation, Inc.
+   Copyright (C) 1990, 1991, 1992, 1993, 1994, 1996, 1997, 1998, 1999,
+   2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2010
+   Free Software Foundation, Inc.
    Contributed by James E. Wilson, UC Berkeley/Cygnus Support;
    based on some ideas from Dain Samples of UC Berkeley.
    Further mangling by Bob Manson, Cygnus Support.
@@ -38,29 +40,25 @@ along with GCC; see the file COPYING3.  If not see
 #include "coverage.h"
 #include "tree.h"
 #include "tree-flow.h"
+#include "tree-dump.h"
 #include "tree-pass.h"
+#include "timevar.h"
 #include "value-prof.h"
 #include "cgraph.h"
 #include "output.h"
 #include "params.h"
 #include "profile.h"
 #include "l-ipo.h"
+#include "params.h"
 #include "profile.h"
 #include "target.h"
-
-/* Default name for coverage callback function.  */
-#define COVERAGE_CALLBACK_FUNC_NAME "__coverage_callback"
-
-/* True if we insert a callback to edge instrumentation code. Avoid this
-   for the callback function itself.  */
-#define COVERAGE_INSERT_CALL ((PARAM_VALUE (PARAM_COVERAGE_CALLBACK) == 1) \
-                              && strcmp (get_name (current_function_decl), \
-                                         COVERAGE_CALLBACK_FUNC_NAME))
+#include "output.h"
 
 /* Number of statements inserted for each edge counter increment.  */
 #define EDGE_COUNTER_STMT_COUNT 3
 
 static GTY(()) tree gcov_type_node;
+static GTY(()) tree gcov_type_tmp_var;
 static GTY(()) tree tree_interval_profiler_fn;
 static GTY(()) tree tree_pow2_profiler_fn;
 static GTY(()) tree tree_one_value_profiler_fn;
@@ -77,6 +75,10 @@ static GTY(()) tree dc_void_ptr_var;
 static GTY(()) tree dc_gcov_type_ptr_var;
 static GTY(()) tree ptr_void;
 static GTY(()) tree gcov_info_decl;
+
+/* When -D__KERNEL__ is in the option list, we assume this is a
+   compilation for Linux Kernel.  */ 
+bool is_kernel_build;
 
 /* Do initialization work for the edge profiler.  */
 
@@ -104,7 +106,7 @@ init_ic_make_global_vars (void)
 		      ptr_void);
       TREE_PUBLIC (ic_void_ptr_var) = 1;
       DECL_EXTERNAL (ic_void_ptr_var) = 1;
-      if (targetm.have_tls)
+      if (targetm.have_tls && !is_kernel_build)
         DECL_TLS_MODEL (ic_void_ptr_var) =
           decl_default_tls_model (ic_void_ptr_var);
 
@@ -115,7 +117,7 @@ init_ic_make_global_vars (void)
 		      gcov_type_ptr);
       TREE_PUBLIC (ic_gcov_type_ptr_var) = 1;
       DECL_EXTERNAL (ic_gcov_type_ptr_var) = 1;
-      if (targetm.have_tls)
+      if (targetm.have_tls && !is_kernel_build)
         DECL_TLS_MODEL (ic_gcov_type_ptr_var) =
           decl_default_tls_model (ic_gcov_type_ptr_var);
     }
@@ -128,7 +130,7 @@ init_ic_make_global_vars (void)
       TREE_STATIC (ic_void_ptr_var) = 1;
       TREE_PUBLIC (ic_void_ptr_var) = 0;
       DECL_INITIAL (ic_void_ptr_var) = NULL;
-      if (targetm.have_tls)
+      if (targetm.have_tls && !is_kernel_build)
         DECL_TLS_MODEL (ic_void_ptr_var) =
           decl_default_tls_model (ic_void_ptr_var);
 
@@ -140,7 +142,7 @@ init_ic_make_global_vars (void)
       TREE_STATIC (ic_gcov_type_ptr_var) = 1;
       TREE_PUBLIC (ic_gcov_type_ptr_var) = 0;
       DECL_INITIAL (ic_gcov_type_ptr_var) = NULL;
-      if (targetm.have_tls)
+      if (targetm.have_tls && !is_kernel_build)
         DECL_TLS_MODEL (ic_gcov_type_ptr_var) =
           decl_default_tls_model (ic_gcov_type_ptr_var);
     }
@@ -150,7 +152,9 @@ init_ic_make_global_vars (void)
   if (!flag_dyn_ipa)
     {
       varpool_finalize_decl (ic_void_ptr_var);
+      varpool_mark_needed_node (varpool_node (ic_void_ptr_var));
       varpool_finalize_decl (ic_gcov_type_ptr_var);
+      varpool_mark_needed_node (varpool_node (ic_gcov_type_ptr_var));
     }
 }
 
@@ -161,11 +165,8 @@ static struct pointer_set_t *instrumentation_to_be_sampled = NULL;
 /* extern __thread gcov_unsigned_t __gcov_sample_counter  */
 static GTY(()) tree gcov_sample_counter_decl = NULL_TREE;
 
-/* extern gcov_unsigned_t __gcov_profile_prefix  */
-static tree GTY(()) gcov_profile_prefix_decl = NULL_TREE;
-
 /* extern gcov_unsigned_t __gcov_sampling_period  */
-static GTY(()) tree gcov_sampling_period_decl = NULL_TREE;
+static tree GTY(()) gcov_sampling_period_decl = NULL_TREE;
 
 /* extern gcov_unsigned_t __gcov_has_sampling  */
 static tree gcov_has_sampling_decl = NULL_TREE;
@@ -185,29 +186,15 @@ static tree GTY(()) gcov_lipo_propagate_scale_decl = NULL_TREE;
 /* extern gcov_unsigned_t __gcov_lipo_dump_cgraph  */
 static tree GTY(()) gcov_lipo_dump_cgraph_decl = NULL_TREE;
 
-/* extern gcov_unsigned_t __gcov_lipo_max_mem  */
-static tree GTY(()) gcov_lipo_max_mem_decl = NULL_TREE;
-
-/* extern gcov_unsigned_t __gcov_lipo_grouping_algorithm  */
-static tree GTY(()) gcov_lipo_grouping_algorithm = NULL_TREE;
-
-/* extern gcov_unsigned_t __gcov_lipo_merge_modu_edges  */
-static tree GTY(()) gcov_lipo_merge_modu_edges = NULL_TREE;
-
-/* extern gcov_unsigned_t __gcov_lipo_strict_inclusion  */
-static tree GTY(()) gcov_lipo_strict_inclusion = NULL_TREE;
-
 /* Insert STMT_IF around given sequence of consecutive statements in the
-   same basic block starting with STMT_START, ending with STMT_END.
-   PROB is the probability of the taken branch.  */
+   same basic block starting with STMT_START, ending with STMT_END.  */
 
 static void
-insert_if_then (gimple stmt_start, gimple stmt_end, gimple stmt_if, int prob)
+insert_if_then (gimple stmt_start, gimple stmt_end, gimple stmt_if)
 {
   gimple_stmt_iterator gsi;
   basic_block bb_original, bb_before_if, bb_after_if;
-  edge e_if_taken, e_then_join, e_else;
-  int orig_frequency;
+  edge e_if_taken, e_then_join;
 
   gsi = gsi_for_stmt (stmt_start);
   gsi_insert_before (&gsi, stmt_if, GSI_SAME_STMT);
@@ -218,11 +205,7 @@ insert_if_then (gimple stmt_start, gimple stmt_end, gimple stmt_if, int prob)
   e_then_join = split_block (e_if_taken->dest, stmt_end);
   bb_before_if = e_if_taken->src;
   bb_after_if = e_then_join->dest;
-  e_else = make_edge (bb_before_if, bb_after_if, EDGE_FALSE_VALUE);
-  orig_frequency = bb_original->frequency;
-  e_if_taken->probability = prob;
-  e_else->probability = REG_BR_PROB_BASE - prob;
-  e_if_taken->dest->frequency = orig_frequency * (prob / REG_BR_PROB_BASE);
+  make_edge (bb_before_if, bb_after_if, EDGE_FALSE_VALUE);
 }
 
 /* Transform:
@@ -255,6 +238,7 @@ add_sampling_wrapper (gimple stmt_start, gimple stmt_end)
 
   /* Create all the new statements needed.  */
   stmt_inc_counter1 = gimple_build_assign (tmp1, gcov_sample_counter_decl);
+  add_referenced_var (gcov_sample_counter_decl);
   one = build_int_cst (get_gcov_unsigned_t (), 1);
   stmt_inc_counter2 = gimple_build_assign_with_ops (
       PLUS_EXPR, tmp2, tmp1, one);
@@ -263,6 +247,7 @@ add_sampling_wrapper (gimple stmt_start, gimple stmt_end)
   stmt_reset_counter = gimple_build_assign (gcov_sample_counter_decl, zero);
   tmp3 = make_ssa_name (tmp_var, NULL);
   stmt_assign_period = gimple_build_assign (tmp3, gcov_sampling_period_decl);
+  add_referenced_var (gcov_sampling_period_decl);
   stmt_if = gimple_build_cond (GE_EXPR, tmp2, tmp3, NULL_TREE, NULL_TREE);
 
   /* Insert them for now in the original basic block.  */
@@ -274,33 +259,7 @@ add_sampling_wrapper (gimple stmt_start, gimple stmt_end)
   gsi_insert_before (&gsi, stmt_reset_counter, GSI_SAME_STMT);
 
   /* Insert IF block.  */
-  /* Sampling rate can be changed at runtime: hard to guess the branch prob,
-     so make it 1.  */
-  insert_if_then (stmt_reset_counter, stmt_end, stmt_if, REG_BR_PROB_BASE);
-}
-
-/* Add a conditional stmt so that counter update will only exec one time.  */
- 
-static void
-add_execonce_wrapper (gimple stmt_start, gimple stmt_end)
-{
-  tree zero, tmp_var, tmp1;
-  gimple stmt_if, stmt_assign;
-  gimple_stmt_iterator gsi;
-
-  /* Create all the new statements needed.  */
-  tmp_var = create_tmp_reg (get_gcov_type (), "PROF_temp");
-  tmp1 = make_ssa_name (tmp_var, NULL);
-  stmt_assign = gimple_build_assign (tmp1, gimple_assign_lhs (stmt_end));
-
-  zero = build_int_cst (get_gcov_type (), 0);
-  stmt_if = gimple_build_cond (EQ_EXPR, tmp1, zero, NULL_TREE, NULL_TREE);
-
-  gsi = gsi_for_stmt (stmt_start);
-  gsi_insert_before (&gsi, stmt_assign, GSI_SAME_STMT);
-
-  /* Insert IF block.  */
-  insert_if_then (stmt_start, stmt_end, stmt_if, 1);
+  insert_if_then (stmt_reset_counter, stmt_end, stmt_if);
 }
 
 /* Return whether STMT is the beginning of an instrumentation block to be
@@ -321,34 +280,22 @@ add_sampling_to_edge_counters (void)
   basic_block bb;
 
   FOR_EACH_BB_REVERSE (bb)
-    for (gsi = gsi_last_bb (bb); !gsi_end_p (gsi); gsi_prev (&gsi))
+    for (gsi = gsi_start_bb (bb); !gsi_end_p (gsi); gsi_next (&gsi))
       {
-        gimple stmt_end = gsi_stmt (gsi);
-        if (is_instrumentation_to_be_sampled (stmt_end))
+        gimple stmt = gsi_stmt (gsi);
+        if (is_instrumentation_to_be_sampled (stmt))
           {
-            gimple stmt_beg;
+            gimple stmt_end;
             int i;
-            int edge_counter_stmt_count = EDGE_COUNTER_STMT_COUNT;
-
             /* The code for edge counter increment has EDGE_COUNTER_STMT_COUNT
                gimple statements. Advance that many statements to find the
-               beginning statement.  */
-            if (COVERAGE_INSERT_CALL)
-              edge_counter_stmt_count++;
-
-            for (i = 0; i < edge_counter_stmt_count - 1; i++)
-              gsi_prev (&gsi);
-            stmt_beg = gsi_stmt (gsi);
-            gcc_assert (stmt_beg);
-
-
-            if (flag_profile_generate_sampling)
-              add_sampling_wrapper (stmt_beg, stmt_end);
-            if (PARAM_VALUE (PARAM_COVERAGE_EXEC_ONCE))
-              add_execonce_wrapper (stmt_beg, stmt_end);
-
-            /* reset the iterator and continue.  */
-            gsi = gsi_last_bb (bb);
+               last statement.  */
+            for (i = 0; i < EDGE_COUNTER_STMT_COUNT - 1; i++)
+              gsi_next (&gsi);
+            stmt_end = gsi_stmt (gsi);
+            gcc_assert (stmt_end);
+            add_sampling_wrapper (stmt, stmt_end);
+            break;
           }
       }
 }
@@ -407,33 +354,6 @@ tree_init_dyn_ipa_parameters (void)
           get_identifier ("__gcov_lipo_dump_cgraph"),
           get_gcov_unsigned_t ());
       init_comdat_decl (gcov_lipo_dump_cgraph_decl, PARAM_LIPO_DUMP_CGRAPH);
-      gcov_lipo_max_mem_decl = build_decl (
-          UNKNOWN_LOCATION,
-          VAR_DECL,
-          get_identifier ("__gcov_lipo_max_mem"),
-          get_gcov_unsigned_t ());
-      init_comdat_decl (gcov_lipo_max_mem_decl, PARAM_MAX_LIPO_MEMORY);
-      gcov_lipo_grouping_algorithm = build_decl (
-          UNKNOWN_LOCATION,
-          VAR_DECL,
-          get_identifier ("__gcov_lipo_grouping_algorithm"),
-          get_gcov_unsigned_t ());
-      init_comdat_decl (gcov_lipo_grouping_algorithm,
-                        PARAM_LIPO_GROUPING_ALGORITHM);
-      gcov_lipo_merge_modu_edges = build_decl (
-          UNKNOWN_LOCATION,
-          VAR_DECL,
-          get_identifier ("__gcov_lipo_merge_modu_edges"),
-          get_gcov_unsigned_t ());
-      init_comdat_decl (gcov_lipo_merge_modu_edges,
-                        PARAM_LIPO_MERGE_MODU_EDGES);
-      gcov_lipo_strict_inclusion = build_decl (
-          UNKNOWN_LOCATION,
-          VAR_DECL,
-          get_identifier ("__gcov_lipo_weak_inclusion"),
-          get_gcov_unsigned_t ());
-      init_comdat_decl (gcov_lipo_strict_inclusion,
-                        PARAM_LIPO_WEAK_INCLUSION);
     }
 }
 
@@ -445,48 +365,6 @@ cleanup_instrumentation_sampling (void)
     {
       pointer_set_destroy (instrumentation_to_be_sampled);
       instrumentation_to_be_sampled = NULL;
-    }
-}
-
-/* Initialization function for FDO instrumentation.  */
-
-void
-tree_init_instrumentation (void)
-{
-  if (!gcov_profile_prefix_decl)
-    {
-      tree prefix_ptr;
-      int prefix_len;
-      tree prefix_string;
-
-      /* Construct an initializer for __gcov_profile_prefix.  */
-      gcov_profile_prefix_decl =
-        build_decl (UNKNOWN_LOCATION, VAR_DECL,
-                    get_identifier ("__gcov_profile_prefix"),
-                    get_const_string_type ());
-      TREE_PUBLIC (gcov_profile_prefix_decl) = 1;
-      DECL_ARTIFICIAL (gcov_profile_prefix_decl) = 1;
-      make_decl_one_only (gcov_profile_prefix_decl,
-                          DECL_ASSEMBLER_NAME (gcov_profile_prefix_decl));
-      TREE_STATIC (gcov_profile_prefix_decl) = 1;
-
-      const char null_prefix[] = "\0";
-      const char *prefix = null_prefix;
-      prefix_len = 0;
-      if (profile_data_prefix)
-        {
-          prefix_len = strlen (profile_data_prefix);
-          prefix = profile_data_prefix;
-        }
-      prefix_string = build_string (prefix_len + 1, prefix);
-      TREE_TYPE (prefix_string) = build_array_type
-          (char_type_node, build_index_type
-           (build_int_cst (NULL_TREE, prefix_len)));
-      prefix_ptr = build1 (ADDR_EXPR, get_const_string_type (),
-                           prefix_string);
-
-      DECL_INITIAL (gcov_profile_prefix_decl) = prefix_ptr;
-      varpool_finalize_decl (gcov_profile_prefix_decl);
     }
 }
 
@@ -549,16 +427,11 @@ tree_init_instrumentation_sampling (void)
       TREE_PUBLIC (gcov_sample_counter_decl) = 1;
       DECL_EXTERNAL (gcov_sample_counter_decl) = 1;
       DECL_ARTIFICIAL (gcov_sample_counter_decl) = 1;
-      if (targetm.have_tls)
+      if (targetm.have_tls && !is_kernel_build)
         DECL_TLS_MODEL (gcov_sample_counter_decl) =
             decl_default_tls_model (gcov_sample_counter_decl);
     }
-  if (PARAM_VALUE (PARAM_COVERAGE_EXEC_ONCE)
-      && instrumentation_to_be_sampled == 0)
-    instrumentation_to_be_sampled = pointer_set_create ();
 }
-
-/* Create the type and function decls for the interface with gcov.  */
 
 void
 gimple_init_edge_profiler (void)
@@ -571,7 +444,6 @@ gimple_init_edge_profiler (void)
   tree ic_topn_profiler_fn_type;
   tree dc_profiler_fn_type;
   tree average_profiler_fn_type;
-
 
   if (!gcov_type_node)
     {
@@ -712,41 +584,21 @@ gimple_init_edge_profiler (void)
 void
 gimple_gen_edge_profiler (int edgeno, edge e)
 {
-  tree ref, one, gcov_type_tmp_var;
+  tree ref, one;
   gimple stmt1, stmt2, stmt3;
-  bool is_atomic = PROFILE_GEN_EDGE_ATOMIC;
 
-  if (is_atomic)
+  /* We share one temporary variable declaration per function.  This
+     gets re-set in tree_profiling.  */
+  if (gcov_type_tmp_var == NULL_TREE)
+    gcov_type_tmp_var = create_tmp_reg (gcov_type_node, "PROF_edge_counter");
+
+  if (PROFILE_GEN_EDGE_ATOMIC)
     ref = tree_coverage_counter_addr (GCOV_COUNTER_ARCS, edgeno);
   else
     ref = tree_coverage_counter_ref (GCOV_COUNTER_ARCS, edgeno);
 
   one = build_int_cst (gcov_type_node, 1);
-
-  /* insert a callback stmt stmt */
-  if (COVERAGE_INSERT_CALL)
-    {
-      gimple call;
-      tree tree_edgeno = build_int_cst (gcov_type_node, edgeno);
-      tree tree_uid = build_int_cst (gcov_type_node,
-                                     current_function_funcdef_no);
-      tree callback_fn_type
-              = build_function_type_list (void_type_node,
-                                          gcov_type_node,
-                                          integer_type_node,
-                                          NULL_TREE);
-      tree tree_callback_fn = build_fn_decl (COVERAGE_CALLBACK_FUNC_NAME,
-                                             callback_fn_type);
-      TREE_NOTHROW (tree_callback_fn) = 1;
-      DECL_ATTRIBUTES (tree_callback_fn)
-        = tree_cons (get_identifier ("leaf"), NULL,
-                     DECL_ATTRIBUTES (tree_callback_fn));
-  
-      call = gimple_build_call (tree_callback_fn, 2, tree_uid, tree_edgeno);
-      gsi_insert_on_edge(e, call);
-    }
-
-  if (is_atomic)
+  if (PROFILE_GEN_EDGE_ATOMIC)
     {
       /* __atomic_fetch_add (&counter, 1, MEMMODEL_RELAXED); */
       stmt3 = gimple_build_call (builtin_decl_explicit (
@@ -754,30 +606,25 @@ gimple_gen_edge_profiler (int edgeno, edge e)
                                  3, ref, one,
                                  build_int_cst (integer_type_node,
                                    MEMMODEL_RELAXED));
+      find_referenced_vars_in (stmt3);
     }
   else
     {
-      gcov_type_tmp_var = make_temp_ssa_name (gcov_type_node,
-            				  NULL, "PROF_edge_counter");
       stmt1 = gimple_build_assign (gcov_type_tmp_var, ref);
-      gcov_type_tmp_var = make_temp_ssa_name (gcov_type_node,
-            				  NULL, "PROF_edge_counter");
+      gimple_assign_set_lhs (stmt1, make_ssa_name (gcov_type_tmp_var, stmt1));
+      find_referenced_vars_in (stmt1);
       stmt2 = gimple_build_assign_with_ops (PLUS_EXPR, gcov_type_tmp_var,
             				gimple_assign_lhs (stmt1), one);
+      gimple_assign_set_lhs (stmt2, make_ssa_name (gcov_type_tmp_var, stmt2));
       stmt3 = gimple_build_assign (unshare_expr (ref), gimple_assign_lhs (stmt2));
-   }
 
-  if (flag_profile_generate_sampling
-      || PARAM_VALUE (PARAM_COVERAGE_EXEC_ONCE))
-    pointer_set_insert (instrumentation_to_be_sampled, stmt3);
+      if (flag_profile_generate_sampling)
+        pointer_set_insert (instrumentation_to_be_sampled, stmt1);
 
-  if (!is_atomic)
-    {
       gsi_insert_on_edge (e, stmt1);
       gsi_insert_on_edge (e, stmt2);
     }
   gsi_insert_on_edge (e, stmt3);
-
 }
 
 /* Emits code to get VALUE to instrument at GSI, and returns the
@@ -817,6 +664,7 @@ gimple_gen_interval_profiler (histogram_value value, unsigned tag, unsigned base
   val = prepare_instrumented_value (&gsi, value);
   call = gimple_build_call (tree_interval_profiler_fn, 4,
 			    ref_ptr, val, start, steps);
+  find_referenced_vars_in (call);
   gsi_insert_before (&gsi, call, GSI_NEW_STMT);
 }
 
@@ -837,6 +685,7 @@ gimple_gen_pow2_profiler (histogram_value value, unsigned tag, unsigned base)
 				      true, NULL_TREE, true, GSI_SAME_STMT);
   val = prepare_instrumented_value (&gsi, value);
   call = gimple_build_call (tree_pow2_profiler_fn, 2, ref_ptr, val);
+  find_referenced_vars_in (call);
   gsi_insert_before (&gsi, call, GSI_NEW_STMT);
 }
 
@@ -857,6 +706,7 @@ gimple_gen_one_value_profiler (histogram_value value, unsigned tag, unsigned bas
 				      true, NULL_TREE, true, GSI_SAME_STMT);
   val = prepare_instrumented_value (&gsi, value);
   call = gimple_build_call (tree_one_value_profiler_fn, 2, ref_ptr, val);
+  find_referenced_vars_in (call);
   gsi_insert_before (&gsi, call, GSI_NEW_STMT);
 }
 
@@ -875,7 +725,7 @@ gimple_gen_ic_profiler (histogram_value value, unsigned tag, unsigned base)
   gimple stmt;
   gimple_stmt_iterator gsi;
   tree ref_ptr;
-
+ 
   stmt = value->hvalue.stmt;
   gsi = gsi_for_stmt (stmt);
   ref_ptr = tree_coverage_counter_addr (tag, base);
@@ -884,15 +734,18 @@ gimple_gen_ic_profiler (histogram_value value, unsigned tag, unsigned base)
 
   /* Insert code:
 
-    stmt1: __gcov_indirect_call_counters = get_relevant_counter_ptr ();
-    stmt2: tmp1 = (void *) (indirect call argument value)
-    stmt3: __gcov_indirect_call_callee = tmp1;
+    __gcov_indirect_call_counters = get_relevant_counter_ptr ();
+    __gcov_indirect_call_callee = (void *) indirect call argument;
    */
 
+  tmp1 = create_tmp_reg (ptr_void, "PROF");
   stmt1 = gimple_build_assign (ic_gcov_type_ptr_var, ref_ptr);
-  tmp1 = make_temp_ssa_name (ptr_void, NULL, "PROF");
+  find_referenced_vars_in (stmt1);
   stmt2 = gimple_build_assign (tmp1, unshare_expr (value->hvalue.value));
+  gimple_assign_set_lhs (stmt2, make_ssa_name (tmp1, stmt2));
+  find_referenced_vars_in (stmt2);
   stmt3 = gimple_build_assign (ic_void_ptr_var, gimple_assign_lhs (stmt2));
+  add_referenced_var (ic_void_ptr_var);
 
   gsi_insert_before (&gsi, stmt1, GSI_SAME_STMT);
   gsi_insert_before (&gsi, stmt2, GSI_SAME_STMT);
@@ -918,13 +771,6 @@ gimple_gen_ic_func_profiler (void)
 
   gimple_init_edge_profiler ();
 
-  /* Insert code:
-
-    stmt1: __gcov_indirect_call_profiler (__gcov_indirect_call_counters,
-					  current_function_funcdef_no,
-					  &current_function_decl,
-					  __gcov_indirect_call_callee);
-   */
   gsi = gsi_after_labels (single_succ (ENTRY_BLOCK_PTR));
 
   cur_func = force_gimple_operand_gsi (&gsi,
@@ -935,9 +781,11 @@ gimple_gen_ic_func_profiler (void)
   counter_ptr = force_gimple_operand_gsi (&gsi, ic_gcov_type_ptr_var,
 					  true, NULL_TREE, true,
 					  GSI_SAME_STMT);
+  add_referenced_var (ic_gcov_type_ptr_var);
   ptr_var = force_gimple_operand_gsi (&gsi, ic_void_ptr_var,
 				      true, NULL_TREE, true,
 				      GSI_SAME_STMT);
+  add_referenced_var (ic_void_ptr_var);
   tree_uid = build_int_cst (gcov_type_node, current_function_funcdef_no);
   stmt1 = gimple_build_call (tree_indirect_call_profiler_fn, 4,
 			     counter_ptr, tree_uid, cur_func, ptr_var);
@@ -980,7 +828,7 @@ gimple_gen_ic_func_topn_profiler (void)
   gcov_info = build_fold_addr_expr (gcov_info_decl);
   cur_func_id = build_int_cst (get_gcov_unsigned_t (),
 			       FUNC_DECL_FUNC_ID (cfun));
-  stmt1 = gimple_build_call (tree_indirect_call_topn_profiler_fn,
+  stmt1 = gimple_build_call (tree_indirect_call_topn_profiler_fn, 
 			     3, cur_func, gcov_info, cur_func_id);
   gsi_insert_before (&gsi, stmt1, GSI_SAME_STMT);
 }
@@ -997,7 +845,7 @@ gimple_gen_dc_profiler (unsigned base, gimple call_stmt)
   gimple stmt1, stmt2, stmt3;
   gimple_stmt_iterator gsi = gsi_for_stmt (call_stmt);
   tree tmp1, tmp2, tmp3, callee = gimple_call_fn (call_stmt);
-
+ 
   /* Insert code:
      __gcov_direct_call_counters = get_relevant_counter_ptr ();
      __gcov_callee = (void *) callee;
@@ -1006,11 +854,15 @@ gimple_gen_dc_profiler (unsigned base, gimple call_stmt)
   tmp1 = force_gimple_operand_gsi (&gsi, tmp1, true, NULL_TREE,
 				   true, GSI_SAME_STMT);
   stmt1 = gimple_build_assign (dc_gcov_type_ptr_var, tmp1);
+  find_referenced_vars_in (stmt1);
   tmp2 = create_tmp_var (ptr_void, "PROF_dc");
+  add_referenced_var (tmp2);
   stmt2 = gimple_build_assign (tmp2, unshare_expr (callee));
+  find_referenced_vars_in (stmt2);
   tmp3 = make_ssa_name (tmp2, stmt2);
   gimple_assign_set_lhs (stmt2, tmp3);
   stmt3 = gimple_build_assign (dc_void_ptr_var, tmp3);
+  find_referenced_vars_in (stmt3);
   gsi_insert_before (&gsi, stmt1, GSI_SAME_STMT);
   gsi_insert_before (&gsi, stmt2, GSI_SAME_STMT);
   gsi_insert_before (&gsi, stmt3, GSI_SAME_STMT);
@@ -1024,6 +876,7 @@ gimple_gen_dc_profiler (unsigned base, gimple call_stmt)
 static void
 gimple_gen_dc_func_profiler (void)
 {
+  struct cgraph_node * c_node = cgraph_get_create_node (current_function_decl);
   gimple_stmt_iterator gsi;
   gimple stmt1;
   tree cur_func, gcov_info, cur_func_id;
@@ -1031,6 +884,9 @@ gimple_gen_dc_func_profiler (void)
   if (DECL_STATIC_CONSTRUCTOR (current_function_decl) 
       || DECL_STATIC_CONSTRUCTOR (current_function_decl)
       || DECL_NO_INSTRUMENT_FUNCTION_ENTRY_EXIT (current_function_decl))
+    return;
+
+  if (!c_node->needed && !c_node->reachable)
     return;
 
   gimple_init_edge_profiler ();
@@ -1085,6 +941,7 @@ gimple_gen_average_profiler (histogram_value value, unsigned tag, unsigned base)
 				      true, GSI_SAME_STMT);
   val = prepare_instrumented_value (&gsi, value);
   call = gimple_build_call (tree_average_profiler_fn, 2, ref_ptr, val);
+  find_referenced_vars_in (call);
   gsi_insert_before (&gsi, call, GSI_NEW_STMT);
 }
 
@@ -1105,7 +962,517 @@ gimple_gen_ior_profiler (histogram_value value, unsigned tag, unsigned base)
 				      true, NULL_TREE, true, GSI_SAME_STMT);
   val = prepare_instrumented_value (&gsi, value);
   call = gimple_build_call (tree_ior_profiler_fn, 2, ref_ptr, val);
+  find_referenced_vars_in (call);
   gsi_insert_before (&gsi, call, GSI_NEW_STMT);
+}
+
+/* String operation substitution record.  For each operation, e.g., memcpy,
+   we keep up to four declarations, e.g., libopt__memcpy__{0,1,2,3}.
+   They correspond to memcpy versions in which memory access is nontemporal
+   in neither, first, second or both arguments (dst, src) respectively.  */
+
+struct stringop_subst
+{
+  const char* original_name;  /* E.g., "memcpy".  */
+  int num_args;               /* Number of args, 3 for memcpy.  */
+  int num_ptr_args;           /* Number of pointer args, 2 for memcpy.  */
+  tree instr_fun;             /* E.g., declaration of instrument_memcpy.  */
+  tree nt_ops[4];             /* E.g., libopt__memcpy__{0,1,2,3}.  */
+};
+typedef struct stringop_subst* stringop_subst_t;
+
+/* Substitution database.  TODO: switch to hash table.  */
+
+static struct stringop_subst stringop_decl[] =
+{
+  {"memcpy",      3, 2, NULL, {NULL, NULL, NULL, NULL}},
+  {"memset",      3, 1, NULL, {NULL, NULL, NULL, NULL}},
+  {"memmove",     3, 2, NULL, {NULL, NULL, NULL, NULL}},
+  {"memcmp",      3, 2, NULL, {NULL, NULL, NULL, NULL}},
+  {"bcmp",        3, 2, NULL, {NULL, NULL, NULL, NULL}},
+  {"strlen",      1, 1, NULL, {NULL, NULL, NULL, NULL}},
+  {"strcpy",      2, 2, NULL, {NULL, NULL, NULL, NULL}},
+  {"strncpy",     3, 2, NULL, {NULL, NULL, NULL, NULL}},
+  {"strcat",      2, 2, NULL, {NULL, NULL, NULL, NULL}},
+  {"strncat",     3, 2, NULL, {NULL, NULL, NULL, NULL}},
+  {"strdup",      1, 1, NULL, {NULL, NULL, NULL, NULL}},
+  {"strndup",     2, 1, NULL, {NULL, NULL, NULL, NULL}},
+  {"strcmp",      2, 2, NULL, {NULL, NULL, NULL, NULL}},
+  {"strncmp",     3, 2, NULL, {NULL, NULL, NULL, NULL}},
+  {"strcasecmp",  2, 2, NULL, {NULL, NULL, NULL, NULL}},
+  {"strncasecmp", 3, 2, NULL, {NULL, NULL, NULL, NULL}},
+  {NULL,          0, 0, NULL, {NULL, NULL, NULL, NULL}}
+};
+
+/* Get the corresponding element in STRINGOP_DECL for NAME.  */
+
+static stringop_subst_t
+get_stringop_subst (const char* name)
+{
+  stringop_subst_t it;
+  for (it = stringop_decl; it->original_name; it++)
+    if (strcmp (name, it->original_name) == 0)
+      return it;
+  return 0;
+}
+
+/* Return the matching substitution if call site STMT is worth replacing.  */
+
+static stringop_subst_t
+reusedist_is_interesting_call (gimple stmt)
+{
+  tree fndecl, name;
+
+  if (gimple_code (stmt) != GIMPLE_CALL)
+    return 0;
+
+  fndecl = gimple_call_fndecl (stmt);
+
+  if (fndecl == NULL_TREE)
+    return 0;
+
+  name = DECL_NAME (fndecl);
+
+  if (name == NULL_TREE)
+    return 0;
+
+  return get_stringop_subst (IDENTIFIER_POINTER (name));
+}
+
+/* Make up an instrumentation function name for string operation OP.  */
+
+static void
+reusedist_instr_func_name (const char* op, char result[], int size)
+{
+  int written;
+
+  written = snprintf (result, size, "reusedist_instr_%s", op);
+
+  gcc_assert (written < size);
+}
+
+/* Create a declaration for an instr. function if not already done.
+   Use TEMPLATE_STMT to figure out argument types.  */
+
+static tree
+reusedist_get_instr_decl (gimple template_stmt, stringop_subst_t subst)
+{
+  if (!subst->instr_fun)
+    {
+      tree args;
+      char name[64];
+
+      if (!ptr_void)
+        ptr_void = build_pointer_type (void_type_node);
+
+      reusedist_instr_func_name (subst->original_name, name, 64);
+
+      switch (subst->num_args)
+        {
+          case 1:
+            args = build_function_type_list (
+                void_type_node, ptr_void,
+                TREE_TYPE (gimple_call_arg (template_stmt, 0)),
+                NULL_TREE);
+            break;
+          case 2:
+            args = build_function_type_list (
+                void_type_node, ptr_void,
+                TREE_TYPE (gimple_call_arg (template_stmt, 0)),
+                TREE_TYPE (gimple_call_arg (template_stmt, 1)),
+                NULL_TREE);
+            break;
+          case 3:
+            args = build_function_type_list (
+                void_type_node, ptr_void,
+                TREE_TYPE (gimple_call_arg (template_stmt, 0)),
+                TREE_TYPE (gimple_call_arg (template_stmt, 1)),
+                TREE_TYPE (gimple_call_arg (template_stmt, 2)),
+                NULL_TREE);
+            break;
+          default:
+            gcc_assert (false);
+        }
+      subst->instr_fun = build_fn_decl (name, args);
+    }
+
+  return subst->instr_fun;
+}
+
+/* Return call to instrumentation function for string op call site STMT.
+   Given a call to memcpy (dst, src, len), it will return a call to
+   reusedist_instrument_memcpy (counters, dst, src, len).  */
+
+static gimple
+reusedist_make_instr_call (gimple stmt, stringop_subst_t subst, tree counters)
+{
+  tree profiler_fn;
+
+  if (!subst)
+    return 0;
+
+  profiler_fn = reusedist_get_instr_decl (stmt, subst);
+
+ switch (subst->num_args)
+   {
+     case 1:
+       return gimple_build_call (profiler_fn, 1 + subst->num_args, counters,
+                                 gimple_call_arg (stmt, 0));
+     case 2:
+       return gimple_build_call (profiler_fn, 1 + subst->num_args, counters,
+                                 gimple_call_arg (stmt, 0),
+                                 gimple_call_arg (stmt, 1));
+     case 3:
+       return gimple_build_call (profiler_fn, 1 + subst->num_args, counters,
+                                 gimple_call_arg (stmt, 0),
+                                 gimple_call_arg (stmt, 1),
+                                 gimple_call_arg (stmt, 2));
+     default:
+       gcc_assert (false);
+   }
+}
+
+/* Reuse distance information for a single memory block at a single site.
+   For some operations, such as memcpy, there will be two such descriptors,
+   one of the source and one for the destination.
+   We're keeping the average reuse distance
+   (e.g., distance from a MEMCPY call until the memory written is first used).
+   We're also keeping the average operation size (e.g., memcpy size).
+   These averages are measured over all dynamic invocations of the same
+   static site.  We're also storing the dynamic operation count.
+
+   We're also keeping a measure named dist_x_size, which is the sum of
+   products (distance * size) across all dynamic instances.  This is meant
+   to account for some information loss through aggregation.  For instance,
+   consider two scenarios.
+   A: 50% of operations have large reuse distance but are very short.
+      50% of operations have short reuse distance but are very long.
+   B: 50% of operations have large reuse distance and are large.
+      50% of operations have short reuse distance and are short.
+   Without the dist_x_size measure, these scenarios can't be told apart
+   from the other three measures.  With the dist_x_size measure, scenario B
+   will look like a better candidate.  */
+
+struct reusedist_t {
+  gcov_type mean_dist;    /* Average reuse distance.  */
+  gcov_type mean_size;    /* Average size of memory referenced.  */
+  gcov_type count;        /* Operation count.  */
+  gcov_type dist_x_size;  /* Sum of (distance * size >> 12) across all ops.  */
+};
+
+typedef struct reusedist_t reusedist_t;
+
+/* Number of gcov counters for one reuse distance measurement.  */
+
+const int RD_NUM_COUNTERS = sizeof(reusedist_t) / sizeof(gcov_type);
+
+/* Initialize RD from gcov COUNTERS.  */
+
+static void
+reusedist_from_counters (const gcov_type* counters,
+                         reusedist_t* rd)
+{
+  memcpy (rd, counters, RD_NUM_COUNTERS * sizeof (gcov_type));
+}
+
+/* Instrument current function to collect reuse distance for string ops.
+   The heavy lifting is done by an external library.  The interface
+   to this library is functions like this:
+
+   void reusedist_instr_memcpy(gcov_type *counters,
+                               void *dst, void *src, size_t len);
+
+   This function will measure the reuse distance for the given operations
+   DST with offset LEN, and store values in COUNTERS for one or two pointer
+   arguments.  E.g., for memcpy 2 * RD_NUM_COUNTERS counters will be set,
+   first RD_NUM_COUNTERS for DST and last RD_NUM_COUNTERS for SRC.
+   For strlen, only RD_NUM_COUNTERS counters will be allocated thus the
+   runtime is expected to set only RD_NUM_COUNTERS counters.
+   The counters will record:
+   - mean reuse distance
+   - mean operation size
+   - call count
+   - sum(reuse distance * operation size) across all calls
+     To avoid overflow, each product is first scaled down by a factor of 2^12.
+
+   All reuse distance measurements for dynamic executions of the same static
+   string operation will be aggregated into a single set of counters.
+   The reuse distance library uses the passed COUNTERS pointer as index
+   in its internal tables.  */
+
+void
+gimple_gen_reusedist (void)
+{
+  basic_block bb;
+  gimple_stmt_iterator gsi;
+
+  if (DECL_STATIC_CONSTRUCTOR (current_function_decl))
+    return;
+
+  gimple_init_edge_profiler ();
+
+  FOR_EACH_BB (bb)
+    for (gsi = gsi_start_bb (bb); !gsi_end_p (gsi); gsi_next (&gsi))
+      {
+        gimple stmt = gsi_stmt (gsi);
+        stringop_subst_t subst = reusedist_is_interesting_call (stmt);
+
+        if (subst
+            && coverage_counter_alloc (
+                GCOV_COUNTER_REUSE_DIST,
+                subst->num_ptr_args * RD_NUM_COUNTERS))
+          {
+            location_t locus;
+            tree counters = tree_coverage_counter_addr (
+                GCOV_COUNTER_REUSE_DIST, 0);
+
+            counters = force_gimple_operand_gsi (
+                &gsi, counters, true, NULL_TREE, true, GSI_SAME_STMT);
+
+            gsi_insert_after (
+                &gsi,
+                reusedist_make_instr_call (stmt, subst, counters),
+                GSI_NEW_STMT);
+
+            if (flag_opt_info >= OPT_INFO_MAX)
+              {
+                locus = (stmt != NULL)
+                    ? gimple_location (stmt)
+                    : DECL_SOURCE_LOCATION (current_function_decl);
+                inform (locus,
+                        "inserted reuse distance instrumentation for %qs, using "
+                        "%d gcov counters", subst->original_name,
+                        subst->num_ptr_args * RD_NUM_COUNTERS);
+              }
+          }
+      }
+}
+
+/* Make up a nontemporal substitution name, e.g., "libopt__memcpy__3".  */
+
+static void
+nt_op_name (const char* name, int suffix, char result[], int size)
+{
+  int written;
+
+  written = snprintf (result, size, "libopt__%s__%d", name, suffix);
+
+  gcc_assert (written < size);
+}
+
+/* Get size threshold for reusedist substitution decisions.  */
+
+static gcov_type
+reusedist_get_size_threshold (const char* name)
+{
+  if (!strcmp (name, "memcpy"))
+    return (gcov_type)PARAM_VALUE (PARAM_REUSEDIST_MEMCPY_SIZE_THRESH);
+
+  if (!strcmp (name, "memset"))
+    return (gcov_type)PARAM_VALUE (PARAM_REUSEDIST_MEMSET_SIZE_THRESH);
+
+  /* Use memcpy threshold as default for unspecified operations.  */
+  return (gcov_type)PARAM_VALUE (PARAM_REUSEDIST_MEMCPY_SIZE_THRESH);
+}
+
+/* Get distance threshold for reusedist substitution decisions.  */
+
+static gcov_type
+reusedist_get_distance_large_threshold (void)
+{
+  return (gcov_type)PARAM_VALUE (PARAM_REUSEDIST_MEAN_DIST_LARGE_THRESH);
+}
+
+/* Get distance threshold for reusedist substitution decisions.  */
+
+static gcov_type
+reusedist_get_distance_small_threshold (void)
+{
+  return (gcov_type)PARAM_VALUE (PARAM_REUSEDIST_MEAN_DIST_SMALL_THRESH);
+}
+
+/* Get call count threshold for reusedist substitution decisions.  */
+
+static gcov_type
+reusedist_get_count_threshold (void)
+{
+  return (gcov_type)PARAM_VALUE (PARAM_REUSEDIST_CALL_COUNT_THRESH);
+}
+
+/* Return whether switching to nontemporal string operation is worth it.
+   NAME is the function name, such as "memcpy".
+   COUNTERS is a pointer to gcov counters for this operation site.
+   Return 1 if worth it, -1 if not worth it and 0 if not sure.  */
+
+static int
+reusedist_nt_is_worth_it (const char* name, const gcov_type* counters)
+{
+  reusedist_t rd;
+
+  reusedist_from_counters (counters, &rd);
+
+  /* TODO: Need to add check for dist_x_size.  */
+
+  if (rd.mean_size < reusedist_get_size_threshold (name)
+      || rd.count < reusedist_get_count_threshold ())
+    /* If the size of the operation is small, don't substitute.  */
+    return 0;
+
+  if (rd.mean_dist >= reusedist_get_distance_large_threshold ())
+    /* Enforce non-temporal.  */
+    return 1;
+  else if (rd.mean_dist <= reusedist_get_distance_small_threshold ())
+    /* Enforce temporal.  */
+    return -1;
+  else
+    /* Not conclusive.  */
+    return 0;
+}
+
+/* Create a declaration for a nontemporal version if not already done.
+   INDEX is the index of the version in list [first, second, both].  */
+
+static tree
+reusedist_get_nt_decl (tree template_decl, stringop_subst_t subst, int index)
+{
+  if (!subst->nt_ops[index])
+    {
+      char nt_name[256];
+      nt_op_name (subst->original_name, index, nt_name, 256);
+      subst->nt_ops[index] = build_fn_decl (nt_name,
+                                            TREE_TYPE (template_decl));
+    }
+
+  return subst->nt_ops[index];
+}
+
+/* Issue notes with reuse distance values in COUNTERS for given ARG.  */
+
+static void
+maybe_issue_profile_use_note (location_t locus, gcov_type* counters, int arg)
+{
+  reusedist_t rd;
+
+  reusedist_from_counters (counters, &rd);
+
+  if ((flag_opt_info >= OPT_INFO_MAX) && rd.count)
+    inform (locus, "reuse distance counters for arg %d: %lld %lld %lld %lld",
+            arg, (long long int)rd.mean_dist, (long long int)rd.mean_size,
+            (long long int)rd.count, (long long int)rd.dist_x_size);
+}
+
+/* Substitute with nontemporal version when profitable.  */
+
+static void
+reusedist_maybe_replace_with_nt_version (gimple stmt,
+                                         gcov_type* counters,
+                                         stringop_subst_t subst)
+{
+  int first, second, suffix;
+  tree subst_decl;
+  const char* name = subst->original_name;
+  location_t locus;
+
+  locus = (stmt != NULL)
+      ? gimple_location (stmt)
+      : DECL_SOURCE_LOCATION (current_function_decl);
+
+  gcc_assert (1 == subst->num_ptr_args || 2 == subst->num_ptr_args);
+
+  maybe_issue_profile_use_note (locus, counters, 1);
+  first = reusedist_nt_is_worth_it (name, counters);
+
+  if (2 == subst->num_ptr_args)
+    {
+      maybe_issue_profile_use_note (locus, counters + RD_NUM_COUNTERS, 2);
+      second = reusedist_nt_is_worth_it (name, counters + RD_NUM_COUNTERS);
+    }
+  else
+      second = 0;
+
+  if (first > 0)
+    /* Nontemporal in first arg.  */
+    {
+      /* The operation on the first arg should be nontemporal.  */
+      if (second > 0)
+        suffix = 3;
+      else
+        suffix = 1;
+    }
+  else if (first < 0)
+    /* Temporal in first arg.  */
+    {
+      if (second > 0)
+        suffix = 2;
+      else if (second < 0)
+        suffix = 0;
+      else
+        suffix = -1;
+    }
+  else
+    /* Don't know about the first arg.  */
+    {
+      if (second > 0)
+        suffix = 2;
+      else
+        suffix = -1;
+    }
+
+  if (suffix == -1)
+    return;
+
+  subst_decl = reusedist_get_nt_decl (gimple_call_fndecl (stmt), subst,
+                                      suffix);
+  gimple_call_set_fndecl (stmt, subst_decl);
+  if (flag_opt_info >= OPT_INFO_MED)
+    inform (locus, "replaced %qs with non-temporal %qs",
+            subst->original_name,
+            IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (subst_decl)));
+}
+
+/* Replace string operations with equivalent nontemporal, when profitable.  */
+
+void
+optimize_reusedist (void)
+{
+  basic_block bb;
+  gimple_stmt_iterator gsi;
+  unsigned n_counters;
+  unsigned counter_index = 0;
+  gcov_type *counters = get_coverage_counts_no_warn (
+      DECL_STRUCT_FUNCTION (current_function_decl),
+      GCOV_COUNTER_REUSE_DIST, &n_counters);
+
+  if (!n_counters || DECL_STATIC_CONSTRUCTOR (current_function_decl))
+    return;
+
+  gcc_assert (!(n_counters % RD_NUM_COUNTERS));
+
+  FOR_EACH_BB (bb)
+    for (gsi = gsi_start_bb (bb); !gsi_end_p (gsi); gsi_next (&gsi))
+      {
+        gimple stmt = gsi_stmt (gsi);
+        stringop_subst_t subst = reusedist_is_interesting_call (stmt);
+
+        if (subst)
+          {
+            if (counter_index < n_counters)
+              reusedist_maybe_replace_with_nt_version (
+                  stmt, &counters[counter_index], subst);
+            counter_index += subst->num_ptr_args * RD_NUM_COUNTERS;
+          }
+      }
+
+  if (counter_index != n_counters)
+    {
+      warning (OPT_Wcoverage_mismatch,
+               "coverage mismatch for reuse distance counters "
+               "in function %qs", IDENTIFIER_POINTER
+               (DECL_ASSEMBLER_NAME (current_function_decl)));
+      if (flag_opt_info >= OPT_INFO_MAX)
+        inform (input_location, "number of counters is %u instead of %u",
+                n_counters, counter_index);
+    }
 }
 
 /* Profile all functions in the callgraph.  */
@@ -1115,9 +1482,12 @@ tree_profiling (void)
 {
   struct cgraph_node *node;
 
-  /* This is a small-ipa pass that gets called only once, from
-     cgraphunit.c:ipa_passes().  */
-  gcc_assert (cgraph_state == CGRAPH_STATE_IPA_SSA);
+  /* Don't profile functions produced at destruction time, particularly
+     the gcov datastructure initializer.  Don't profile if it has been
+     already instrumented either (when OpenMP expansion creates
+     child function from already instrumented body).  */
+  if (cgraph_state == CGRAPH_STATE_FINISHED)
+    return 0;
 
   /* After value profile transformation, artificial edges (that keep
      function body from being deleted) won't be needed.  */
@@ -1131,38 +1501,26 @@ tree_profiling (void)
 
   init_node_map();
 
-  FOR_EACH_DEFINED_FUNCTION (node)
+  for (node = cgraph_nodes; node; node = node->next)
     {
-      if (!gimple_has_body_p (node->symbol.decl))
+      if (!node->analyzed
+	  || !gimple_has_body_p (node->decl))
 	continue;
 
       /* Don't profile functions produced for builtin stuff.  */
-      if (DECL_SOURCE_LOCATION (node->symbol.decl) == BUILTINS_LOCATION)
+      if (DECL_SOURCE_LOCATION (node->decl) == BUILTINS_LOCATION
+	  || DECL_STRUCT_FUNCTION (node->decl)->after_tree_profile)
 	continue;
 
-      push_cfun (DECL_STRUCT_FUNCTION (node->symbol.decl));
+      push_cfun (DECL_STRUCT_FUNCTION (node->decl));
+      current_function_decl = node->decl;
 
-      if (L_IPO_COMP_MODE)
-        {
-          basic_block bb;
-          FOR_EACH_BB (bb)
-            {
-              gimple_stmt_iterator gsi;
-              for (gsi = gsi_start_bb (bb); !gsi_end_p (gsi); gsi_next (&gsi))
-                {
-                  gimple stmt = gsi_stmt (gsi);
-                  if (is_gimple_call (stmt))
-                    lipo_fixup_cgraph_edge_call_target (stmt);
-                }
-	    }
-          update_ssa (TODO_update_ssa);
-	}
-
+      /* Re-set global shared temporary variable for edge-counters.  */
+      gcov_type_tmp_var = NULL_TREE;
 
       /* Local pure-const may imply need to fixup the cfg.  */
       if (execute_fixup_cfg () & TODO_cleanup_cfg)
 	cleanup_tree_cfg ();
-
       branch_prob ();
 
       if (! flag_branch_probabilities
@@ -1180,19 +1538,22 @@ tree_profiling (void)
 	 easy to adjust it, if and when there is some.  */
       free_dominance_info (CDI_DOMINATORS);
       free_dominance_info (CDI_POST_DOMINATORS);
+
+      current_function_decl = NULL;
       pop_cfun ();
     }
 
   /* Drop pure/const flags from instrumented functions.  */
-  FOR_EACH_DEFINED_FUNCTION (node)
+  for (node = cgraph_nodes; node; node = node->next)
     {
-      if (!gimple_has_body_p (node->symbol.decl)
-	  || !(!node->clone_of
-	  || node->symbol.decl != node->clone_of->symbol.decl))
+      if (!node->analyzed
+	  || !gimple_has_body_p (node->decl)
+	  || !(!node->clone_of || node->decl != node->clone_of->decl))
 	continue;
 
       /* Don't profile functions produced for builtin stuff.  */
-      if (DECL_SOURCE_LOCATION (node->symbol.decl) == BUILTINS_LOCATION)
+      if (DECL_SOURCE_LOCATION (node->decl) == BUILTINS_LOCATION
+	  || DECL_STRUCT_FUNCTION (node->decl)->after_tree_profile)
 	continue;
 
       cgraph_set_const_flag (node, false, false);
@@ -1200,20 +1561,22 @@ tree_profiling (void)
     }
 
   /* Update call statements and rebuild the cgraph.  */
-  FOR_EACH_DEFINED_FUNCTION (node)
+  for (node = cgraph_nodes; node; node = node->next)
     {
       basic_block bb;
 
-      if (!gimple_has_body_p (node->symbol.decl)
-	  || !(!node->clone_of
-	  || node->symbol.decl != node->clone_of->symbol.decl))
+      if (!node->analyzed
+	  || !gimple_has_body_p (node->decl)
+	  || !(!node->clone_of || node->decl != node->clone_of->decl))
 	continue;
 
       /* Don't profile functions produced for builtin stuff.  */
-      if (DECL_SOURCE_LOCATION (node->symbol.decl) == BUILTINS_LOCATION)
+      if (DECL_SOURCE_LOCATION (node->decl) == BUILTINS_LOCATION
+	  || DECL_STRUCT_FUNCTION (node->decl)->after_tree_profile)
 	continue;
 
-      push_cfun (DECL_STRUCT_FUNCTION (node->symbol.decl));
+      push_cfun (DECL_STRUCT_FUNCTION (node->decl));
+      current_function_decl = node->decl;
 
       FOR_EACH_BB (bb)
 	{
@@ -1222,13 +1585,16 @@ tree_profiling (void)
 	    {
 	      gimple stmt = gsi_stmt (gsi);
 	      if (is_gimple_call (stmt))
-                update_stmt (stmt);
+		update_stmt (stmt);
 	    }
 	}
 
+      cfun->after_tree_profile = 1;
       update_ssa (TODO_update_ssa);
 
       rebuild_cgraph_edges ();
+
+      current_function_decl = NULL;
       pop_cfun ();
     }
 
@@ -1267,8 +1633,9 @@ direct_call_profiling (void)
 		      build_pointer_type (gcov_type_node));
       DECL_ARTIFICIAL (dc_gcov_type_ptr_var) = 1;
       DECL_EXTERNAL (dc_gcov_type_ptr_var) = 1;
-      DECL_TLS_MODEL (dc_gcov_type_ptr_var) =
-	decl_default_tls_model (dc_gcov_type_ptr_var);
+      if (!is_kernel_build)
+        DECL_TLS_MODEL (dc_gcov_type_ptr_var) =
+	  decl_default_tls_model (dc_gcov_type_ptr_var);
 
       dc_void_ptr_var =
 	build_decl (UNKNOWN_LOCATION, VAR_DECL,
@@ -1276,9 +1643,14 @@ direct_call_profiling (void)
 		    ptr_void);
       DECL_ARTIFICIAL (dc_void_ptr_var) = 1;
       DECL_EXTERNAL (dc_void_ptr_var) = 1;
-      DECL_TLS_MODEL (dc_void_ptr_var) =
-	decl_default_tls_model (dc_void_ptr_var);
+      if (!is_kernel_build)
+        DECL_TLS_MODEL (dc_void_ptr_var) =
+	  decl_default_tls_model (dc_void_ptr_var);
     }
+
+  add_referenced_var (gcov_info_decl);
+  add_referenced_var (dc_gcov_type_ptr_var);
+  add_referenced_var (dc_void_ptr_var);
 
   if (!DECL_STATIC_CONSTRUCTOR (current_function_decl))
     {
@@ -1292,19 +1664,6 @@ direct_call_profiling (void)
 		|| DECL_BUILT_IN (gimple_call_fndecl (stmt))
 		|| DECL_IS_BUILTIN (gimple_call_fndecl (stmt)))
 	      continue;
-
-            if (PARAM_VALUE (PARAM_LIPO_SKIP_SPECIAL_SECTIONS))
-            {
-              tree callee = gimple_call_fndecl (stmt);
-              if (DECL_IS_MALLOC (callee)
-                  || DECL_IS_OPERATOR_NEW (callee)
-                  || (DECL_ASSEMBLER_NAME_SET_P (callee)
-                      && (!strcmp (IDENTIFIER_POINTER (
-                          DECL_ASSEMBLER_NAME (callee)), "_ZdlPv")
-                          || !strcmp (IDENTIFIER_POINTER (
-                              DECL_ASSEMBLER_NAME (callee)), "_ZdaPv"))))
-                continue;
-            }
 
 	    if (!coverage_counter_alloc (GCOV_COUNTER_DIRECT_CALL, 2))
 	      continue;
@@ -1331,7 +1690,8 @@ gate_tree_profile_ipa (void)
 {
   return (!in_lto_p && !flag_auto_profile
 	  && (flag_branch_probabilities || flag_test_coverage
-	      || profile_arc_flag));
+	      || profile_arc_flag || flag_profile_reusedist
+              || flag_optimize_locality));
 }
 
 struct simple_ipa_opt_pass pass_ipa_tree_profile =
@@ -1339,7 +1699,6 @@ struct simple_ipa_opt_pass pass_ipa_tree_profile =
  {
   SIMPLE_IPA_PASS,
   "profile",  		               /* name */
-  OPTGROUP_NONE,                       /* optinfo_flags */
   gate_tree_profile_ipa,               /* gate */
   tree_profiling,                      /* execute */
   NULL,                                /* sub */
@@ -1359,7 +1718,6 @@ struct gimple_opt_pass pass_direct_call_profile =
  {
   GIMPLE_PASS,
   "dc_profile",				/* name */
-  OPTGROUP_NONE,                        /* optinfo_flags */
   do_direct_call_profiling,		/* gate */
   direct_call_profiling,		/* execute */
   NULL,					/* sub */
@@ -1370,7 +1728,7 @@ struct gimple_opt_pass pass_direct_call_profile =
   0,					/* properties_provided */
   0,					/* properties_destroyed */
   0,					/* todo_flags_start */
-  TODO_update_ssa                      	/* todo_flags_finish */
+  TODO_update_ssa | TODO_dump_func	/* todo_flags_finish */
  }
 };
 

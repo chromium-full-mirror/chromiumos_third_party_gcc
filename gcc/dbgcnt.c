@@ -1,5 +1,5 @@
 /* Debug counter for debugging support
-   Copyright (C) 2006-2013 Free Software Foundation, Inc.
+   Copyright (C) 2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -23,7 +23,9 @@ See dbgcnt.def for usage information.  */
 #include "system.h"
 #include "coretypes.h"
 #include "diagnostic-core.h"
-#include "dumpfile.h"
+#include "tm.h"
+#include "rtl.h"
+#include "output.h"
 
 #include "dbgcnt.h"
 

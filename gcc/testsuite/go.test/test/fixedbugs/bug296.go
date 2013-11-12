@@ -1,4 +1,4 @@
-// run
+// $G $D/$F.go && $L $F.$A && ./$A.out
 
 // Copyright 2010 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style

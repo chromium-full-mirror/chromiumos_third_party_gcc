@@ -17,6 +17,10 @@ extern "Java"
     {
       namespace security
       {
+        namespace hash
+        {
+            class Sha160;
+        }
         namespace util
         {
             class PRNG;
@@ -73,7 +77,8 @@ public:
   static const jint DEFAULT_EXPONENT_SIZE = 160;
 private:
   static const jint DEFAULT_ENCODING_FORMAT = 1;
-  ::java::security::SecureRandom * __attribute__((aligned(__alignof__( ::java::lang::Object)))) rnd;
+  ::gnu::java::security::hash::Sha160 * __attribute__((aligned(__alignof__( ::java::lang::Object)))) sha;
+  ::java::security::SecureRandom * rnd;
   jint l;
   jint m;
   ::java::math::BigInteger * seed;

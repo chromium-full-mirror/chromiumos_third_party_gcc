@@ -4,24 +4,9 @@
 
 package go1
 
-import "runtime"
-
 // Not a benchmark; input for revcomp.
 
-var fastabytes = makefasta()
-
-func makefasta() []byte {
-	var n int = 25e6
-	if runtime.GOARCH == "arm" {
-		// TODO(dfc) remove this limitation after precise gc.
-		// A value of 25e6 consumes 465mb of heap on 32bit 
-		// platforms, which is too much for most ARM systems. 
-		// A value of 25e5 produces a memory layout that 
-		// confuses the gc on 32bit platforms. So 25e4 it is.
-		n = 25e4
-	}
-	return fasta(n)
-}
+var fasta25m = fasta(25e6)
 
 func fasta(n int) []byte {
 	out := make(fastaBuffer, 0, 11*n)

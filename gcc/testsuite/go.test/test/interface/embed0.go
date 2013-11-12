@@ -1,10 +1,10 @@
-// skip # used by embed1.go
+// true	# used by embed1.go
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Test that embedded interface types can have local methods.
+// Check that embedded interface types can have local methods.
 
 package p
 

@@ -1,5 +1,4 @@
 /* { dg-do compile } */
-/* { dg-options "-Wno-aggressive-loop-optimizations" } */
 
 int a, b;
 struct S { unsigned int s, t, u; } c, d = { 0, 1, 0 };

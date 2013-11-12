@@ -1,5 +1,6 @@
 /* Instruction scheduling pass.  Selective scheduler and pipeliner.
-   Copyright (C) 2006-2013 Free Software Foundation, Inc.
+   Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -34,14 +35,16 @@ along with GCC; see the file COPYING3.  If not see
 #include "params.h"
 #include "target.h"
 #include "output.h"
+#include "timevar.h"
+#include "tree-pass.h"
 #include "sched-int.h"
 #include "ggc.h"
 #include "tree.h"
 #include "vec.h"
 #include "langhooks.h"
 #include "rtlhooks-def.h"
+#include "output.h"
 #include "emit-rtl.h"
-#include "ira.h"
 
 #ifdef INSN_SCHEDULING
 #include "sel-sched-ir.h"
@@ -282,7 +285,7 @@ struct rtx_search_arg
   /* What we are searching for.  */
   rtx x;
 
-  /* The occurrence counter.  */
+  /* The occurence counter.  */
   int n;
 };
 
@@ -500,25 +503,31 @@ static int max_ws;
 static int num_insns_scheduled;
 
 /* A vector of expressions is used to be able to sort them.  */
-static vec<expr_t> vec_av_set = vNULL;
+DEF_VEC_P(expr_t);
+DEF_VEC_ALLOC_P(expr_t,heap);
+static VEC(expr_t, heap) *vec_av_set = NULL;
 
 /* A vector of vinsns is used to hold temporary lists of vinsns.  */
-typedef vec<vinsn_t> vinsn_vec_t;
+DEF_VEC_P(vinsn_t);
+DEF_VEC_ALLOC_P(vinsn_t,heap);
+typedef VEC(vinsn_t, heap) *vinsn_vec_t;
 
 /* This vector has the exprs which may still present in av_sets, but actually
    can't be moved up due to bookkeeping created during code motion to another
    fence.  See comment near the call to update_and_record_unavailable_insns
    for the detailed explanations.  */
-static vinsn_vec_t vec_bookkeeping_blocked_vinsns = vinsn_vec_t();
+static vinsn_vec_t vec_bookkeeping_blocked_vinsns = NULL;
 
 /* This vector has vinsns which are scheduled with renaming on the first fence
    and then seen on the second.  For expressions with such vinsns, target
    availability information may be wrong.  */
-static vinsn_vec_t vec_target_unavailable_vinsns = vinsn_vec_t();
+static vinsn_vec_t vec_target_unavailable_vinsns = NULL;
 
 /* Vector to store temporary nops inserted in move_op to prevent removal
    of empty bbs.  */
-static vec<insn_t> vec_temp_moveop_nops = vNULL;
+DEF_VEC_P(insn_t);
+DEF_VEC_ALLOC_P(insn_t,heap);
+static VEC(insn_t, heap) *vec_temp_moveop_nops = NULL;
 
 /* These bitmaps record original instructions scheduled on the current
    iteration and bookkeeping copies created by them.  */
@@ -581,12 +590,12 @@ advance_one_cycle (fence_t fence)
   can_issue_more = issue_rate;
   FENCE_ISSUE_MORE (fence) = can_issue_more;
 
-  for (i = 0; vec_safe_iterate (FENCE_EXECUTING_INSNS (fence), i, &insn); )
+  for (i = 0; VEC_iterate (rtx, FENCE_EXECUTING_INSNS (fence), i, insn); )
     {
       if (INSN_READY_CYCLE (insn) < cycle)
         {
           remove_from_deps (FENCE_DC (fence), insn);
-          FENCE_EXECUTING_INSNS (fence)->unordered_remove (i);
+          VEC_unordered_remove (rtx, FENCE_EXECUTING_INSNS (fence), i);
           continue;
         }
       i++;
@@ -724,7 +733,7 @@ can_substitute_through_p (insn_t insn, ds_t ds)
   return false;
 }
 
-/* Substitute all occurrences of INSN's destination in EXPR' vinsn with INSN's
+/* Substitute all occurences of INSN's destination in EXPR' vinsn with INSN's
    source (if INSN is eligible for substitution).  Returns TRUE if
    substitution was actually performed, FALSE otherwise.  Substitution might
    be not performed because it's either EXPR' vinsn doesn't contain INSN's
@@ -1131,7 +1140,7 @@ init_regs_for_mode (enum machine_mode mode)
 #ifdef LEAF_REGISTERS
             /* We can't use a non-leaf register if we're in a
                leaf function.  */
-            || (crtl->is_leaf
+            || (current_function_is_leaf
                 && !LEAF_REGISTERS[cur_reg + i])
 #endif
             )
@@ -1932,7 +1941,9 @@ undo_transformations (av_set_t *av_ptr, rtx insn)
         {
           expr_history_def *phist;
 
-          phist = &EXPR_HISTORY_OF_CHANGES (expr)[index];
+          phist = VEC_index (expr_history_def,
+                             EXPR_HISTORY_OF_CHANGES (expr),
+                             index);
 
           switch (phist->type)
             {
@@ -2102,61 +2113,6 @@ moving_insn_creates_bookkeeping_block_p (insn_t insn,
   return TRUE;
 }
 
-/* Return true when the conflict with newly created implicit clobbers
-   between EXPR and THROUGH_INSN is found because of renaming.  */
-static bool
-implicit_clobber_conflict_p (insn_t through_insn, expr_t expr)
-{
-  HARD_REG_SET temp;
-  rtx insn, reg, rhs, pat;
-  hard_reg_set_iterator hrsi;
-  unsigned regno;
-  bool valid;
-
-  /* Make a new pseudo register.  */
-  reg = gen_reg_rtx (GET_MODE (EXPR_LHS (expr)));
-  max_regno = max_reg_num ();
-  maybe_extend_reg_info_p ();
-
-  /* Validate a change and bail out early.  */
-  insn = EXPR_INSN_RTX (expr);
-  validate_change (insn, &SET_DEST (PATTERN (insn)), reg, true);
-  valid = verify_changes (0);
-  cancel_changes (0);
-  if (!valid)
-    {
-      if (sched_verbose >= 6)
-	sel_print ("implicit clobbers failed validation, ");
-      return true;
-    }
-
-  /* Make a new insn with it.  */
-  rhs = copy_rtx (VINSN_RHS (EXPR_VINSN (expr)));
-  pat = gen_rtx_SET (VOIDmode, reg, rhs);
-  start_sequence ();
-  insn = emit_insn (pat);
-  end_sequence ();
-
-  /* Calculate implicit clobbers.  */
-  extract_insn (insn);
-  preprocess_constraints ();
-  ira_implicitly_set_insn_hard_regs (&temp);
-  AND_COMPL_HARD_REG_SET (temp, ira_no_alloc_regs);
-
-  /* If any implicit clobber registers intersect with regular ones in
-     through_insn, we have a dependency and thus bail out.  */
-  EXECUTE_IF_SET_IN_HARD_REG_SET (temp, 0, regno, hrsi)
-    {
-      vinsn_t vi = INSN_VINSN (through_insn);
-      if (bitmap_bit_p (VINSN_REG_SETS (vi), regno)
-	  || bitmap_bit_p (VINSN_REG_CLOBBERS (vi), regno)
-	  || bitmap_bit_p (VINSN_REG_USES (vi), regno))
-	return true;
-    }
-
-  return false;
-}
-
 /* Modifies EXPR so it can be moved through the THROUGH_INSN,
    performing necessary transformations.  Record the type of transformation
    made in PTRANS_TYPE, when it is not NULL.  When INSIDE_INSN_GROUP,
@@ -2289,17 +2245,6 @@ moveup_expr (expr_t expr, insn_t through_insn, bool inside_insn_group,
       if (!enable_schedule_as_rhs_p || !EXPR_SEPARABLE_P (expr))
         return MOVEUP_EXPR_NULL;
 
-      /* When renaming a hard register to a pseudo before reload, extra
-	 dependencies can occur from the implicit clobbers of the insn.
-	 Filter out such cases here.  */
-      if (!reload_completed && REG_P (EXPR_LHS (expr))
-	  && HARD_REGISTER_P (EXPR_LHS (expr))
-	  && implicit_clobber_conflict_p (through_insn, expr))
-	{
-	  if (sched_verbose >= 6)
-	    sel_print ("implicit clobbers conflict detected, ");
-	  return MOVEUP_EXPR_NULL;
-	}
       EXPR_TARGET_AVAILABLE (expr) = false;
       was_target_conflict = true;
       as_rhs = true;
@@ -2793,7 +2738,7 @@ compute_av_set_at_bb_end (insn_t insn, ilist_t p, int ws)
   /* Add insn to the tail of current path.  */
   ilist_add (&p, insn);
 
-  FOR_EACH_VEC_ELT (sinfo->succs_ok, is, succ)
+  FOR_EACH_VEC_ELT (rtx, sinfo->succs_ok, is, succ)
     {
       av_set_t succ_set;
 
@@ -2801,7 +2746,7 @@ compute_av_set_at_bb_end (insn_t insn, ilist_t p, int ws)
       succ_set = compute_av_set_inside_bb (succ, p, ws, true);
 
       av_set_split_usefulness (succ_set,
-                               sinfo->probs_ok[is],
+                               VEC_index (int, sinfo->probs_ok, is),
                                sinfo->all_prob);
 
       if (sinfo->all_succs_n > 1)
@@ -2847,7 +2792,7 @@ compute_av_set_at_bb_end (insn_t insn, ilist_t p, int ws)
   /* Check liveness restrictions via hard way when there are more than
      two successors.  */
   if (sinfo->succs_ok_n > 2)
-    FOR_EACH_VEC_ELT (sinfo->succs_ok, is, succ)
+    FOR_EACH_VEC_ELT (rtx, sinfo->succs_ok, is, succ)
       {
         basic_block succ_bb = BLOCK_FOR_INSN (succ);
 
@@ -2858,7 +2803,7 @@ compute_av_set_at_bb_end (insn_t insn, ilist_t p, int ws)
 
   /* Finally, check liveness restrictions on paths leaving the region.  */
   if (sinfo->all_succs_n > sinfo->succs_ok_n)
-    FOR_EACH_VEC_ELT (sinfo->succs_other, is, succ)
+    FOR_EACH_VEC_ELT (rtx, sinfo->succs_other, is, succ)
       mark_unavailable_targets
         (av1, NULL, BB_LV_SET (BLOCK_FOR_INSN (succ)));
 
@@ -3635,10 +3580,13 @@ vinsn_vec_has_expr_p (vinsn_vec_t vinsn_vec, expr_t expr)
      of expr taken from its history vector.  */
   for (i = 0, expr_vinsn = EXPR_VINSN (expr);
        expr_vinsn;
-       expr_vinsn = (i < EXPR_HISTORY_OF_CHANGES (expr).length ()
-		     ? EXPR_HISTORY_OF_CHANGES (expr)[i++].old_expr_vinsn
+       expr_vinsn = (i < VEC_length (expr_history_def,
+				     EXPR_HISTORY_OF_CHANGES (expr))
+		     ? VEC_index (expr_history_def,
+				  EXPR_HISTORY_OF_CHANGES (expr),
+				  i++)->old_expr_vinsn
 		     : NULL))
-    FOR_EACH_VEC_ELT (vinsn_vec, n, vinsn)
+    FOR_EACH_VEC_ELT (vinsn_t, vinsn_vec, n, vinsn)
       if (VINSN_SEPARABLE_P (vinsn))
 	{
 	  if (vinsn_equal_p (vinsn, expr_vinsn))
@@ -3706,15 +3654,15 @@ av_set_could_be_blocked_by_bookkeeping_p (av_set_t orig_ops, void *static_params
 static void
 vinsn_vec_clear (vinsn_vec_t *vinsn_vec)
 {
-  unsigned len = vinsn_vec->length ();
+  unsigned len = VEC_length (vinsn_t, *vinsn_vec);
   if (len > 0)
     {
       vinsn_t vinsn;
       int n;
 
-      FOR_EACH_VEC_ELT (*vinsn_vec, n, vinsn)
+      FOR_EACH_VEC_ELT (vinsn_t, *vinsn_vec, n, vinsn)
         vinsn_detach (vinsn);
-      vinsn_vec->block_remove (0, len);
+      VEC_block_remove (vinsn_t, *vinsn_vec, 0, len);
     }
 }
 
@@ -3723,14 +3671,15 @@ static void
 vinsn_vec_add (vinsn_vec_t *vinsn_vec, expr_t expr)
 {
   vinsn_attach (EXPR_VINSN (expr));
-  vinsn_vec->safe_push (EXPR_VINSN (expr));
+  VEC_safe_push (vinsn_t, heap, *vinsn_vec, EXPR_VINSN (expr));
 }
 
 /* Free the vector representing blocked expressions.  */
 static void
-vinsn_vec_free (vinsn_vec_t &vinsn_vec)
+vinsn_vec_free (vinsn_vec_t *vinsn_vec)
 {
-  vinsn_vec.release ();
+  if (*vinsn_vec)
+    VEC_free (vinsn_t, heap, *vinsn_vec);
 }
 
 /* Increase EXPR_PRIORITY_ADJ for INSN by AMOUNT.  */
@@ -3767,15 +3716,15 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
     return false;
 
   /* Empty vector from the previous stuff.  */
-  if (vec_av_set.length () > 0)
-    vec_av_set.block_remove (0, vec_av_set.length ());
+  if (VEC_length (expr_t, vec_av_set) > 0)
+    VEC_block_remove (expr_t, vec_av_set, 0, VEC_length (expr_t, vec_av_set));
 
   /* Turn the set into a vector for sorting and call sel_target_adjust_priority
      for each insn.  */
-  gcc_assert (vec_av_set.is_empty ());
+  gcc_assert (VEC_empty (expr_t, vec_av_set));
   FOR_EACH_EXPR (expr, si, av)
     {
-      vec_av_set.safe_push (expr);
+      VEC_safe_push (expr_t, heap, vec_av_set, expr);
 
       gcc_assert (EXPR_PRIORITY_ADJ (expr) == 0 || *pneed_stall);
 
@@ -3784,7 +3733,7 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
     }
 
   /* Sort the vector.  */
-  vec_av_set.qsort (sel_rank_for_schedule);
+  VEC_qsort (expr_t, vec_av_set, sel_rank_for_schedule);
 
   /* We record maximal priority of insns in av set for current instruction
      group.  */
@@ -3792,11 +3741,11 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
     av_max_prio = est_ticks_till_branch = INT_MIN;
 
   /* Filter out inappropriate expressions.  Loop's direction is reversed to
-     visit "best" instructions first.  We assume that vec::unordered_remove
+     visit "best" instructions first.  We assume that VEC_unordered_remove
      moves last element in place of one being deleted.  */
-  for (n = vec_av_set.length () - 1, stalled = 0; n >= 0; n--)
+  for (n = VEC_length (expr_t, vec_av_set) - 1, stalled = 0; n >= 0; n--)
     {
-      expr_t expr = vec_av_set[n];
+      expr_t expr = VEC_index (expr_t, vec_av_set, n);
       insn_t insn = EXPR_INSN_RTX (expr);
       signed char target_available;
       bool is_orig_reg_p = true;
@@ -3805,7 +3754,7 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
       /* Don't allow any insns other than from SCHED_GROUP if we have one.  */
       if (FENCE_SCHED_NEXT (fence) && insn != FENCE_SCHED_NEXT (fence))
         {
-          vec_av_set.unordered_remove (n);
+          VEC_unordered_remove (expr_t, vec_av_set, n);
           continue;
         }
 
@@ -3829,7 +3778,7 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
 	 we have to recompute the set of available registers for it.  */
       if (vinsn_vec_has_expr_p (vec_bookkeeping_blocked_vinsns, expr))
 	{
-          vec_av_set.unordered_remove (n);
+          VEC_unordered_remove (expr_t, vec_av_set, n);
           if (sched_verbose >= 4)
             sel_print ("Expr %d is blocked by bookkeeping inserted earlier\n",
                        INSN_UID (insn));
@@ -3846,12 +3795,12 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
                (target_available == false
                 && !EXPR_SEPARABLE_P (expr))
                /* Don't try to find a register for low-priority expression.  */
-               || (int) vec_av_set.length () - 1 - n >= max_insns_to_rename
+               || (int) VEC_length (expr_t, vec_av_set) - 1 - n >= max_insns_to_rename
                /* ??? FIXME: Don't try to rename data speculation.  */
                || (EXPR_SPEC_DONE_DS (expr) & BEGIN_DATA)
                || ! find_best_reg_for_expr (expr, bnds, &is_orig_reg_p))
         {
-          vec_av_set.unordered_remove (n);
+          VEC_unordered_remove (expr_t, vec_av_set, n);
           if (sched_verbose >= 4)
             sel_print ("Expr %d has no suitable target register\n",
                        INSN_UID (insn));
@@ -3871,7 +3820,7 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
 
 	  if ((int) current_loop_nest->ninsns < 9)
 	    {
-	      vec_av_set.unordered_remove (n);
+	      VEC_unordered_remove (expr_t, vec_av_set, n);
 	      if (sched_verbose >= 4)
 		sel_print ("Pipelining expr %d will likely cause stall\n",
 			   INSN_UID (insn));
@@ -3882,7 +3831,7 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
 	      < need_n_ticks_till_branch * issue_rate / 2
 	      && est_ticks_till_branch < need_n_ticks_till_branch)
 	     {
-	       vec_av_set.unordered_remove (n);
+	       VEC_unordered_remove (expr_t, vec_av_set, n);
 	       if (sched_verbose >= 4)
 		 sel_print ("Pipelining expr %d will likely cause stall\n",
 			    INSN_UID (insn));
@@ -3897,7 +3846,7 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
 	{
           stalled++;
           min_need_stall = min_need_stall < 0 ? 1 : MIN (min_need_stall, 1);
-          vec_av_set.unordered_remove (n);
+          VEC_unordered_remove (expr_t, vec_av_set, n);
 	  if (sched_verbose >= 4)
 	    sel_print ("Delaying speculation check %d until its first use\n",
 		       INSN_UID (insn));
@@ -3924,7 +3873,7 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
 	      min_need_stall = (min_need_stall < 0
 				? need_cycles
 				: MIN (min_need_stall, need_cycles));
-	      vec_av_set.unordered_remove (n);
+	      VEC_unordered_remove (expr_t, vec_av_set, n);
 
 	      if (sched_verbose >= 4)
 		sel_print ("Expr %d is not ready until cycle %d (cached)\n",
@@ -3962,7 +3911,7 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
                             ? need_cycles
                             : MIN (min_need_stall, need_cycles));
 
-          vec_av_set.unordered_remove (n);
+          VEC_unordered_remove (expr_t, vec_av_set, n);
 
           if (sched_verbose >= 4)
             sel_print ("Expr %d is not ready yet until cycle %d\n",
@@ -3987,7 +3936,7 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
   if (min_need_stall < 0)
     min_need_stall = 0;
 
-  if (vec_av_set.is_empty ())
+  if (VEC_empty (expr_t, vec_av_set))
     {
       /* We need to set *pneed_stall here, because later we skip this code
          when ready list is empty.  */
@@ -3998,14 +3947,14 @@ fill_vec_av_set (av_set_t av, blist_t bnds, fence_t fence,
     gcc_assert (min_need_stall == 0);
 
   /* Sort the vector.  */
-  vec_av_set.qsort (sel_rank_for_schedule);
+  VEC_qsort (expr_t, vec_av_set, sel_rank_for_schedule);
 
   if (sched_verbose >= 4)
     {
       sel_print ("Total ready exprs: %d, stalled: %d\n",
-                 vec_av_set.length (), stalled);
-      sel_print ("Sorted av set (%d): ", vec_av_set.length ());
-      FOR_EACH_VEC_ELT (vec_av_set, n, expr)
+                 VEC_length (expr_t, vec_av_set), stalled);
+      sel_print ("Sorted av set (%d): ", VEC_length (expr_t, vec_av_set));
+      FOR_EACH_VEC_ELT (expr_t, vec_av_set, n, expr)
         dump_expr (expr);
       sel_print ("\n");
     }
@@ -4023,7 +3972,7 @@ convert_vec_av_set_to_ready (void)
   expr_t expr;
 
   /* Allocate and fill the ready list from the sorted vector.  */
-  ready.n_ready = vec_av_set.length ();
+  ready.n_ready = VEC_length (expr_t, vec_av_set);
   ready.first = ready.n_ready - 1;
 
   gcc_assert (ready.n_ready > 0);
@@ -4034,7 +3983,7 @@ convert_vec_av_set_to_ready (void)
       sched_extend_ready_list (ready.n_ready);
     }
 
-  FOR_EACH_VEC_ELT (vec_av_set, n, expr)
+  FOR_EACH_VEC_ELT (expr_t, vec_av_set, n, expr)
     {
       vinsn_t vi = EXPR_VINSN (expr);
       insn_t insn = VINSN_INSN_RTX (vi);
@@ -4180,7 +4129,7 @@ invoke_reorder_hooks (fence_t fence)
     {
       int i, j, n;
       rtx *arr = ready.vec;
-      expr_t *vec = vec_av_set.address ();
+      expr_t *vec = VEC_address (expr_t, vec_av_set);
 
       for (i = 0, n = ready.n_ready; i < n; i++)
         if (EXPR_INSN_RTX (vec[i]) != arr[i])
@@ -4201,7 +4150,7 @@ invoke_reorder_hooks (fence_t fence)
   return issue_more;
 }
 
-/* Return an EXPR corresponding to INDEX element of ready list, if
+/* Return an EXPR correponding to INDEX element of ready list, if
    FOLLOW_READY_ELEMENT is true (i.e., an expr of
    ready_element (&ready, INDEX) will be returned), and to INDEX element of
    ready.vec otherwise.  */
@@ -4213,7 +4162,7 @@ find_expr_for_ready (int index, bool follow_ready_element)
 
   real_index = follow_ready_element ? ready.first - index : index;
 
-  expr = vec_av_set[real_index];
+  expr = VEC_index (expr_t, vec_av_set, real_index);
   gcc_assert (ready.vec[real_index] == EXPR_INSN_RTX (expr));
 
   return expr;
@@ -5048,15 +4997,16 @@ remove_temp_moveop_nops (bool full_tidying)
   int i;
   insn_t insn;
 
-  FOR_EACH_VEC_ELT (vec_temp_moveop_nops, i, insn)
+  FOR_EACH_VEC_ELT (insn_t, vec_temp_moveop_nops, i, insn)
     {
       gcc_assert (INSN_NOP_P (insn));
       return_nop_to_pool (insn, full_tidying);
     }
 
   /* Empty the vector.  */
-  if (vec_temp_moveop_nops.length () > 0)
-    vec_temp_moveop_nops.block_remove (0, vec_temp_moveop_nops.length ());
+  if (VEC_length (insn_t, vec_temp_moveop_nops) > 0)
+    VEC_block_remove (insn_t, vec_temp_moveop_nops, 0,
+		      VEC_length (insn_t, vec_temp_moveop_nops));
 }
 
 /* Records the maximal UID before moving up an instruction.  Used for
@@ -5389,7 +5339,7 @@ update_fence_and_insn (fence_t fence, insn_t insn, int need_stall)
   /* First, reflect that something is scheduled on this fence.  */
   asm_p = advance_state_on_fence (fence, insn);
   FENCE_LAST_SCHEDULED_INSN (fence) = insn;
-  vec_safe_push (FENCE_EXECUTING_INSNS (fence), insn);
+  VEC_safe_push (rtx, gc, FENCE_EXECUTING_INSNS (fence), insn);
   if (SCHED_GROUP_P (insn))
     {
       FENCE_SCHED_NEXT (fence) = INSN_SCHED_NEXT (insn);
@@ -6036,7 +5986,7 @@ remove_insn_from_stream (rtx insn, bool only_disconnect)
     {
       insn_t nop = get_nop_from_pool (insn);
       gcc_assert (INSN_NOP_P (nop));
-      vec_temp_moveop_nops.safe_push (nop);
+      VEC_safe_push (insn_t, heap, vec_temp_moveop_nops, nop);
     }
 
   sel_remove_insn (insn, only_disconnect, false);
@@ -6785,7 +6735,7 @@ init_seqno_1 (basic_block bb, sbitmap visited_bbs, bitmap blocks_to_reschedule)
   insn_t succ_insn;
   succ_iterator si;
 
-  bitmap_set_bit (visited_bbs, bbi);
+  SET_BIT (visited_bbs, bbi);
   if (blocks_to_reschedule)
     bitmap_clear_bit (blocks_to_reschedule, bb->index);
 
@@ -6797,7 +6747,7 @@ init_seqno_1 (basic_block bb, sbitmap visited_bbs, bitmap blocks_to_reschedule)
 
       gcc_assert (in_current_region_p (succ));
 
-      if (!bitmap_bit_p (visited_bbs, succ_bbi))
+      if (!TEST_BIT (visited_bbs, succ_bbi))
 	{
 	  gcc_assert (succ_bbi > bbi);
 
@@ -6828,16 +6778,16 @@ init_seqno (bitmap blocks_to_reschedule, basic_block from)
 
   if (blocks_to_reschedule)
     {
-      bitmap_ones (visited_bbs);
+      sbitmap_ones (visited_bbs);
       EXECUTE_IF_SET_IN_BITMAP (blocks_to_reschedule, 0, bbi, bi)
         {
 	  gcc_assert (BLOCK_TO_BB (bbi) < current_nr_blocks);
-          bitmap_clear_bit (visited_bbs, BLOCK_TO_BB (bbi));
+          RESET_BIT (visited_bbs, BLOCK_TO_BB (bbi));
 	}
     }
   else
     {
-      bitmap_clear (visited_bbs);
+      sbitmap_zero (visited_bbs);
       from = EBB_FIRST_BB (0);
     }
 
@@ -6929,10 +6879,10 @@ sel_region_init (int rgn)
   if (current_region_empty_p ())
     return true;
 
-  bbs.create (current_nr_blocks);
+  bbs = VEC_alloc (basic_block, heap, current_nr_blocks);
 
   for (i = 0; i < current_nr_blocks; i++)
-    bbs.quick_push (BASIC_BLOCK (BB_TO_BLOCK (i)));
+    VEC_quick_push (basic_block, bbs, BASIC_BLOCK (BB_TO_BLOCK (i)));
 
   sel_init_bbs (bbs);
 
@@ -6958,7 +6908,7 @@ sel_region_init (int rgn)
   sel_setup_sched_infos ();
   sel_init_global_and_expr (bbs);
 
-  bbs.release ();
+  VEC_free (basic_block, heap, bbs);
 
   blocks_to_reschedule = BITMAP_ALLOC (NULL);
 
@@ -7186,15 +7136,8 @@ reset_sched_cycles_in_current_ebb (void)
 
       if (real_insn)
 	{
-	  static state_t temp = NULL;
-
-	  if (!temp)
-	    temp = xmalloc (dfa_state_size);
-	  memcpy (temp, curr_state, dfa_state_size);
-
 	  cost = state_transition (curr_state, insn);
-	  if (memcmp (temp, curr_state, dfa_state_size))
-	    issued_insns++;
+	  issued_insns++;
 
           if (sched_verbose >= 2)
 	    {
@@ -7306,12 +7249,13 @@ sel_region_finish (bool reset_sched_cycles_p)
   free_nop_pool ();
 
   /* Free the vectors.  */
-  vec_av_set.release ();
+  if (vec_av_set)
+    VEC_free (expr_t, heap, vec_av_set);
   BITMAP_FREE (current_copies);
   BITMAP_FREE (current_originators);
   BITMAP_FREE (code_motion_visited_blocks);
-  vinsn_vec_free (vec_bookkeeping_blocked_vinsns);
-  vinsn_vec_free (vec_target_unavailable_vinsns);
+  vinsn_vec_free (&vec_bookkeeping_blocked_vinsns);
+  vinsn_vec_free (&vec_target_unavailable_vinsns);
 
   /* If LV_SET of the region head should be updated, do it now because
      there will be no other chance.  */
@@ -7341,7 +7285,7 @@ sel_region_finish (bool reset_sched_cycles_p)
 
   finish_deps_global ();
   sched_finish_luids ();
-  h_d_i_d.release ();
+  VEC_free (haifa_deps_insn_data_def, heap, h_d_i_d);
 
   sel_finish_bbs ();
   BITMAP_FREE (blocks_to_reschedule);

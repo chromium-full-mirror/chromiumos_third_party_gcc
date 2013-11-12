@@ -57,7 +57,7 @@ func TestDecryptPKCS1v15(t *testing.T) {
 			t.Errorf("#%d error decrypting", i)
 		}
 		want := []byte(test.out)
-		if !bytes.Equal(out, want) {
+		if bytes.Compare(out, want) != 0 {
 			t.Errorf("#%d got:%#v want:%#v", i, out, want)
 		}
 	}
@@ -90,7 +90,7 @@ func TestEncryptPKCS1v15(t *testing.T) {
 			return false
 		}
 
-		if !bytes.Equal(plaintext, in) {
+		if bytes.Compare(plaintext, in) != 0 {
 			t.Errorf("output mismatch: %#v %#v", plaintext, in)
 			return false
 		}
@@ -132,7 +132,7 @@ func TestEncryptPKCS1v15SessionKey(t *testing.T) {
 			t.Errorf("#%d error decrypting", i)
 		}
 		want := []byte(test.out)
-		if !bytes.Equal(key, want) {
+		if bytes.Compare(key, want) != 0 {
 			t.Errorf("#%d got:%#v want:%#v", i, key, want)
 		}
 	}
@@ -176,7 +176,7 @@ func TestSignPKCS1v15(t *testing.T) {
 		}
 
 		expected, _ := hex.DecodeString(test.out)
-		if !bytes.Equal(s, expected) {
+		if bytes.Compare(s, expected) != 0 {
 			t.Errorf("#%d got: %x want: %x", i, s, expected)
 		}
 	}

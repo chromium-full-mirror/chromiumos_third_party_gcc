@@ -22,7 +22,6 @@ void f(void)
    particular situation before doing this transformation we have to
    assure that a is killed by a dominating store via type float for
    it to be valid.  Then we might as well handle the situation by
-   value-numbering, removing the load alltogether.
-   ???  We now do this after CPP re-writes a into SSA form.  */
-/* { dg-final { scan-tree-dump-times "VIEW_CONVERT_EXPR" 1 "forwprop1" } } */
+   value-numbering, removing the load alltogether.  */
+/* { dg-final { scan-tree-dump-times "VIEW_CONVERT_EXPR" 1 "forwprop1" { xfail *-*-* } } } */
 /* { dg-final { cleanup-tree-dump "forwprop1" } } */

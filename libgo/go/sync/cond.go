@@ -56,10 +56,6 @@ func NewCond(l Locker) *Cond {
 //    c.L.Unlock()
 //
 func (c *Cond) Wait() {
-	if raceenabled {
-		_ = c.m.state
-		raceDisable()
-	}
 	c.m.Lock()
 	if c.newSema == nil {
 		c.newSema = new(uint32)
@@ -67,9 +63,6 @@ func (c *Cond) Wait() {
 	s := c.newSema
 	c.newWaiters++
 	c.m.Unlock()
-	if raceenabled {
-		raceEnable()
-	}
 	c.L.Unlock()
 	runtime_Semacquire(s)
 	c.L.Lock()
@@ -80,10 +73,6 @@ func (c *Cond) Wait() {
 // It is allowed but not required for the caller to hold c.L
 // during the call.
 func (c *Cond) Signal() {
-	if raceenabled {
-		_ = c.m.state
-		raceDisable()
-	}
 	c.m.Lock()
 	if c.oldWaiters == 0 && c.newWaiters > 0 {
 		// Retire old generation; rename new to old.
@@ -97,9 +86,6 @@ func (c *Cond) Signal() {
 		runtime_Semrelease(c.oldSema)
 	}
 	c.m.Unlock()
-	if raceenabled {
-		raceEnable()
-	}
 }
 
 // Broadcast wakes all goroutines waiting on c.
@@ -107,10 +93,6 @@ func (c *Cond) Signal() {
 // It is allowed but not required for the caller to hold c.L
 // during the call.
 func (c *Cond) Broadcast() {
-	if raceenabled {
-		_ = c.m.state
-		raceDisable()
-	}
 	c.m.Lock()
 	// Wake both generations.
 	if c.oldWaiters > 0 {
@@ -127,7 +109,4 @@ func (c *Cond) Broadcast() {
 		c.newSema = nil
 	}
 	c.m.Unlock()
-	if raceenabled {
-		raceEnable()
-	}
 }

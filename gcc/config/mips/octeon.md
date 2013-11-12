@@ -1,5 +1,6 @@
 ;;  Octeon pipeline description.
-;;  Copyright (C) 2008-2013 Free Software Foundation, Inc.
+;;  Copyright (C) 2008
+;;  Free Software Foundation, Inc.
 
 ;; This file is part of GCC.
 
@@ -82,22 +83,22 @@
 
 (define_insn_reservation "octeon_imul_o1" 2
   (and (eq_attr "cpu" "octeon")
-       (eq_attr "type" "imul,mthi,mtlo"))
+       (eq_attr "type" "imul,mthilo"))
   "(octeon_pipe0 | octeon_pipe1) + octeon_mult, octeon_mult")
 
 (define_insn_reservation "octeon_imul_o2" 1
   (and (eq_attr "cpu" "octeon2")
-       (eq_attr "type" "imul,mthi,mtlo"))
+       (eq_attr "type" "imul,mthilo"))
   "octeon_pipe1 + octeon_mult")
 
 (define_insn_reservation "octeon_mfhilo_o1" 5
   (and (eq_attr "cpu" "octeon")
-       (eq_attr "type" "mfhi,mflo"))
+       (eq_attr "type" "mfhilo"))
   "(octeon_pipe0 | octeon_pipe1) + octeon_mult")
 
 (define_insn_reservation "octeon_mfhilo_o2" 6
   (and (eq_attr "cpu" "octeon2")
-       (eq_attr "type" "mfhi,mflo"))
+       (eq_attr "type" "mfhilo"))
   "octeon_pipe1 + octeon_mult")
 
 (define_insn_reservation "octeon_imadd_o1" 4
@@ -132,5 +133,5 @@
 
 (define_insn_reservation "octeon_unknown" 1
   (and (eq_attr "cpu" "octeon,octeon2")
-       (eq_attr "type" "unknown,multi,atomic,syncloop"))
+       (eq_attr "type" "unknown,multi"))
   "octeon_pipe0 + octeon_pipe1")

@@ -1,5 +1,4 @@
 ! { dg-do compile }
-! { dg-options "-Wc-binding-type" }
 ! This should compile, though there is a warning about the type of len
 ! (return variable of strlen()) for being implicit.
 ! PR fortran/32797
@@ -22,3 +21,5 @@ CONTAINS
       CALL C_F_POINTER(FPTR=FPTR, CPTR=CPTR, SHAPE=[strlen(CPTR)])
    END FUNCTION
 END MODULE ISO_C_UTILITIES
+! { dg-final { cleanup-modules "iso_c_utilities" } }
+

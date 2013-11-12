@@ -26,70 +26,85 @@
              DCL        VAR(&CFLAGS) TYPE(*CHAR) +
                           VALUE('OPTIMIZE(40)')                 /* Compile options. */
 
-             DCL        VAR(&TGTRLS) TYPE(*CHAR) +
-                          VALUE('V5R3M0')                       /* Target release. */
-
 
 /*      Working storage.                                                      */
 
              DCL        VAR(&CMDLEN) TYPE(*DEC) LEN(15 5) VALUE(300)    /* Command length. */
              DCL        VAR(&CMD) TYPE(*CHAR) LEN(512)
-             DCL        VAR(&FIXDCMD) TYPE(*CHAR) LEN(512)
 
 
 /*      Compile sources into modules.                                         */
 
-             CHGVAR     VAR(&FIXDCMD) VALUE('CRTCMOD' *BCAT &CFLAGS *BCAT      +
-                        'SYSIFCOPT(*IFS64IO)' *BCAT                            +
-                        'DEFINE(''_LARGEFILE64_SOURCE''' *BCAT                 +
-                        '''_LFS64_LARGEFILE=1'') TGTRLS(' *TCAT &TGTRLS *TCAT  +
-                        ') SRCFILE(' *TCAT &SRCLIB *TCAT '/' *TCAT             +
-                        &SRCFILE *TCAT ') MODULE(' *TCAT &MODLIB *TCAT '/')
-
-
-             CHGVAR     VAR(&CMD) VALUE(&FIXDCMD *TCAT 'ADLER32)')
+             CHGVAR     VAR(&CMD) VALUE('CRTCMOD MODULE(' *TCAT &MODLIB *TCAT  +
+                        '/ADLER32)               SRCFILE(' *TCAT               +
+                        &SRCLIB *TCAT '/' *TCAT &SRCFILE *TCAT                 +
+                        ') SYSIFCOPT(*IFSIO)' *BCAT &CFLAGS)
              CALL       PGM(QCMDEXC) PARM(&CMD &CMDLEN)
 
-             CHGVAR     VAR(&CMD) VALUE(&FIXDCMD *TCAT 'COMPRESS)')
+             CHGVAR     VAR(&CMD) VALUE('CRTCMOD MODULE(' *TCAT &MODLIB *TCAT  +
+                        '/COMPRESS)              SRCFILE(' *TCAT               +
+                        &SRCLIB *TCAT '/' *TCAT &SRCFILE *TCAT                 +
+                        ') SYSIFCOPT(*IFSIO)' *BCAT &CFLAGS)
              CALL       PGM(QCMDEXC) PARM(&CMD &CMDLEN)
 
-             CHGVAR     VAR(&CMD) VALUE(&FIXDCMD *TCAT 'CRC32)')
+             CHGVAR     VAR(&CMD) VALUE('CRTCMOD MODULE(' *TCAT &MODLIB *TCAT  +
+                        '/CRC32)                 SRCFILE(' *TCAT               +
+                        &SRCLIB *TCAT '/' *TCAT &SRCFILE *TCAT                 +
+                        ') SYSIFCOPT(*IFSIO)' *BCAT &CFLAGS)
              CALL       PGM(QCMDEXC) PARM(&CMD &CMDLEN)
 
-             CHGVAR     VAR(&CMD) VALUE(&FIXDCMD *TCAT 'DEFLATE)')
+             CHGVAR     VAR(&CMD) VALUE('CRTCMOD MODULE(' *TCAT &MODLIB *TCAT  +
+                        '/DEFLATE)               SRCFILE(' *TCAT               +
+                        &SRCLIB *TCAT '/' *TCAT &SRCFILE *TCAT                 +
+                        ') SYSIFCOPT(*IFSIO)' *BCAT &CFLAGS)
              CALL       PGM(QCMDEXC) PARM(&CMD &CMDLEN)
 
-             CHGVAR     VAR(&CMD) VALUE(&FIXDCMD *TCAT 'GZCLOSE)')
+             CHGVAR     VAR(&CMD) VALUE('CRTCMOD MODULE(' *TCAT &MODLIB *TCAT  +
+                        '/GZIO)                  SRCFILE(' *TCAT               +
+                        &SRCLIB *TCAT '/' *TCAT &SRCFILE *TCAT                 +
+                        ') SYSIFCOPT(*IFSIO)' *BCAT &CFLAGS)
              CALL       PGM(QCMDEXC) PARM(&CMD &CMDLEN)
 
-             CHGVAR     VAR(&CMD) VALUE(&FIXDCMD *TCAT 'GZLIB)')
+             CHGVAR     VAR(&CMD) VALUE('CRTCMOD MODULE(' *TCAT &MODLIB *TCAT  +
+                        '/INFBACK)               SRCFILE(' *TCAT               +
+                        &SRCLIB *TCAT '/' *TCAT &SRCFILE *TCAT                 +
+                        ') SYSIFCOPT(*IFSIO)' *BCAT &CFLAGS)
              CALL       PGM(QCMDEXC) PARM(&CMD &CMDLEN)
 
-             CHGVAR     VAR(&CMD) VALUE(&FIXDCMD *TCAT 'GZREAD)')
+             CHGVAR     VAR(&CMD) VALUE('CRTCMOD MODULE(' *TCAT &MODLIB *TCAT  +
+                        '/INFFAST)               SRCFILE(' *TCAT               +
+                        &SRCLIB *TCAT '/' *TCAT &SRCFILE *TCAT                 +
+                        ') SYSIFCOPT(*IFSIO)' *BCAT &CFLAGS)
              CALL       PGM(QCMDEXC) PARM(&CMD &CMDLEN)
 
-             CHGVAR     VAR(&CMD) VALUE(&FIXDCMD *TCAT 'GZWRITE)')
+             CHGVAR     VAR(&CMD) VALUE('CRTCMOD MODULE(' *TCAT &MODLIB *TCAT  +
+                        '/INFLATE)               SRCFILE(' *TCAT               +
+                        &SRCLIB *TCAT '/' *TCAT &SRCFILE *TCAT                 +
+                        ') SYSIFCOPT(*IFSIO)' *BCAT &CFLAGS)
              CALL       PGM(QCMDEXC) PARM(&CMD &CMDLEN)
 
-             CHGVAR     VAR(&CMD) VALUE(&FIXDCMD *TCAT 'INFBACK)')
+             CHGVAR     VAR(&CMD) VALUE('CRTCMOD MODULE(' *TCAT &MODLIB *TCAT  +
+                        '/INFTREES)              SRCFILE(' *TCAT               +
+                        &SRCLIB *TCAT '/' *TCAT &SRCFILE *TCAT                 +
+                        ') SYSIFCOPT(*IFSIO)' *BCAT &CFLAGS)
              CALL       PGM(QCMDEXC) PARM(&CMD &CMDLEN)
 
-             CHGVAR     VAR(&CMD) VALUE(&FIXDCMD *TCAT 'INFFAST)')
+             CHGVAR     VAR(&CMD) VALUE('CRTCMOD MODULE(' *TCAT &MODLIB *TCAT  +
+                        '/TREES)                 SRCFILE(' *TCAT               +
+                        &SRCLIB *TCAT '/' *TCAT &SRCFILE *TCAT                 +
+                        ') SYSIFCOPT(*IFSIO)' *BCAT &CFLAGS)
              CALL       PGM(QCMDEXC) PARM(&CMD &CMDLEN)
 
-             CHGVAR     VAR(&CMD) VALUE(&FIXDCMD *TCAT 'INFLATE)')
+             CHGVAR     VAR(&CMD) VALUE('CRTCMOD MODULE(' *TCAT &MODLIB *TCAT  +
+                        '/UNCOMPR)               SRCFILE(' *TCAT               +
+                        &SRCLIB *TCAT '/' *TCAT &SRCFILE *TCAT                 +
+                        ') SYSIFCOPT(*IFSIO)' *BCAT &CFLAGS)
              CALL       PGM(QCMDEXC) PARM(&CMD &CMDLEN)
 
-             CHGVAR     VAR(&CMD) VALUE(&FIXDCMD *TCAT 'INFTREES)')
-             CALL       PGM(QCMDEXC) PARM(&CMD &CMDLEN)
-
-             CHGVAR     VAR(&CMD) VALUE(&FIXDCMD *TCAT 'TREES)')
-             CALL       PGM(QCMDEXC) PARM(&CMD &CMDLEN)
-
-             CHGVAR     VAR(&CMD) VALUE(&FIXDCMD *TCAT 'UNCOMPR)')
-             CALL       PGM(QCMDEXC) PARM(&CMD &CMDLEN)
-
-             CHGVAR     VAR(&CMD) VALUE(&FIXDCMD *TCAT 'ZUTIL)')
+             CHGVAR     VAR(&CMD) VALUE('CRTCMOD MODULE(' *TCAT &MODLIB *TCAT  +
+                        '/ZUTIL)                 SRCFILE(' *TCAT               +
+                        &SRCLIB *TCAT '/' *TCAT &SRCFILE *TCAT                 +
+                        ') SYSIFCOPT(*IFSIO)' *BCAT &CFLAGS)
              CALL       PGM(QCMDEXC) PARM(&CMD &CMDLEN)
 
 
@@ -98,13 +113,11 @@
              CRTSRVPGM  SRVPGM(&SRVLIB/ZLIB) +
                           MODULE(&MODLIB/ADLER32     &MODLIB/COMPRESS    +
                                  &MODLIB/CRC32       &MODLIB/DEFLATE     +
-                                 &MODLIB/GZCLOSE     &MODLIB/GZLIB       +
-                                 &MODLIB/GZREAD      &MODLIB/GZWRITE     +
-                                 &MODLIB/INFBACK     &MODLIB/INFFAST     +
-                                 &MODLIB/INFLATE     &MODLIB/INFTREES    +
-                                 &MODLIB/TREES       &MODLIB/UNCOMPR     +
-                                 &MODLIB/ZUTIL)                          +
-                          SRCFILE(&SRCLIB/&CTLFILE) SRCMBR(BNDSRC)       +
-                          TEXT('ZLIB 1.2.7') TGTRLS(&TGTRLS)
+                                 &MODLIB/GZIO        &MODLIB/INFBACK     +
+                                 &MODLIB/INFFAST     &MODLIB/INFLATE     +
+                                 &MODLIB/INFTREES    &MODLIB/TREES       +
+                                 &MODLIB/UNCOMPR     &MODLIB/ZUTIL)      +
+                          SRCFILE(&SRCLIB/&CTLFILE) SRCMBR(BNDSRC) +
+                          TEXT('ZLIB 1.2.3') TGTRLS(V4R4M0)
 
              ENDPGM

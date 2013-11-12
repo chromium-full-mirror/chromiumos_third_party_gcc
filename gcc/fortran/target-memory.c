@@ -1,5 +1,6 @@
 /* Simulate storage of variables into target memory.
-   Copyright (C) 2007-2013 Free Software Foundation, Inc.
+   Copyright (C) 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Paul Thomas and Brooks Moses
 
 This file is part of GCC.
@@ -20,7 +21,6 @@ along with GCC; see the file COPYING3.  If not see
 
 #include "config.h"
 #include "system.h"
-#include "coretypes.h"
 #include "flags.h"
 #include "machmode.h"
 #include "tree.h"
@@ -35,6 +35,16 @@ along with GCC; see the file COPYING3.  If not see
 /* --------------------------------------------------------------- */ 
 /* Calculate the size of an expression.  */
 
+static size_t
+size_array (gfc_expr *e)
+{
+  mpz_t array_size;
+  gfc_constructor *c = gfc_constructor_first (e->value.constructor);
+  size_t elt_size = gfc_target_expr_size (c->expr);
+
+  gfc_array_size (e, &array_size);
+  return (size_t)mpz_get_ui (array_size) * elt_size;
+}
 
 static size_t
 size_integer (int kind)
@@ -72,13 +82,15 @@ size_character (int length, int kind)
 }
 
 
-/* Return the size of a single element of the given expression.
-   Identical to gfc_target_expr_size for scalars.  */
-
 size_t
-gfc_element_size (gfc_expr *e)
+gfc_target_expr_size (gfc_expr *e)
 {
   tree type;
+
+  gcc_assert (e != NULL);
+
+  if (e->expr_type == EXPR_ARRAY)
+    return size_array (e);
 
   switch (e->ts.type)
     {
@@ -113,41 +125,14 @@ gfc_element_size (gfc_expr *e)
 	/* Determine type size without clobbering the typespec for ISO C
 	   binding types.  */
 	gfc_typespec ts;
-	HOST_WIDE_INT size;
 	ts = e->ts;
 	type = gfc_typenode_for_spec (&ts);
-	size = int_size_in_bytes (type);
-	gcc_assert (size >= 0);
-	return size;
+	return int_size_in_bytes (type);
       }
     default:
-      gfc_internal_error ("Invalid expression in gfc_element_size.");
+      gfc_internal_error ("Invalid expression in gfc_target_expr_size.");
       return 0;
     }
-}
-
-
-/* Return the size of an expression in its target representation.  */
-
-size_t
-gfc_target_expr_size (gfc_expr *e)
-{
-  mpz_t tmp;
-  size_t asz;
-
-  gcc_assert (e != NULL);
-
-  if (e->rank)
-    {
-      if (gfc_array_size (e, &tmp))
-	asz = mpz_get_ui (tmp);
-      else
-	asz = 0;
-    }
-  else
-    asz = 1;
-
-  return asz * gfc_element_size (e);
 }
 
 
@@ -155,7 +140,7 @@ gfc_target_expr_size (gfc_expr *e)
    return the number of bytes of the buffer that have been
    used.  */
 
-static unsigned HOST_WIDE_INT
+static int
 encode_array (gfc_expr *expr, unsigned char *buffer, size_t buffer_size)
 {
   mpz_t array_size;
@@ -232,14 +217,13 @@ gfc_encode_character (int kind, int length, const gfc_char_t *string,
 }
 
 
-static unsigned HOST_WIDE_INT
+static int
 encode_derived (gfc_expr *source, unsigned char *buffer, size_t buffer_size)
 {
   gfc_constructor *c;
   gfc_component *cmp;
   int ptr;
   tree type;
-  HOST_WIDE_INT size;
 
   type = gfc_typenode_for_spec (&source->ts);
 
@@ -255,24 +239,19 @@ encode_derived (gfc_expr *source, unsigned char *buffer, size_t buffer_size)
 	    + TREE_INT_CST_LOW(DECL_FIELD_BIT_OFFSET(cmp->backend_decl))/8;
 
       if (c->expr->expr_type == EXPR_NULL)
-	{
-	  size = int_size_in_bytes (TREE_TYPE (cmp->backend_decl));
-	  gcc_assert (size >= 0);
-	  memset (&buffer[ptr], 0, size);
-	}
+ 	memset (&buffer[ptr], 0,
+		int_size_in_bytes (TREE_TYPE (cmp->backend_decl)));
       else
 	gfc_target_encode_expr (c->expr, &buffer[ptr],
 				buffer_size - ptr);
     }
 
-  size = int_size_in_bytes (type);
-  gcc_assert (size >= 0);
-  return size;
+  return int_size_in_bytes (type);
 }
 
 
 /* Write a constant expression in binary form to a buffer.  */
-unsigned HOST_WIDE_INT
+int
 gfc_target_encode_expr (gfc_expr *source, unsigned char *buffer,
 			size_t buffer_size)
 {
@@ -416,7 +395,8 @@ gfc_interpret_logical (int kind, unsigned char *buffer, size_t buffer_size,
 {
   tree t = native_interpret_expr (gfc_get_logical_type (kind), buffer,
 				  buffer_size);
-  *logical = tree_to_double_int (t).is_zero () ? 0 : 1;
+  *logical = double_int_zero_p (tree_to_double_int (t))
+	     ? 0 : 1;
   return size_logical (kind);
 }
 
@@ -590,7 +570,6 @@ gfc_target_interpret_expr (unsigned char *buffer, size_t buffer_size,
     case BT_DERIVED:
       result->representation.length = 
         gfc_interpret_derived (buffer, buffer_size, result);
-      gcc_assert (result->representation.length >= 0);
       break;
 
     default:
@@ -702,7 +681,7 @@ gfc_merge_initializers (gfc_typespec ts, gfc_expr *e, unsigned char *data,
 	{
 	  size_t elt_size = gfc_target_expr_size (c->expr);
 
-	  if (mpz_cmp_si (c->offset, 0) != 0)
+	  if (c->offset)
 	    len = elt_size * (size_t)mpz_get_si (c->offset);
 
 	  len = len + gfc_merge_initializers (ts, c->expr, &data[len],

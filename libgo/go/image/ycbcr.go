@@ -15,7 +15,6 @@ const (
 	YCbCrSubsampleRatio444 YCbCrSubsampleRatio = iota
 	YCbCrSubsampleRatio422
 	YCbCrSubsampleRatio420
-	YCbCrSubsampleRatio440
 )
 
 func (s YCbCrSubsampleRatio) String() string {
@@ -26,8 +25,6 @@ func (s YCbCrSubsampleRatio) String() string {
 		return "YCbCrSubsampleRatio422"
 	case YCbCrSubsampleRatio420:
 		return "YCbCrSubsampleRatio420"
-	case YCbCrSubsampleRatio440:
-		return "YCbCrSubsampleRatio440"
 	}
 	return "YCbCrSubsampleRatioUnknown"
 }
@@ -42,7 +39,6 @@ func (s YCbCrSubsampleRatio) String() string {
 //	For 4:4:4, CStride == YStride/1 && len(Cb) == len(Cr) == len(Y)/1.
 //	For 4:2:2, CStride == YStride/2 && len(Cb) == len(Cr) == len(Y)/2.
 //	For 4:2:0, CStride == YStride/2 && len(Cb) == len(Cr) == len(Y)/4.
-//	For 4:4:0, CStride == YStride/1 && len(Cb) == len(Cr) == len(Y)/2.
 type YCbCr struct {
 	Y, Cb, Cr      []uint8
 	YStride        int
@@ -86,8 +82,6 @@ func (p *YCbCr) COffset(x, y int) int {
 		return (y-p.Rect.Min.Y)*p.CStride + (x/2 - p.Rect.Min.X/2)
 	case YCbCrSubsampleRatio420:
 		return (y/2-p.Rect.Min.Y/2)*p.CStride + (x/2 - p.Rect.Min.X/2)
-	case YCbCrSubsampleRatio440:
-		return (y/2-p.Rect.Min.Y/2)*p.CStride + (x - p.Rect.Min.X)
 	}
 	// Default to 4:4:4 subsampling.
 	return (y-p.Rect.Min.Y)*p.CStride + (x - p.Rect.Min.X)
@@ -131,9 +125,6 @@ func NewYCbCr(r Rectangle, subsampleRatio YCbCrSubsampleRatio) *YCbCr {
 		ch = h
 	case YCbCrSubsampleRatio420:
 		cw = (r.Max.X+1)/2 - r.Min.X/2
-		ch = (r.Max.Y+1)/2 - r.Min.Y/2
-	case YCbCrSubsampleRatio440:
-		cw = w
 		ch = (r.Max.Y+1)/2 - r.Min.Y/2
 	default:
 		// Default to 4:4:4 subsampling.

@@ -21,17 +21,15 @@ import (
 
 var calibrate = flag.Bool("calibrate", false, "run calibration test")
 
-func karatsubaLoad(b *testing.B) {
-	BenchmarkMul(b)
-}
-
-// measureKaratsuba returns the time to run a Karatsuba-relevant benchmark
-// given Karatsuba threshold th.
-func measureKaratsuba(th int) time.Duration {
-	th, karatsubaThreshold = karatsubaThreshold, th
-	res := testing.Benchmark(karatsubaLoad)
-	karatsubaThreshold = th
-	return time.Duration(res.NsPerOp())
+// measure returns the time to run f
+func measure(f func()) time.Duration {
+	const N = 100
+	start := time.Now()
+	for i := N; i > 0; i-- {
+		f()
+	}
+	stop := time.Now()
+	return stop.Sub(start) / N
 }
 
 func computeThresholds() {
@@ -39,33 +37,35 @@ func computeThresholds() {
 	fmt.Printf("(run repeatedly for good results)\n")
 
 	// determine Tk, the work load execution time using basic multiplication
-	Tb := measureKaratsuba(1e9) // th == 1e9 => Karatsuba multiplication disabled
-	fmt.Printf("Tb = %10s\n", Tb)
+	karatsubaThreshold = 1e9 // disable karatsuba
+	Tb := measure(benchmarkMulLoad)
+	fmt.Printf("Tb = %dns\n", Tb)
 
 	// thresholds
-	th := 4
+	n := 8 // any lower values for the threshold lead to very slow multiplies
 	th1 := -1
 	th2 := -1
 
 	var deltaOld time.Duration
-	for count := -1; count != 0 && th < 128; count-- {
+	for count := -1; count != 0; count-- {
 		// determine Tk, the work load execution time using Karatsuba multiplication
-		Tk := measureKaratsuba(th)
+		karatsubaThreshold = n // enable karatsuba
+		Tk := measure(benchmarkMulLoad)
 
 		// improvement over Tb
 		delta := (Tb - Tk) * 100 / Tb
 
-		fmt.Printf("th = %3d  Tk = %10s  %4d%%", th, Tk, delta)
+		fmt.Printf("n = %3d  Tk = %8dns  %4d%%", n, Tk, delta)
 
 		// determine break-even point
 		if Tk < Tb && th1 < 0 {
-			th1 = th
+			th1 = n
 			fmt.Print("  break-even point")
 		}
 
 		// determine diminishing return
 		if 0 < delta && delta < deltaOld && th2 < 0 {
-			th2 = th
+			th2 = n
 			fmt.Print("  diminishing return")
 		}
 		deltaOld = delta
@@ -74,10 +74,10 @@ func computeThresholds() {
 
 		// trigger counter
 		if th1 >= 0 && th2 >= 0 && count < 0 {
-			count = 10 // this many extra measurements after we got both thresholds
+			count = 20 // this many extra measurements after we got both thresholds
 		}
 
-		th++
+		n++
 	}
 }
 

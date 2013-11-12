@@ -1,5 +1,4 @@
-/* { dg-options "isa>=3" } */
-/* { dg-skip-if "naming registers makes this a code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-O2 isa>=3" } */
 
 NOMIPS16 void
 f1 (int *area)

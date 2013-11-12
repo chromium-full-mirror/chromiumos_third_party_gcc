@@ -8,10 +8,4 @@ package signal
 
 import "os"
 
-const numSig = 0
-
-func signum(sig os.Signal) int { return -1 }
-
-func disableSignal(int) {}
-
-func enableSignal(int) {}
+func enableSignal(sig os.Signal) {}

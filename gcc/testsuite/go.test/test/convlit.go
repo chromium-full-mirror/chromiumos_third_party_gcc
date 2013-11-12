@@ -1,15 +1,14 @@
-// errorcheck
+// errchk $G -e $D/$F.go
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Verify that illegal assignments with both explicit and implicit conversions of literals are detected.
-// Does not compile.
-
 package main
 
-// explicit conversion of constants
+// explicit conversion of constants is work in progress.
+// the ERRORs in this block are debatable, but they're what
+// the language spec says for now.
 var x1 = string(1)
 var x2 string = string(1)
 var x3 = int(1.5)     // ERROR "convert|truncate"

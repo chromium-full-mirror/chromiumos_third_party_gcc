@@ -1,6 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-march=octeon2 -mgp64" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-march=octeon2 -O -mgp64" } */
 
 #define TEST(N, T) \
   T f##N (T *p, int i) { return p[i]; } \

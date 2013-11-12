@@ -1,8 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-mshared -mexplicit-relocs -fno-delayed-branch -fno-unroll-loops" } */
-/* We can load into something other than $25 when not optimizing,
-   then immediately move into $25.  */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-mshared -mexplicit-relocs -O2 -fno-delayed-branch" } */
 
 void bar (void);
 

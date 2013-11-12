@@ -4,20 +4,18 @@
 /* Test of prohibition on directives which result from macro expansion.
    See also direct2s.c */
 
-/* 
-   { dg-options "-ftrack-macro-expansion=0" }
-   { dg-do compile } */
+/* { dg-do compile } */
 
 #define HASH #
 #define HASHDEFINE #define
 #define HASHINCLUDE #include
 
 HASH include "somerandomfile" /*{ dg-error "stray" "non-include" }*/
-/*{ dg-bogus "No such" "don't execute non-include" { target *-*-* } 15 }*/
-int resync_parser_1; /*{ dg-error "parse|syntax|expected" "" { target *-*-* } 15 }*/
+/*{ dg-bogus "No such" "don't execute non-include" { target *-*-* } 13 }*/
+int resync_parser_1; /*{ dg-error "parse|syntax|expected" "" { target *-*-* } 13 }*/
 
 HASHINCLUDE <somerandomfile> /*{ dg-error "stray|expected" "non-include 2" }*/
-/*{ dg-bogus "No such" "don't execute non-include 2" { target *-*-* } 19 }*/
+/*{ dg-bogus "No such" "don't execute non-include 2" { target *-*-* } 17 }*/
 int resync_parser_2;
 
 void g1 ()
@@ -45,4 +43,4 @@ void f ()
 #define starslash *##/
 
 slashstar starslash /* { dg-error "parse error|syntax error|expected" "not a comment" } */
-/* { dg-error "does not give" "paste warning(s)" { target *-*-* } 47 } */
+/* { dg-error "does not give" "paste warning(s)" { target *-*-* } 45 } */

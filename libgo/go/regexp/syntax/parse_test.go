@@ -2,11 +2,12 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package syntax
+package syntax_test
 
 import (
 	"bytes"
 	"fmt"
+	. "regexp/syntax"
 	"testing"
 	"unicode"
 )
@@ -412,13 +413,13 @@ func TestFoldConstants(t *testing.T) {
 		if unicode.SimpleFold(i) == i {
 			continue
 		}
-		if last == -1 && minFold != i {
-			t.Errorf("minFold=%#U should be %#U", minFold, i)
+		if last == -1 && MinFold != i {
+			t.Errorf("MinFold=%#U should be %#U", MinFold, i)
 		}
 		last = i
 	}
-	if maxFold != last {
-		t.Errorf("maxFold=%#U should be %#U", maxFold, last)
+	if MaxFold != last {
+		t.Errorf("MaxFold=%#U should be %#U", MaxFold, last)
 	}
 }
 
@@ -429,11 +430,11 @@ func TestAppendRangeCollapse(t *testing.T) {
 	// Note that we are not calling cleanClass.
 	var r []rune
 	for i := rune('A'); i <= 'Z'; i++ {
-		r = appendRange(r, i, i)
-		r = appendRange(r, i+'a'-'A', i+'a'-'A')
+		r = AppendRange(r, i, i)
+		r = AppendRange(r, i+'a'-'A', i+'a'-'A')
 	}
 	if string(r) != "AZaz" {
-		t.Errorf("appendRange interlaced A-Z a-z = %s, want AZaz", string(r))
+		t.Errorf("AppendRange interlaced A-Z a-z = %s, want AZaz", string(r))
 	}
 }
 

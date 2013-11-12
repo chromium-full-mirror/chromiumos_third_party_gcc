@@ -1,4 +1,4 @@
-/* frexpq.c -- __float128 version of s_frexp.c.
+/* s_frexpl.c -- long double version of s_frexp.c.
  * Conversion to IEEE quad long double by Jakub Jelinek, jj@ultra.linux.cz.
  */
 

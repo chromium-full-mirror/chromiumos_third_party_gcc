@@ -1,5 +1,5 @@
 /* VMSelector.java --
-   Copyright (C) 2004, 2010 Free Software Foundation, Inc.
+   Copyright (C) 2004 Free Software Foundation, Inc.
 
 This file is part of GNU Classpath.
 
@@ -40,9 +40,8 @@ package gnu.java.nio;
 import gnu.classpath.Configuration;
 import java.io.IOException;
 
-final class VMSelector
+public final class VMSelector
 {
-
   static
   {
     // load the shared library needed for native methods.
@@ -51,8 +50,6 @@ final class VMSelector
         System.loadLibrary ("javanio");
       }
   }
-
-  private VMSelector() {} // Prohibits instantiation.
 
   // A timeout value of 0 means block forever.
   static native int select (int[] read, int[] write,

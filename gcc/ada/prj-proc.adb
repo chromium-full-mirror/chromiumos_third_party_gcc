@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2001-2013, Free Software Foundation, Inc.         --
+--          Copyright (C) 2001-2012, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -23,7 +23,6 @@
 --                                                                          --
 ------------------------------------------------------------------------------
 
-with Atree;    use Atree;
 with Err_Vars; use Err_Vars;
 with Opt;      use Opt;
 with Osint;    use Osint;
@@ -33,12 +32,11 @@ with Prj.Env;
 with Prj.Err;  use Prj.Err;
 with Prj.Ext;  use Prj.Ext;
 with Prj.Nmsc; use Prj.Nmsc;
-with Prj.Part;
 with Prj.Util;
+with Prj.Part;
 with Snames;
 
-with Ada.Containers.Vectors;
-with Ada.Strings.Fixed;      use Ada.Strings.Fixed;
+with Ada.Strings.Fixed; use Ada.Strings.Fixed;
 
 with GNAT.Case_Util; use GNAT.Case_Util;
 with GNAT.HTable;
@@ -1590,7 +1588,7 @@ package body Prj.Proc is
                   Add_Attributes
                     (Project,
                      Project.Name,
-                     Name_Id (Project.Directory.Display_Name),
+                     Name_Id (Project.Directory.Name),
                      Shared,
                      Shared.Packages.Table (New_Pkg).Decl,
                      First_Attribute_Of
@@ -2063,30 +2061,14 @@ package body Prj.Proc is
          if Is_Attribute and then Name = Snames.Name_Project_Path then
             if In_Tree.Is_Root_Tree then
                declare
-                  package Name_Ids is
-                    new Ada.Containers.Vectors (Positive, Name_Id);
-                  Val  : String_List_Id := New_Value.Values;
-                  List : Name_Ids.Vector;
+                  Val : String_List_Id := New_Value.Values;
                begin
-                  --  Get all values
-
                   while Val /= Nil_String loop
-                     List.Prepend
-                       (Shared.String_Elements.Table (Val).Value);
-                     Val := Shared.String_Elements.Table (Val).Next;
-                  end loop;
-
-                  --  Prepend them in the order found in the attribute
-
-                  for K in Positive range 1 .. Positive (List.Length) loop
                      Prj.Env.Add_Directories
                        (Child_Env.Project_Path,
-                        Normalize_Pathname
-                          (Name      => Get_Name_String
-                             (List.Element (K)),
-                           Directory => Get_Name_String
-                             (Project.Directory.Display_Name)),
-                        Prepend => True);
+                        Get_Name_String
+                          (Shared.String_Elements.Table (Val).Value));
+                     Val := Shared.String_Elements.Table (Val).Next;
                   end loop;
                end;
 
@@ -2607,7 +2589,6 @@ package body Prj.Proc is
          Loaded_Project : Prj.Tree.Project_Node_Id;
          Success        : Boolean := True;
          Tree           : Project_Tree_Ref;
-         Node_Tree      : Project_Node_Tree_Ref;
 
       begin
          if Project.Qualifier not in Aggregate_Project then
@@ -2624,11 +2605,8 @@ package body Prj.Proc is
 
          List := Project.Aggregated_Projects;
          while Success and then List /= null loop
-            Node_Tree := new Project_Node_Tree_Data;
-            Initialize (Node_Tree);
-
             Prj.Part.Parse
-              (In_Tree           => Node_Tree,
+              (In_Tree           => From_Project_Node_Tree,
                Project           => Loaded_Project,
                Packages_To_Check => Packages_To_Check,
                Project_File_Name => Get_Name_String (List.Path),
@@ -2665,7 +2643,7 @@ package body Prj.Proc is
                      Packages_To_Check      => Packages_To_Check,
                      Success                => Success,
                      From_Project_Node      => Loaded_Project,
-                     From_Project_Node_Tree => Node_Tree,
+                     From_Project_Node_Tree => From_Project_Node_Tree,
                      Env                    => Child_Env,
                      Reset_Tree             => False);
                else
@@ -2677,7 +2655,7 @@ package body Prj.Proc is
                      Packages_To_Check      => Packages_To_Check,
                      Success                => Success,
                      From_Project_Node      => Loaded_Project,
-                     From_Project_Node_Tree => Node_Tree,
+                     From_Project_Node_Tree => From_Project_Node_Tree,
                      Env                    => Env,
                      Reset_Tree             => False);
                end if;
@@ -2872,7 +2850,7 @@ package body Prj.Proc is
             Add_Attributes
               (Project,
                Name,
-               Name_Id (Project.Directory.Display_Name),
+               Name_Id (Project.Directory.Name),
                In_Tree.Shared,
                Project.Decl,
                Prj.Attr.Attribute_First,
@@ -2930,7 +2908,7 @@ package body Prj.Proc is
 
             Process_Imported_Projects (Imported, Limited_With => True);
 
-            if Total_Errors_Detected = 0 then
+            if Err_Vars.Total_Errors_Detected = 0 then
                Process_Aggregated_Projects;
             end if;
 
@@ -2960,7 +2938,7 @@ package body Prj.Proc is
                   end loop;
                end if;
 
-               if Total_Errors_Detected = 0 then
+               if Err_Vars.Total_Errors_Detected = 0 then
 
                   --  For an aggregate library we add the aggregated projects
                   --  as imported ones. This is necessary to give visibility

@@ -74,7 +74,7 @@ glibj.zip:
 else
 
 if WITH_JAR
-CREATE_GLIBJ_ZIP=$(JAR) cf glibj.zip gnu java javax org sun META-INF && $(JAR) i glibj.zip
+CREATE_GLIBJ_ZIP=$(JAR) cf glibj.zip gnu java javax org sun META-INF
 else
 CREATE_GLIBJ_ZIP=$(ZIP) -r -D glibj.zip gnu java javax org sun META-INF > /dev/null
 endif

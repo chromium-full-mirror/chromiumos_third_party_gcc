@@ -1,5 +1,5 @@
 /* Properties.java -- run-time configuration properties.
-   Copyright (C) 2003, 2004, 2006, 2010  Free Software Foundation, Inc.
+   Copyright (C) 2003, 2004, 2006 Free Software Foundation, Inc.
 
 This file is a part of GNU Classpath.
 
@@ -54,8 +54,7 @@ import java.util.logging.Logger;
  */
 public final class Properties
 {
-  private static final Logger log = Configuration.DEBUG ?
-                        Logger.getLogger(Properties.class.getName()) : null;
+  private static final Logger log = Logger.getLogger(Properties.class.getName());
 
   public static final String VERSION = "gnu.crypto.version";
 

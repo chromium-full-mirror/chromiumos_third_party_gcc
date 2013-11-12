@@ -1,6 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-mgp64" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-mgp64 -O" } */
 
 #define TEST(ID, TYPE1, TYPE2)					\
   union u##ID {							\

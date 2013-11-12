@@ -1,7 +1,6 @@
 nativeexeclib_LTLIBRARIES = libjavaio.la 
 
-libjavaio_la_SOURCES = 	java_io_VMConsole.c \
-			java_io_VMFile.c \
+libjavaio_la_SOURCES = 	java_io_VMFile.c \
 			java_io_VMObjectInputStream.c \
 			java_io_VMObjectStreamClass.c
 

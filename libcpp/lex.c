@@ -1,5 +1,6 @@
 /* CPP Library - lexical analysis.
-   Copyright (C) 2000-2013 Free Software Foundation, Inc.
+   Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2007, 2008, 2009, 2010,
+   2011 Free Software Foundation, Inc.
    Contributed by Per Bothner, 1994-95.
    Based on CCCP program by Paul Rubin, June 1986
    Adapted to ANSI C, Richard Stallman, Jan 1987
@@ -266,6 +267,7 @@ search_line_acc_char (const uchar *s, const uchar *end ATTRIBUTE_UNUSED)
 /* Disable on Solaris 2/x86 until the following problems can be properly
    autoconfed:
 
+   The Solaris 8 assembler cannot assemble SSE2/SSE4.2 insns.
    The Solaris 9 assembler cannot assemble SSE4.2 insns.
    Before Solaris 9 Update 6, SSE insns cannot be executed.
    The Solaris 10+ assembler tags objects with the instruction set
@@ -426,8 +428,6 @@ search_line_sse42 (const uchar *s, const uchar *end)
   /* Check for unaligned input.  */
   if (si & 15)
     {
-      v16qi sv;
-
       if (__builtin_expect (end - s < 16, 0)
 	  && __builtin_expect ((si & 0xfff) > 0xff0, 0))
 	{
@@ -440,9 +440,8 @@ search_line_sse42 (const uchar *s, const uchar *end)
 
       /* ??? The builtin doesn't understand that the PCMPESTRI read from
 	 memory need not be aligned.  */
-      sv = __builtin_ia32_loaddqu ((const char *) s);
-      index = __builtin_ia32_pcmpestri128 (search, 4, sv, 16, 0);
-
+      __asm ("%vpcmpestri $0, (%1), %2"
+	     : "=c"(index) : "r"(s), "x"(search), "a"(4), "d"(16));
       if (__builtin_expect (index < 16, 0))
 	goto found;
 
@@ -592,10 +591,10 @@ search_line_fast (const uchar *s, const uchar *end ATTRIBUTE_UNUSED)
   {
 #define N  (sizeof(vc) / sizeof(long))
 
+    typedef char check_count[(N == 2 || N == 4) * 2 - 1];
     union {
       vc v;
-      /* Statically assert that N is 2 or 4.  */
-      unsigned long l[(N == 2 || N == 4) ? N : -1];
+      unsigned long l[N];
     } u;
     unsigned long l, i = 0;
 
@@ -629,69 +628,6 @@ search_line_fast (const uchar *s, const uchar *end ATTRIBUTE_UNUSED)
 
 #undef N
   }
-}
-
-#elif defined (__ARM_NEON__)
-#include "arm_neon.h"
-
-static const uchar *
-search_line_fast (const uchar *s, const uchar *end ATTRIBUTE_UNUSED)
-{
-  const uint8x16_t repl_nl = vdupq_n_u8 ('\n');
-  const uint8x16_t repl_cr = vdupq_n_u8 ('\r');
-  const uint8x16_t repl_bs = vdupq_n_u8 ('\\');
-  const uint8x16_t repl_qm = vdupq_n_u8 ('?');
-  const uint8x16_t xmask = (uint8x16_t) vdupq_n_u64 (0x8040201008040201ULL);
-
-  unsigned int misalign, found, mask;
-  const uint8_t *p;
-  uint8x16_t data;
-
-  /* Align the source pointer.  */
-  misalign = (uintptr_t)s & 15;
-  p = (const uint8_t *)((uintptr_t)s & -16);
-  data = vld1q_u8 (p);
-
-  /* Create a mask for the bytes that are valid within the first
-     16-byte block.  The Idea here is that the AND with the mask
-     within the loop is "free", since we need some AND or TEST
-     insn in order to set the flags for the branch anyway.  */
-  mask = (-1u << misalign) & 0xffff;
-
-  /* Main loop, processing 16 bytes at a time.  */
-  goto start;
-
-  do
-    {
-      uint8x8_t l;
-      uint16x4_t m;
-      uint32x2_t n;
-      uint8x16_t t, u, v, w;
-
-      p += 16;
-      data = vld1q_u8 (p);
-      mask = 0xffff;
-
-    start:
-      t = vceqq_u8 (data, repl_nl);
-      u = vceqq_u8 (data, repl_cr);
-      v = vorrq_u8 (t, vceqq_u8 (data, repl_bs));
-      w = vorrq_u8 (u, vceqq_u8 (data, repl_qm));
-      t = vandq_u8 (vorrq_u8 (v, w), xmask);
-      l = vpadd_u8 (vget_low_u8 (t), vget_high_u8 (t));
-      m = vpaddl_u8 (l);
-      n = vpaddl_u16 (m);
-      
-      found = vget_lane_u32 ((uint32x2_t) vorr_u64 ((uint64x1_t) n, 
-	      vshr_n_u64 ((uint64x1_t) n, 24)), 0);
-      found &= mask;
-    }
-  while (!found);
-
-  /* FOUND contains 1 in bits for which we matched a relevant
-     character.  Conversion to the byte index is trivial.  */
-  found = __builtin_ctz (found);
-  return (const uchar *)p + found;
 }
 
 #else
@@ -1093,7 +1029,6 @@ warn_about_normalization (cpp_reader *pfile,
       else
 	cpp_warning_with_line (pfile, CPP_W_NORMALIZE, token->src_loc, 0,
 			       "`%.*s' is not in NFC", (int) sz, buf);
-      free (buf);
     }
 }
 
@@ -1516,8 +1451,8 @@ lex_raw_string (cpp_reader *pfile, cpp_token *token, const uchar *base,
       else if (c == '\n')
 	{
 	  if (pfile->state.in_directive
-	      || (pfile->state.parsing_args
-		  && pfile->buffer->next_line >= pfile->buffer->rlimit))
+	      || pfile->state.parsing_args
+	      || pfile->state.in_deferred_pragma)
 	    {
 	      cur--;
 	      type = CPP_OTHER;
@@ -1561,12 +1496,10 @@ lex_raw_string (cpp_reader *pfile, cpp_token *token, const uchar *base,
 	 from inttypes.h, we generate a warning and treat the ud-suffix as a
 	 separate preprocessing token.  This approach is under discussion by
 	 the standards committee, and has been adopted as a conforming
-	 extension by other front ends such as clang.
-         A special exception is made for the suffix 's' which will be
-	 standardized as a user-defined literal suffix for strings.  */
-      if (ISALPHA (*cur) && *cur != 's')
+	 extension by other front ends such as clang. */
+      if (ISALPHA(*cur))
 	{
-	  /* Raise a warning, but do not consume subsequent tokens.  */
+	  // Raise a warning, but do not consume subsequent tokens.
 	  if (CPP_OPTION (pfile, warn_literal_suffix))
 	    cpp_warning_with_line (pfile, CPP_W_LITERAL_SUFFIX,
 				   token->src_loc, 0,
@@ -1574,7 +1507,7 @@ lex_raw_string (cpp_reader *pfile, cpp_token *token, const uchar *base,
 				   "a space between literal and identifier");
 	}
       /* Grab user defined literal suffix.  */
-      else if (ISIDST (*cur))
+      else if (*cur == '_')
 	{
 	  type = cpp_userdef_string_add_type (type);
 	  ++cur;
@@ -1694,12 +1627,10 @@ lex_string (cpp_reader *pfile, cpp_token *token, const uchar *base)
 	 from inttypes.h, we generate a warning and treat the ud-suffix as a
 	 separate preprocessing token.  This approach is under discussion by
 	 the standards committee, and has been adopted as a conforming
-	 extension by other front ends such as clang.
-         A special exception is made for the suffix 's' which will be
-	 standardized as a user-defined literal suffix for strings.  */
-      if (ISALPHA (*cur) && *cur != 's')
+	 extension by other front ends such as clang. */
+      if (ISALPHA(*cur))
 	{
-	  /* Raise a warning, but do not consume subsequent tokens.  */
+	  // Raise a warning, but do not consume subsequent tokens.
 	  if (CPP_OPTION (pfile, warn_literal_suffix))
 	    cpp_warning_with_line (pfile, CPP_W_LITERAL_SUFFIX,
 				   token->src_loc, 0,
@@ -1707,7 +1638,7 @@ lex_string (cpp_reader *pfile, cpp_token *token, const uchar *base)
 				   "a space between literal and identifier");
 	}
       /* Grab user defined literal suffix.  */
-      else if (ISIDST (*cur))
+      else if (*cur == '_')
 	{
 	  type = cpp_userdef_char_add_type (type);
 	  type = cpp_userdef_string_add_type (type);
@@ -2846,17 +2777,8 @@ new_buff (size_t len)
     len = MIN_BUFF_SIZE;
   len = CPP_ALIGN (len);
 
-#ifdef ENABLE_VALGRIND_CHECKING
-  /* Valgrind warns about uses of interior pointers, so put _cpp_buff
-     struct first.  */
-  size_t slen = CPP_ALIGN2 (sizeof (_cpp_buff), 2 * DEFAULT_ALIGNMENT);
-  base = XNEWVEC (unsigned char, len + slen);
-  result = (_cpp_buff *) base;
-  base += slen;
-#else
   base = XNEWVEC (unsigned char, len + sizeof (_cpp_buff));
   result = (_cpp_buff *) (base + len);
-#endif
   result->base = base;
   result->cur = base;
   result->limit = base + len;
@@ -2943,11 +2865,7 @@ _cpp_free_buff (_cpp_buff *buff)
   for (; buff; buff = next)
     {
       next = buff->next;
-#ifdef ENABLE_VALGRIND_CHECKING
-      free (buff);
-#else
       free (buff->base);
-#endif
     }
 }
 

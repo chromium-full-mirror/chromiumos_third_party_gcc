@@ -1,4 +1,3 @@
-! { dg-do run }
       integer i, j /1/, g/2/, h ! { dg-warning "" "" }
       integer k, l(3) /2*2,1/   ! { dg-warning "" "" }
       real pi /3.1416/, e       ! { dg-warning "" "" }

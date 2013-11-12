@@ -1,4 +1,4 @@
-// compile
+// $G $D/$F.go
 
 // Copyright 2009 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -6,7 +6,7 @@
 
 // used to crash the compiler
 
-package bug235
+package main
 
 type T struct {
 	x [4]byte

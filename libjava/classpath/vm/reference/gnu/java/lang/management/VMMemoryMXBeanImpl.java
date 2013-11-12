@@ -1,5 +1,5 @@
 /* VMMemoryMXBeanImpl.java - VM impl. of a memory bean
-   Copyright (C) 2006, 2010  Free Software Foundation, Inc.
+   Copyright (C) 2006 Free Software Foundation
 
 This file is part of GNU Classpath.
 
@@ -56,8 +56,6 @@ import java.util.List;
  */
 final class VMMemoryMXBeanImpl
 {
-
-  private VMMemoryMXBeanImpl() {} // Prohibits instantiation.
 
   /**
    * Returns an instance of {@link java.lang.management.MemoryUsage}

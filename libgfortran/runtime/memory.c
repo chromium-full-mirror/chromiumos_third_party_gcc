@@ -1,5 +1,5 @@
 /* Memory management routines.
-   Copyright (C) 2002-2013 Free Software Foundation, Inc.
+   Copyright 2002, 2005, 2006, 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
 This file is part of the GNU Fortran runtime library (libgfortran).
@@ -26,17 +26,22 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #include "libgfortran.h"
 #include <stdlib.h>
 
+/* If GFC_CLEAR_MEMORY is defined, the memory allocation routines will
+   return memory that is guaranteed to be set to zero.  This can have
+   a severe efficiency penalty, so it should never be set if good
+   performance is desired, but it can help when you're debugging code.  */
+/* #define GFC_CLEAR_MEMORY */
 
 void *
-xmalloc (size_t n)
+get_mem (size_t n)
 {
   void *p;
 
-  if (n == 0)
-    n = 1;
-
-  p = malloc (n);
-
+#ifdef GFC_CLEAR_MEMORY
+  p = (void *) calloc (1, n);
+#else
+  p = (void *) malloc (n);
+#endif
   if (p == NULL)
     os_error ("Memory allocation failed");
 
@@ -44,17 +49,13 @@ xmalloc (size_t n)
 }
 
 
-/* calloc wrapper that aborts on error.  */
+/* Allocate memory for internal (compiler generated) use.  */
 
 void *
-xcalloc (size_t nmemb, size_t size)
+internal_malloc_size (size_t size)
 {
-  if (nmemb * size == 0)
-    nmemb = size = 1;
+  if (unlikely (size == 0))
+    size = 1;
 
-  void *p = calloc (nmemb, size);
-  if (!p)
-    os_error ("Allocating cleared memory failed");
-
-  return p;
+  return get_mem (size);
 }

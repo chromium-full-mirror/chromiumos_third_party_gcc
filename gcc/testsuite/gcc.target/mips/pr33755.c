@@ -1,4 +1,5 @@
 /* { dg-do link } */
+/* { dg-options "-O2" } */
 
 volatile int gv;
 const char *ptrs[2];

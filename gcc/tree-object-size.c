@@ -1,5 +1,6 @@
 /* __builtin_object_size (ptr, object_size_type) computation
-   Copyright (C) 2004-2013 Free Software Foundation, Inc.
+   Copyright (C) 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+   Free Software Foundation, Inc.
    Contributed by Jakub Jelinek <jakub@redhat.com>
 
 This file is part of GCC.
@@ -24,6 +25,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm.h"
 #include "tree.h"
 #include "diagnostic-core.h"
+#include "tree-pretty-print.h"
 #include "gimple-pretty-print.h"
 #include "tree-flow.h"
 #include "tree-pass.h"
@@ -191,11 +193,12 @@ addr_object_size (struct object_size_info *osi, const_tree ptr,
 	}
       if (sz != unknown[object_size_type])
 	{
-	  double_int dsz = double_int::from_uhwi (sz) - mem_ref_offset (pt_var);
-	  if (dsz.is_negative ())
+	  double_int dsz = double_int_sub (uhwi_to_double_int (sz),
+					   mem_ref_offset (pt_var));
+	  if (double_int_negative_p (dsz))
 	    sz = 0;
-	  else if (dsz.fits_uhwi ())
-	    sz = dsz.to_uhwi ();
+	  else if (double_int_fits_in_uhwi_p (dsz))
+	    sz = double_int_to_uhwi (dsz);
 	  else
 	    sz = unknown[object_size_type];
 	}
@@ -971,12 +974,14 @@ collect_object_sizes_for (struct object_size_info *osi, tree var)
       break;
 
     case GIMPLE_NOP:
-      if (SSA_NAME_VAR (var)
-	  && TREE_CODE (SSA_NAME_VAR (var)) == PARM_DECL)
-	expr_object_size (osi, var, SSA_NAME_VAR (var));
-      else
-	/* Uninitialized SSA names point nowhere.  */
-	object_sizes[object_size_type][varno] = unknown[object_size_type];
+      {
+	tree decl = SSA_NAME_VAR (var);
+
+	if (TREE_CODE (decl) != PARM_DECL && DECL_INITIAL (decl))
+	  expr_object_size (osi, var, DECL_INITIAL (decl));
+	else
+	  expr_object_size (osi, var, decl);
+      }
       break;
 
     case GIMPLE_PHI:
@@ -1267,7 +1272,6 @@ struct gimple_opt_pass pass_object_sizes =
  {
   GIMPLE_PASS,
   "objsz",				/* name */
-  OPTGROUP_NONE,                        /* optinfo_flags */
   NULL,					/* gate */
   compute_object_sizes,			/* execute */
   NULL,					/* sub */

@@ -1,5 +1,4 @@
 /* { dg-do compile } */
-/* { dg-require-effective-target pthread } */
 /* { dg-options "-O -ffast-math -ftree-parallelize-loops=2 -g" } */
 
 struct S

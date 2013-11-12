@@ -1,5 +1,6 @@
 /* Process expressions for the GNU compiler for the Java(TM) language.
-   Copyright (C) 1996-2013 Free Software Foundation, Inc.
+   Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
+   2005, 2006, 2007, 2008, 2010, 2011 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -73,7 +74,7 @@ static void expand_cond (enum tree_code, tree, int);
 static void expand_java_goto (int);
 static tree expand_java_switch (tree, int);
 static void expand_java_add_case (tree, int, int);
-static vec<tree, va_gc> *pop_arguments (tree); 
+static VEC(tree,gc) *pop_arguments (tree); 
 static void expand_invoke (int, int, int); 
 static void expand_java_field_op (int, int, int); 
 static void java_push_constant_from_pool (struct JCF *, int); 
@@ -95,7 +96,7 @@ tree dtable_ident = NULL_TREE;
 int always_initialize_class_p = 0;
 
 /* We store the stack state in two places:
-   Within a basic block, we use the quick_stack, which is a vec of expression
+   Within a basic block, we use the quick_stack, which is a VEC of expression
    nodes.
    This is the top part of the stack;  below that we use find_stack_slot.
    At the end of a basic block, the quick_stack must be flushed
@@ -121,7 +122,7 @@ int always_initialize_class_p = 0;
    So dup cannot just add an extra element to the quick_stack, but iadd can.
 */
 
-static GTY(()) vec<tree, va_gc> *quick_stack;
+static GTY(()) VEC(tree,gc) *quick_stack;
 
 /* The physical memory page size used in this computer.  See
    build_field_ref().  */
@@ -221,10 +222,10 @@ flush_quick_stack (void)
   tree t;
 
   /* Count the number of slots the quick stack is holding.  */
-  for (ix = 0; vec_safe_iterate (quick_stack, ix, &t); ix++)
+  for (ix = 0; VEC_iterate(tree, quick_stack, ix, t); ix++)
     stack_index -= 1 + TYPE_IS_WIDE (TREE_TYPE (t));
 
-  for (ix = 0; vec_safe_iterate (quick_stack, ix, &t); ix++)
+  for (ix = 0; VEC_iterate(tree, quick_stack, ix, t); ix++)
     {
       tree decl, type = TREE_TYPE (t);
 
@@ -234,7 +235,7 @@ flush_quick_stack (void)
       stack_index += 1 + TYPE_IS_WIDE (type);
     }
 
-  vec_safe_truncate (quick_stack, 0);
+  VEC_truncate (tree, quick_stack, 0);
 }
 
 /* Push TYPE on the type stack.
@@ -275,7 +276,7 @@ push_value (tree value)
       value = convert (type, value);
     }
   push_type (type);
-  vec_safe_push (quick_stack, value);
+  VEC_safe_push (tree, gc, quick_stack, value);
 
   /* If the value has a side effect, then we need to evaluate it
      whether or not the result is used.  If the value ends up on the
@@ -589,8 +590,8 @@ static tree
 pop_value (tree type)
 {
   type = pop_type (type);
-  if (vec_safe_length (quick_stack) != 0)
-    return quick_stack->pop ();
+  if (VEC_length (tree, quick_stack) != 0)
+    return VEC_pop (tree, quick_stack);
   else
     return find_stack_slot (stack_pointer, promote_type (type));
 }
@@ -1099,17 +1100,17 @@ static void
 expand_java_multianewarray (tree class_type, int ndim)
 {
   int i;
-  vec<tree, va_gc> *args = NULL;
+  VEC(tree,gc) *args = NULL;
 
-  vec_safe_grow (args, 3 + ndim);
+  VEC_safe_grow (tree, gc, args, 3 + ndim);
 
-  (*args)[0] = build_class_ref (class_type);
-  (*args)[1] = build_int_cst (NULL_TREE, ndim);
+  VEC_replace (tree, args, 0, build_class_ref (class_type));
+  VEC_replace (tree, args, 1, build_int_cst (NULL_TREE, ndim));
 
   for(i = ndim - 1; i >= 0; i-- )
-    (*args)[(unsigned)(2 + i)] = pop_value (int_type_node);
+    VEC_replace (tree, args, (unsigned)(2 + i), pop_value (int_type_node));
 
-  (*args)[2 + ndim] = null_pointer_node;
+  VEC_replace (tree, args, 2 + ndim, null_pointer_node);
 
   push_value (build_call_vec (promote_type (class_type),
                               build_address_of (soft_multianewarray_node),
@@ -1807,7 +1808,7 @@ char *instruction_bits;
    indexed by PC.  Each element is a tree vector holding the type
    state at that PC.  We only note type states at basic block
    boundaries.  */
-vec<tree, va_gc> *type_states;
+VEC(tree, gc) *type_states;
 
 static void
 note_label (int current_pc ATTRIBUTE_UNUSED, int target_pc)
@@ -1900,12 +1901,12 @@ expand_java_add_case (tree switch_expr, int match, int target_pc)
   append_to_statement_list (x, &SWITCH_BODY (switch_expr));
 }
 
-static vec<tree, va_gc> *
+static VEC(tree,gc) *
 pop_arguments (tree method_type)
 {
   function_args_iterator fnai;
   tree type;
-  vec<tree, va_gc> *args = NULL;
+  VEC(tree,gc) *args = NULL;
   int arity;
 
   FOREACH_FUNCTION_ARGS (method_type, type, fnai)
@@ -1914,14 +1915,14 @@ pop_arguments (tree method_type)
       if (type == void_type_node)
         break;
 
-      vec_safe_push (args, type);
+      VEC_safe_push (tree, gc, args, type);
     }
 
-  arity = vec_safe_length (args);
+  arity = VEC_length (tree, args);
 
   while (arity--)
     {
-      tree arg = pop_value ((*args)[arity]);
+      tree arg = pop_value (VEC_index (tree, args, arity));
 
       /* We simply cast each argument to its proper type.  This is
 	 needed since we lose type information coming out of the
@@ -1934,7 +1935,7 @@ pop_arguments (tree method_type)
 	       && INTEGRAL_TYPE_P (type))
 	arg = convert (integer_type_node, arg);
 
-      (*args)[arity] = arg;
+      VEC_replace (tree, args, arity, arg);
     }
 
   return args;
@@ -2062,14 +2063,14 @@ typedef struct
   const char *new_classname;
   const char *new_signature;
   int flags;
-  void (*rewrite_arglist) (vec<tree, va_gc> **);
+  void (*rewrite_arglist) (VEC(tree,gc) **);
 } rewrite_rule;
 
 /* Add __builtin_return_address(0) to the end of an arglist.  */
 
 
 static void
-rewrite_arglist_getcaller (vec<tree, va_gc> **arglist)
+rewrite_arglist_getcaller (VEC(tree,gc) **arglist)
 {
   tree retaddr 
     = build_call_expr (builtin_decl_explicit (BUILT_IN_RETURN_ADDRESS),
@@ -2077,15 +2078,15 @@ rewrite_arglist_getcaller (vec<tree, va_gc> **arglist)
 
   DECL_UNINLINABLE (current_function_decl) = 1;
 
-  vec_safe_push (*arglist, retaddr);
+  VEC_safe_push (tree, gc, *arglist, retaddr);
 }
 
 /* Add this.class to the end of an arglist.  */
 
 static void
-rewrite_arglist_getclass (vec<tree, va_gc> **arglist)
+rewrite_arglist_getclass (VEC(tree,gc) **arglist)
 {
-  vec_safe_push (*arglist, build_class_ref (output_class));
+  VEC_safe_push (tree, gc, *arglist, build_class_ref (output_class));
 }
 
 static rewrite_rule rules[] =
@@ -2136,7 +2137,7 @@ special_method_p (tree candidate_method)
    method, update SPECIAL.*/
 
 void
-maybe_rewrite_invocation (tree *method_p, vec<tree, va_gc> **arg_list_p, 
+maybe_rewrite_invocation (tree *method_p, VEC(tree,gc) **arg_list_p, 
 			  tree *method_signature_p, tree *special)
 {
   tree context = DECL_NAME (TYPE_NAME (DECL_CONTEXT (*method_p)));
@@ -2184,7 +2185,7 @@ maybe_rewrite_invocation (tree *method_p, vec<tree, va_gc> **arg_list_p,
 tree
 build_known_method_ref (tree method, tree method_type ATTRIBUTE_UNUSED,
 			tree self_type, tree method_signature ATTRIBUTE_UNUSED,
-			vec<tree, va_gc> *arg_list ATTRIBUTE_UNUSED, tree special)
+			VEC(tree,gc) *arg_list ATTRIBUTE_UNUSED, tree special)
 {
   tree func;
   if (is_compiled_class (self_type))
@@ -2260,12 +2261,12 @@ build_known_method_ref (tree method, tree method_type ATTRIBUTE_UNUSED,
 }
 
 tree
-invoke_build_dtable (int is_invoke_interface, vec<tree, va_gc> *arg_list)
+invoke_build_dtable (int is_invoke_interface, VEC(tree,gc) *arg_list)
 {
   tree dtable, objectref;
-  tree saved = save_expr ((*arg_list)[0]);
+  tree saved = save_expr (VEC_index (tree, arg_list, 0));
 
-  (*arg_list)[0] = saved;
+  VEC_replace (tree, arg_list, 0, saved);
 
   /* If we're dealing with interfaces and if the objectref
      argument is an array then get the dispatch table of the class
@@ -2291,17 +2292,18 @@ invoke_build_dtable (int is_invoke_interface, vec<tree, va_gc> *arg_list)
 
 int
 get_symbol_table_index (tree t, tree special,
-			vec<method_entry, va_gc> **symbol_table)
+			VEC(method_entry,gc) **symbol_table)
 {
   method_entry *e;
   unsigned i;
-  method_entry elem = {t, special};
 
-  FOR_EACH_VEC_SAFE_ELT (*symbol_table, i, e)
+  FOR_EACH_VEC_ELT (method_entry, *symbol_table, i, e)
     if (t == e->method && special == e->special)
       goto done;
 
-  vec_safe_push (*symbol_table, elem);
+  e = VEC_safe_push (method_entry, gc, *symbol_table, NULL);
+  e->method = t;
+  e->special = special;
 
  done:
   return i + 1;
@@ -2427,7 +2429,7 @@ expand_invoke (int opcode, int method_ref_index, int nargs ATTRIBUTE_UNUSED)
   const char *const self_name
     = IDENTIFIER_POINTER (DECL_NAME (TYPE_NAME (self_type)));
   tree call, func, method, method_type;
-  vec<tree, va_gc> *arg_list;
+  VEC(tree,gc) *arg_list;
   tree check = NULL_TREE;
 
   tree special = NULL_TREE;
@@ -2568,8 +2570,8 @@ expand_invoke (int opcode, int method_ref_index, int nargs ATTRIBUTE_UNUSED)
 	 We do omit the check if we're calling <init>.  */
       /* We use a SAVE_EXPR here to make sure we only evaluate
 	 the new `self' expression once.  */
-      tree save_arg = save_expr ((*arg_list)[0]);
-      (*arg_list)[0] = save_arg;
+      tree save_arg = save_expr (VEC_index (tree, arg_list, 0));
+      VEC_replace (tree, arg_list, 0, save_arg);
       check = java_check_reference (save_arg, ! DECL_INIT_P (method));
       func = build_known_method_ref (method, method_type, self_type,
 				     method_signature, arg_list, special);
@@ -2621,7 +2623,7 @@ build_jni_stub (tree method)
   tree method_args;
   tree meth_var;
   tree bind;
-  vec<tree, va_gc> *args = NULL;
+  VEC(tree,gc) *args = NULL;
   int args_size = 0;
 
   tree klass = DECL_CONTEXT (method);
@@ -2656,7 +2658,7 @@ build_jni_stub (tree method)
 
   /* The JNIEnv structure is the first argument to the JNI function.  */
   args_size += int_size_in_bytes (TREE_TYPE (env_var));
-  vec_safe_push (args, env_var);
+  VEC_safe_push (tree, gc, args, env_var);
 
   /* For a static method the second argument is the class.  For a
      non-static method the second argument is `this'; that is already
@@ -2664,7 +2666,7 @@ build_jni_stub (tree method)
   if (METHOD_STATIC (method))
     {
       args_size += int_size_in_bytes (TREE_TYPE (klass));
-      vec_safe_push (args, klass);
+      VEC_safe_push (tree, gc, args, klass);
     }
 
   /* All the arguments to this method become arguments to the
@@ -2679,7 +2681,7 @@ build_jni_stub (tree method)
 #endif
       args_size += (arg_bits / BITS_PER_UNIT);
 
-      vec_safe_push (args, tem);
+      VEC_safe_push (tree, gc, args, tem);
     }
   arg_types = TYPE_ARG_TYPES (TREE_TYPE (method));
 
@@ -2966,7 +2968,7 @@ static void
 load_type_state (int pc)
 {
   int i;
-  tree vec = (*type_states)[pc];
+  tree vec = VEC_index (tree, type_states, pc);
   int cur_length = TREE_VEC_LENGTH (vec);
   stack_pointer = cur_length - DECL_MAX_LOCALS(current_function_decl);
   for (i = 0; i < cur_length; i++)
@@ -3009,8 +3011,8 @@ note_instructions (JCF *jcf, tree method)
   byte_ops = jcf->read_ptr;
   instruction_bits = XRESIZEVAR (char, instruction_bits, length + 1);
   memset (instruction_bits, 0, length + 1);
-  vec_alloc (type_states, length + 1);
-  type_states->quick_grow_cleared (length + 1);
+  type_states = VEC_alloc (tree, gc, length + 1);
+  VEC_safe_grow_cleared (tree, gc, type_states, length + 1);
 
   /* This pass figures out which PC can be the targets of jumps. */
   for (PC = 0; PC < length;)
@@ -3685,6 +3687,82 @@ maybe_adjust_start_pc (struct JCF *jcf, int code_offset,
     start_pc = insn_pc;
 
   return start_pc;
+}
+
+/* Force the (direct) sub-operands of NODE to be evaluated in left-to-right
+   order, as specified by Java Language Specification.
+
+   The problem is that while expand_expr will evaluate its sub-operands in
+   left-to-right order, for variables it will just return an rtx (i.e.
+   an lvalue) for the variable (rather than an rvalue).  So it is possible
+   that a later sub-operand will change the register, and when the
+   actual operation is done, it will use the new value, when it should
+   have used the original value.
+
+   We fix this by using save_expr.  This forces the sub-operand to be
+   copied into a fresh virtual register,
+
+   For method invocation, we modify the arguments so that a
+   left-to-right order evaluation is performed. Saved expressions
+   will, in CALL_EXPR order, be reused when the call will be expanded.
+
+   We also promote outgoing args if needed.  */
+
+tree
+force_evaluation_order (tree node)
+{
+  if (flag_syntax_only)
+    return node;
+  if (TREE_CODE (node) == CALL_EXPR
+      || (TREE_CODE (node) == COMPOUND_EXPR
+	  && TREE_CODE (TREE_OPERAND (node, 0)) == CALL_EXPR
+	  && TREE_CODE (TREE_OPERAND (node, 1)) == SAVE_EXPR)) 
+    {
+      tree call, cmp;
+      int i, nargs;
+
+      /* Account for wrapped around ctors.  */
+      if (TREE_CODE (node) == COMPOUND_EXPR)
+        call = TREE_OPERAND (node, 0);
+      else
+	call = node;
+
+      nargs = call_expr_nargs (call);
+
+      /* This reverses the evaluation order. This is a desired effect. */
+      for (i = 0, cmp = NULL_TREE; i < nargs; i++)
+	{
+	  tree arg = CALL_EXPR_ARG (call, i);
+	  /* Promote types smaller than integer.  This is required by
+	     some ABIs.  */
+	  tree type = TREE_TYPE (arg);
+	  tree saved;
+	  if (targetm.calls.promote_prototypes (type)
+	      && INTEGRAL_TYPE_P (type)
+	      && INT_CST_LT_UNSIGNED (TYPE_SIZE (type),
+				      TYPE_SIZE (integer_type_node)))
+	    arg = fold_convert (integer_type_node, arg);
+
+	  saved = save_expr (force_evaluation_order (arg));
+	  cmp = (cmp == NULL_TREE ? saved :
+		 build2 (COMPOUND_EXPR, void_type_node, cmp, saved));
+
+	  CALL_EXPR_ARG (call, i) = saved;
+	}
+      
+      if (cmp && TREE_CODE (cmp) == COMPOUND_EXPR)
+	TREE_SIDE_EFFECTS (cmp) = 1;
+
+      if (cmp)
+	{
+	  cmp = build2 (COMPOUND_EXPR, TREE_TYPE (node), cmp, node);
+	  if (TREE_TYPE (cmp) != void_type_node)
+	    cmp = save_expr (cmp);
+	  TREE_SIDE_EFFECTS (cmp) = 1;
+	  node = cmp;
+	}
+    }
+  return node;
 }
 
 /* Build a node to represent empty statements and blocks. */

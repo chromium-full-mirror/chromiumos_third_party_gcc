@@ -1,6 +1,6 @@
 // class template regex -*- C++ -*-
 
-// Copyright (C) 2010-2013 Free Software Foundation, Inc.
+// Copyright (C) 2010, 2011 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -32,13 +32,15 @@ namespace std _GLIBCXX_VISIBILITY(default)
 {
 _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
-  /**
-   * @addtogroup regex
-   * @{
-   */
+/**
+ * @defgroup regex Regular Expressions
+ * A facility for performing regular expression pattern matching.
+ */
+ //@{
 
+  // [7.7] Class regex_traits
   /**
-   * @brief Class regex_traits. Describes aspects of a regular expression.
+   * @brief Describes aspects of a regular expression.
    *
    * A regular expression traits class that satisfies the requirements of 
    * section [28.7].
@@ -51,16 +53,17 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     struct regex_traits
     {
     public:
-      typedef _Ch_type                     	char_type;
-      typedef std::basic_string<char_type> 	string_type;
-      typedef std::locale                  	locale_type;
-      typedef std::ctype_base::mask        	char_class_type;
+      typedef _Ch_type                     char_type;
+      typedef std::basic_string<char_type> string_type;
+      typedef std::locale                  locale_type;
+      typedef std::ctype_base::mask        char_class_type;
 
     public:
       /**
        * @brief Constructs a default traits object.
        */
-      regex_traits() { }
+      regex_traits()
+      { }
       
       /**
        * @brief Gives the length of a C-style string starting at @p __p.
@@ -98,10 +101,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        */
       char_type
       translate_nocase(char_type __c) const
-      { 
-	typedef std::ctype<char_type> __ctype_type;
-	const __ctype_type& __fctyp(use_facet<__ctype_type>(_M_locale));
-	return __fctyp.tolower(__c); 
+      {
+	using std::ctype;
+	using std::use_facet;
+	return use_facet<ctype<char_type> >(_M_locale).tolower(__c);
       }
       
       /**
@@ -128,14 +131,16 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
         string_type
         transform(_Fwd_iter __first, _Fwd_iter __last) const
         {
-	  typedef std::collate<char_type> __collate_type;
-	  const __collate_type& __fclt(use_facet<__collate_type>(_M_locale));
+	  using std::collate;
+	  using std::use_facet;
+	  const collate<_Ch_type>& __c(use_facet<
+				       collate<_Ch_type> >(_M_locale));
 	  string_type __s(__first, __last);
-	  return __fclt.transform(__s.data(), __s.data() + __s.size());
+	  return __c.transform(__s.data(), __s.data() + __s.size());
 	}
 
       /**
-       * @brief Gets a sort key for a character sequence, independent of case.
+       * @brief Gets a sort key for a character sequence, independant of case.
        *
        * @param __first beginning of the character sequence.
        * @param __last  one-past-the-end of the character sequence.
@@ -185,7 +190,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        * the returned mask identifies the classification regardless of
        * the case of the characters to be matched (for example,
        * [[:lower:]] is the same as [[:alpha:]]), otherwise a
-       * case-dependent classification is returned.  The value
+       * case-dependant classification is returned.  The value
        * returned shall be independent of the case of the characters
        * in the character sequence. If the name is not recognized then
        * returns a value that compares equal to 0.
@@ -279,14 +284,16 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     regex_traits<_Ch_type>::
     isctype(_Ch_type __c, char_class_type __f) const
     {
-      typedef std::ctype<char_type> __ctype_type;
-      const __ctype_type& __fctyp(use_facet<__ctype_type>(_M_locale));
+      using std::ctype;
+      using std::use_facet;
+      const ctype<_Ch_type>& __ctype(use_facet<
+				     ctype<_Ch_type> >(_M_locale));
       
-      if (__fctyp.is(__f, __c))
+      if (__ctype.is(__f, __c))
 	return true;
       
       // special case of underscore in [[:w:]]
-      if (__c == __fctyp.widen('_'))
+      if (__c == __ctype.widen('_'))
 	{
 	  const char __wb[] = "w";
 	  char_class_type __wt = this->lookup_classname(__wb,
@@ -296,7 +303,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	}
     
       // special case of [[:space:]] in [[:blank:]]
-      if (__fctyp.is(std::ctype_base::space, __c))
+      if (__ctype.is(std::ctype_base::space, __c))
 	{
 	  const char __bb[] = "blank";
 	  char_class_type __bt = this->lookup_classname(__bb,
@@ -313,7 +320,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     regex_traits<_Ch_type>::
     value(_Ch_type __ch, int __radix) const
     {
-      std::basic_istringstream<char_type> __is(string_type(1, __ch));
+      std::basic_istringstream<_Ch_type> __is(string_type(1, __ch));
       int __v;
       if (__radix == 8)
 	__is >> std::oct;
@@ -347,16 +354,26 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        * std [28.8.1](1)
        */
       //@{
-      static constexpr flag_type icase = regex_constants::icase;
-      static constexpr flag_type nosubs = regex_constants::nosubs;
-      static constexpr flag_type optimize = regex_constants::optimize;
-      static constexpr flag_type collate = regex_constants::collate;
-      static constexpr flag_type ECMAScript = regex_constants::ECMAScript;
-      static constexpr flag_type basic = regex_constants::basic;
-      static constexpr flag_type extended = regex_constants::extended;
-      static constexpr flag_type awk = regex_constants::awk;
-      static constexpr flag_type grep = regex_constants::grep;
-      static constexpr flag_type egrep = regex_constants::egrep;
+      static constexpr regex_constants::syntax_option_type icase
+        = regex_constants::icase;
+      static constexpr regex_constants::syntax_option_type nosubs
+        = regex_constants::nosubs;
+      static constexpr regex_constants::syntax_option_type optimize
+        = regex_constants::optimize;
+      static constexpr regex_constants::syntax_option_type collate
+        = regex_constants::collate;
+      static constexpr regex_constants::syntax_option_type ECMAScript
+        = regex_constants::ECMAScript;
+      static constexpr regex_constants::syntax_option_type basic
+        = regex_constants::basic;
+      static constexpr regex_constants::syntax_option_type extended
+        = regex_constants::extended;
+      static constexpr regex_constants::syntax_option_type awk
+        = regex_constants::awk;
+      static constexpr regex_constants::syntax_option_type grep
+        = regex_constants::grep;
+      static constexpr regex_constants::syntax_option_type egrep
+        = regex_constants::egrep;
       //@}
 
       // [7.8.2] construct/copy/destroy
@@ -365,8 +382,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        * character sequence.
        */
       basic_regex()
-      : _M_flags(ECMAScript),
-        _M_automaton(__detail::__compile<const _Ch_type*, _Rx_traits>(0, 0,
+      : _M_flags(regex_constants::ECMAScript),
+        _M_automaton(__regex::__compile<const _Ch_type*, _Rx_traits>(0, 0,
                      _M_traits, _M_flags))
       { }
 
@@ -382,9 +399,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        * @throws regex_error if @p __p is not a valid regular expression.
        */
       explicit
-      basic_regex(const _Ch_type* __p, flag_type __f = ECMAScript)
+      basic_regex(const _Ch_type* __p,
+		  flag_type __f = regex_constants::ECMAScript)
       : _M_flags(__f),
-        _M_automaton(__detail::__compile(__p, __p + _Rx_traits::length(__p),
+        _M_automaton(__regex::__compile(__p, __p + _Rx_traits::length(__p),
         				_M_traits, _M_flags))
       { }
 
@@ -402,7 +420,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        */
       basic_regex(const _Ch_type* __p, std::size_t __len, flag_type __f)
       : _M_flags(__f),
-        _M_automaton(__detail::__compile(__p, __p + __len, _M_traits, _M_flags))
+        _M_automaton(__regex::__compile(__p, __p + __len, _M_traits, _M_flags))
       { }
 
       /**
@@ -436,11 +454,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        */
       template<typename _Ch_traits, typename _Ch_alloc>
         explicit
-        basic_regex(const std::basic_string<_Ch_type, _Ch_traits, 
-					    _Ch_alloc>& __s,
-		    flag_type __f = ECMAScript)
+        basic_regex(const std::basic_string<_Ch_type, _Ch_traits,
+		    _Ch_alloc>& __s,
+		    flag_type __f = regex_constants::ECMAScript)
 	: _M_flags(__f),
-	  _M_automaton(__detail::__compile(__s.begin(), __s.end(),
+	  _M_automaton(__regex::__compile(__s.begin(), __s.end(),
 	  				  _M_traits, _M_flags))
         { }
 
@@ -459,9 +477,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        */
       template<typename _InputIterator>
         basic_regex(_InputIterator __first, _InputIterator __last, 
-		    flag_type __f = ECMAScript)
+		    flag_type __f = regex_constants::ECMAScript)
 	: _M_flags(__f),
-	  _M_automaton(__detail::__compile(__first, __last, _M_traits, _M_flags))
+	  _M_automaton(__regex::__compile(__first, __last, _M_traits, _M_flags))
         { }
 
       /**
@@ -473,9 +491,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        * @throws regex_error if @p __l is not a valid regular expression.
        */
       basic_regex(initializer_list<_Ch_type> __l,
-		  flag_type __f = ECMAScript)
+		  flag_type __f = regex_constants::ECMAScript)
       : _M_flags(__f),
-        _M_automaton(__detail::__compile(__l.begin(), __l.end(),
+        _M_automaton(__regex::__compile(__l.begin(), __l.end(),
         				_M_traits, _M_flags))
       { }
 
@@ -516,9 +534,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        *
        * @param __s A pointer to a string containing a regular expression.
        */
-      template<typename _Ch_typeraits, typename _Alloc>
+      template<typename _Ch_typeraits, typename _Allocator>
         basic_regex&
-        operator=(const basic_string<_Ch_type, _Ch_typeraits, _Alloc>& __s)
+        operator=(const basic_string<_Ch_type, _Ch_typeraits, _Allocator>& __s)
         { return this->assign(__s, flags()); }
 
       // [7.8.3] assign
@@ -562,7 +580,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        * regex_error is thrown, *this remains unchanged.
        */
       basic_regex&
-      assign(const _Ch_type* __p, flag_type __flags = ECMAScript)
+      assign(const _Ch_type* __p,
+	     flag_type __flags = regex_constants::ECMAScript)
       { return this->assign(string_type(__p), __flags); }
 
       /**
@@ -593,10 +612,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        * expression pattern interpreted according to @p __flags.  If
        * regex_error is thrown, *this remains unchanged.
        */
-      template<typename _Ch_typeraits, typename _Alloc>
+      template<typename _Ch_typeraits, typename _Allocator>
         basic_regex&
-        assign(const basic_string<_Ch_type, _Ch_typeraits, _Alloc>& __s,
-	       flag_type __flags = ECMAScript)
+        assign(const basic_string<_Ch_type, _Ch_typeraits, _Allocator>& __s,
+	       flag_type __flags = regex_constants::ECMAScript)
         { 
 	  basic_regex __tmp(__s, __flags);
 	  this->swap(__tmp);
@@ -619,7 +638,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       template<typename _InputIterator>
         basic_regex&
         assign(_InputIterator __first, _InputIterator __last,
-	       flag_type __flags = ECMAScript)
+	       flag_type __flags = regex_constants::ECMAScript)
         { return this->assign(string_type(__first, __last), __flags); }
 
       /**
@@ -634,7 +653,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        * unchanged.
        */
       basic_regex&
-      assign(initializer_list<_Ch_type> __l, flag_type __flags = ECMAScript)
+      assign(initializer_list<_Ch_type> __l,
+	     flag_type __flags = regex_constants::ECMAScript)
       { return this->assign(__l.begin(), __l.end(), __flags); }
 
       // [7.8.4] const operations
@@ -681,8 +701,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       void
       swap(basic_regex& __rhs)
       {
-	std::swap(_M_flags, __rhs._M_flags);
-	std::swap(_M_traits, __rhs._M_traits);
+	std::swap(_M_flags,     __rhs._M_flags);
+	std::swap(_M_traits,    __rhs._M_traits);
 	std::swap(_M_automaton, __rhs._M_automaton);
       }
 
@@ -692,19 +712,18 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       { _M_automaton->_M_dot(__ostr); }
 #endif
       
-      const __detail::_AutomatonPtr&
+      const __regex::_AutomatonPtr&
       _M_get_automaton() const
       { return _M_automaton; }
 
     protected:
       flag_type              _M_flags;
       _Rx_traits             _M_traits;
-      __detail::_AutomatonPtr _M_automaton;
+      __regex::_AutomatonPtr _M_automaton;
     };
   
   /** @brief Standard regular expressions. */
   typedef basic_regex<char>    regex;
-
 #ifdef _GLIBCXX_USE_WCHAR_T
   /** @brief Standard wide-character regular expressions. */
   typedef basic_regex<wchar_t> wregex;
@@ -740,14 +759,14 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   template<typename _BiIter>
     class sub_match : public std::pair<_BiIter, _BiIter>
     {
-      typedef iterator_traits<_BiIter>			__iter_traits;
-	
     public:
-      typedef typename __iter_traits::value_type      	value_type;
-      typedef typename __iter_traits::difference_type 	difference_type;
-      typedef _BiIter                                   iterator;
-      typedef std::basic_string<value_type>             string_type;
+      typedef typename iterator_traits<_BiIter>::value_type      value_type;
+      typedef typename iterator_traits<_BiIter>::difference_type
+                                                            difference_type;
+      typedef _BiIter                                              iterator;
+      typedef std::basic_string<value_type>                     string_type;
 
+    public:
       bool matched;
       
       constexpr sub_match() : matched() { }
@@ -832,14 +851,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   
   /** @brief Standard regex submatch over a C-style null-terminated string. */
   typedef sub_match<const char*>             csub_match;
-
   /** @brief Standard regex submatch over a standard string. */
   typedef sub_match<string::const_iterator>  ssub_match;
-
 #ifdef _GLIBCXX_USE_WCHAR_T
   /** @brief Regex submatch over a C-style null-terminated wide string. */
   typedef sub_match<const wchar_t*>          wcsub_match;
-
   /** @brief Regex submatch over a standard wide string. */
   typedef sub_match<wstring::const_iterator> wssub_match;
 #endif
@@ -854,7 +870,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    */
   template<typename _BiIter>
     inline bool
-    operator==(const sub_match<_BiIter>& __lhs, const sub_match<_BiIter>& __rhs)
+    operator==(const sub_match<_BiIter>& __lhs,
+	       const sub_match<_BiIter>& __rhs)
     { return __lhs.compare(__rhs) == 0; }
 
   /**
@@ -865,7 +882,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    */
   template<typename _BiIter>
     inline bool
-    operator!=(const sub_match<_BiIter>& __lhs, const sub_match<_BiIter>& __rhs)
+    operator!=(const sub_match<_BiIter>& __lhs,
+	       const sub_match<_BiIter>& __rhs)
     { return __lhs.compare(__rhs) != 0; }
 
   /**
@@ -876,7 +894,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    */
   template<typename _BiIter>
     inline bool
-    operator<(const sub_match<_BiIter>& __lhs, const sub_match<_BiIter>& __rhs)
+    operator<(const sub_match<_BiIter>& __lhs,
+	      const sub_match<_BiIter>& __rhs)
     { return __lhs.compare(__rhs) < 0; }
 
   /**
@@ -887,7 +906,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    */
   template<typename _BiIter>
     inline bool
-    operator<=(const sub_match<_BiIter>& __lhs, const sub_match<_BiIter>& __rhs)
+    operator<=(const sub_match<_BiIter>& __lhs,
+	       const sub_match<_BiIter>& __rhs)
     { return __lhs.compare(__rhs) <= 0; }
 
   /**
@@ -898,7 +918,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    */
   template<typename _BiIter>
     inline bool
-    operator>=(const sub_match<_BiIter>& __lhs, const sub_match<_BiIter>& __rhs)
+    operator>=(const sub_match<_BiIter>& __lhs,
+	       const sub_match<_BiIter>& __rhs)
     { return __lhs.compare(__rhs) >= 0; }
 
   /**
@@ -909,14 +930,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    */
   template<typename _BiIter>
     inline bool
-    operator>(const sub_match<_BiIter>& __lhs, const sub_match<_BiIter>& __rhs)
+    operator>(const sub_match<_BiIter>& __lhs,
+	      const sub_match<_BiIter>& __rhs)
     { return __lhs.compare(__rhs) > 0; }
-
-  // Alias for sub_match'd string.
-  template<typename _Bi_iter, typename _Ch_traits, typename _Ch_alloc>
-    using __sub_match_string = basic_string<
-                              typename iterator_traits<_Bi_iter>::value_type,
-                              _Ch_traits, _Ch_alloc>;
 
   /**
    * @brief Tests the equivalence of a string and a regular expression
@@ -927,7 +943,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    */
   template<typename _Bi_iter, typename _Ch_traits, typename _Ch_alloc>
     inline bool
-    operator==(const __sub_match_string<_Bi_iter, _Ch_traits, _Ch_alloc>& __lhs,
+    operator==(const basic_string<
+	       typename iterator_traits<_Bi_iter>::value_type,
+	       _Ch_traits, _Ch_alloc>& __lhs,
 	       const sub_match<_Bi_iter>& __rhs)
     { return __rhs.compare(__lhs.c_str()) == 0; }
 
@@ -940,8 +958,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    */
   template<typename _Bi_iter, typename _Ch_traits, typename _Ch_alloc>
     inline bool
-    operator!=(const __sub_match_string<_Bi_iter, _Ch_traits, _Ch_alloc>& __lhs,
-	       const sub_match<_Bi_iter>& __rhs)
+    operator!=(const basic_string<
+	       typename iterator_traits<_Bi_iter>::value_type,
+	       _Ch_traits, _Ch_alloc>& __lhs, const sub_match<_Bi_iter>& __rhs)
     { return !(__lhs == __rhs); }
 
   /**
@@ -952,8 +971,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    */
   template<typename _Bi_iter, typename _Ch_traits, typename _Ch_alloc>
     inline bool
-    operator<(const __sub_match_string<_Bi_iter, _Ch_traits, _Ch_alloc>& __lhs,
-	      const sub_match<_Bi_iter>& __rhs)
+    operator<(const basic_string<
+	      typename iterator_traits<_Bi_iter>::value_type,
+	      _Ch_traits, _Ch_alloc>& __lhs, const sub_match<_Bi_iter>& __rhs)
      { return __rhs.compare(__lhs.c_str()) > 0; }
 
   /**
@@ -964,8 +984,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    */
   template<typename _Bi_iter, typename _Ch_traits, typename _Ch_alloc>
     inline bool
-    operator>(const __sub_match_string<_Bi_iter, _Ch_traits, _Ch_alloc>& __lhs,
-	      const sub_match<_Bi_iter>& __rhs)
+    operator>(const basic_string<
+	      typename iterator_traits<_Bi_iter>::value_type, 
+	      _Ch_traits, _Ch_alloc>& __lhs, const sub_match<_Bi_iter>& __rhs)
     { return __rhs < __lhs; }
 
   /**
@@ -976,8 +997,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    */
   template<typename _Bi_iter, typename _Ch_traits, typename _Ch_alloc>
     inline bool
-    operator>=(const __sub_match_string<_Bi_iter, _Ch_traits, _Ch_alloc>& __lhs,
-	       const sub_match<_Bi_iter>& __rhs)
+    operator>=(const basic_string<
+	       typename iterator_traits<_Bi_iter>::value_type,
+	       _Ch_traits, _Ch_alloc>& __lhs, const sub_match<_Bi_iter>& __rhs)
     { return !(__lhs < __rhs); }
 
   /**
@@ -988,8 +1010,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    */
   template<typename _Bi_iter, typename _Ch_traits, typename _Ch_alloc>
     inline bool
-    operator<=(const __sub_match_string<_Bi_iter, _Ch_traits, _Ch_alloc>& __lhs,
-	       const sub_match<_Bi_iter>& __rhs)
+    operator<=(const basic_string<
+	       typename iterator_traits<_Bi_iter>::value_type,
+	       _Ch_traits, _Ch_alloc>& __lhs, const sub_match<_Bi_iter>& __rhs)
     { return !(__rhs < __lhs); }
 
   /**
@@ -1002,7 +1025,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   template<typename _Bi_iter, typename _Ch_traits, typename _Ch_alloc>
     inline bool
     operator==(const sub_match<_Bi_iter>& __lhs,
-	       const __sub_match_string<_Bi_iter, _Ch_traits, _Ch_alloc>& __rhs)
+	       const basic_string<
+	       typename iterator_traits<_Bi_iter>::value_type,
+	       _Ch_traits, _Ch_alloc>& __rhs)
     { return __lhs.compare(__rhs.c_str()) == 0; }
 
   /**
@@ -1015,7 +1040,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   template<typename _Bi_iter, typename _Ch_traits, typename _Ch_alloc>
     inline bool
     operator!=(const sub_match<_Bi_iter>& __lhs,
-	       const __sub_match_string<_Bi_iter, _Ch_traits, _Ch_alloc>& __rhs)
+	       const basic_string<
+	       typename iterator_traits<_Bi_iter>::value_type,
+	       _Ch_traits, _Ch_alloc>& __rhs)
     { return !(__lhs == __rhs); }
 
   /**
@@ -1027,7 +1054,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   template<typename _Bi_iter, class _Ch_traits, class _Ch_alloc>
     inline bool
     operator<(const sub_match<_Bi_iter>& __lhs,
-	      const __sub_match_string<_Bi_iter, _Ch_traits, _Ch_alloc>& __rhs)
+	      const basic_string<
+	      typename iterator_traits<_Bi_iter>::value_type,
+	      _Ch_traits, _Ch_alloc>& __rhs)
     { return __lhs.compare(__rhs.c_str()) < 0; }
 
   /**
@@ -1039,7 +1068,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   template<typename _Bi_iter, class _Ch_traits, class _Ch_alloc>
     inline bool
     operator>(const sub_match<_Bi_iter>& __lhs,
-	      const __sub_match_string<_Bi_iter, _Ch_traits, _Ch_alloc>& __rhs)
+	      const basic_string<
+	      typename iterator_traits<_Bi_iter>::value_type,
+	      _Ch_traits, _Ch_alloc>& __rhs)
     { return __rhs < __lhs; }
 
   /**
@@ -1051,7 +1082,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   template<typename _Bi_iter, class _Ch_traits, class _Ch_alloc>
     inline bool
     operator>=(const sub_match<_Bi_iter>& __lhs,
-	       const __sub_match_string<_Bi_iter, _Ch_traits, _Ch_alloc>& __rhs)
+	       const basic_string<
+	       typename iterator_traits<_Bi_iter>::value_type,
+	       _Ch_traits, _Ch_alloc>& __rhs)
     { return !(__lhs < __rhs); }
 
   /**
@@ -1063,7 +1096,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   template<typename _Bi_iter, class _Ch_traits, class _Ch_alloc>
     inline bool
     operator<=(const sub_match<_Bi_iter>& __lhs,
-	       const __sub_match_string<_Bi_iter, _Ch_traits, _Ch_alloc>& __rhs)
+	       const basic_string<
+	       typename iterator_traits<_Bi_iter>::value_type,
+	       _Ch_traits, _Ch_alloc>& __rhs)
     { return !(__rhs < __lhs); }
 
   /**
@@ -1226,8 +1261,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     operator==(typename iterator_traits<_Bi_iter>::value_type const& __lhs,
 	       const sub_match<_Bi_iter>& __rhs)
     {
-      typedef typename sub_match<_Bi_iter>::string_type string_type;
-      return __rhs.compare(string_type(1, __lhs)) == 0;
+      return __rhs.compare(typename sub_match<_Bi_iter>::string_type(1, __lhs))
+             == 0;
     }
 
   /**
@@ -1254,8 +1289,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     operator<(typename iterator_traits<_Bi_iter>::value_type const& __lhs,
 	      const sub_match<_Bi_iter>& __rhs)
     {
-      typedef typename sub_match<_Bi_iter>::string_type string_type;
-      return __rhs.compare(string_type(1, __lhs)) > 0;
+      return __rhs.compare(typename sub_match<_Bi_iter>::string_type(1, __lhs))
+             > 0;
     }
 
   /**
@@ -1306,8 +1341,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     operator==(const sub_match<_Bi_iter>& __lhs,
 	       typename iterator_traits<_Bi_iter>::value_type const& __rhs)
     {
-      typedef typename sub_match<_Bi_iter>::string_type string_type;
-      return __lhs.compare(string_type(1, __rhs)) == 0;
+      return __lhs.compare(typename sub_match<_Bi_iter>::string_type(1, __rhs))
+             == 0;
     }
 
   /**
@@ -1334,8 +1369,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     operator<(const sub_match<_Bi_iter>& __lhs,
 	      typename iterator_traits<_Bi_iter>::value_type const& __rhs)
     {
-      typedef typename sub_match<_Bi_iter>::string_type string_type;
-      return __lhs.compare(string_type(1, __rhs)) < 0;
+      return __lhs.compare(typename sub_match<_Bi_iter>::string_type(1, __rhs))
+             < 0;
     }
 
   /**
@@ -1425,9 +1460,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    * @nosubgrouping
    */
   template<typename _Bi_iter,
-	   typename _Alloc = allocator<sub_match<_Bi_iter> > >
+	   typename _Allocator = allocator<sub_match<_Bi_iter> > >
     class match_results
-    : private std::vector<sub_match<_Bi_iter>, _Alloc>
+    : private std::vector<sub_match<_Bi_iter>, _Allocator>
     {
     private:
       /*
@@ -1441,27 +1476,26 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        * [n+1] prefix
        * [n+2] suffix
        */
-      typedef std::vector<sub_match<_Bi_iter>, _Alloc>     _Base_type;
-      typedef std::iterator_traits<_Bi_iter>   	   	   __iter_traits;
-      typedef regex_constants::match_flag_type		   match_flag_type;
+      typedef std::vector<sub_match<_Bi_iter>, _Allocator>    _Base_type;
 
     public:
       /**
        * @name 10.? Public Types
        */
       //@{
-      typedef _Alloc                                       allocator_type;
-      typedef sub_match<_Bi_iter>                          value_type;
-      typedef const value_type&                            const_reference;
-      typedef const_reference                              reference;
-      typedef typename _Base_type::const_iterator          const_iterator;
-      typedef const_iterator                               iterator;
-      typedef typename __iter_traits::difference_type	   difference_type;
-      typedef typename __iter_traits::value_type 	   char_type;
-      typedef typename allocator_traits<_Alloc>::size_type size_type;
-
-
-      typedef std::basic_string<char_type>                 string_type;
+      typedef sub_match<_Bi_iter>                             value_type;
+      typedef const value_type&                               const_reference;
+      typedef const_reference                                 reference;
+      typedef typename _Base_type::const_iterator             const_iterator;
+      typedef const_iterator                                  iterator;
+      typedef typename std::iterator_traits<_Bi_iter>::difference_type
+                                                              difference_type;
+      typedef typename allocator_traits<_Allocator>::size_type
+                                                              size_type;
+      typedef _Allocator                                      allocator_type;
+      typedef typename std::iterator_traits<_Bi_iter>::value_type
+                                                              char_type;
+      typedef std::basic_string<char_type>                    string_type;
       //@}
   
     public:
@@ -1475,7 +1509,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        * @post size() returns 0 and str() returns an empty string.
        */
       explicit
-      match_results(const _Alloc& __a = _Alloc())
+      match_results(const _Allocator& __a = _Allocator())
       : _Base_type(__a)
       { }
 
@@ -1717,7 +1751,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
         _Out_iter
         format(_Out_iter __out, const char_type* __fmt_first,
 	       const char_type* __fmt_last,
-	       match_flag_type __flags = regex_constants::format_default) const
+	       regex_constants::match_flag_type __flags
+	       = regex_constants::format_default) const
         { return __out; }
 
       /**
@@ -1726,7 +1761,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       template<typename _Out_iter, typename _St, typename _Sa>
         _Out_iter
         format(_Out_iter __out, const basic_string<char_type, _St, _Sa>& __fmt,
-	       match_flag_type __flags = regex_constants::format_default) const
+	       regex_constants::match_flag_type __flags
+	       = regex_constants::format_default) const
         {
           return format(__out, __fmt.data(), __fmt.data() + __fmt.size(),
                         __flags);
@@ -1738,7 +1774,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       template<typename _Out_iter, typename _St, typename _Sa>
         basic_string<char_type, _St, _Sa>
         format(const basic_string<char_type, _St, _Sa>& __fmt,
-	       match_flag_type __flags = regex_constants::format_default) const
+	       regex_constants::match_flag_type __flags
+	       = regex_constants::format_default) const
         {
           basic_string<char_type, _St, _Sa> __result;
           format(std::back_inserter(__result), __fmt, __flags);
@@ -1750,7 +1787,8 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
        */
       string_type
       format(const char_type* __fmt,
-	     match_flag_type __flags = regex_constants::format_default) const
+	     regex_constants::match_flag_type __flags
+	     = regex_constants::format_default) const
       {
         string_type __result;
         format(std::back_inserter(__result),
@@ -1789,7 +1827,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       //@} 
       
     private:
-      friend class __detail::_SpecializedResults<_Bi_iter, _Alloc>;
+      friend class __regex::_SpecializedResults<_Bi_iter, _Allocator>;
     };
   
   typedef match_results<const char*>             cmatch;
@@ -1805,10 +1843,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    * @returns true if the two objects refer to the same match,
    * false otherwise.
    */
-  template<typename _Bi_iter, typename _Alloc>
+  template<typename _Bi_iter, typename _Allocator>
     inline bool
-    operator==(const match_results<_Bi_iter, _Alloc>& __m1,
-	       const match_results<_Bi_iter, _Alloc>& __m2)
+    operator==(const match_results<_Bi_iter, _Allocator>& __m1,
+	       const match_results<_Bi_iter, _Allocator>& __m2)
     {
       if (__m1.ready() != __m2.ready())
         return false;
@@ -1829,10 +1867,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    * @returns true if the two objects do not refer to the same match,
    * false otherwise.
    */
-  template<typename _Bi_iter, class _Alloc>
+  template<typename _Bi_iter, class _Allocator>
     inline bool
-    operator!=(const match_results<_Bi_iter, _Alloc>& __m1,
-	       const match_results<_Bi_iter, _Alloc>& __m2)
+    operator!=(const match_results<_Bi_iter, _Allocator>& __m1,
+	       const match_results<_Bi_iter, _Allocator>& __m2)
     { return !(__m1 == __m2); }
 
   // [7.10.6] match_results swap
@@ -1843,10 +1881,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    *
    * The contents of the two match_results objects are swapped.
    */
-  template<typename _Bi_iter, typename _Alloc>
+  template<typename _Bi_iter, typename _Allocator>
     inline void
-    swap(match_results<_Bi_iter, _Alloc>& __lhs,
-	 match_results<_Bi_iter, _Alloc>& __rhs)
+    swap(match_results<_Bi_iter, _Allocator>& __lhs,
+	 match_results<_Bi_iter, _Allocator>& __rhs)
     { __lhs.swap(__rhs); }
 
   // [7.11.2] Function template regex_match
@@ -1872,21 +1910,21 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    *
    * @todo Implement this function.
    */
-  template<typename _Bi_iter, typename _Alloc,
+  template<typename _Bi_iter, typename _Allocator,
 	   typename _Ch_type, typename _Rx_traits>
     bool
     regex_match(_Bi_iter                                 __s,
                 _Bi_iter                                 __e,
-                match_results<_Bi_iter, _Alloc>&     __m,
+                match_results<_Bi_iter, _Allocator>&     __m,
                 const basic_regex<_Ch_type, _Rx_traits>& __re,
                 regex_constants::match_flag_type         __flags
                                = regex_constants::match_default)
     {
-      __detail::_AutomatonPtr __a = __re._M_get_automaton();
-      __detail::_Automaton::_SizeT __sz = __a->_M_sub_count();
-      __detail::_SpecializedCursor<_Bi_iter> __cs(__s, __e);
-      __detail::_SpecializedResults<_Bi_iter, _Alloc> __r(__sz, __cs, __m);
-      __detail::_Grep_matcher __matcher(__cs, __r, __a, __flags);
+      __regex::_AutomatonPtr __a = __re._M_get_automaton();
+      __regex::_Automaton::_SizeT __sz = __a->_M_sub_count();
+      __regex::_SpecializedCursor<_Bi_iter> __cs(__s, __e);
+      __regex::_SpecializedResults<_Bi_iter, _Allocator> __r(__sz, __cs, __m);
+      __regex::_Grep_matcher __matcher(__cs, __r, __a, __flags);
       return __m[0].matched;
     }
 
@@ -1929,10 +1967,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    *
    * @throws an exception of type regex_error.
    */
-  template<typename _Ch_type, typename _Alloc, typename _Rx_traits>
+  template<typename _Ch_type, typename _Allocator, typename _Rx_traits>
     inline bool
     regex_match(const _Ch_type* __s,
-		match_results<const _Ch_type*, _Alloc>& __m,
+		match_results<const _Ch_type*, _Allocator>& __m,
 		const basic_regex<_Ch_type, _Rx_traits>& __re,
 		regex_constants::match_flag_type __f
 		= regex_constants::match_default)
@@ -1953,11 +1991,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    * @throws an exception of type regex_error.
    */
   template<typename _Ch_traits, typename _Ch_alloc,
-	   typename _Alloc, typename _Ch_type, typename _Rx_traits>
+	   typename _Allocator, typename _Ch_type, typename _Rx_traits>
     inline bool
     regex_match(const basic_string<_Ch_type, _Ch_traits, _Ch_alloc>& __s,
 		match_results<typename basic_string<_Ch_type, 
-		_Ch_traits, _Ch_alloc>::const_iterator, _Alloc>& __m,
+		_Ch_traits, _Ch_alloc>::const_iterator, _Allocator>& __m,
 		const basic_regex<_Ch_type, _Rx_traits>& __re,
 		regex_constants::match_flag_type __flags
 		= regex_constants::match_default)
@@ -2022,11 +2060,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    *
    * @todo Implement this function.
    */
-  template<typename _Bi_iter, typename _Alloc,
+  template<typename _Bi_iter, typename _Allocator,
 	   typename _Ch_type, typename _Rx_traits>
     inline bool
     regex_search(_Bi_iter __first, _Bi_iter __last,
-		 match_results<_Bi_iter, _Alloc>& __m,
+		 match_results<_Bi_iter, _Allocator>& __m,
 		 const basic_regex<_Ch_type, _Rx_traits>& __re,
 		 regex_constants::match_flag_type __flags
 		 = regex_constants::match_default)
@@ -2068,10 +2106,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    *
    * @throws an exception of type regex_error.
    */
-  template<typename _Ch_type, class _Alloc, class _Rx_traits>
+  template<typename _Ch_type, class _Allocator, class _Rx_traits>
     inline bool
     regex_search(const _Ch_type* __s,
-		 match_results<const _Ch_type*, _Alloc>& __m,
+		 match_results<const _Ch_type*, _Allocator>& __m,
 		 const basic_regex<_Ch_type, _Rx_traits>& __e,
 		 regex_constants::match_flag_type __f
 		 = regex_constants::match_default)
@@ -2130,12 +2168,12 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
    * @throws an exception of type regex_error.
    */
   template<typename _Ch_traits, typename _Ch_alloc,
-	   typename _Alloc, typename _Ch_type,
+	   typename _Allocator, typename _Ch_type,
 	   typename _Rx_traits>
     inline bool
     regex_search(const basic_string<_Ch_type, _Ch_traits, _Ch_alloc>& __s,
 		 match_results<typename basic_string<_Ch_type,
-		 _Ch_traits, _Ch_alloc>::const_iterator, _Alloc>& __m,
+		 _Ch_traits, _Ch_alloc>::const_iterator, _Allocator>& __m,
 		 const basic_regex<_Ch_type, _Rx_traits>& __e,
 		 regex_constants::match_flag_type __f
 		 = regex_constants::match_default)
@@ -2211,6 +2249,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       typedef const value_type&                  reference;
       typedef std::forward_iterator_tag          iterator_category;
 
+    public:
       /**
        * @brief Provides a singular iterator, useful for indicating
        * one-past-the-end of a range.
@@ -2467,14 +2506,11 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /** @brief Token iterator for C-style NULL-terminated strings. */
   typedef regex_token_iterator<const char*>             cregex_token_iterator;
-
   /** @brief Token iterator for standard strings. */
   typedef regex_token_iterator<string::const_iterator>  sregex_token_iterator;
-
 #ifdef _GLIBCXX_USE_WCHAR_T
   /** @brief Token iterator for C-style NULL-terminated wide strings. */
   typedef regex_token_iterator<const wchar_t*>          wcregex_token_iterator;
-
   /** @brief Token iterator for standard wide-character strings. */
   typedef regex_token_iterator<wstring::const_iterator> wsregex_token_iterator;
 #endif

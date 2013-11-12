@@ -43,7 +43,6 @@ public:
   static ::java::lang::Long * getLong(::java::lang::String *, jlong);
   static ::java::lang::Long * getLong(::java::lang::String *, ::java::lang::Long *);
   jint Long$compareTo(::java::lang::Long *);
-  static jint compare(jlong, jlong);
   static jint bitCount(jlong);
   static jlong rotateLeft(jlong, jint);
   static jlong rotateRight(jlong, jint);

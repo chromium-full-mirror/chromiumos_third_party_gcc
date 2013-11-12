@@ -1,5 +1,6 @@
 /* Some code common to C++ and ObjC++ front ends.
-   Copyright (C) 2004-2013 Free Software Foundation, Inc.
+   Copyright (C) 2004, 2007, 2008, 2009, 2010, 2011
+   Free Software Foundation, Inc.
    Contributed by Ziemowit Laski  <zlaski@apple.com>
 
 This file is part of GCC.
@@ -119,7 +120,7 @@ cp_var_mod_type_p (tree type, tree fn)
 {
   /* If TYPE is a pointer-to-member, it is variably modified if either
      the class or the member are variably modified.  */
-  if (TYPE_PTRMEM_P (type))
+  if (TYPE_PTR_TO_MEMBER_P (type))
     return (variably_modified_type_p (TYPE_PTRMEM_CLASS_TYPE (type), fn)
 	    || variably_modified_type_p (TYPE_PTRMEM_POINTED_TO_TYPE (type),
 					 fn));
@@ -187,7 +188,10 @@ typedef struct GTY (()) sb
   tree real_type_value;
 } saved_builtin;
 
-static GTY (()) vec<saved_builtin, va_gc> *saved_builtins = NULL;
+DEF_VEC_O(saved_builtin);
+DEF_VEC_ALLOC_O(saved_builtin,gc);
+
+static GTY (()) VEC(saved_builtin, gc) *saved_builtins = NULL;
 
 /* Return true if the type is not user defined.  */
 
@@ -307,15 +311,13 @@ cmp_templ_arg (tree ta1, tree ta2)
       int n, i;
       if (!ARGUMENT_PACK_P (ta2))
         return 0;
-      tree pack1 = ARGUMENT_PACK_ARGS (ta1);
-      tree pack2 = ARGUMENT_PACK_ARGS (ta2);
-      n = TREE_VEC_LENGTH (pack1);
-      if (n != TREE_VEC_LENGTH (pack2))
+      n = TREE_VEC_LENGTH (ta1);
+      if (n != TREE_VEC_LENGTH (ta2))
         return 0;
       for (i = 0; i < n ; i++)
         {
-          if (!cmp_templ_arg (TREE_VEC_ELT (pack1, i),
-                              TREE_VEC_ELT (pack2, i)))
+          if (!cmp_templ_arg (TREE_VEC_ELT (ta1, i),
+                              TREE_VEC_ELT (ta2, i)))
             return 0;
         }
       return 1;
@@ -477,7 +479,7 @@ cp_add_built_in_decl (tree decl)
   if (parser_parsing_start)
     return;
 
-  sb = vec_safe_push (saved_builtins, saved_builtin ());
+  sb = VEC_safe_push (saved_builtin, gc, saved_builtins, NULL);
   sb->decl = decl;
   sb->decl_init_copy = NULL;
   sb->decl_fini_copy = NULL;
@@ -556,7 +558,8 @@ cp_save_built_in_decl_pre_parsing (void)
 
   add_built_in_type_node ();
 
-  for (i = 0; saved_builtins->iterate (i, &bi); ++i)
+  for (i = 0; VEC_iterate (saved_builtin,
+                           saved_builtins, i, bi); ++i)
     save_built_in_decl_pre_parsing_1 (bi);
 }
 
@@ -569,7 +572,8 @@ cp_restore_built_in_decl_pre_parsing (void)
   size_t i;
   saved_builtin *bi;
 
-  for (i = 0; saved_builtins->iterate (i, &bi); ++i)
+  for (i = 0; VEC_iterate (saved_builtin,
+                           saved_builtins, i, bi); ++i)
     {
       tree decl = bi->decl;
 
@@ -599,7 +603,8 @@ cp_save_built_in_decl_post_parsing (void)
   size_t i;
   saved_builtin *bi;
 
-  for (i = 0; saved_builtins->iterate (i, &bi); ++i)
+  for (i = 0; VEC_iterate (saved_builtin,
+                           saved_builtins, i, bi); ++i)
     {
       if (!TREE_STATIC (bi->decl) || DECL_ARTIFICIAL (bi->decl))
        	continue;
@@ -620,7 +625,8 @@ cp_restore_built_in_decl_post_parsing (void)
   unsigned i;
   saved_builtin *bi;
 
-  for (i = 0; saved_builtins->iterate (i, &bi); ++i)
+  for (i = 0; VEC_iterate (saved_builtin,
+                           saved_builtins, i, bi); ++i)
     {
       tree decl = bi->decl;
       /* Now restore the decl's state  */
@@ -687,25 +693,6 @@ init_shadowed_var_for_decl (void)
 {
   shadowed_var_for_decl = htab_create_ggc (512, tree_decl_map_hash,
 					   tree_decl_map_eq, 0);
-}
-
-/* Return true if stmt can fall thru.  Used by block_may_fallthru
-   default case.  */
-
-bool
-cxx_block_may_fallthru (const_tree stmt)
-{
-  switch (TREE_CODE (stmt))
-    {
-    case EXPR_STMT:
-      return block_may_fallthru (EXPR_STMT_EXPR (stmt));
-
-    case THROW_EXPR:
-      return false;
-
-    default:
-      return true;
-    }
 }
 
 void

@@ -1,4 +1,4 @@
-/* Copyright (C) 2003, 2005, 2006, 2012 Free Software Foundation
+/* Copyright (C) 2003, 2005, 2006  Free Software Foundation
 
    This file is part of libgcj.
 
@@ -17,6 +17,11 @@ details.  */
 #endif
 #include <errno.h>
 #include <string.h>
+
+#if HAVE_BSTRING_H
+// Needed for bzero, implicitly used by FD_ZERO on IRIX 5.2 
+#include <bstring.h>
+#endif
 
 #include <gcj/cni.h>
 #include <gnu/java/net/PlainDatagramSocketImpl.h>
@@ -655,7 +660,8 @@ gnu::java::net::PlainDatagramSocketImpl::setOption (jint optID,
 	    len = sizeof (struct in_addr);
 	    ptr = (const char *) &u.addr;
 	  }
-#ifdef HAVE_INET6
+// Tru64 UNIX V5.0 has struct sockaddr_in6, but no IPV6_MULTICAST_IF
+#if defined (HAVE_INET6) && defined (IPV6_MULTICAST_IF)
 	else if (len == 16)
 	  {
 	    level = IPPROTO_IPV6;

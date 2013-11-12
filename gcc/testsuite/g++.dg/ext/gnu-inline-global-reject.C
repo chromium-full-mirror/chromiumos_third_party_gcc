@@ -4,7 +4,7 @@
 */
 
 /* { dg-do compile } */
-/* { dg-options " -ansi -Wno-long-long -ftrack-macro-expansion=0" } */
+/* { dg-options " -ansi -Wno-long-long" } */
 
 #include "gnu-inline-common.h"
 

@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 2006-2012, Free Software Foundation, Inc.         --
+--          Copyright (C) 2006-2010, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -213,7 +213,7 @@ package body Ada.Calendar.Formatting is
 
       Result : String := "0000-00-00 00:00:00.00";
       Last   : constant Positive :=
-        Result'Last - (if Include_Time_Fraction then 0 else 3);
+                 Result'Last - (if Include_Time_Fraction then 0 else 3);
 
    begin
       Split (Date, Year, Month, Day,
@@ -421,19 +421,18 @@ package body Ada.Calendar.Formatting is
 
    begin
       Formatting_Operations.Split
-        (Date        => Date,
-         Year        => Year,
-         Month       => Month,
-         Day         => Day,
-         Day_Secs    => Seconds,
-         Hour        => H,
-         Minute      => M,
-         Second      => Se,
-         Sub_Sec     => Su,
-         Leap_Sec    => Leap_Second,
-         Use_TZ      => True,
-         Is_Historic => True,
-         Time_Zone   => Tz);
+        (Date      => Date,
+         Year      => Year,
+         Month     => Month,
+         Day       => Day,
+         Day_Secs  => Seconds,
+         Hour      => H,
+         Minute    => M,
+         Second    => Se,
+         Sub_Sec   => Su,
+         Leap_Sec  => Leap_Second,
+         Time_Zone => Tz,
+         Is_Ada_05 => True);
 
       --  Validity checks
 
@@ -467,19 +466,18 @@ package body Ada.Calendar.Formatting is
 
    begin
       Formatting_Operations.Split
-        (Date        => Date,
-         Year        => Year,
-         Month       => Month,
-         Day         => Day,
-         Day_Secs    => Dd,
-         Hour        => Hour,
-         Minute      => Minute,
-         Second      => Second,
-         Sub_Sec     => Sub_Second,
-         Leap_Sec    => Le,
-         Use_TZ      => True,
-         Is_Historic => True,
-         Time_Zone   => Tz);
+        (Date      => Date,
+         Year      => Year,
+         Month     => Month,
+         Day       => Day,
+         Day_Secs  => Dd,
+         Hour      => Hour,
+         Minute    => Minute,
+         Second    => Second,
+         Sub_Sec   => Sub_Second,
+         Leap_Sec  => Le,
+         Time_Zone => Tz,
+         Is_Ada_05 => True);
 
       --  Validity checks
 
@@ -516,19 +514,18 @@ package body Ada.Calendar.Formatting is
 
    begin
       Formatting_Operations.Split
-       (Date        => Date,
-        Year        => Year,
-        Month       => Month,
-        Day         => Day,
-        Day_Secs    => Dd,
-        Hour        => Hour,
-        Minute      => Minute,
-        Second      => Second,
-        Sub_Sec     => Sub_Second,
-        Leap_Sec    => Leap_Second,
-        Use_TZ      => True,
-        Is_Historic => True,
-        Time_Zone   => Tz);
+       (Date      => Date,
+        Year      => Year,
+        Month     => Month,
+        Day       => Day,
+        Day_Secs  => Dd,
+        Hour      => Hour,
+        Minute    => Minute,
+        Second    => Second,
+        Sub_Sec   => Sub_Second,
+        Leap_Sec  => Leap_Second,
+        Time_Zone => Tz,
+        Is_Ada_05 => True);
 
       --  Validity checks
 
@@ -632,8 +629,7 @@ package body Ada.Calendar.Formatting is
            Sub_Sec      => Ss,
            Leap_Sec     => Leap_Second,
            Use_Day_Secs => True,
-           Use_TZ       => True,
-           Is_Historic  => True,
+           Is_Ada_05    => True,
            Time_Zone    => Tz);
    end Time_Of;
 
@@ -682,8 +678,7 @@ package body Ada.Calendar.Formatting is
            Sub_Sec      => Sub_Second,
            Leap_Sec     => Leap_Second,
            Use_Day_Secs => False,
-           Use_TZ       => True,
-           Is_Historic  => True,
+           Is_Ada_05    => True,
            Time_Zone    => Tz);
    end Time_Of;
 

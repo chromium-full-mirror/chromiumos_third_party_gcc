@@ -27,7 +27,7 @@ __go_map_delete (struct __go_map *map, const void *key)
   void **pentry;
 
   if (map == NULL)
-    return;
+    runtime_panicstring ("deletion of entry in nil map");
 
   descriptor = map->__descriptor;
 

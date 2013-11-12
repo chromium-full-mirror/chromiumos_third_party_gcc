@@ -67,7 +67,7 @@ name`'rtype_qual`_'atype_code (rtype * const restrict retarray,
 	extent[n] = 0;
     }
 
-  if (retarray->base_addr == NULL)
+  if (retarray->data == NULL)
     {
       size_t alloc_size, str;
 
@@ -88,7 +88,7 @@ name`'rtype_qual`_'atype_code (rtype * const restrict retarray,
       alloc_size = sizeof (rtype_name) * GFC_DESCRIPTOR_STRIDE(retarray,rank-1)
     		   * extent[rank-1];
 
-      retarray->base_addr = xmalloc (alloc_size);
+      retarray->data = internal_malloc_size (alloc_size);
       if (alloc_size == 0)
 	{
 	  /* Make sure we have a zero-sized array.  */
@@ -118,8 +118,8 @@ name`'rtype_qual`_'atype_code (rtype * const restrict retarray,
 	return;
     }
 
-  base = array->base_addr;
-  dest = retarray->base_addr;
+  base = array->data;
+  dest = retarray->data;
 
   continue_loop = 1;
   while (continue_loop)
@@ -209,7 +209,7 @@ void
   if (len <= 0)
     return;
 
-  mbase = mask->base_addr;
+  mbase = mask->data;
 
   mask_kind = GFC_DESCRIPTOR_SIZE (mask);
 
@@ -245,7 +245,7 @@ void
 	extent[n] = 0;
     }
 
-  if (retarray->base_addr == NULL)
+  if (retarray->data == NULL)
     {
       size_t alloc_size, str;
 
@@ -273,7 +273,7 @@ void
 	  return;
 	}
       else
-	retarray->base_addr = xmalloc (alloc_size);
+	retarray->data = internal_malloc_size (alloc_size);
 
     }
   else
@@ -298,8 +298,8 @@ void
 	return;
     }
 
-  dest = retarray->base_addr;
-  base = array->base_addr;
+  dest = retarray->data;
+  base = array->data;
 
   while (base)
     {
@@ -311,12 +311,17 @@ void
       {
 ')dnl
 define(START_MASKED_ARRAY_BLOCK,
-`	for (n = 0; n < len; n++, src += delta, msrc += mdelta)
+`	if (len <= 0)
+	  *dest = '$1`;
+	else
 	  {
+	    for (n = 0; n < len; n++, src += delta, msrc += mdelta)
+	      {
 ')dnl
 define(FINISH_MASKED_ARRAY_FUNCTION,
-`	  }
-	*dest = result;
+`	      }
+	    *dest = result;
+	  }
       }
       /* Advance to the next element.  */
       count[0]++;
@@ -399,7 +404,7 @@ void
 	extent[n] = 0;
     }
 
-  if (retarray->base_addr == NULL)
+  if (retarray->data == NULL)
     {
       size_t alloc_size, str;
 
@@ -427,7 +432,7 @@ void
 	  return;
 	}
       else
-	retarray->base_addr = xmalloc (alloc_size);
+	retarray->data = internal_malloc_size (alloc_size);
     }
   else
     {
@@ -459,7 +464,7 @@ void
       dstride[n] = GFC_DESCRIPTOR_STRIDE(retarray,n);
     }
 
-  dest = retarray->base_addr;
+  dest = retarray->data;
 
   while(1)
     {
@@ -495,6 +500,6 @@ FINISH_ARRAY_FUNCTION($4)')dnl
 define(MASKED_ARRAY_FUNCTION,
 `START_MASKED_ARRAY_FUNCTION
 $2
-START_MASKED_ARRAY_BLOCK
+START_MASKED_ARRAY_BLOCK($1)
 $3
 FINISH_MASKED_ARRAY_FUNCTION')dnl

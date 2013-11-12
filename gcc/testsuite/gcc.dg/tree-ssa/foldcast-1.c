@@ -1,7 +1,7 @@
 /* { dg-do compile } */
 /* { dg-options "-fdump-tree-original" } */
 
-typedef __INTPTR_TYPE__ ssize_t;
+typedef int ssize_t __attribute__((mode(pointer)));
 ssize_t foo (ssize_t x)
 {
   return (ssize_t)(char *)x;

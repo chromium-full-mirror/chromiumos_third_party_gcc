@@ -45,7 +45,6 @@ private:
   ::java::lang::ClassLoader * classloader;
   JArray< ::java::security::Principal * > * principals;
   jboolean staticBinding;
-  jboolean hasAllPermissions;
 public:
   static ::java::lang::Class class$;
 };

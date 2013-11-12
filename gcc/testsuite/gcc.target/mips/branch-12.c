@@ -5,9 +5,9 @@
 #include "branch-helper.h"
 
 NOMIPS16 void
-foo (int (*bar) (void), int *x)
+foo (void (*bar) (void), volatile int *x)
 {
-  *x = bar ();
+  bar ();
   if (__builtin_expect (*x == 0, 1))
     OCCUPY_0x1fff8;
 }

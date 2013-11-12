@@ -1,7 +1,6 @@
 /* PR target/51106 */
 /* { dg-do "compile" } */
 /* { dg-skip-if "RTL error" { "*-*-*" } { "-fno-fat-lto-objects" } { "" } } */
-/* { dg-skip-if "" { powerpc-ibm-aix* } { "*" } { "" } } */
 
 int
 bar (int x)
@@ -12,4 +11,4 @@ lab:
   return 0;
 }
 
-/* { dg-warning "probably doesn.t match constraints" "" { target *-*-* } 9 } */
+/* { dg-warning "probably doesn.t match constraints" "" { target *-*-* } 8 } */

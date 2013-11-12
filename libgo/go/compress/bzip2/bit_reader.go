@@ -14,16 +14,21 @@ import (
 // because the error handling was verbose. Instead, any error is kept and can
 // be checked afterwards.
 type bitReader struct {
-	r    io.ByteReader
+	r    byteReader
 	n    uint64
 	bits uint
 	err  error
 }
 
-// newBitReader returns a new bitReader reading from r. If r is not
-// already an io.ByteReader, it will be converted via a bufio.Reader.
+// bitReader needs to read bytes from an io.Reader. We attempt to convert the
+// given io.Reader to this interface and, if it doesn't already fit, we wrap in
+// a bufio.Reader.
+type byteReader interface {
+	ReadByte() (byte, error)
+}
+
 func newBitReader(r io.Reader) bitReader {
-	byter, ok := r.(io.ByteReader)
+	byter, ok := r.(byteReader)
 	if !ok {
 		byter = bufio.NewReader(r)
 	}

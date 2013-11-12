@@ -6,7 +6,7 @@
 --                                                                          --
 --                                 B o d y                                  --
 --                                                                          --
---          Copyright (C) 1992-2012, Free Software Foundation, Inc.         --
+--          Copyright (C) 1992-2009, Free Software Foundation, Inc.         --
 --                                                                          --
 -- GNAT is free software;  you can  redistribute it  and/or modify it under --
 -- terms of the  GNU General Public License as published  by the Free Soft- --
@@ -48,7 +48,8 @@ package body System.Val_WChar is
       WV : constant Unsigned_32         := Wide_Wide_Character'Pos (WC);
    begin
       if WV > 16#FFFF# then
-         Bad_Value (Str);
+         raise Constraint_Error with
+           "out of range character for Value attribute";
       else
          return Wide_Character'Val (WV);
       end if;
@@ -76,7 +77,7 @@ package body System.Val_WChar is
          --  Must be at least three characters
 
          if L - F < 2 then
-            Bad_Value (Str);
+            raise Constraint_Error;
 
          --  If just three characters, simple character case
 
@@ -102,7 +103,7 @@ package body System.Val_WChar is
                   P := P + 1;
 
                   if P = Str'Last then
-                     Bad_Value (Str);
+                     raise Constraint_Error;
                   end if;
 
                   return Str (P);
@@ -123,7 +124,7 @@ package body System.Val_WChar is
                end if;
 
                if P /= L - 1 then
-                  Bad_Value (Str);
+                  raise Constraint_Error;
                end if;
 
                return W;
@@ -149,12 +150,12 @@ package body System.Val_WChar is
                elsif Str (J) in 'a' .. 'f' then
                   W := W - Character'Pos ('a') + 10;
                else
-                  Bad_Value (Str);
+                  raise Constraint_Error;
                end if;
             end loop;
 
             if W > 16#7FFF_FFFF# then
-               Bad_Value (Str);
+               raise Constraint_Error;
             else
                return Wide_Wide_Character'Val (W);
             end if;
@@ -169,7 +170,7 @@ package body System.Val_WChar is
 
    exception
       when Constraint_Error =>
-         Bad_Value (Str);
+         raise Constraint_Error with "invalid string for value attribute";
    end Value_Wide_Wide_Character;
 
 end System.Val_WChar;

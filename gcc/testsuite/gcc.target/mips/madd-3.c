@@ -1,6 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "isa_rev>=1 -mgp32" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-O2 isa_rev>=1 -mgp32" } */
 /* { dg-final { scan-assembler-times "\tmadd\t" 3 } } */
 
 NOMIPS16 long long

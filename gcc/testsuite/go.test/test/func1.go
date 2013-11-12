@@ -1,15 +1,14 @@
-// errorcheck
+// errchk $G $F.go
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Test that result parameters are in the same scope as regular parameters.
-// Does not compile.
+// does not compile and should not compile
 
 package main
 
-func f1(a int) (int, float32) {
+func f1(a int) (int, float32) { // BUG (not caught by compiler): multiple return values must have names
 	return 7, 7.0
 }
 

@@ -407,7 +407,6 @@ type (
 	// A ChanType node represents a channel type.
 	ChanType struct {
 		Begin token.Pos // position of "chan" keyword or "<-" (whichever comes first)
-		Arrow token.Pos // position of "<-" (noPos if there is no "<-")
 		Dir   ChanDir   // channel direction
 		Value Expr      // value type
 	}
@@ -555,7 +554,7 @@ type (
 
 	// A DeclStmt node represents a declaration in a statement list.
 	DeclStmt struct {
-		Decl Decl // *GenDecl with CONST, TYPE, or VAR token
+		Decl Decl
 	}
 
 	// An EmptyStmt node represents an empty statement.

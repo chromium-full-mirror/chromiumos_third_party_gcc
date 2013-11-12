@@ -1,9 +1,6 @@
 // $G -N -o slow.$A $D/bug369.dir/pkg.go &&
 // $G -o fast.$A $D/bug369.dir/pkg.go &&
-// run
-
-// NOTE: This test is not run by 'run.go' and so not run by all.bash.
-// To run this test you must use the ./run shell script.
+// $G $D/$F.go && $L $F.$A && ./$A.out
 
 // Copyright 2011 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -38,9 +35,9 @@ func BenchmarkSlowNonASCII(b *testing.B) {
 }
 
 func main() {
-	os.Args = []string{os.Args[0], "-test.benchtime=100ms"}
+	os.Args = []string{os.Args[0], "-test.benchtime=0.1"}
 	flag.Parse()
-
+	
 	rslow := testing.Benchmark(BenchmarkSlowNonASCII)
 	rfast := testing.Benchmark(BenchmarkFastNonASCII)
 	tslow := rslow.NsPerOp()

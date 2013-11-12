@@ -1,4 +1,4 @@
-/* { dg-options "-mr10k-cache-barrier=load-store -mno-abicalls" } */
+/* { dg-options "-O2 -mr10k-cache-barrier=load-store -mno-abicalls" } */
 
 /* Test that loads are correctly protected.  */
 

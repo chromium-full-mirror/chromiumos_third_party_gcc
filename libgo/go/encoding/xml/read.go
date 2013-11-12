@@ -81,8 +81,8 @@ import (
 //      of the above rules and the struct has a field with tag ",any",
 //      unmarshal maps the sub-element to that struct field.
 //
-//   * An anonymous struct field is handled as if the fields of its
-//      value were part of the outer struct.
+//   * A non-pointer anonymous struct field is handled as if the
+//      fields of its value were part of the outer struct.
 //
 //   * A struct field with tag "-" is never unmarshalled into.
 //
@@ -248,7 +248,7 @@ func (p *Decoder) unmarshal(val reflect.Value, start *StartElement) error {
 				}
 				return UnmarshalError(e)
 			}
-			fv := finfo.value(sv)
+			fv := sv.FieldByIndex(finfo.idx)
 			if _, ok := fv.Interface().(Name); ok {
 				fv.Set(reflect.ValueOf(start.Name))
 			}
@@ -260,10 +260,10 @@ func (p *Decoder) unmarshal(val reflect.Value, start *StartElement) error {
 			finfo := &tinfo.fields[i]
 			switch finfo.flags & fMode {
 			case fAttr:
-				strv := finfo.value(sv)
+				strv := sv.FieldByIndex(finfo.idx)
 				// Look for attribute.
 				for _, a := range start.Attr {
-					if a.Name.Local == finfo.name && (finfo.xmlns == "" || finfo.xmlns == a.Name.Space) {
+					if a.Name.Local == finfo.name {
 						copyValue(strv, []byte(a.Value))
 						break
 					}
@@ -271,22 +271,22 @@ func (p *Decoder) unmarshal(val reflect.Value, start *StartElement) error {
 
 			case fCharData:
 				if !saveData.IsValid() {
-					saveData = finfo.value(sv)
+					saveData = sv.FieldByIndex(finfo.idx)
 				}
 
 			case fComment:
 				if !saveComment.IsValid() {
-					saveComment = finfo.value(sv)
+					saveComment = sv.FieldByIndex(finfo.idx)
 				}
 
-			case fAny, fAny | fElement:
+			case fAny:
 				if !saveAny.IsValid() {
-					saveAny = finfo.value(sv)
+					saveAny = sv.FieldByIndex(finfo.idx)
 				}
 
 			case fInnerXml:
 				if !saveXML.IsValid() {
-					saveXML = finfo.value(sv)
+					saveXML = sv.FieldByIndex(finfo.idx)
 					if p.saved == nil {
 						saveXMLIndex = 0
 						p.saved = new(bytes.Buffer)
@@ -374,58 +374,68 @@ Loop:
 }
 
 func copyValue(dst reflect.Value, src []byte) (err error) {
-	if dst.Kind() == reflect.Ptr {
-		if dst.IsNil() {
-			dst.Set(reflect.New(dst.Type().Elem()))
-		}
-		dst = dst.Elem()
+	// Helper functions for integer and unsigned integer conversions
+	var itmp int64
+	getInt64 := func() bool {
+		itmp, err = strconv.ParseInt(string(src), 10, 64)
+		// TODO: should check sizes
+		return err == nil
+	}
+	var utmp uint64
+	getUint64 := func() bool {
+		utmp, err = strconv.ParseUint(string(src), 10, 64)
+		// TODO: check for overflow?
+		return err == nil
+	}
+	var ftmp float64
+	getFloat64 := func() bool {
+		ftmp, err = strconv.ParseFloat(string(src), 64)
+		// TODO: check for overflow?
+		return err == nil
 	}
 
 	// Save accumulated data.
-	switch dst.Kind() {
+	switch t := dst; t.Kind() {
 	case reflect.Invalid:
-		// Probably a commendst.
+		// Probably a comment.
 	default:
-		return errors.New("cannot happen: unknown type " + dst.Type().String())
+		return errors.New("cannot happen: unknown type " + t.Type().String())
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		itmp, err := strconv.ParseInt(string(src), 10, dst.Type().Bits())
-		if err != nil {
+		if !getInt64() {
 			return err
 		}
-		dst.SetInt(itmp)
+		t.SetInt(itmp)
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		utmp, err := strconv.ParseUint(string(src), 10, dst.Type().Bits())
-		if err != nil {
+		if !getUint64() {
 			return err
 		}
-		dst.SetUint(utmp)
+		t.SetUint(utmp)
 	case reflect.Float32, reflect.Float64:
-		ftmp, err := strconv.ParseFloat(string(src), dst.Type().Bits())
-		if err != nil {
+		if !getFloat64() {
 			return err
 		}
-		dst.SetFloat(ftmp)
+		t.SetFloat(ftmp)
 	case reflect.Bool:
 		value, err := strconv.ParseBool(strings.TrimSpace(string(src)))
 		if err != nil {
 			return err
 		}
-		dst.SetBool(value)
+		t.SetBool(value)
 	case reflect.String:
-		dst.SetString(string(src))
+		t.SetString(string(src))
 	case reflect.Slice:
 		if len(src) == 0 {
 			// non-nil to flag presence
 			src = []byte{}
 		}
-		dst.SetBytes(src)
+		t.SetBytes(src)
 	case reflect.Struct:
-		if dst.Type() == timeType {
+		if t.Type() == timeType {
 			tv, err := time.Parse(time.RFC3339, string(src))
 			if err != nil {
 				return err
 			}
-			dst.Set(reflect.ValueOf(tv))
+			t.Set(reflect.ValueOf(tv))
 		}
 	}
 	return nil
@@ -441,7 +451,7 @@ func (p *Decoder) unmarshalPath(tinfo *typeInfo, sv reflect.Value, parents []str
 Loop:
 	for i := range tinfo.fields {
 		finfo := &tinfo.fields[i]
-		if finfo.flags&fElement == 0 || len(finfo.parents) < len(parents) || finfo.xmlns != "" && finfo.xmlns != start.Name.Space {
+		if finfo.flags&fElement == 0 || len(finfo.parents) < len(parents) {
 			continue
 		}
 		for j := range parents {
@@ -451,7 +461,7 @@ Loop:
 		}
 		if len(finfo.parents) == len(parents) && finfo.name == start.Name.Local {
 			// It's a perfect match, unmarshal the field.
-			return true, p.unmarshal(finfo.value(sv), start)
+			return true, p.unmarshal(sv.FieldByIndex(finfo.idx), start)
 		}
 		if len(finfo.parents) > len(parents) && finfo.parents[len(parents)] == start.Name.Local {
 			// It's a prefix for the field. Break and recurse
@@ -493,6 +503,7 @@ Loop:
 			return true, nil
 		}
 	}
+	panic("unreachable")
 }
 
 // Skip reads tokens until it has consumed the end element
@@ -516,4 +527,5 @@ func (d *Decoder) Skip() error {
 			return nil
 		}
 	}
+	panic("unreachable")
 }

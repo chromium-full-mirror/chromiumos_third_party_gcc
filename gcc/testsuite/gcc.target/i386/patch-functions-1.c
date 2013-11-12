@@ -1,5 +1,5 @@
 /* Verify -mpatch-functions-for-instrumentation works.  */
-/* { dg-do compile } */
+/* { dg-do run } */
 /* { dg-require-effective-target lp64 } */
 /* { dg-options "-mpatch-functions-for-instrumentation" } */
 
@@ -8,16 +8,13 @@
 /* Check nop-bytes at end.  */
 /* { dg-final { scan-assembler "ret(.*).byte\t0x90(.*).byte\t0x90" } } */
 
-__attribute__ ((noinline))
-void foo()
-{
+void foo() {
   /* Dummy loop.  */
   int x = 0;
   while (++x);
 }
 
-int main()
-{
+int main() {
   foo();
   return 0;
 }

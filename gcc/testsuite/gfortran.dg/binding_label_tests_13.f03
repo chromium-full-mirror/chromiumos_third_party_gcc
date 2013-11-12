@@ -6,4 +6,3 @@ module binding_label_tests_13
   integer(c_int) :: c3
   bind(c) c3
 end module binding_label_tests_13
-! { dg-final { keep-modules "" } }

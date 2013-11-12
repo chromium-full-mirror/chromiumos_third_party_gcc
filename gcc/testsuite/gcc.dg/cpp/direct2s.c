@@ -6,7 +6,7 @@
    should be identical.  */
 
 /* { dg-do compile } */
-/* { dg-options "-save-temps -ansi -pedantic-errors -ftrack-macro-expansion=0" } */
+/* { dg-options "-save-temps -ansi -pedantic-errors" } */
 
 #define HASH #
 #define HASHDEFINE #define

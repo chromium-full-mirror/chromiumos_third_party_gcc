@@ -10,8 +10,5 @@ void foo()
   __transaction_relaxed { free (p); }
 }
 
-/* We still have one call to free()-- on the uninstrumented path
-   everything is as usual.  */
-/* { dg-final { scan-tree-dump-times "free" 1 "optimized" } } */
-
+/* { dg-final { scan-tree-dump-times "free" 0 "optimized" } } */
 /* { dg-final { cleanup-tree-dump "optimized" } } */

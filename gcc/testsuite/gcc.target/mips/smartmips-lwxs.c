@@ -1,6 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-msmartmips" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-O -msmartmips" } */
 
 NOMIPS16 int scaled_indexed_word_load (int a[], int b)
 {

@@ -6,9 +6,9 @@
 
 #pragma interface
 
-#include <java/lang/ReflectiveOperationException.h>
+#include <java/lang/Exception.h>
 
-class java::lang::IllegalAccessException : public ::java::lang::ReflectiveOperationException
+class java::lang::IllegalAccessException : public ::java::lang::Exception
 {
 
 public:

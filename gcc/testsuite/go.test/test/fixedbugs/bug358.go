@@ -1,4 +1,4 @@
-// errorcheck
+// errchk $G $D/$F.go
 
 // Copyright 2011 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -12,7 +12,7 @@ package main
 import (
 	"io/ioutil"	// GCCGO_ERROR "imported and not used"
 	"net/http"
-	"os"		// GCCGO_ERROR "imported and not used"
+	"os"
 )
 
 func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {

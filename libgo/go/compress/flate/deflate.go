@@ -22,7 +22,7 @@ const (
 	logMaxOffsetSize   = 15  // Standard DEFLATE
 	minMatchLength     = 3   // The smallest match that the compressor looks for
 	maxMatchLength     = 258 // The longest match for the compressor
-	minOffsetSize      = 1   // The shortest offset that makes any sense
+	minOffsetSize      = 1   // The shortest offset that makes any sence
 
 	// The maximum number of tokens we put into a single flat block, just too
 	// stop things from getting too large.

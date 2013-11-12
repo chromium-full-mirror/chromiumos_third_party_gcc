@@ -1,5 +1,5 @@
 /* { dg-do run } */
-/* { dg-options "-mips3d" } */
+/* { dg-options "-O2 -mips3d" } */
 
 /* Test MIPS-3D branch-if-any-two builtin functions */
 #include <stdlib.h>

@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Unix domain sockets
+
 package net
 
 // UnixAddr represents the address of a Unix domain socket end point.
@@ -10,8 +12,7 @@ type UnixAddr struct {
 	Net  string
 }
 
-// Network returns the address's network name, "unix", "unixgram" or
-// "unixpacket".
+// Network returns the address's network name, "unix" or "unixgram".
 func (a *UnixAddr) Network() string {
 	return a.Net
 }
@@ -35,9 +36,11 @@ func (a *UnixAddr) toAddr() Addr {
 // "unixpacket".
 func ResolveUnixAddr(net, addr string) (*UnixAddr, error) {
 	switch net {
-	case "unix", "unixgram", "unixpacket":
-		return &UnixAddr{Name: addr, Net: net}, nil
+	case "unix":
+	case "unixpacket":
+	case "unixgram":
 	default:
 		return nil, UnknownNetworkError(net)
 	}
+	return &UnixAddr{addr, net}, nil
 }

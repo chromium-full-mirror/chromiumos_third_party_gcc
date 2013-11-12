@@ -1,10 +1,8 @@
-// run
+// $G $D/$F.go && $L $F.$A && ./$A.out
 
 // Copyright 2009 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
-
-// Test arrays and slices.
 
 package main
 
@@ -70,9 +68,6 @@ func testpdpd() {
 
 	a = a[5:25]
 	res(sumpd(a), 5, 25)
-
-	a = a[30:95]
-	res(sumpd(a), 35, 100)
 }
 
 // call ptr fixed with ptr fixed

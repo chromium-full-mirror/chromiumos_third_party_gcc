@@ -1,5 +1,5 @@
 /* Test for ICE in predictive commoning with empty loop header block
-   on arm-none-linux-*.  */
+   on arm-none-linux-gnueabi.  */
 
 struct Foo
 {

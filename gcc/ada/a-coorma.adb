@@ -360,8 +360,8 @@ package body Ada.Containers.Ordered_Maps is
          L : Natural renames T.Lock;
       begin
          return R : constant Constant_Reference_Type :=
-           (Element => Position.Node.Element'Access,
-            Control => (Controlled with Position.Container))
+                      (Element => Position.Node.Element'Access,
+                       Control => (Controlled with Position.Container))
          do
             B := B + 1;
             L := L + 1;
@@ -370,7 +370,7 @@ package body Ada.Containers.Ordered_Maps is
    end Constant_Reference;
 
    function Constant_Reference
-     (Container : aliased Map;
+     (Container : Map;
       Key       : Key_Type) return Constant_Reference_Type
    is
       Node : constant Node_Access := Key_Ops.Find (Container.Tree, Key);
@@ -386,8 +386,9 @@ package body Ada.Containers.Ordered_Maps is
          L : Natural renames T.Lock;
       begin
          return R : constant Constant_Reference_Type :=
-           (Element => Node.Element'Access,
-            Control => (Controlled with Container'Unrestricted_Access))
+                      (Element => Node.Element'Access,
+                       Control =>
+                         (Controlled with Container'Unrestricted_Access))
          do
             B := B + 1;
             L := L + 1;
@@ -421,12 +422,12 @@ package body Ada.Containers.Ordered_Maps is
 
    function Copy_Node (Source : Node_Access) return Node_Access is
       Target : constant Node_Access :=
-        new Node_Type'(Color   => Source.Color,
-                       Key     => Source.Key,
-                       Element => Source.Element,
-                       Parent  => null,
-                       Left    => null,
-                       Right   => null);
+                 new Node_Type'(Color   => Source.Color,
+                                Key     => Source.Key,
+                                Element => Source.Element,
+                                Parent  => null,
+                                Left    => null,
+                                Right   => null);
    begin
       return Target;
    end Copy_Node;
@@ -945,9 +946,9 @@ package body Ada.Containers.Ordered_Maps is
       --  for a reverse iterator, Container.Last is the beginning.
 
       return It : constant Iterator :=
-        (Limited_Controlled with
-           Container => Container'Unrestricted_Access,
-           Node      => null)
+                    (Limited_Controlled with
+                       Container => Container'Unrestricted_Access,
+                       Node      => null)
       do
          B := B + 1;
       end return;
@@ -993,9 +994,9 @@ package body Ada.Containers.Ordered_Maps is
       --  is a forward or reverse iteration.
 
       return It : constant Iterator :=
-        (Limited_Controlled with
-           Container => Container'Unrestricted_Access,
-           Node      => Start.Node)
+                    (Limited_Controlled with
+                       Container => Container'Unrestricted_Access,
+                       Node      => Start.Node)
       do
          B := B + 1;
       end return;
@@ -1131,7 +1132,8 @@ package body Ada.Containers.Ordered_Maps is
                      "Position cursor of Next is bad");
 
       declare
-         Node : constant Node_Access := Tree_Operations.Next (Position.Node);
+         Node : constant Node_Access :=
+                  Tree_Operations.Next (Position.Node);
 
       begin
          if Node = null then
@@ -1188,7 +1190,7 @@ package body Ada.Containers.Ordered_Maps is
 
       declare
          Node : constant Node_Access :=
-           Tree_Operations.Previous (Position.Node);
+                  Tree_Operations.Previous (Position.Node);
 
       begin
          if Node = null then
@@ -1353,8 +1355,8 @@ package body Ada.Containers.Ordered_Maps is
          L : Natural renames T.Lock;
       begin
          return R : constant Reference_Type :=
-           (Element => Position.Node.Element'Access,
-            Control => (Controlled with Position.Container))
+                      (Element => Position.Node.Element'Access,
+                       Control => (Controlled with Position.Container))
          do
             B := B + 1;
             L := L + 1;
@@ -1379,8 +1381,9 @@ package body Ada.Containers.Ordered_Maps is
          L : Natural renames T.Lock;
       begin
          return R : constant Reference_Type :=
-           (Element => Node.Element'Access,
-            Control => (Controlled with Container'Unrestricted_Access))
+                      (Element => Node.Element'Access,
+                       Control =>
+                         (Controlled with Container'Unrestricted_Access))
          do
             B := B + 1;
             L := L + 1;

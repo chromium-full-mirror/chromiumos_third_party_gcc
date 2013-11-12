@@ -1,13 +1,10 @@
-// errorcheck
+// errchk $G -e $D/$F.go
 
 // Copyright 2011 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-
-// Verify that erroneous labels are caught by the compiler.
-// This set is caught by pass 2. That's why this file is label1.go.
-// Does not compile.
+// Pass 2 label errors.
 
 package main
 

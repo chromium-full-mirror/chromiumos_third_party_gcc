@@ -1,5 +1,6 @@
 /* Generate code to allocate RTL structures.
-   Copyright (C) 1997-2013 Free Software Foundation, Inc.
+   Copyright (C) 1997, 1998, 1999, 2000, 2002, 2003, 2004, 2007, 2010
+   Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -63,9 +64,9 @@ type_from_format (int c)
     case 'E':
       return "rtvec ";
     case 't':
-      return "tree ";
+      return "union tree_node *";  /* tree - typedef not available */
     case 'B':
-      return "basic_block ";
+      return "struct basic_block_def *";  /* basic block - typedef not available */
     default:
       gcc_unreachable ();
     }

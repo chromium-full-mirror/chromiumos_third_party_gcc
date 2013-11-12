@@ -31,10 +31,9 @@ class gnu::javax::sound::midi::dssi::DSSIMidiDeviceProvider$DSSIInfo : public ::
 {
 
 public:
-  DSSIMidiDeviceProvider$DSSIInfo(::java::lang::String *, ::java::lang::String *, ::java::lang::String *, ::java::lang::String *, ::java::lang::String *, ::java::lang::String *, jlong);
+  DSSIMidiDeviceProvider$DSSIInfo(::java::lang::String *, ::java::lang::String *, ::java::lang::String *, ::java::lang::String *, ::java::lang::String *, jlong);
 public: // actually package-private
-  ::java::lang::String * __attribute__((aligned(__alignof__( ::javax::sound::midi::MidiDevice$Info)))) copyright;
-  ::java::lang::String * soname;
+  ::java::lang::String * __attribute__((aligned(__alignof__( ::javax::sound::midi::MidiDevice$Info)))) soname;
   jlong index;
 public:
   static ::java::lang::Class class$;

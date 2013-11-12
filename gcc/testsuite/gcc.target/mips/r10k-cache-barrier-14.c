@@ -1,4 +1,4 @@
-/* { dg-options "(-mips16) -mr10k-cache-barrier=store -ffat-lto-objects" } */
+/* { dg-options "(-mips16) -O2 -mr10k-cache-barrier=store" } */
 
 /* Test that indirect calls are protected.  */
 

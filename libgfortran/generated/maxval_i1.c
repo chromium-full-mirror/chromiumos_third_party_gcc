@@ -1,5 +1,5 @@
 /* Implementation of the MAXVAL intrinsic
-   Copyright (C) 2002-2013 Free Software Foundation, Inc.
+   Copyright 2002, 2007, 2009, 2010 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
 This file is part of the GNU Fortran runtime library (libgfortran).
@@ -79,7 +79,7 @@ maxval_i1 (gfc_array_i1 * const restrict retarray,
 	extent[n] = 0;
     }
 
-  if (retarray->base_addr == NULL)
+  if (retarray->data == NULL)
     {
       size_t alloc_size, str;
 
@@ -100,7 +100,7 @@ maxval_i1 (gfc_array_i1 * const restrict retarray,
       alloc_size = sizeof (GFC_INTEGER_1) * GFC_DESCRIPTOR_STRIDE(retarray,rank-1)
     		   * extent[rank-1];
 
-      retarray->base_addr = xmalloc (alloc_size);
+      retarray->data = internal_malloc_size (alloc_size);
       if (alloc_size == 0)
 	{
 	  /* Make sure we have a zero-sized array.  */
@@ -130,8 +130,8 @@ maxval_i1 (gfc_array_i1 * const restrict retarray,
 	return;
     }
 
-  base = array->base_addr;
-  dest = retarray->base_addr;
+  base = array->data;
+  dest = retarray->data;
 
   continue_loop = 1;
   while (continue_loop)
@@ -235,7 +235,7 @@ mmaxval_i1 (gfc_array_i1 * const restrict retarray,
   if (len <= 0)
     return;
 
-  mbase = mask->base_addr;
+  mbase = mask->data;
 
   mask_kind = GFC_DESCRIPTOR_SIZE (mask);
 
@@ -271,7 +271,7 @@ mmaxval_i1 (gfc_array_i1 * const restrict retarray,
 	extent[n] = 0;
     }
 
-  if (retarray->base_addr == NULL)
+  if (retarray->data == NULL)
     {
       size_t alloc_size, str;
 
@@ -299,7 +299,7 @@ mmaxval_i1 (gfc_array_i1 * const restrict retarray,
 	  return;
 	}
       else
-	retarray->base_addr = xmalloc (alloc_size);
+	retarray->data = internal_malloc_size (alloc_size);
 
     }
   else
@@ -324,8 +324,8 @@ mmaxval_i1 (gfc_array_i1 * const restrict retarray,
 	return;
     }
 
-  dest = retarray->base_addr;
-  base = array->base_addr;
+  dest = retarray->data;
+  base = array->data;
 
   while (base)
     {
@@ -344,8 +344,12 @@ mmaxval_i1 (gfc_array_i1 * const restrict retarray,
 #if defined (GFC_INTEGER_1_QUIET_NAN)
 	int non_empty_p = 0;
 #endif
-	for (n = 0; n < len; n++, src += delta, msrc += mdelta)
+	if (len <= 0)
+	  *dest = (-GFC_INTEGER_1_HUGE-1);
+	else
 	  {
+	    for (n = 0; n < len; n++, src += delta, msrc += mdelta)
+	      {
 
 #if defined (GFC_INTEGER_1_INFINITY) || defined (GFC_INTEGER_1_QUIET_NAN)
 		if (*msrc)
@@ -370,8 +374,9 @@ mmaxval_i1 (gfc_array_i1 * const restrict retarray,
 #endif
 		if (*msrc && *src > result)
 		  result = *src;
+	      }
+	    *dest = result;
 	  }
-	*dest = result;
       }
       /* Advance to the next element.  */
       count[0]++;
@@ -454,7 +459,7 @@ smaxval_i1 (gfc_array_i1 * const restrict retarray,
 	extent[n] = 0;
     }
 
-  if (retarray->base_addr == NULL)
+  if (retarray->data == NULL)
     {
       size_t alloc_size, str;
 
@@ -482,7 +487,7 @@ smaxval_i1 (gfc_array_i1 * const restrict retarray,
 	  return;
 	}
       else
-	retarray->base_addr = xmalloc (alloc_size);
+	retarray->data = internal_malloc_size (alloc_size);
     }
   else
     {
@@ -514,7 +519,7 @@ smaxval_i1 (gfc_array_i1 * const restrict retarray,
       dstride[n] = GFC_DESCRIPTOR_STRIDE(retarray,n);
     }
 
-  dest = retarray->base_addr;
+  dest = retarray->data;
 
   while(1)
     {

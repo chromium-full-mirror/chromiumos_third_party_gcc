@@ -1,4 +1,4 @@
-// compile
+// $G $D/$F.go || echo BUG: should compile
 
 // Copyright 2010 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -7,7 +7,7 @@
 // http://code.google.com/p/go/issues/detail?id=806
 // triggered out of registers on 8g
 
-package bug283
+package main
 
 type Point struct {
 	x int

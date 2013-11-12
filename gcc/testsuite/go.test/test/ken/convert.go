@@ -1,11 +1,10 @@
-// run
+// $G $D/$F.go && $L $F.$A && ./$A.out
 
 // Copyright 2010 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Test, near-exhaustive, of converting numbers between types.
-// No complex numbers though.
+// near-exhaustive test of converting numbers between types.
 
 package main
 

@@ -1,4 +1,4 @@
-/* isnanq.c -- __float128 version of s_isnan.c.
+/* s_isnanl.c -- long double version of s_isnan.c.
  * Conversion to long double by Jakub Jelinek, jj@ultra.linux.cz.
  */
 

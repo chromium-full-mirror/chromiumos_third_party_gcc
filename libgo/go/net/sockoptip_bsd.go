@@ -4,6 +4,8 @@
 
 // +build darwin freebsd netbsd openbsd
 
+// IP-level socket options for BSD variants
+
 package net
 
 import (
@@ -11,30 +13,48 @@ import (
 	"syscall"
 )
 
-func setIPv4MulticastInterface(fd *netFD, ifi *Interface) error {
-	ip, err := interfaceToIPv4Addr(ifi)
-	if err != nil {
-		return os.NewSyscallError("setsockopt", err)
+func ipv4MulticastTTL(fd *netFD) (int, error) {
+	if err := fd.incref(false); err != nil {
+		return 0, err
 	}
-	var a [4]byte
-	copy(a[:], ip.To4())
+	defer fd.decref()
+	v, err := syscall.GetsockoptByte(fd.sysfd, syscall.IPPROTO_IP, syscall.IP_MULTICAST_TTL)
+	if err != nil {
+		return 0, os.NewSyscallError("getsockopt", err)
+	}
+	return int(v), nil
+}
+
+func setIPv4MulticastTTL(fd *netFD, v int) error {
 	if err := fd.incref(false); err != nil {
 		return err
 	}
 	defer fd.decref()
-	err = syscall.SetsockoptInet4Addr(fd.sysfd, syscall.IPPROTO_IP, syscall.IP_MULTICAST_IF, a)
+	err := syscall.SetsockoptByte(fd.sysfd, syscall.IPPROTO_IP, syscall.IP_MULTICAST_TTL, byte(v))
 	if err != nil {
 		return os.NewSyscallError("setsockopt", err)
 	}
 	return nil
 }
 
-func setIPv4MulticastLoopback(fd *netFD, v bool) error {
+func ipv6TrafficClass(fd *netFD) (int, error) {
+	if err := fd.incref(false); err != nil {
+		return 0, err
+	}
+	defer fd.decref()
+	v, err := syscall.GetsockoptInt(fd.sysfd, syscall.IPPROTO_IPV6, syscall.IPV6_TCLASS)
+	if err != nil {
+		return 0, os.NewSyscallError("getsockopt", err)
+	}
+	return v, nil
+}
+
+func setIPv6TrafficClass(fd *netFD, v int) error {
 	if err := fd.incref(false); err != nil {
 		return err
 	}
 	defer fd.decref()
-	err := syscall.SetsockoptByte(fd.sysfd, syscall.IPPROTO_IP, syscall.IP_MULTICAST_LOOP, byte(boolint(v)))
+	err := syscall.SetsockoptInt(fd.sysfd, syscall.IPPROTO_IPV6, syscall.IPV6_TCLASS, v)
 	if err != nil {
 		return os.NewSyscallError("setsockopt", err)
 	}

@@ -99,8 +99,9 @@ Java_gnu_java_awt_dnd_peer_gtk_GtkDragSourceContextPeer_create
 
 JNIEXPORT void JNICALL 
 Java_gnu_java_awt_dnd_peer_gtk_GtkDragSourceContextPeer_nativeSetCursor
-  (JNIEnv *env __attribute__((unused)), jobject obj, jint type)
+  (JNIEnv *env, jobject obj, jint type)
 {
+  void *ptr;
   GdkWindow *win;
   GdkCursorType gdk_cursor_type;
   GdkCursor *gdk_cursor;
@@ -108,6 +109,7 @@ Java_gnu_java_awt_dnd_peer_gtk_GtkDragSourceContextPeer_nativeSetCursor
   gdk_threads_enter ();
 
   javaObj = obj;
+  ptr = gtkpeer_get_global_ref (env, obj);
   
   switch (type)
     {
@@ -228,9 +230,10 @@ Java_gnu_java_awt_dnd_peer_gtk_GtkDragSourceContextPeer_connectSignals
 }
 
 static void
-connect_signals_for_widget (GtkWidget *w __attribute__((unused)))
+connect_signals_for_widget (GtkWidget *w)
 {
   /* FIXME: Not implemented. */
+  w = NULL;
 }
 
 JNIEXPORT void JNICALL 
@@ -254,6 +257,7 @@ Java_gnu_java_awt_dnd_peer_gtk_GtkDragSourceContextPeer_nativeStartDrag
   (JNIEnv *env, jobject obj, jobject img, jint x, jint y, jint act,
    jstring target)
 {
+  void *ptr;
   const gchar *data;
   GtkTargetEntry tar[1];
   GdkEvent *event;
@@ -264,6 +268,7 @@ Java_gnu_java_awt_dnd_peer_gtk_GtkDragSourceContextPeer_nativeStartDrag
   gdk_threads_enter ();
   
   javaObj = obj;
+  ptr = gtkpeer_get_global_ref (env, obj);
 
   data = (*env)->GetStringUTFChars (env, target, NULL);
   tar[0].target = (gchar *) data;  

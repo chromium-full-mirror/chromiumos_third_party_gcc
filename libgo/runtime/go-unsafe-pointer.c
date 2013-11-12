@@ -6,7 +6,7 @@
 
 #include <stddef.h>
 
-#include "runtime.h"
+#include "go-string.h"
 #include "go-type.h"
 
 /* This file provides the type descriptor for the unsafe.Pointer type.
@@ -15,7 +15,7 @@
    descriptor.  */
 
 extern const struct __go_type_descriptor unsafe_Pointer
-  __asm__ (GOSYM_PREFIX "__go_tdn_unsafe.Pointer");
+  asm ("__go_tdn_unsafe.Pointer");
 
 /* Used to determine the field alignment.  */
 struct field_align
@@ -26,9 +26,9 @@ struct field_align
 
 /* The reflection string.  */
 #define REFLECTION "unsafe.Pointer"
-static const String reflection_string =
+static const struct __go_string reflection_string =
 {
-  (const byte *) REFLECTION,
+  (const unsigned char *) REFLECTION,
   sizeof REFLECTION - 1
 };
 
@@ -61,13 +61,13 @@ const struct __go_type_descriptor unsafe_Pointer =
    it to be defined elsewhere.  */
 
 extern const struct __go_ptr_type pointer_unsafe_Pointer
-  __asm__ (GOSYM_PREFIX "__go_td_pN14_unsafe.Pointer");
+  asm ("__go_td_pN14_unsafe.Pointer");
 
 /* The reflection string.  */
 #define PREFLECTION "*unsafe.Pointer"
-static const String preflection_string =
+static const struct __go_string preflection_string =
 {
-  (const byte *) PREFLECTION,
+  (const unsigned char *) PREFLECTION,
   sizeof PREFLECTION - 1,
 };
 

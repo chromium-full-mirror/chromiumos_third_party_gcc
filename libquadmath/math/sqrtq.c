@@ -8,17 +8,14 @@ sqrtq (const __float128 x)
   __float128 y;
   int exp;
 
-  if (isnanq (x) || (isinfq (x) && x > 0))
-    return x;
-
   if (x == 0)
     return x;
 
+  if (isnanq (x))
+    return x;
+
   if (x < 0)
-    {
-      /* Return NaN with invalid signal.  */
-      return (x - x) / (x - x);
-    }
+    return nanq ("");
 
   if (x <= DBL_MAX && x >= DBL_MIN)
   {

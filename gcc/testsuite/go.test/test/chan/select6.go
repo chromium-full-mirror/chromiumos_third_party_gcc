@@ -1,10 +1,10 @@
-// run
+// $G $D/$F.go && $L $F.$A && ./$A.out
 
 // Copyright 2011 The Go Authors.  All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Test for select: Issue 2075
+// Issue 2075
 // A bug in select corrupts channel queues of failed cases
 // if there are multiple waiters on those channels and the
 // select is the last in the queue. If further waits are made

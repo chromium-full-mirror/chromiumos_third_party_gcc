@@ -5,8 +5,7 @@
 
 #define N 200
 
-void __attribute__((noinline))
-foo (unsigned char *__restrict__ pInput, unsigned char *__restrict__ pOutput)
+void foo (unsigned char *__restrict__ pInput, unsigned char *__restrict__ pOutput)
 {
   unsigned char i, a, b, c;
 
@@ -33,7 +32,8 @@ int main (int argc, const char* argv[])
     {
       input[i] = i;
       output[i] = 0;
-      __asm__ volatile ("");
+      if (input[i] > 256)
+        abort ();
     }
 
   for (i = 0; i < N / 3; i++)
@@ -52,8 +52,7 @@ int main (int argc, const char* argv[])
   return 0;
 }
 
-/* { dg-final { scan-tree-dump-times "vectorized 1 loops" 2 "vect" { target { vect_perm_byte && vect_char_mult } } } } */
-/* { dg-final { scan-tree-dump-times "vectorized 1 loops" 1 "vect" { target { vect_perm_byte && {! vect_char_mult } } } } } */
+/* { dg-final { scan-tree-dump-times "vectorized 1 loops" 2 "vect" { target vect_perm_byte } } } */
 /* { dg-final { scan-tree-dump-times "vectorizing stmts using SLP" 1 "vect" { target vect_perm_byte } } } */
 /* { dg-final { cleanup-tree-dump "vect" } } */
 

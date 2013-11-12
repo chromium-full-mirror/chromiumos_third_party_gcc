@@ -99,4 +99,5 @@ func offsetCode(off uint32) uint32 {
 	default:
 		return offsetCodes[off>>14] + 28
 	}
+	panic("unreachable")
 }

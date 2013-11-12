@@ -26,6 +26,5 @@ func Log2(x float64) float64 {
 }
 
 func log2(x float64) float64 {
-	frac, exp := Frexp(x)
-	return Log(frac)*(1/Ln2) + float64(exp)
+	return Log(x) * (1 / Ln2)
 }

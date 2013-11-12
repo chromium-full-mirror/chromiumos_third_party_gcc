@@ -62,7 +62,6 @@ static struct gimple_opt_pass pass_dumb_plugin_example =
   {
     GIMPLE_PASS,
     "dumb_plugin_example",                /* name */
-    OPTGROUP_NONE,                        /* optinfo_flags */
     gate_dumb_plugin_example,             /* gate */
     execute_dumb_plugin_example,          /* execute */
     NULL,                                 /* sub */
@@ -73,7 +72,7 @@ static struct gimple_opt_pass pass_dumb_plugin_example =
     0,                                    /* properties_provided */
     0,                                    /* properties_destroyed */
     0,                                    /* todo_flags_start */
-    0					  /* todo_flags_finish */
+    TODO_dump_func                        /* todo_flags_finish */
   }
 };
 

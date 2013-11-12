@@ -24,7 +24,7 @@ struct mapaccess_ret
 
 extern struct mapaccess_ret mapaccess (struct __go_map_type *, uintptr_t,
 				       uintptr_t)
-  __asm__ (GOSYM_PREFIX "reflect.mapaccess");
+  asm ("reflect.mapaccess");
 
 struct mapaccess_ret
 mapaccess (struct __go_map_type *mt, uintptr_t m, uintptr_t key_i)
@@ -77,7 +77,7 @@ mapaccess (struct __go_map_type *mt, uintptr_t m, uintptr_t key_i)
 
 extern void mapassign (struct __go_map_type *, uintptr_t, uintptr_t,
 		       uintptr_t, _Bool)
-  __asm__ (GOSYM_PREFIX "reflect.mapassign");
+  asm ("reflect.mapassign");
 
 void
 mapassign (struct __go_map_type *mt, uintptr_t m, uintptr_t key_i,
@@ -118,7 +118,7 @@ mapassign (struct __go_map_type *mt, uintptr_t m, uintptr_t key_i,
 }
 
 extern int32_t maplen (uintptr_t)
-  __asm__ (GOSYM_PREFIX "reflect.maplen");
+  asm ("reflect.maplen");
 
 int32_t
 maplen (uintptr_t m)
@@ -131,7 +131,7 @@ maplen (uintptr_t m)
 }
 
 extern unsigned char *mapiterinit (struct __go_map_type *, uintptr_t)
-  __asm__ (GOSYM_PREFIX "reflect.mapiterinit");
+  asm ("reflect.mapiterinit");
 
 unsigned char *
 mapiterinit (struct __go_map_type *mt, uintptr_t m)
@@ -145,7 +145,7 @@ mapiterinit (struct __go_map_type *mt, uintptr_t m)
 }
 
 extern void mapiternext (unsigned char *)
-  __asm__ (GOSYM_PREFIX "reflect.mapiternext");
+  asm ("reflect.mapiternext");
 
 void
 mapiternext (unsigned char *it)
@@ -160,7 +160,7 @@ struct mapiterkey_ret
 };
 
 extern struct mapiterkey_ret mapiterkey (unsigned char *)
-  __asm__ (GOSYM_PREFIX "reflect.mapiterkey");
+  asm ("reflect.mapiterkey");
 
 struct mapiterkey_ret
 mapiterkey (unsigned char *ita)
@@ -203,7 +203,7 @@ mapiterkey (unsigned char *ita)
 /* Make a new map.  We have to build our own map descriptor.  */
 
 extern uintptr_t makemap (const struct __go_map_type *)
-  __asm__ (GOSYM_PREFIX "reflect.makemap");
+  asm ("reflect.makemap");
 
 uintptr_t
 makemap (const struct __go_map_type *t)
@@ -237,13 +237,4 @@ makemap (const struct __go_map_type *t)
   ret = __go_alloc (sizeof (void *));
   __builtin_memcpy (ret, &map, sizeof (void *));
   return (uintptr_t) ret;
-}
-
-extern _Bool ismapkey (const struct __go_type_descriptor *)
-  __asm__ (GOSYM_PREFIX "reflect.ismapkey");
-
-_Bool
-ismapkey (const struct __go_type_descriptor *typ)
-{
-  return typ != NULL && typ->__hashfn != __go_type_hash_error;
 }

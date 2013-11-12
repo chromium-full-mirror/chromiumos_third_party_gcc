@@ -5,7 +5,7 @@
 template<typename T> struct a
 {
     template <template <typename> class C, typename X, C<X>* =0>
-    struct b
+    struct b // { dg-error "class C' is not a template|is not a valid type" }
     {
     };
 };
@@ -13,8 +13,7 @@ template<typename T> struct a
 void
 foo ()
 {
-  a<int> a1; // OK
-  a<int>::b<a,int> b1; // { dg-error "template argument" }
+    a<int> v; // { dg-message "required from here" }
 }
 
-// { dg-prune-output "invalid type in declaration" }
+

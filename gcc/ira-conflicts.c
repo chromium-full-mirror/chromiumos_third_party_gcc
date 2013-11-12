@@ -1,5 +1,6 @@
 /* IRA conflict builder.
-   Copyright (C) 2006-2013 Free Software Foundation, Inc.
+   Copyright (C) 2006, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Vladimir Makarov <vmakarov@redhat.com>.
 
 This file is part of GCC.
@@ -859,7 +860,7 @@ ira_build_conflicts (void)
 	  ira_object_iterator oi;
 
 	  build_conflicts ();
-	  ira_traverse_loop_tree (true, ira_loop_tree_root, add_copies, NULL);
+	  ira_traverse_loop_tree (true, ira_loop_tree_root, NULL, add_copies);
 	  /* We need finished conflict table for the subsequent call.  */
 	  if (flag_ira_region == IRA_REGION_ALL
 	      || flag_ira_region == IRA_REGION_MIXED)
@@ -891,16 +892,17 @@ ira_build_conflicts (void)
       for (i = 0; i < n; i++)
 	{
 	  ira_object_t obj = ALLOCNO_OBJECT (a, i);
-	  rtx allocno_reg = regno_reg_rtx [ALLOCNO_REGNO (a)];
+	  reg_attrs *attrs = REG_ATTRS (regno_reg_rtx [ALLOCNO_REGNO (a)]);
+	  tree decl;
 
 	  if ((! flag_caller_saves && ALLOCNO_CALLS_CROSSED_NUM (a) != 0)
 	      /* For debugging purposes don't put user defined variables in
-		 callee-clobbered registers.  However, do allow parameters
-		 in callee-clobbered registers to improve debugging.  This
-		 is a bit of a fragile hack.  */
+		 callee-clobbered registers.  */
 	      || (optimize == 0
-		  && REG_USERVAR_P (allocno_reg)
-		  && ! reg_is_parm_p (allocno_reg)))
+		  && attrs != NULL
+		  && (decl = attrs->decl) != NULL
+		  && VAR_OR_FUNCTION_DECL_P (decl)
+		  && ! DECL_ARTIFICIAL (decl)))
 	    {
 	      IOR_HARD_REG_SET (OBJECT_TOTAL_CONFLICT_HARD_REGS (obj),
 				call_used_reg_set);

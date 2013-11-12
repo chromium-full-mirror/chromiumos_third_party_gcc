@@ -1,6 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-march=octeon" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-O -march=octeon" } */
 /* { dg-final { scan-assembler-times "\tbaddu\t" 4 } } */
 /* { dg-final { scan-assembler-not "\tandi\t" } } */
 

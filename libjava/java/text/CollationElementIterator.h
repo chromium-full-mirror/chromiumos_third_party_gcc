@@ -50,8 +50,8 @@ public: // actually package-private
   jint index;
   jint textIndex;
 private:
-  JArray< ::java::text::RuleBasedCollator$CollationElement * > * textDecomposition;
-  JArray< jint > * textIndexes;
+  JArray< ::java::text::RuleBasedCollator$CollationElement * > * text_decomposition;
+  JArray< jint > * text_indexes;
 public:
   static ::java::lang::Class class$;
 };

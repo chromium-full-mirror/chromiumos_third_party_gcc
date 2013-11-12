@@ -1,7 +1,6 @@
 /* { dg-do compile { target { ! { ia32 } } } } */
-/* { dg-require-effective-target maybe_x32 } */
 /* { dg-require-effective-target fpic } */
-/* { dg-options "-O2 -mx32 -maddress-mode=long -fpic" } */
+/* { dg-options "-O2 -mx32 -fpic" } */
 
 typedef int int32_t;
 typedef unsigned int uint32_t;

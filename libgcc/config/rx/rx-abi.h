@@ -1,5 +1,6 @@
 /* Header file for RX ABI versions of libgcc functions.
-   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+   Copyright (C) 2009
+   Free Software Foundation, Inc.
    Contributed by Red Hat.
 
    This file is part of GCC.

@@ -1,4 +1,4 @@
-! { dg-do run { xfail spu-*-* powerpc-ibm-aix* } }
+! { dg-do run { xfail spu-*-*  } }
 ! Test XFAILed on Darwin because the system's printf() lacks
 ! proper support for denormals.
 !
@@ -24,3 +24,4 @@ program main
   if (test (-huge(0.0_8), 1) /= 0) call abort
 end program main
 !
+! { dg-final { cleanup-modules "test_default_format" } }

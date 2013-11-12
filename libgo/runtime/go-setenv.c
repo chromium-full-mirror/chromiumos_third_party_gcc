@@ -10,43 +10,39 @@
 #include <stdlib.h>
 
 #include "go-alloc.h"
-#include "runtime.h"
+#include "go-string.h"
 
 /* Set the C environment from Go.  This is called by syscall.Setenv.  */
 
-void setenv_c (String, String) __asm__ (GOSYM_PREFIX "syscall.setenv_c");
+void setenv_c (struct __go_string, struct __go_string)
+  __asm__ ("syscall.setenv_c");
 
 void
-setenv_c (String k, String v)
+setenv_c (struct __go_string k, struct __go_string v)
 {
-  const byte *ks;
+  const unsigned char *ks;
   unsigned char *kn;
-  const byte *vs;
+  const unsigned char *vs;
   unsigned char *vn;
 
-  ks = k.str;
-  if (ks == NULL)
-    ks = (const byte *) "";
+  ks = k.__data;
   kn = NULL;
-
-  vs = v.str;
-  if (vs == NULL)
-    vs = (const byte *) "";
+  vs = v.__data;
   vn = NULL;
 
 #ifdef HAVE_SETENV
 
-  if (ks != NULL && ks[k.len] != 0)
+  if (ks[k.__length] != 0)
     {
-      kn = __go_alloc (k.len + 1);
-      __builtin_memcpy (kn, ks, k.len);
+      kn = __go_alloc (k.__length + 1);
+      __builtin_memcpy (kn, ks, k.__length);
       ks = kn;
     }
 
-  if (vs != NULL && vs[v.len] != 0)
+  if (vs[v.__length] != 0)
     {
-      vn = __go_alloc (v.len + 1);
-      __builtin_memcpy (vn, vs, v.len);
+      vn = __go_alloc (v.__length + 1);
+      __builtin_memcpy (vn, vs, v.__length);
       vs = vn;
     }
 
@@ -54,11 +50,11 @@ setenv_c (String k, String v)
 
 #else /* !defined(HAVE_SETENV) */
 
-  kn = __go_alloc (k.len + v.len + 2);
-  __builtin_memcpy (kn, ks, k.len);
-  kn[k.len] = '=';
-  __builtin_memcpy (kn + k.len + 1, vs, v.len);
-  kn[k.len + v.len + 1] = '\0';
+  kn = __go_alloc (k.__length + v.__length + 2);
+  __builtin_memcpy (kn, ks, k.__length);
+  kn[k.__length] = '=';
+  __builtin_memcpy (kn + k.__length + 1, vs, v.__length);
+  kn[k.__length + v.__length + 1] = '\0';
   putenv ((char *) kn);
 
 #endif /* !defined(HAVE_SETENV) */

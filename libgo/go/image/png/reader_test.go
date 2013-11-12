@@ -10,7 +10,6 @@ import (
 	"image"
 	"image/color"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
@@ -36,14 +35,6 @@ var filenames = []string{
 	"basn4a16",
 	"basn6a08",
 	"basn6a16",
-}
-
-var filenamesPaletted = []string{
-	"basn3p01",
-	"basn3p02",
-	"basn3p04",
-	"basn3p08",
-	"basn3p08-trns",
 }
 
 var filenamesShort = []string{
@@ -115,18 +106,13 @@ func sng(w io.WriteCloser, filename string, png image.Image) {
 		lastAlpha := -1
 		io.WriteString(w, "PLTE {\n")
 		for i, c := range cpm {
-			var r, g, b, a uint8
-			switch c := c.(type) {
-			case color.RGBA:
-				r, g, b, a = c.R, c.G, c.B, 0xff
-			case color.NRGBA:
-				r, g, b, a = c.R, c.G, c.B, c.A
-			default:
-				panic("unknown palette color type")
-			}
-			if a != 0xff {
+			r, g, b, a := c.RGBA()
+			if a != 0xffff {
 				lastAlpha = i
 			}
+			r >>= 8
+			g >>= 8
+			b >>= 8
 			fmt.Fprintf(w, "    (%3d,%3d,%3d)     # rgb = (0x%02x,0x%02x,0x%02x)\n", r, g, b, r, g, b)
 		}
 		io.WriteString(w, "}\n")
@@ -216,7 +202,7 @@ func TestReader(t *testing.T) {
 		}
 
 		piper, pipew := io.Pipe()
-		pb := bufio.NewScanner(piper)
+		pb := bufio.NewReader(piper)
 		go sng(pipew, fn, img)
 		defer piper.Close()
 
@@ -227,7 +213,7 @@ func TestReader(t *testing.T) {
 			continue
 		}
 		defer sf.Close()
-		sb := bufio.NewScanner(sf)
+		sb := bufio.NewReader(sf)
 		if err != nil {
 			t.Error(fn, err)
 			continue
@@ -235,27 +221,23 @@ func TestReader(t *testing.T) {
 
 		// Compare the two, in SNG format, line by line.
 		for {
-			pdone := pb.Scan()
-			sdone := sb.Scan()
-			if pdone && sdone {
+			ps, perr := pb.ReadString('\n')
+			ss, serr := sb.ReadString('\n')
+			if perr == io.EOF && serr == io.EOF {
 				break
 			}
-			if pdone || sdone {
-				t.Errorf("%s: Different sizes", fn)
+			if perr != nil {
+				t.Error(fn, perr)
 				break
 			}
-			ps := pb.Text()
-			ss := sb.Text()
+			if serr != nil {
+				t.Error(fn, serr)
+				break
+			}
 			if ps != ss {
 				t.Errorf("%s: Mismatch\n%sversus\n%s\n", fn, ps, ss)
 				break
 			}
-		}
-		if pb.Err() != nil {
-			t.Error(fn, pb.Err())
-		}
-		if sb.Err() != nil {
-			t.Error(fn, sb.Err())
 		}
 	}
 }
@@ -284,67 +266,4 @@ func TestReaderError(t *testing.T) {
 			t.Errorf("decoding %s: have image + error", tt.file)
 		}
 	}
-}
-
-func TestPalettedDecodeConfig(t *testing.T) {
-	for _, fn := range filenamesPaletted {
-		f, err := os.Open("testdata/pngsuite/" + fn + ".png")
-		if err != nil {
-			t.Errorf("%s: open failed: %v", fn, err)
-			continue
-		}
-		defer f.Close()
-		cfg, err := DecodeConfig(f)
-		if err != nil {
-			t.Errorf("%s: %v", fn, err)
-			continue
-		}
-		pal, ok := cfg.ColorModel.(color.Palette)
-		if !ok {
-			t.Errorf("%s: expected paletted color model", fn)
-			continue
-		}
-		if pal == nil {
-			t.Errorf("%s: palette not initialized", fn)
-			continue
-		}
-	}
-}
-
-func benchmarkDecode(b *testing.B, filename string, bytesPerPixel int) {
-	b.StopTimer()
-	data, err := ioutil.ReadFile(filename)
-	if err != nil {
-		b.Fatal(err)
-	}
-	s := string(data)
-	cfg, err := DecodeConfig(strings.NewReader(s))
-	if err != nil {
-		b.Fatal(err)
-	}
-	b.SetBytes(int64(cfg.Width * cfg.Height * bytesPerPixel))
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		Decode(strings.NewReader(s))
-	}
-}
-
-func BenchmarkDecodeGray(b *testing.B) {
-	benchmarkDecode(b, "testdata/benchGray.png", 1)
-}
-
-func BenchmarkDecodeNRGBAGradient(b *testing.B) {
-	benchmarkDecode(b, "testdata/benchNRGBA-gradient.png", 4)
-}
-
-func BenchmarkDecodeNRGBAOpaque(b *testing.B) {
-	benchmarkDecode(b, "testdata/benchNRGBA-opaque.png", 4)
-}
-
-func BenchmarkDecodePaletted(b *testing.B) {
-	benchmarkDecode(b, "testdata/benchPaletted.png", 1)
-}
-
-func BenchmarkDecodeRGB(b *testing.B) {
-	benchmarkDecode(b, "testdata/benchRGB.png", 4)
 }

@@ -70,12 +70,11 @@ func initSystemRoots() {
 
 	var data C.CFDataRef = nil
 	err := C.FetchPEMRoots(&data)
-	if err == -1 {
-		return
+	if err != -1 {
+		defer C.CFRelease(C.CFTypeRef(data))
+		buf := C.GoBytes(unsafe.Pointer(C.CFDataGetBytePtr(data)), C.int(C.CFDataGetLength(data)))
+		roots.AppendCertsFromPEM(buf)
 	}
 
-	defer C.CFRelease(C.CFTypeRef(data))
-	buf := C.GoBytes(unsafe.Pointer(C.CFDataGetBytePtr(data)), C.int(C.CFDataGetLength(data)))
-	roots.AppendCertsFromPEM(buf)
 	systemRoots = roots
 }

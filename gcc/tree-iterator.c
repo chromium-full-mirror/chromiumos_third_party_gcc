@@ -1,5 +1,6 @@
 /* Iterator routines for manipulating GENERIC and GIMPLE tree statements.
-   Copyright (C) 2003-2013 Free Software Foundation, Inc.
+   Copyright (C) 2003, 2004, 2007, 2008, 2009, 2010
+   Free Software Foundation, Inc.
    Contributed by Andrew MacLeod  <amacleod@redhat.com>
 
 This file is part of GCC.
@@ -30,15 +31,15 @@ along with GCC; see the file COPYING3.  If not see
 /* This is a cache of STATEMENT_LIST nodes.  We create and destroy them
    fairly often during gimplification.  */
 
-static GTY ((deletable (""))) vec<tree, va_gc> *stmt_list_cache;
+static GTY ((deletable (""))) VEC(tree,gc) *stmt_list_cache;
 
 tree
 alloc_stmt_list (void)
 {
   tree list;
-  if (!vec_safe_is_empty (stmt_list_cache))
+  if (!VEC_empty (tree, stmt_list_cache))
     {
-      list = stmt_list_cache->pop ();
+      list = VEC_pop (tree, stmt_list_cache);
       memset (list, 0, sizeof(struct tree_base));
       TREE_SET_CODE (list, STATEMENT_LIST);
     }
@@ -53,7 +54,7 @@ free_stmt_list (tree t)
 {
   gcc_assert (!STATEMENT_LIST_HEAD (t));
   gcc_assert (!STATEMENT_LIST_TAIL (t));
-  vec_safe_push (stmt_list_cache, t);
+  VEC_safe_push (tree, gc, stmt_list_cache, t);
 }
 
 /* A subroutine of append_to_statement_list{,_force}.  T is not NULL.  */
@@ -72,13 +73,6 @@ append_to_statement_list_1 (tree t, tree *list_p)
 	  return;
 	}
       *list_p = list = alloc_stmt_list ();
-    }
-  else if (TREE_CODE (list) != STATEMENT_LIST)
-    {
-      tree first = list;
-      *list_p = list = alloc_stmt_list ();
-      i = tsi_last (list);
-      tsi_link_after (&i, first, TSI_CONTINUE_LINKING);
     }
 
   i = tsi_last (list);

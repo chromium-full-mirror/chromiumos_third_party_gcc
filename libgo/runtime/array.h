@@ -19,10 +19,10 @@ struct __go_open_array
      enough to hold the size of any allocated object.  Using "int"
      saves 8 bytes per slice header on a 64-bit system with 32-bit
      ints.  */
-  intgo __count;
+  int __count;
   /* The capacity of the array--the number of elements that can fit in
      the __VALUES field.  */
-  intgo __capacity;
+  int __capacity;
 };
 
 #endif /* !defined(LIBGO_ARRAY_H) */

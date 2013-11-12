@@ -222,7 +222,8 @@ HOST_EXPORTS = \
 	HOST_LIBS="$(STAGE1_LIBS)"; export HOST_LIBS; \
 	GMPLIBS="$(HOST_GMPLIBS)"; export GMPLIBS; \
 	GMPINC="$(HOST_GMPINC)"; export GMPINC; \
-	ISLINC="$(HOST_ISLINC)"; export ISLINC; \
+	PPLLIBS="$(HOST_PPLLIBS)"; export PPLLIBS; \
+	PPLINC="$(HOST_PPLINC)"; export PPLINC; \
 	CLOOGLIBS="$(HOST_CLOOGLIBS)"; export CLOOGLIBS; \
 	CLOOGINC="$(HOST_CLOOGINC)"; export CLOOGINC; \
 	LIBELFLIBS="$(HOST_LIBELFLIBS)" ; export LIBELFLIBS; \
@@ -235,7 +236,7 @@ POSTSTAGE1_CXX_EXPORT = \
 @if target-libstdc++-v3-bootstrap
 # Override the above if we're bootstrapping C++.
 POSTSTAGE1_CXX_EXPORT = \
-	CXX="$(STAGE_CC_WRAPPER) $$r/$(HOST_SUBDIR)/prev-gcc/xg++$(exeext) \
+	CXX="$(STAGE_CC_WRAPPER) $$r/$(HOST_SUBDIR)/prev-gcc/g++$(exeext) \
 	  -B$$r/$(HOST_SUBDIR)/prev-gcc/ -B$(build_tooldir)/bin/ -nostdinc++ \
 	  -B$$r/prev-$(TARGET_SUBDIR)/libstdc++-v3/src/.libs \
 	  -B$$r/prev-$(TARGET_SUBDIR)/libstdc++-v3/libsupc++/.libs \
@@ -306,8 +307,9 @@ NORMAL_TARGET_EXPORTS = \
 HOST_GMPLIBS = @gmplibs@
 HOST_GMPINC = @gmpinc@
 
-# Where to find ISL
-HOST_ISLINC = @islinc@
+# Where to find PPL
+HOST_PPLLIBS = @ppllibs@
+HOST_PPLINC = @pplinc@
 
 # Where to find CLOOG
 HOST_CLOOGLIBS = @clooglibs@
@@ -361,7 +363,7 @@ BUILD_PREFIX_1 = @BUILD_PREFIX_1@
 # here so that they can be overridden by Makefile fragments.
 BOOT_CFLAGS= -g -O2
 BOOT_LDFLAGS=
-BOOT_ADAFLAGS= -gnatpg
+BOOT_ADAFLAGS=-gnatpg -gnata
 
 AWK = @AWK@
 SED = @SED@
@@ -417,6 +419,7 @@ TFLAGS =
 STAGE_CFLAGS = $(BOOT_CFLAGS)
 STAGE_TFLAGS = $(TFLAGS)
 STAGE_CONFIGURE_FLAGS=@stage2_werror_flag@
+POSTSTAGE1_CONFIGURE_FLAGS = @POSTSTAGE1_CONFIGURE_FLAGS@
 
 [+ FOR bootstrap-stage +]
 # Defaults for stage [+id+]; some are overridden below.
@@ -427,7 +430,10 @@ STAGE[+id+]_CXXFLAGS = $(CXXFLAGS)
 STAGE[+id+]_CXXFLAGS = $(STAGE[+id+]_CFLAGS)
 @endif target-libstdc++-v3-bootstrap
 STAGE[+id+]_TFLAGS = $(STAGE_TFLAGS)
-STAGE[+id+]_CONFIGURE_FLAGS = $(STAGE_CONFIGURE_FLAGS)
+# STAGE1_CONFIGURE_FLAGS overridden below, so we can use
+# POSTSTAGE1_CONFIGURE_FLAGS here.
+STAGE[+id+]_CONFIGURE_FLAGS = \
+	$(STAGE_CONFIGURE_FLAGS) $(POSTSTAGE1_CONFIGURE_FLAGS)
 [+ ENDFOR bootstrap-stage +]
 
 # Only build the C compiler for stage1, because that is the only one that
@@ -445,6 +451,9 @@ STAGE1_LANGUAGES = @stage1_languages@
 #   the last argument when conflicting --enable arguments are passed.
 # * Likewise, we force-disable coverage flags, since the installed
 #   compiler probably has never heard of them.
+# * Don't remove this, because above we added
+#   POSTSTAGE1_CONFIGURE_FLAGS to STAGE[+id+]_CONFIGURE_FLAGS, which
+#   we don't want for STAGE1_CONFIGURE_FLAGS.
 STAGE1_CONFIGURE_FLAGS = --disable-intermodule $(STAGE1_CHECKING) \
 	  --disable-coverage --enable-languages="$(STAGE1_LANGUAGES)"
 
@@ -608,12 +617,6 @@ EXTRA_HOST_FLAGS = \
 	'WINDMC=$(WINDMC)'
 
 FLAGS_TO_PASS = $(BASE_FLAGS_TO_PASS) $(EXTRA_HOST_FLAGS)
-
-# Flags to pass to stage1 or when not bootstrapping.
-
-STAGE1_FLAGS_TO_PASS = \
-	LDFLAGS="$${LDFLAGS}" \
-	HOST_LIBS="$${HOST_LIBS}"
 
 # Flags to pass to stage2 and later makes.
 
@@ -1076,7 +1079,7 @@ all-[+prefix+][+module+]: configure-[+prefix+][+module+][+ IF bootstrap +][+ ELS
 	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
 	[+exports+] [+extra_exports+] \
 	(cd [+subdir+]/[+module+] && \
-	  $(MAKE) $(BASE_FLAGS_TO_PASS) [+args+] [+stage1_args+] [+extra_make_flags+] \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) [+args+] [+extra_make_flags+] \
 		$(TARGET-[+prefix+][+module+]))
 @endif [+prefix+][+module+]
 
@@ -1109,8 +1112,9 @@ all-stage[+id+]-[+prefix+][+module+]: configure-stage[+id+]-[+prefix+][+module+]
 		CFLAGS_FOR_TARGET="$(CFLAGS_FOR_TARGET)" \
 		CXXFLAGS_FOR_TARGET="$(CXXFLAGS_FOR_TARGET)" \
 		LIBCFLAGS_FOR_TARGET="$(LIBCFLAGS_FOR_TARGET)" \
-		[+args+] [+IF prev +][+poststage1_args+][+ ELSE prev +] \
-		[+stage1_args+][+ ENDIF prev +] [+extra_make_flags+] \
+		[+args+] [+
+		IF prev +][+poststage1_args+][+ ENDIF prev
+		+] [+extra_make_flags+] \
 		TFLAGS="$(STAGE[+id+]_TFLAGS)" \
 		$(TARGET-stage[+id+]-[+prefix+][+module+])
 
@@ -1124,8 +1128,9 @@ clean-stage[+id+]-[+prefix+][+module+]:
 	  $(MAKE) stage[+id+]-start; \
 	fi; \
 	cd [+subdir+]/[+module+] && \
-	$(MAKE) [+args+] [+ IF prev +][+poststage1_args+][+ ELSE prev +] \
-	[+stage1_args+][+ ENDIF prev +] [+extra_make_flags+] clean
+	$(MAKE) [+args+] [+ IF prev +] \
+		[+poststage1_args+] [+ ENDIF prev +] \
+		[+extra_make_flags+] clean
 @endif [+prefix+][+module+]-bootstrap
 
 [+ ENDFOR bootstrap_stage +]
@@ -1160,7 +1165,6 @@ clean-stage[+id+]-[+prefix+][+module+]:
        exports="$(HOST_EXPORTS)"
        poststage1_exports="$(POSTSTAGE1_HOST_EXPORTS)"
        args="$(EXTRA_HOST_FLAGS)"
-       stage1_args="$(STAGE1_FLAGS_TO_PASS)"
        poststage1_args="$(POSTSTAGE1_FLAGS_TO_PASS)" +]
 
 .PHONY: check-[+module+] maybe-check-[+module+]
@@ -1404,20 +1408,6 @@ check-target-libmudflap-c++:
 	$(MAKE) RUNTESTFLAGS="$(RUNTESTFLAGS) c++frags.exp" check-target-libmudflap
 
 @endif target-libmudflap
-
-@if target-libgomp
-.PHONY: check-target-libgomp-c++
-check-target-libgomp-c++:
-	$(MAKE) RUNTESTFLAGS="$(RUNTESTFLAGS) c++.exp" check-target-libgomp
-
-@endif target-libgomp
-
-@if target-libitm
-.PHONY: check-target-libitm-c++
-check-target-libitm-c++:
-	$(MAKE) RUNTESTFLAGS="$(RUNTESTFLAGS) c++.exp" check-target-libitm
-
-@endif target-libitm
 
 # ----------
 # GCC module

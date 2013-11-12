@@ -2,6 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// Network interface identification
+
 package net
 
 import "errors"
@@ -64,7 +66,7 @@ func (ifi *Interface) Addrs() ([]Addr, error) {
 	if ifi == nil {
 		return nil, errInvalidInterface
 	}
-	return interfaceAddrTable(ifi)
+	return interfaceAddrTable(ifi.Index)
 }
 
 // MulticastAddrs returns multicast, joined group addresses for
@@ -73,7 +75,7 @@ func (ifi *Interface) MulticastAddrs() ([]Addr, error) {
 	if ifi == nil {
 		return nil, errInvalidInterface
 	}
-	return interfaceMulticastAddrTable(ifi)
+	return interfaceMulticastAddrTable(ifi.Index)
 }
 
 // Interfaces returns a list of the system's network interfaces.
@@ -84,7 +86,7 @@ func Interfaces() ([]Interface, error) {
 // InterfaceAddrs returns a list of the system's network interface
 // addresses.
 func InterfaceAddrs() ([]Addr, error) {
-	return interfaceAddrTable(nil)
+	return interfaceAddrTable(0)
 }
 
 // InterfaceByIndex returns the interface specified by index.
@@ -96,14 +98,8 @@ func InterfaceByIndex(index int) (*Interface, error) {
 	if err != nil {
 		return nil, err
 	}
-	return interfaceByIndex(ift, index)
-}
-
-func interfaceByIndex(ift []Interface, index int) (*Interface, error) {
 	for _, ifi := range ift {
-		if index == ifi.Index {
-			return &ifi, nil
-		}
+		return &ifi, nil
 	}
 	return nil, errNoSuchInterface
 }

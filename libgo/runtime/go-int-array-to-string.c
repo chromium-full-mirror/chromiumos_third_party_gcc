@@ -5,30 +5,31 @@
    license that can be found in the LICENSE file.  */
 
 #include "go-assert.h"
+#include "go-string.h"
 #include "runtime.h"
 #include "arch.h"
 #include "malloc.h"
 
-String
-__go_int_array_to_string (const void* p, intgo len)
+struct __go_string
+__go_int_array_to_string (const void* p, int len)
 {
-  const int32 *ints;
-  intgo slen;
-  intgo i;
+  const int *ints;
+  int slen;
+  int i;
   unsigned char *retdata;
-  String ret;
+  struct __go_string ret;
   unsigned char *s;
 
-  ints = (const int32 *) p;
+  ints = (const int *) p;
 
   slen = 0;
   for (i = 0; i < len; ++i)
     {
-      int32 v;
+      int v;
 
       v = ints[i];
 
-      if (v < 0 || v > 0x10ffff)
+      if (v > 0x10ffff)
 	v = 0xfffd;
 
       if (v <= 0x7f)
@@ -41,20 +42,20 @@ __go_int_array_to_string (const void* p, intgo len)
 	slen += 4;
     }
 
-  retdata = runtime_mallocgc ((uintptr) slen, FlagNoPointers, 1, 0);
-  ret.str = retdata;
-  ret.len = slen;
+  retdata = runtime_mallocgc (slen, FlagNoPointers, 1, 0);
+  ret.__data = retdata;
+  ret.__length = slen;
 
   s = retdata;
   for (i = 0; i < len; ++i)
     {
-      int32 v;
+      int v;
 
       v = ints[i];
 
       /* If V is out of range for UTF-8, substitute the replacement
 	 character.  */
-      if (v < 0 || v > 0x10ffff)
+      if (v > 0x10ffff)
 	v = 0xfffd;
 
       if (v <= 0x7f)

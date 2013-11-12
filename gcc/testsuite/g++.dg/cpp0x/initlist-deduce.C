@@ -24,5 +24,3 @@ int main()
 {
   g({1});			// { dg-warning "deduc" }
 }
-
-// { dg-prune-output "-fno-deduce-init-list" }

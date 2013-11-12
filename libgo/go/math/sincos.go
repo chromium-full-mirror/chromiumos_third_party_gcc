@@ -6,7 +6,7 @@ package math
 
 // Coefficients _sin[] and _cos[] are found in pkg/math/sin.go.
 
-// Sincos returns Sin(x), Cos(x).
+// Sincos(x) returns Sin(x), Cos(x).
 //
 // Special cases are:
 //	Sincos(±0) = ±0, 1

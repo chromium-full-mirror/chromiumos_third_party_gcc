@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"testing"
 	"time"
 )
 
@@ -35,19 +34,17 @@ var _ = log.Printf
 // When opening a fakeDriver's database, it starts empty with no
 // tables.  All tables and data are stored in memory only.
 type fakeDriver struct {
-	mu         sync.Mutex // guards 3 following fields
-	openCount  int        // conn opens
-	closeCount int        // conn closes
-	dbs        map[string]*fakeDB
+	mu        sync.Mutex
+	openCount int
+	dbs       map[string]*fakeDB
 }
 
 type fakeDB struct {
 	name string
 
-	mu      sync.Mutex
-	free    []*fakeConn
-	tables  map[string]*table
-	badConn bool
+	mu     sync.Mutex
+	free   []*fakeConn
+	tables map[string]*table
 }
 
 type table struct {
@@ -86,7 +83,6 @@ type fakeConn struct {
 	stmtsMade   int
 	stmtsClosed int
 	numPrepare  int
-	bad         bool
 }
 
 func (c *fakeConn) incrStat(v *int) {
@@ -126,9 +122,7 @@ func init() {
 
 // Supports dsn forms:
 //    <dbname>
-//    <dbname>;<opts>  (only currently supported option is `badConn`,
-//                      which causes driver.ErrBadConn to be returned on
-//                      every other conn.Begin())
+//    <dbname>;<opts>  (no currently supported options)
 func (d *fakeDriver) Open(dsn string) (driver.Conn, error) {
 	parts := strings.Split(dsn, ";")
 	if len(parts) < 1 {
@@ -141,12 +135,7 @@ func (d *fakeDriver) Open(dsn string) (driver.Conn, error) {
 	d.mu.Lock()
 	d.openCount++
 	d.mu.Unlock()
-	conn := &fakeConn{db: db}
-
-	if len(parts) >= 2 && parts[1] == "badConn" {
-		conn.bad = true
-	}
-	return conn, nil
+	return &fakeConn{db: db}, nil
 }
 
 func (d *fakeDriver) getDB(name string) *fakeDB {
@@ -210,20 +199,7 @@ func (db *fakeDB) columnType(table, column string) (typ string, ok bool) {
 	return "", false
 }
 
-func (c *fakeConn) isBad() bool {
-	// if not simulating bad conn, do nothing
-	if !c.bad {
-		return false
-	}
-	// alternate between bad conn and not bad conn
-	c.db.badConn = !c.db.badConn
-	return c.db.badConn
-}
-
 func (c *fakeConn) Begin() (driver.Tx, error) {
-	if c.isBad() {
-		return nil, driver.ErrBadConn
-	}
 	if c.currTx != nil {
 		return nil, errors.New("already in a transaction")
 	}
@@ -231,43 +207,7 @@ func (c *fakeConn) Begin() (driver.Tx, error) {
 	return c.currTx, nil
 }
 
-var hookPostCloseConn struct {
-	sync.Mutex
-	fn func(*fakeConn, error)
-}
-
-func setHookpostCloseConn(fn func(*fakeConn, error)) {
-	hookPostCloseConn.Lock()
-	defer hookPostCloseConn.Unlock()
-	hookPostCloseConn.fn = fn
-}
-
-var testStrictClose *testing.T
-
-// setStrictFakeConnClose sets the t to Errorf on when fakeConn.Close
-// fails to close. If nil, the check is disabled.
-func setStrictFakeConnClose(t *testing.T) {
-	testStrictClose = t
-}
-
-func (c *fakeConn) Close() (err error) {
-	drv := fdriver.(*fakeDriver)
-	defer func() {
-		if err != nil && testStrictClose != nil {
-			testStrictClose.Errorf("failed to close a test fakeConn: %v", err)
-		}
-		hookPostCloseConn.Lock()
-		fn := hookPostCloseConn.fn
-		hookPostCloseConn.Unlock()
-		if fn != nil {
-			fn(c, err)
-		}
-		if err == nil {
-			drv.mu.Lock()
-			drv.closeCount++
-			drv.mu.Unlock()
-		}
-	}()
+func (c *fakeConn) Close() error {
 	if c.currTx != nil {
 		return errors.New("can't close fakeConn; in a Transaction")
 	}
@@ -293,18 +233,6 @@ func checkSubsetTypes(args []driver.Value) error {
 }
 
 func (c *fakeConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	// This is an optional interface, but it's implemented here
-	// just to check that all the args are of the proper types.
-	// ErrSkip is returned so the caller acts as if we didn't
-	// implement this at all.
-	err := checkSubsetTypes(args)
-	if err != nil {
-		return nil, err
-	}
-	return nil, driver.ErrSkip
-}
-
-func (c *fakeConn) Query(query string, args []driver.Value) (driver.Rows, error) {
 	// This is an optional interface, but it's implemented here
 	// just to check that all the args are of the proper types.
 	// ErrSkip is returned so the caller acts as if we didn't
@@ -455,19 +383,10 @@ func (c *fakeConn) Prepare(query string) (driver.Stmt, error) {
 }
 
 func (s *fakeStmt) ColumnConverter(idx int) driver.ValueConverter {
-	if len(s.placeholderConverter) == 0 {
-		return driver.DefaultParameterConverter
-	}
 	return s.placeholderConverter[idx]
 }
 
 func (s *fakeStmt) Close() error {
-	if s.c == nil {
-		panic("nil conn in fakeStmt.Close")
-	}
-	if s.c.db == nil {
-		panic("in fakeStmt.Close, conn's db is nil (already closed)")
-	}
 	if !s.closed {
 		s.c.incrStat(&s.c.stmtsClosed)
 		s.closed = true
@@ -559,15 +478,6 @@ func (s *fakeStmt) Query(args []driver.Value) (driver.Rows, error) {
 	if !ok {
 		return nil, fmt.Errorf("fakedb: table %q doesn't exist", s.table)
 	}
-
-	if s.table == "magicquery" {
-		if len(s.whereCol) == 2 && s.whereCol[0] == "op" && s.whereCol[1] == "millis" {
-			if args[0] == "sleep" {
-				time.Sleep(time.Duration(args[1].(int64)) * time.Millisecond)
-			}
-		}
-	}
-
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -688,28 +598,6 @@ func (rc *rowsCursor) Next(dest []driver.Value) error {
 	return nil
 }
 
-// fakeDriverString is like driver.String, but indirects pointers like
-// DefaultValueConverter.
-//
-// This could be surprising behavior to retroactively apply to
-// driver.String now that Go1 is out, but this is convenient for
-// our TestPointerParamsAndScans.
-//
-type fakeDriverString struct{}
-
-func (fakeDriverString) ConvertValue(v interface{}) (driver.Value, error) {
-	switch c := v.(type) {
-	case string, []byte:
-		return v, nil
-	case *string:
-		if c == nil {
-			return nil, nil
-		}
-		return *c, nil
-	}
-	return fmt.Sprintf("%v", v), nil
-}
-
 func converterForType(typ string) driver.ValueConverter {
 	switch typ {
 	case "bool":
@@ -719,9 +607,9 @@ func converterForType(typ string) driver.ValueConverter {
 	case "int32":
 		return driver.Int32
 	case "string":
-		return driver.NotNull{Converter: fakeDriverString{}}
+		return driver.NotNull{Converter: driver.String}
 	case "nullstring":
-		return driver.Null{Converter: fakeDriverString{}}
+		return driver.Null{Converter: driver.String}
 	case "int64":
 		// TODO(coopernurse): add type-specific converter
 		return driver.NotNull{Converter: driver.DefaultParameterConverter}

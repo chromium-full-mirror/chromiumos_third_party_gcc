@@ -130,12 +130,12 @@ func (devNull) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+var blackHole = make([]byte, 8192)
+
 func (devNull) ReadFrom(r io.Reader) (n int64, err error) {
-	buf := blackHole()
-	defer blackHolePut(buf)
 	readSize := 0
 	for {
-		readSize, err = r.Read(buf)
+		readSize, err = r.Read(blackHole)
 		n += int64(readSize)
 		if err != nil {
 			if err == io.EOF {
@@ -144,6 +144,7 @@ func (devNull) ReadFrom(r io.Reader) (n int64, err error) {
 			return
 		}
 	}
+	panic("unreachable")
 }
 
 // Discard is an io.Writer on which all Write calls succeed

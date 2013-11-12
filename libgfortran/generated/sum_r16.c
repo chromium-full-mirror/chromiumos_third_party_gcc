@@ -1,5 +1,5 @@
 /* Implementation of the SUM intrinsic
-   Copyright (C) 2002-2013 Free Software Foundation, Inc.
+   Copyright 2002, 2007, 2009 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
 
 This file is part of the GNU Fortran 95 runtime library (libgfortran).
@@ -79,7 +79,7 @@ sum_r16 (gfc_array_r16 * const restrict retarray,
 	extent[n] = 0;
     }
 
-  if (retarray->base_addr == NULL)
+  if (retarray->data == NULL)
     {
       size_t alloc_size, str;
 
@@ -100,7 +100,7 @@ sum_r16 (gfc_array_r16 * const restrict retarray,
       alloc_size = sizeof (GFC_REAL_16) * GFC_DESCRIPTOR_STRIDE(retarray,rank-1)
     		   * extent[rank-1];
 
-      retarray->base_addr = xmalloc (alloc_size);
+      retarray->data = internal_malloc_size (alloc_size);
       if (alloc_size == 0)
 	{
 	  /* Make sure we have a zero-sized array.  */
@@ -130,8 +130,8 @@ sum_r16 (gfc_array_r16 * const restrict retarray,
 	return;
     }
 
-  base = array->base_addr;
-  dest = retarray->base_addr;
+  base = array->data;
+  dest = retarray->data;
 
   continue_loop = 1;
   while (continue_loop)
@@ -221,7 +221,7 @@ msum_r16 (gfc_array_r16 * const restrict retarray,
   if (len <= 0)
     return;
 
-  mbase = mask->base_addr;
+  mbase = mask->data;
 
   mask_kind = GFC_DESCRIPTOR_SIZE (mask);
 
@@ -257,7 +257,7 @@ msum_r16 (gfc_array_r16 * const restrict retarray,
 	extent[n] = 0;
     }
 
-  if (retarray->base_addr == NULL)
+  if (retarray->data == NULL)
     {
       size_t alloc_size, str;
 
@@ -285,7 +285,7 @@ msum_r16 (gfc_array_r16 * const restrict retarray,
 	  return;
 	}
       else
-	retarray->base_addr = xmalloc (alloc_size);
+	retarray->data = internal_malloc_size (alloc_size);
 
     }
   else
@@ -310,8 +310,8 @@ msum_r16 (gfc_array_r16 * const restrict retarray,
 	return;
     }
 
-  dest = retarray->base_addr;
-  base = array->base_addr;
+  dest = retarray->data;
+  base = array->data;
 
   while (base)
     {
@@ -323,13 +323,18 @@ msum_r16 (gfc_array_r16 * const restrict retarray,
       {
 
   result = 0;
-	for (n = 0; n < len; n++, src += delta, msrc += mdelta)
+	if (len <= 0)
+	  *dest = 0;
+	else
 	  {
+	    for (n = 0; n < len; n++, src += delta, msrc += mdelta)
+	      {
 
   if (*msrc)
     result += *src;
+	      }
+	    *dest = result;
 	  }
-	*dest = result;
       }
       /* Advance to the next element.  */
       count[0]++;
@@ -412,7 +417,7 @@ ssum_r16 (gfc_array_r16 * const restrict retarray,
 	extent[n] = 0;
     }
 
-  if (retarray->base_addr == NULL)
+  if (retarray->data == NULL)
     {
       size_t alloc_size, str;
 
@@ -440,7 +445,7 @@ ssum_r16 (gfc_array_r16 * const restrict retarray,
 	  return;
 	}
       else
-	retarray->base_addr = xmalloc (alloc_size);
+	retarray->data = internal_malloc_size (alloc_size);
     }
   else
     {
@@ -472,7 +477,7 @@ ssum_r16 (gfc_array_r16 * const restrict retarray,
       dstride[n] = GFC_DESCRIPTOR_STRIDE(retarray,n);
     }
 
-  dest = retarray->base_addr;
+  dest = retarray->data;
 
   while(1)
     {

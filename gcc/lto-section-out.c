@@ -1,6 +1,6 @@
 /* Functions for writing LTO sections.
 
-   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+   Copyright (C) 2009, 2010 Free Software Foundation, Inc.
    Contributed by Kenneth Zadeck <zadeck@naturalbridge.com>
 
 This file is part of GCC.
@@ -30,6 +30,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "hashtab.h"
 #include "basic-block.h"
 #include "tree-flow.h"
+#include "tree-pass.h"
 #include "cgraph.h"
 #include "function.h"
 #include "ggc.h"
@@ -42,12 +43,12 @@ along with GCC; see the file COPYING3.  If not see
 #include "lto-streamer.h"
 #include "lto-compress.h"
 
-static vec<lto_out_decl_state_ptr> decl_state_stack;
+static VEC(lto_out_decl_state_ptr, heap) *decl_state_stack;
 
 /* List of out decl states used by functions.  We use this to
    generate the decl directory later. */
 
-vec<lto_out_decl_state_ptr> lto_function_decl_states;
+VEC(lto_out_decl_state_ptr, heap) *lto_function_decl_states;
 /* Returns a hash code for P.  */
 
 hashval_t
@@ -293,7 +294,7 @@ lto_output_decl_index (struct lto_output_stream *obs,
       new_slot->t = name;
       new_slot->slot_num = index;
       *slot = new_slot;
-      encoder->trees.safe_push (name);
+      VEC_safe_push (tree, heap, encoder->trees, name);
       new_entry_p = TRUE;
     }
   else
@@ -412,6 +413,7 @@ lto_destroy_simple_output_block (struct lto_simple_output_block *ob)
   memset (&header, 0, sizeof (struct lto_simple_header));
   header.lto_header.major_version = LTO_major_version;
   header.lto_header.minor_version = LTO_minor_version;
+  header.lto_header.section_type = LTO_section_cgraph;
 
   header.compressed_size = 0;
 
@@ -481,7 +483,7 @@ lto_delete_out_decl_state (struct lto_out_decl_state *state)
 struct lto_out_decl_state *
 lto_get_out_decl_state (void)
 {
-  return decl_state_stack.last ();
+  return VEC_last (lto_out_decl_state_ptr, decl_state_stack);
 }
 
 /* Push STATE to top of out decl stack. */
@@ -489,7 +491,7 @@ lto_get_out_decl_state (void)
 void
 lto_push_out_decl_state (struct lto_out_decl_state *state)
 {
-  decl_state_stack.safe_push (state);
+  VEC_safe_push (lto_out_decl_state_ptr, heap, decl_state_stack, state);
 }
 
 /* Pop the currently used out-decl state from top of stack. */
@@ -497,7 +499,7 @@ lto_push_out_decl_state (struct lto_out_decl_state *state)
 struct lto_out_decl_state *
 lto_pop_out_decl_state (void)
 {
-  return decl_state_stack.pop ();
+  return VEC_pop (lto_out_decl_state_ptr, decl_state_stack);
 }
 
 /* Record STATE after it has been used in serializing the body of
@@ -518,5 +520,6 @@ lto_record_function_out_decl_state (tree fn_decl,
 	state->streams[i].tree_hash_table = NULL;
       }
   state->fn_decl = fn_decl;
-  lto_function_decl_states.safe_push (state);
+  VEC_safe_push (lto_out_decl_state_ptr, heap, lto_function_decl_states,
+		 state);
 }

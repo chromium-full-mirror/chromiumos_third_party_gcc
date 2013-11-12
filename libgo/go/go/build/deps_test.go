@@ -5,9 +5,10 @@
 // This file exercises the import parser but also checks that
 // some low-level packages do not have new dependencies added.
 
-package build
+package build_test
 
 import (
+	"go/build"
 	"sort"
 	"testing"
 )
@@ -23,13 +24,13 @@ import (
 // be used as dependencies by other rules.
 //
 // DO NOT CHANGE THIS DATA TO FIX BUILDS.
-//
+// 
 var pkgDeps = map[string][]string{
 	// L0 is the lowest level, core, nearly unavoidable packages.
 	"errors":      {},
 	"io":          {"errors", "sync"},
 	"runtime":     {"unsafe"},
-	"sync":        {"sync/atomic", "unsafe"},
+	"sync":        {"sync/atomic"},
 	"sync/atomic": {"unsafe"},
 	"unsafe":      {},
 
@@ -47,7 +48,7 @@ var pkgDeps = map[string][]string{
 	"math":          {"unsafe"},
 	"math/cmplx":    {"math"},
 	"math/rand":     {"L0", "math"},
-	"sort":          {},
+	"sort":          {"math"},
 	"strconv":       {"L0", "unicode/utf8", "math"},
 	"unicode/utf16": {},
 	"unicode/utf8":  {},
@@ -141,7 +142,7 @@ var pkgDeps = map[string][]string{
 	// Packages used by testing must be low-level (L2+fmt).
 	"regexp":         {"L2", "regexp/syntax"},
 	"regexp/syntax":  {"L2"},
-	"runtime/debug":  {"L2", "fmt", "io/ioutil", "os", "time"},
+	"runtime/debug":  {"L2", "fmt", "io/ioutil", "os"},
 	"runtime/pprof":  {"L2", "fmt", "text/tabwriter"},
 	"text/tabwriter": {"L2"},
 
@@ -176,7 +177,7 @@ var pkgDeps = map[string][]string{
 	},
 
 	// One of a kind.
-	"archive/tar":         {"L4", "OS", "syscall"},
+	"archive/tar":         {"L4", "OS"},
 	"archive/zip":         {"L4", "OS", "compress/flate"},
 	"compress/bzip2":      {"L4"},
 	"compress/flate":      {"L4"},
@@ -248,23 +249,18 @@ var pkgDeps = map[string][]string{
 	"net/mail":      {"L4", "NET", "OS"},
 	"net/textproto": {"L4", "OS", "net"},
 
-	// Support libraries for crypto that aren't L2.
-	"CRYPTO-SUPPORT": {
-		"crypto/subtle",
-	},
-
 	// Core crypto.
 	"crypto/aes":    {"L3"},
 	"crypto/des":    {"L3"},
-	"crypto/hmac":   {"L3", "CRYPTO-SUPPORT"},
+	"crypto/hmac":   {"L3"},
 	"crypto/md5":    {"L3"},
 	"crypto/rc4":    {"L3"},
 	"crypto/sha1":   {"L3"},
 	"crypto/sha256": {"L3"},
 	"crypto/sha512": {"L3"},
+	"crypto/subtle": {"L3"},
 
 	"CRYPTO": {
-		"CRYPTO-SUPPORT",
 		"crypto/aes",
 		"crypto/des",
 		"crypto/hmac",
@@ -273,6 +269,7 @@ var pkgDeps = map[string][]string{
 		"crypto/sha1",
 		"crypto/sha256",
 		"crypto/sha512",
+		"crypto/subtle",
 	},
 
 	// Random byte, number generation.
@@ -303,10 +300,7 @@ var pkgDeps = map[string][]string{
 		"L4", "CRYPTO-MATH", "CGO", "OS",
 		"crypto/x509", "encoding/pem", "net", "syscall",
 	},
-	"crypto/x509": {
-		"L4", "CRYPTO-MATH", "OS", "CGO",
-		"crypto/x509/pkix", "encoding/pem", "encoding/hex", "net", "syscall",
-	},
+	"crypto/x509":      {"L4", "CRYPTO-MATH", "OS", "CGO", "crypto/x509/pkix", "encoding/pem", "syscall"},
 	"crypto/x509/pkix": {"L4", "CRYPTO-MATH"},
 
 	// Simple net+crypto-aware packages.
@@ -381,7 +375,7 @@ func TestDependencies(t *testing.T) {
 	}
 	sort.Strings(all)
 
-	ctxt := Default
+	ctxt := build.Default
 	test := func(mustImport bool) {
 		for _, pkg := range all {
 			if isMacro(pkg) {

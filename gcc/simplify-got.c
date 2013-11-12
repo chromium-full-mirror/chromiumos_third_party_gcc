@@ -181,7 +181,6 @@ struct rtl_opt_pass pass_simplify_got =
  {
   RTL_PASS,
   "simplify_got",                       /* name */
-  OPTGROUP_NONE,                        /* optinfo_flags */
   gate_handle_simplify_got,             /* gate */
   rest_of_handle_simplify_got,          /* execute */
   NULL,                                 /* sub */
@@ -192,6 +191,6 @@ struct rtl_opt_pass pass_simplify_got =
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
-  0                                     /* todo_flags_finish */
+  TODO_dump_func                        /* todo_flags_finish */
  }
 };

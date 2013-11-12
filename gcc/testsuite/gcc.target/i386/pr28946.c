@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-Os -fno-ident" } */
+/* { dg-options "-Os" } */
 /* { dg-final { scan-assembler-not "test" } } */
 
 int fct1 (void);

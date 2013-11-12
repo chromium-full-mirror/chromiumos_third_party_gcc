@@ -6,10 +6,8 @@
 
 #include <stdint.h>
 
-#include "runtime.h"
-
 _Bool CompareAndSwapInt32 (int32_t *, int32_t, int32_t)
-  __asm__ (GOSYM_PREFIX "sync_atomic.CompareAndSwapInt32");
+  asm ("sync_atomic.CompareAndSwapInt32");
 
 _Bool
 CompareAndSwapInt32 (int32_t *val, int32_t old, int32_t new)
@@ -18,7 +16,7 @@ CompareAndSwapInt32 (int32_t *val, int32_t old, int32_t new)
 }
 
 _Bool CompareAndSwapInt64 (int64_t *, int64_t, int64_t)
-  __asm__ (GOSYM_PREFIX "sync_atomic.CompareAndSwapInt64");
+  asm ("sync_atomic.CompareAndSwapInt64");
 
 _Bool
 CompareAndSwapInt64 (int64_t *val, int64_t old, int64_t new)
@@ -27,7 +25,7 @@ CompareAndSwapInt64 (int64_t *val, int64_t old, int64_t new)
 }
 
 _Bool CompareAndSwapUint32 (uint32_t *, uint32_t, uint32_t)
-  __asm__ (GOSYM_PREFIX "sync_atomic.CompareAndSwapUint32");
+  asm ("sync_atomic.CompareAndSwapUint32");
 
 _Bool
 CompareAndSwapUint32 (uint32_t *val, uint32_t old, uint32_t new)
@@ -36,7 +34,7 @@ CompareAndSwapUint32 (uint32_t *val, uint32_t old, uint32_t new)
 }
 
 _Bool CompareAndSwapUint64 (uint64_t *, uint64_t, uint64_t)
-  __asm__ (GOSYM_PREFIX "sync_atomic.CompareAndSwapUint64");
+  asm ("sync_atomic.CompareAndSwapUint64");
 
 _Bool
 CompareAndSwapUint64 (uint64_t *val, uint64_t old, uint64_t new)
@@ -45,7 +43,7 @@ CompareAndSwapUint64 (uint64_t *val, uint64_t old, uint64_t new)
 }
 
 _Bool CompareAndSwapUintptr (uintptr_t *, uintptr_t, uintptr_t)
-  __asm__ (GOSYM_PREFIX "sync_atomic.CompareAndSwapUintptr");
+  asm ("sync_atomic.CompareAndSwapUintptr");
 
 _Bool
 CompareAndSwapUintptr (uintptr_t *val, uintptr_t old, uintptr_t new)
@@ -54,7 +52,7 @@ CompareAndSwapUintptr (uintptr_t *val, uintptr_t old, uintptr_t new)
 }
 
 _Bool CompareAndSwapPointer (void **, void *, void *)
-  __asm__ (GOSYM_PREFIX "sync_atomic.CompareAndSwapPointer");
+  asm ("sync_atomic.CompareAndSwapPointer");
 
 _Bool
 CompareAndSwapPointer (void **val, void *old, void *new)
@@ -63,7 +61,7 @@ CompareAndSwapPointer (void **val, void *old, void *new)
 }
 
 int32_t AddInt32 (int32_t *, int32_t)
-  __asm__ (GOSYM_PREFIX "sync_atomic.AddInt32");
+  asm ("sync_atomic.AddInt32");
 
 int32_t
 AddInt32 (int32_t *val, int32_t delta)
@@ -72,7 +70,7 @@ AddInt32 (int32_t *val, int32_t delta)
 }
 
 uint32_t AddUint32 (uint32_t *, uint32_t)
-  __asm__ (GOSYM_PREFIX "sync_atomic.AddUint32");
+  asm ("sync_atomic.AddUint32");
 
 uint32_t
 AddUint32 (uint32_t *val, uint32_t delta)
@@ -81,7 +79,7 @@ AddUint32 (uint32_t *val, uint32_t delta)
 }
 
 int64_t AddInt64 (int64_t *, int64_t)
-  __asm__ (GOSYM_PREFIX "sync_atomic.AddInt64");
+  asm ("sync_atomic.AddInt64");
 
 int64_t
 AddInt64 (int64_t *val, int64_t delta)
@@ -90,7 +88,7 @@ AddInt64 (int64_t *val, int64_t delta)
 }
 
 uint64_t AddUint64 (uint64_t *, uint64_t)
-  __asm__ (GOSYM_PREFIX "sync_atomic.AddUint64");
+  asm ("sync_atomic.AddUint64");
 
 uint64_t
 AddUint64 (uint64_t *val, uint64_t delta)
@@ -99,7 +97,7 @@ AddUint64 (uint64_t *val, uint64_t delta)
 }
 
 uintptr_t AddUintptr (uintptr_t *, uintptr_t)
-  __asm__ (GOSYM_PREFIX "sync_atomic.AddUintptr");
+  asm ("sync_atomic.AddUintptr");
 
 uintptr_t
 AddUintptr (uintptr_t *val, uintptr_t delta)
@@ -108,7 +106,7 @@ AddUintptr (uintptr_t *val, uintptr_t delta)
 }
 
 int32_t LoadInt32 (int32_t *addr)
-  __asm__ (GOSYM_PREFIX "sync_atomic.LoadInt32");
+  asm ("sync_atomic.LoadInt32");
 
 int32_t
 LoadInt32 (int32_t *addr)
@@ -122,7 +120,7 @@ LoadInt32 (int32_t *addr)
 }
 
 int64_t LoadInt64 (int64_t *addr)
-  __asm__ (GOSYM_PREFIX "sync_atomic.LoadInt64");
+  asm ("sync_atomic.LoadInt64");
 
 int64_t
 LoadInt64 (int64_t *addr)
@@ -136,7 +134,7 @@ LoadInt64 (int64_t *addr)
 }
 
 uint32_t LoadUint32 (uint32_t *addr)
-  __asm__ (GOSYM_PREFIX "sync_atomic.LoadUint32");
+  asm ("sync_atomic.LoadUint32");
 
 uint32_t
 LoadUint32 (uint32_t *addr)
@@ -150,7 +148,7 @@ LoadUint32 (uint32_t *addr)
 }
 
 uint64_t LoadUint64 (uint64_t *addr)
-  __asm__ (GOSYM_PREFIX "sync_atomic.LoadUint64");
+  asm ("sync_atomic.LoadUint64");
 
 uint64_t
 LoadUint64 (uint64_t *addr)
@@ -164,7 +162,7 @@ LoadUint64 (uint64_t *addr)
 }
 
 uintptr_t LoadUintptr (uintptr_t *addr)
-  __asm__ (GOSYM_PREFIX "sync_atomic.LoadUintptr");
+  asm ("sync_atomic.LoadUintptr");
 
 uintptr_t
 LoadUintptr (uintptr_t *addr)
@@ -178,7 +176,7 @@ LoadUintptr (uintptr_t *addr)
 }
 
 void *LoadPointer (void **addr)
-  __asm__ (GOSYM_PREFIX "sync_atomic.LoadPointer");
+  asm ("sync_atomic.LoadPointer");
 
 void *
 LoadPointer (void **addr)
@@ -192,7 +190,7 @@ LoadPointer (void **addr)
 }
 
 void StoreInt32 (int32_t *addr, int32_t val)
-  __asm__ (GOSYM_PREFIX "sync_atomic.StoreInt32");
+  asm ("sync_atomic.StoreInt32");
 
 void
 StoreInt32 (int32_t *addr, int32_t val)
@@ -205,7 +203,7 @@ StoreInt32 (int32_t *addr, int32_t val)
 }
 
 void StoreInt64 (int64_t *addr, int64_t val)
-  __asm__ (GOSYM_PREFIX "sync_atomic.StoreInt64");
+  asm ("sync_atomic.StoreInt64");
 
 void
 StoreInt64 (int64_t *addr, int64_t val)
@@ -218,7 +216,7 @@ StoreInt64 (int64_t *addr, int64_t val)
 }
 
 void StoreUint32 (uint32_t *addr, uint32_t val)
-  __asm__ (GOSYM_PREFIX "sync_atomic.StoreUint32");
+  asm ("sync_atomic.StoreUint32");
 
 void
 StoreUint32 (uint32_t *addr, uint32_t val)
@@ -231,7 +229,7 @@ StoreUint32 (uint32_t *addr, uint32_t val)
 }
 
 void StoreUint64 (uint64_t *addr, uint64_t val)
-  __asm__ (GOSYM_PREFIX "sync_atomic.StoreUint64");
+  asm ("sync_atomic.StoreUint64");
 
 void
 StoreUint64 (uint64_t *addr, uint64_t val)
@@ -244,7 +242,7 @@ StoreUint64 (uint64_t *addr, uint64_t val)
 }
 
 void StoreUintptr (uintptr_t *addr, uintptr_t val)
-  __asm__ (GOSYM_PREFIX "sync_atomic.StoreUintptr");
+  asm ("sync_atomic.StoreUintptr");
 
 void
 StoreUintptr (uintptr_t *addr, uintptr_t val)
@@ -257,7 +255,7 @@ StoreUintptr (uintptr_t *addr, uintptr_t val)
 }
 
 void StorePointer (void **addr, void *val)
-  __asm__ (GOSYM_PREFIX "sync_atomic.StorePointer");
+  asm ("sync_atomic.StorePointer");
 
 void
 StorePointer (void **addr, void *val)

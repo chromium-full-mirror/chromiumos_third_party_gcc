@@ -30,7 +30,7 @@ package math
 //	         := sign(x)*log1p(|x| + x**2/(1 + sqrt(1+x**2)))
 //
 
-// Asinh returns the inverse hyperbolic sine of x.
+// Asinh(x) calculates the inverse hyperbolic sine of x.
 //
 // Special cases are:
 //	Asinh(±0) = ±0

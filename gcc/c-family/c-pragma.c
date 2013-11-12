@@ -1,5 +1,6 @@
 /* Handle #pragma, system V.4 style.  Supports #pragma weak and #pragma pack.
-   Copyright (C) 1992-2013 Free Software Foundation, Inc.
+   Copyright (C) 1992, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
+   2006, 2007, 2008, 2009, 2010 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -29,14 +30,15 @@ along with GCC; see the file COPYING3.  If not see
 #include "c-pragma.h"
 #include "flags.h"
 #include "c-common.h"
+#include "output.h"
 #include "tm_p.h"		/* For REGISTER_TARGET_PRAGMAS (why is
 				   this not a target hook?).  */
 #include "vec.h"
+#include "vecprim.h"
 #include "target.h"
 #include "diagnostic.h"
 #include "opts.h"
 #include "plugin.h"
-#include "cgraph.h"
 
 #define GCC_BAD(gmsgid) \
   do { warning (OPT_Wpragmas, gmsgid); return; } while (0)
@@ -239,8 +241,10 @@ typedef struct GTY(()) pending_weak_d
   tree value;
 } pending_weak;
 
+DEF_VEC_O(pending_weak);
+DEF_VEC_ALLOC_O(pending_weak,gc);
 
-static GTY(()) vec<pending_weak, va_gc> *pending_weaks;
+static GTY(()) VEC(pending_weak,gc) *pending_weaks;
 
 static void apply_pragma_weak (tree, tree);
 static void handle_pragma_weak (cpp_reader *);
@@ -290,11 +294,11 @@ maybe_apply_pragma_weak (tree decl)
 
   id = DECL_ASSEMBLER_NAME (decl);
 
-  FOR_EACH_VEC_ELT (*pending_weaks, i, pe)
+  FOR_EACH_VEC_ELT (pending_weak, pending_weaks, i, pe)
     if (id == pe->name)
       {
 	apply_pragma_weak (decl, pe->value);
-	pending_weaks->unordered_remove (i);
+	VEC_unordered_remove (pending_weak, pending_weaks, i);
 	break;
       }
 }
@@ -307,12 +311,8 @@ maybe_apply_pending_pragma_weaks (void)
   tree alias_id, id, decl;
   int i;
   pending_weak *pe;
-  symtab_node target;
 
-  if (!pending_weaks)
-    return;
-
-  FOR_EACH_VEC_ELT (*pending_weaks, i, pe)
+  FOR_EACH_VEC_ELT (pending_weak, pending_weaks, i, pe)
     {
       alias_id = pe->name;
       id = pe->value;
@@ -320,22 +320,13 @@ maybe_apply_pending_pragma_weaks (void)
       if (id == NULL)
 	continue;
 
-      target = symtab_node_for_asm (id);
       decl = build_decl (UNKNOWN_LOCATION,
-			 target ? TREE_CODE (target->symbol.decl) : FUNCTION_DECL,
-			 alias_id, default_function_type);
+			 FUNCTION_DECL, alias_id, default_function_type);
 
       DECL_ARTIFICIAL (decl) = 1;
       TREE_PUBLIC (decl) = 1;
+      DECL_EXTERNAL (decl) = 1;
       DECL_WEAK (decl) = 1;
-      if (TREE_CODE (decl) == VAR_DECL)
-	TREE_STATIC (decl) = 1;
-      if (!target)
-	{
-	  error ("%q+D aliased to undefined symbol %qE",
-		 decl, id);
-	  continue;
-	}
 
       assemble_alias (decl, id);
     }
@@ -371,14 +362,16 @@ handle_pragma_weak (cpp_reader * ARG_UNUSED (dummy))
     }
   else
     {
-      pending_weak pe = {name, value};
-      vec_safe_push (pending_weaks, pe);
+      pending_weak *pe;
+      pe = VEC_safe_push (pending_weak, gc, pending_weaks, NULL);
+      pe->name = name;
+      pe->value = value;
     }
 }
 
 /* GCC supports two #pragma directives for renaming the external
    symbol associated with a declaration (DECL_ASSEMBLER_NAME), for
-   compatibility with the Solaris and VMS system headers.  GCC also
+   compatibility with the Solaris and Tru64 system headers.  GCC also
    has its own notation for this, __asm__("name") annotations.
 
    Corner cases of these features and their interaction:
@@ -413,8 +406,10 @@ typedef struct GTY(()) pending_redefinition_d {
   tree newname;
 } pending_redefinition;
 
+DEF_VEC_O(pending_redefinition);
+DEF_VEC_ALLOC_O(pending_redefinition,gc);
 
-static GTY(()) vec<pending_redefinition, va_gc> *pending_redefine_extname;
+static GTY(()) VEC(pending_redefinition,gc) *pending_redefine_extname;
 
 static void handle_pragma_redefine_extname (cpp_reader *);
 
@@ -485,7 +480,7 @@ add_to_renaming_pragma_list (tree oldname, tree newname)
   unsigned ix;
   pending_redefinition *p;
 
-  FOR_EACH_VEC_SAFE_ELT (pending_redefine_extname, ix, p)
+  FOR_EACH_VEC_ELT (pending_redefinition, pending_redefine_extname, ix, p)
     if (oldname == p->oldname)
       {
 	if (p->newname != newname)
@@ -494,12 +489,34 @@ add_to_renaming_pragma_list (tree oldname, tree newname)
 	return;
       }
 
-  pending_redefinition e = {oldname, newname};
-  vec_safe_push (pending_redefine_extname, e);
+  p = VEC_safe_push (pending_redefinition, gc, pending_redefine_extname, NULL);
+  p->oldname = oldname;
+  p->newname = newname;
 }
 
 /* The current prefix set by #pragma extern_prefix.  */
 GTY(()) tree pragma_extern_prefix;
+
+/* #pragma extern_prefix "prefix" */
+static void
+handle_pragma_extern_prefix (cpp_reader * ARG_UNUSED (dummy))
+{
+  tree prefix, x;
+  enum cpp_ttype t;
+
+  if (pragma_lex (&prefix) != CPP_STRING)
+    GCC_BAD ("malformed #pragma extern_prefix, ignored");
+  t = pragma_lex (&x);
+  if (t != CPP_EOF)
+    warning (OPT_Wpragmas, "junk at end of %<#pragma extern_prefix%>");
+
+  if (targetm.handle_pragma_extern_prefix)
+    /* Note that the length includes the null terminator.  */
+    pragma_extern_prefix = (TREE_STRING_LENGTH (prefix) > 1 ? prefix : NULL);
+  else if (warn_unknown_pragmas > in_system_header)
+    warning (OPT_Wunknown_pragmas,
+	     "#pragma extern_prefix not supported on this target");
+}
 
 /* Hook from the front ends to apply the results of one of the preceding
    pragmas that rename variables.  */
@@ -529,7 +546,7 @@ maybe_apply_renaming_pragma (tree decl, tree asmname)
 		   "conflict with previous rename");
 
       /* Take any pending redefine_extname off the list.  */
-      FOR_EACH_VEC_SAFE_ELT (pending_redefine_extname, ix, p)
+      FOR_EACH_VEC_ELT (pending_redefinition, pending_redefine_extname, ix, p)
 	if (DECL_NAME (decl) == p->oldname)
 	  {
 	    /* Only warn if there is a conflict.  */
@@ -537,18 +554,20 @@ maybe_apply_renaming_pragma (tree decl, tree asmname)
 	      warning (OPT_Wpragmas, "#pragma redefine_extname ignored due to "
 		       "conflict with previous rename");
 
-	    pending_redefine_extname->unordered_remove (ix);
+	    VEC_unordered_remove (pending_redefinition,
+				  pending_redefine_extname, ix);
 	    break;
 	  }
       return 0;
     }
 
   /* Find out if we have a pending #pragma redefine_extname.  */
-  FOR_EACH_VEC_SAFE_ELT (pending_redefine_extname, ix, p)
+  FOR_EACH_VEC_ELT (pending_redefinition, pending_redefine_extname, ix, p)
     if (DECL_NAME (decl) == p->oldname)
       {
 	tree newname = p->newname;
-	pending_redefine_extname->unordered_remove (ix);
+	VEC_unordered_remove (pending_redefinition,
+			      pending_redefine_extname, ix);
 
 	/* If we already have an asmname, #pragma redefine_extname is
 	   ignored (with a warning if it conflicts).  */
@@ -595,7 +614,7 @@ maybe_apply_renaming_pragma (tree decl, tree asmname)
 
 static void handle_pragma_visibility (cpp_reader *);
 
-static vec<int> visstack;
+static VEC (int, heap) *visstack;
 
 /* Push the visibility indicated by STR onto the top of the #pragma
    visibility stack.  KIND is 0 for #pragma GCC visibility, 1 for
@@ -607,7 +626,8 @@ static vec<int> visstack;
 void
 push_visibility (const char *str, int kind)
 {
-  visstack.safe_push (((int) default_visibility) | (kind << 8));
+  VEC_safe_push (int, heap, visstack,
+		 ((int) default_visibility) | (kind << 8));
   if (!strcmp (str, "default"))
     default_visibility = VISIBILITY_DEFAULT;
   else if (!strcmp (str, "internal"))
@@ -627,14 +647,14 @@ push_visibility (const char *str, int kind)
 bool
 pop_visibility (int kind)
 {
-  if (!visstack.length ())
+  if (!VEC_length (int, visstack))
     return false;
-  if ((visstack.last () >> 8) != kind)
+  if ((VEC_last (int, visstack) >> 8) != kind)
     return false;
   default_visibility
-    = (enum symbol_visibility) (visstack.pop () & 0xff);
+    = (enum symbol_visibility) (VEC_pop (int, visstack) & 0xff);
   visibility_options.inpragma
-    = visstack.length () != 0;
+    = VEC_length (int, visstack) != 0;
   return true;
 }
 
@@ -1128,7 +1148,7 @@ handle_pragma_float_const_decimal64 (cpp_reader *ARG_UNUSED (dummy))
       return;
     }
 
-  pedwarn (input_location, OPT_Wpedantic,
+  pedwarn (input_location, OPT_pedantic,
 	   "ISO C does not support %<#pragma STDC FLOAT_CONST_DECIMAL64%>");
 
   switch (handle_stdc_pragma ("STDC FLOAT_CONST_DECIMAL64"))
@@ -1146,8 +1166,10 @@ handle_pragma_float_const_decimal64 (cpp_reader *ARG_UNUSED (dummy))
 }
 
 /* A vector of registered pragma callbacks, which is never freed.   */
+DEF_VEC_O (internal_pragma_handler);
+DEF_VEC_ALLOC_O (internal_pragma_handler, heap);
 
-static vec<internal_pragma_handler> registered_pragmas;
+static VEC(internal_pragma_handler, heap) *registered_pragmas;
 
 typedef struct
 {
@@ -1155,8 +1177,10 @@ typedef struct
   const char *name;
 } pragma_ns_name;
 
+DEF_VEC_O (pragma_ns_name);
+DEF_VEC_ALLOC_O (pragma_ns_name, heap);
 
-static vec<pragma_ns_name> registered_pp_pragmas;
+static VEC(pragma_ns_name, heap) *registered_pp_pragmas;
 
 struct omp_pragma_def { const char *name; unsigned int id; };
 static const struct omp_pragma_def omp_pragmas[] = {
@@ -1192,10 +1216,13 @@ c_pp_lookup_pragma (unsigned int id, const char **space, const char **name)
       }
 
   if (id >= PRAGMA_FIRST_EXTERNAL
-      && (id < PRAGMA_FIRST_EXTERNAL + registered_pp_pragmas.length ()))
+      && (id < PRAGMA_FIRST_EXTERNAL
+	  + VEC_length (pragma_ns_name, registered_pp_pragmas)))
     {
-      *space = registered_pp_pragmas[id - PRAGMA_FIRST_EXTERNAL].space;
-      *name = registered_pp_pragmas[id - PRAGMA_FIRST_EXTERNAL].name;
+      *space = VEC_index (pragma_ns_name, registered_pp_pragmas,
+			  id - PRAGMA_FIRST_EXTERNAL)->space;
+      *name = VEC_index (pragma_ns_name, registered_pp_pragmas,
+			 id - PRAGMA_FIRST_EXTERNAL)->name;
       return;
     }
 
@@ -1220,14 +1247,15 @@ c_register_pragma_1 (const char *space, const char *name,
 
       ns_name.space = space;
       ns_name.name = name;
-      registered_pp_pragmas.safe_push (ns_name);
-      id = registered_pp_pragmas.length ();
+      VEC_safe_push (pragma_ns_name, heap, registered_pp_pragmas, &ns_name);
+      id = VEC_length (pragma_ns_name, registered_pp_pragmas);
       id += PRAGMA_FIRST_EXTERNAL - 1;
     }
   else
     {
-      registered_pragmas.safe_push (ihandler);
-      id = registered_pragmas.length ();
+      VEC_safe_push (internal_pragma_handler, heap, registered_pragmas,
+                     &ihandler);
+      id = VEC_length (internal_pragma_handler, registered_pragmas);
       id += PRAGMA_FIRST_EXTERNAL - 1;
 
       /* The C++ front end allocates 6 bits in cp_token; the C front end
@@ -1317,7 +1345,7 @@ c_invoke_pragma_handler (unsigned int id)
   pragma_handler_2arg handler_2arg;
 
   id -= PRAGMA_FIRST_EXTERNAL;
-  ihandler = &registered_pragmas[id];
+  ihandler = VEC_index (internal_pragma_handler, registered_pragmas, id);
   if (ihandler->extra_data)
     {
       handler_2arg = ihandler->handler.handler_2arg;
@@ -1368,6 +1396,7 @@ init_pragma (void)
 
   c_register_pragma_with_expansion (0, "redefine_extname",
 				    handle_pragma_redefine_extname);
+  c_register_pragma (0, "extern_prefix", handle_pragma_extern_prefix);
 
   c_register_pragma_with_expansion (0, "message", handle_pragma_message);
 

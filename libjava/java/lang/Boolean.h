@@ -23,7 +23,6 @@ public:
   jboolean equals(::java::lang::Object *);
   static jboolean getBoolean(::java::lang::String *);
   jint Boolean$compareTo(::java::lang::Boolean *);
-  static jint compare(jboolean, jboolean);
   static jboolean parseBoolean(::java::lang::String *);
   jint compareTo(::java::lang::Object *);
 private:

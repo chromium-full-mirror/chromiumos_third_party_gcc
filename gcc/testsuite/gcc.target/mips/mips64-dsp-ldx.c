@@ -1,7 +1,6 @@
 /* Test MIPS64 DSP instructions */
 /* { dg-do compile } */
-/* { dg-options "-mgp64 -mdsp" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-mgp64 -mdsp -O" } */
 
 /* { dg-final { scan-assembler "\tldx\t" } } */
 

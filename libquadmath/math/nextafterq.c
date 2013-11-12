@@ -1,4 +1,4 @@
-/* nextafterq.c -- __float128 version of s_nextafter.c.
+/* s_nextafterl.c -- long double version of s_nextafter.c.
  * Conversion to IEEE quad long double by Jakub Jelinek, jj@ultra.linux.cz.
  */
 

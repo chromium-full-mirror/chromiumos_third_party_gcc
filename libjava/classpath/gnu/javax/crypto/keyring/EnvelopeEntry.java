@@ -1,5 +1,5 @@
 /* EnvelopeEntry.java --
-   Copyright (C) 2003, 2006, 2010 Free Software Foundation, Inc.
+   Copyright (C) 2003, 2006 Free Software Foundation, Inc.
 
 This file is a part of GNU Classpath.
 
@@ -58,8 +58,7 @@ import java.util.logging.Logger;
 public abstract class EnvelopeEntry
     extends Entry
 {
-  private static final Logger log = Configuration.DEBUG ?
-                Logger.getLogger(EnvelopeEntry.class.getName()) : null;
+  private static final Logger log = Logger.getLogger(EnvelopeEntry.class.getName());
   /** The envelope that contains this one (if any). */
   protected EnvelopeEntry containingEnvelope;
   /** The contained entries. */

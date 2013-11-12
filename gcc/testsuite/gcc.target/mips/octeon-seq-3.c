@@ -1,6 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-march=octeon -mgp64" } */
-/* { dg-skip-if "code quality test" { *-*-* } { "-O0" } { "" } } */
+/* { dg-options "-O -march=octeon -mgp64" } */
 
 /* { dg-final { scan-assembler-not "and\t\|andi\t\|ext\t\|sll\t\|srl\t" } } */
 /* { dg-final { scan-assembler-times "\tseqi\t\|\tsnei\t" 4 } } */

@@ -1,6 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-mpaired-single -mgp64 -ftree-vectorize" } */
-/* { dg-skip-if "requires vectorization" { *-*-* } { "-O0" "-Os" } { "" } } */
+/* { dg-options "-O2 -mpaired-single -mgp64 -ftree-vectorize" } */
 
 extern float a[], b[], c[];
 
@@ -12,6 +11,6 @@ foo (void)
     a[i] = b[i] == c[i] + 1 ? b[i] : c[i];
 }
 
-/* { dg-final { scan-assembler "\tadd\\.ps\t" } } */
-/* { dg-final { scan-assembler "\tc\\.eq\\.ps\t" } } */
-/* { dg-final { scan-assembler "\tmov\[tf\]\\.ps\t" } } */
+/* { dg-final { scan-assembler "add\\.ps" } } */
+/* { dg-final { scan-assembler "c\\.eq\\.ps" } } */
+/* { dg-final { scan-assembler "mov\[tf\]\\.ps" } } */

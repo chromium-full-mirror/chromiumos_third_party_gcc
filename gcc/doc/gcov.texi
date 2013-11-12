@@ -1,10 +1,12 @@
-@c Copyright (C) 1996-2013 Free Software Foundation, Inc.
+@c Copyright (C) 1996, 1997, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
+@c 2008, 2010 Free Software Foundation, Inc.
 @c This is part of the GCC manual.
 @c For copying conditions, see the file gcc.texi.
 
 @ignore
 @c man begin COPYRIGHT
-Copyright @copyright{} 1996-2013 Free Software Foundation, Inc.
+Copyright @copyright{} 1996, 1997, 1999, 2000, 2001, 2002, 2003, 2004,
+2005, 2008, 2010  Free Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.3 or
@@ -122,17 +124,18 @@ gcov [@option{-v}|@option{--version}] [@option{-h}|@option{--help}]
      [@option{-a}|@option{--all-blocks}]
      [@option{-b}|@option{--branch-probabilities}]
      [@option{-c}|@option{--branch-counts}]
-     [@option{-d}|@option{--display-progress}]
-     [@option{-f}|@option{--function-summaries}]
-     [@option{-i}|@option{--intermediate-format}]
-     [@option{-l}|@option{--long-file-names}]
-     [@option{-m}|@option{--demangled-names}]
-     [@option{-n}|@option{--no-output}]
-     [@option{-o}|@option{--object-directory} @var{directory|file}]
-     [@option{-p}|@option{--preserve-paths}]
-     [@option{-r}|@option{--relative-only}]
-     [@option{-s}|@option{--source-prefix} @var{directory}]
+     [@option{-m}|@option{--pmu-profile}]
      [@option{-u}|@option{--unconditional-branches}]
+     [@option{-n}|@option{--no-output}]
+     [@option{-l}|@option{--long-file-names}]
+     [@option{-p}|@option{--preserve-paths}]
+     [@option{-q}|@option{--pmu_profile-path}]
+     [@option{-r}|@option{--relative-only}]
+     [@option{-f}|@option{--function-summaries}]
+     [@option{-o}|@option{--object-directory} @var{directory|file}]
+     [@option{-s}|@option{--source-prefix} @var{directory}]
+     [@option{-i}|@option{--intermediate-format}]
+     [@option{-d}|@option{--display-progress}]
      @var{files}
 @c man end
 @c man begin SEEALSO
@@ -170,6 +173,14 @@ be shown, unless the @option{-u} option is given.
 @itemx --branch-counts
 Write branch frequencies as the number of branches taken, rather than
 the percentage of branches taken.
+
+@item -m
+@itemx --pmu-profile
+Output the additional PMU profile information if available.
+
+@item -q
+@itemx --pmu_profile-path
+PMU profile path (default @file{pmuprofile.gcda}).
 
 @item -n
 @itemx --no-output
@@ -236,47 +247,29 @@ Display the progress on the standard output.
 
 @item -i
 @itemx --intermediate-format
-Output gcov file in an easy-to-parse intermediate text format that can
-be used by @command{lcov} or other tools. The output is a single
-@file{.gcov} file per @file{.gcda} file. No source code is required.
+Output gcov file in an intermediate text format that can be used by
+@command{lcov} or other applications. It will output a single *.gcov file per
+*.gcda file. No source code is required.
 
 The format of the intermediate @file{.gcov} file is plain text with
 one entry per line
 
 @smallexample
-file:@var{source_file_name}
-function:@var{line_number},@var{execution_count},@var{function_name}
-lcount:@var{line number},@var{execution_count}
-branch:@var{line_number},@var{branch_coverage_type}
+SF:@var{source_file_name}
+FN:@var{line_number},@var{function_name}
+FNDA:@var{execution_count},@var{function_name}
+BA:@var{line_num},@var{branch_coverage_type}
+DA:@var{line number},@var{execution_count}
 
 Where the @var{branch_coverage_type} is
-   notexec (Branch not executed)
-   taken (Branch executed and taken)
-   nottaken (Branch executed, but not taken)
+   0 (Branch not executed)
+   1 (Branch executed, but not taken)
+   2 (Branch executed and taken)
 
-There can be multiple @var{file} entries in an intermediate gcov
-file. All entries following a @var{file} pertain to that source file
-until the next @var{file} entry.
+There can be multiple SF entries in an intermediate gcov file. All
+entries following SF pertain to that source file until the next SF
+entry.
 @end smallexample
-
-Here is a sample when @option{-i} is used in conjuction with @option{-b} option:
-
-@smallexample
-file:array.cc
-function:11,1,_Z3sumRKSt6vectorIPiSaIS0_EE
-function:22,1,main
-lcount:11,1
-lcount:12,1
-lcount:14,1
-branch:14,taken
-lcount:26,1
-branch:28,nottaken
-@end smallexample
-
-@item -m
-@itemx --demangled-names
-Display demangled function names in output. The default is to show
-mangled function names.
 
 @end table
 
@@ -595,23 +588,20 @@ collected at that point to be dumped to @file{.gcda} output files.
 
 @command{gcov} uses two files for profiling.  The names of these files
 are derived from the original @emph{object} file by substituting the
-file suffix with either @file{.gcno}, or @file{.gcda}.  The files
-contain coverage and profile data stored in a platform-independent format.
-The @file{.gcno} files are placed in the same directory as the object
-file.  By default, the @file{.gcda} files are also stored in the same
-directory as the object file, but the GCC @option{-fprofile-dir} option
-may be used to store the @file{.gcda} files in a separate directory.
+file suffix with either @file{.gcno}, or @file{.gcda}.  All of these files
+are placed in the same directory as the object file, and contain data
+stored in a platform-independent format.
 
-The @file{.gcno} notes file is generated when the source file is compiled
-with the GCC @option{-ftest-coverage} option.  It contains information to
+The @file{.gcno} file is generated when the source file is compiled with
+the GCC @option{-ftest-coverage} option.  It contains information to
 reconstruct the basic block graphs and assign source line numbers to
 blocks.
 
-The @file{.gcda} count data file is generated when a program containing
-object files built with the GCC @option{-fprofile-arcs} option is executed.
-A separate @file{.gcda} file is created for each object file compiled with
-this option.  It contains arc transition counts, value profile counts, and
-some summary information.
+The @file{.gcda} file is generated when a program containing object files
+built with the GCC @option{-fprofile-arcs} option is executed.  A
+separate @file{.gcda} file is created for each object file compiled with
+this option.  It contains arc transition counts, and some summary
+information.
 
 The full details of the file format is specified in @file{gcov-io.h},
 and functions provided in that header file should be used to access the

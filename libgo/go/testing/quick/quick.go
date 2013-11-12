@@ -140,6 +140,8 @@ func Value(t reflect.Type, rand *rand.Rand) (value reflect.Value, ok bool) {
 	default:
 		return reflect.Value{}, false
 	}
+
+	return
 }
 
 // A Config structure contains options for running a test.

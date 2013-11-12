@@ -12,8 +12,6 @@ import (
 	"sync"
 )
 
-var errMissingParams = errors.New("jsonrpc: request body missing params")
-
 type serverCodec struct {
 	dec *json.Decoder // for reading JSON values
 	enc *json.Encoder // for writing JSON values
@@ -52,8 +50,12 @@ type serverRequest struct {
 
 func (r *serverRequest) reset() {
 	r.Method = ""
-	r.Params = nil
-	r.Id = nil
+	if r.Params != nil {
+		*r.Params = (*r.Params)[0:0]
+	}
+	if r.Id != nil {
+		*r.Id = (*r.Id)[0:0]
+	}
 }
 
 type serverResponse struct {
@@ -85,9 +87,6 @@ func (c *serverCodec) ReadRequestHeader(r *rpc.Request) error {
 func (c *serverCodec) ReadRequestBody(x interface{}) error {
 	if x == nil {
 		return nil
-	}
-	if c.req.Params == nil {
-		return errMissingParams
 	}
 	// JSON params is array value.
 	// RPC params is struct.

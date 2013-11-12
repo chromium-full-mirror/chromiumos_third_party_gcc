@@ -1,6 +1,7 @@
 /* Operating system specific defines to be used when targeting GCC for
    hosting on Windows32, using a Unix style C library and tools.
-   Copyright (C) 1995-2013 Free Software Foundation, Inc.
+   Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
+   2007, 2008, 2009, 2010, 2011 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -48,7 +49,11 @@ along with GCC; see the file COPYING3.  If not see
  %{static|static-libgcc:-lgcc -lgcc_eh} \
  %{!static: \
    %{!static-libgcc: \
-     -lgcc_s -lgcc \
+     %{!shared: \
+       %{!shared-libgcc:-lgcc -lgcc_eh} \
+       %{shared-libgcc:-lgcc_s -lgcc} \
+      } \
+     %{shared:-lgcc_s -lgcc} \
     } \
   } "
 #else

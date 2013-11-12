@@ -211,21 +211,11 @@ public class LogManager
   /**
    * Registers a listener which will be notified when the
    * logging properties are re-read.
-   *
-   * @param listener the event listener to register.
-   * @throws NullPointerException if the listener is {@code null}.
-   * @throws SecurityException if a security manager exists and the
-   *                           calling code does not have the permission
-   *                           {@code LoggingPermission("control")}.
    */
   public synchronized void addPropertyChangeListener(PropertyChangeListener listener)
   {
-    if (listener == null)
-      throw new NullPointerException("Attempt to add null property change listener");
-
-    SecurityManager sm = System.getSecurityManager();
-    if (sm != null)
-      sm.checkPermission(new LoggingPermission("control", null));
+    /* do not register null. */
+    listener.getClass();
 
     pcs.addPropertyChangeListener(listener);
   }
@@ -236,22 +226,11 @@ public class LogManager
    * If <code>listener</code> has not been registered previously,
    * nothing happens.  Also, no exception is thrown if
    * <code>listener</code> is <code>null</code>.
-   *
-   * @param listener the listener to remove.
-   * @throws SecurityException if a security manager exists and the
-   *                           calling code does not have the permission
-   *                           {@code LoggingPermission("control")}.
    */
   public synchronized void removePropertyChangeListener(PropertyChangeListener listener)
   {
     if (listener != null)
-      {
-        SecurityManager sm = System.getSecurityManager();
-        if (sm != null)
-          sm.checkPermission(new LoggingPermission("control", null));
-
-        pcs.removePropertyChangeListener(listener);
-      }
+      pcs.removePropertyChangeListener(listener);
   }
 
   /**

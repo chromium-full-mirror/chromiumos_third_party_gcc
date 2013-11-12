@@ -414,12 +414,11 @@ public class StyleSheet extends StyleContext
               tags[i] = t.toString();
             else
               tags[i] = null;
-            attributes.add(attributeSetToMap(atts));
+            attributes.set(i, attributeSetToMap(atts));
           }
         else
           {
             tags[i] = null;
-            attributes.add(null);
           }
       }
     tags[0] = tag.toString();

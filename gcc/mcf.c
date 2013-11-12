@@ -1,6 +1,7 @@
 /* Routines to implement minimum-cost maximal flow algorithm used to smooth
    basic block and edge frequency counts.
-   Copyright (C) 2008-2013 Free Software Foundation, Inc.
+   Copyright (C) 2008, 2009
+   Free Software Foundation, Inc.
    Contributed by Paul Yuan (yingbo.com@gmail.com) and
                   Vinodha Ramasamy (vinodha@google.com).
 
@@ -45,14 +46,16 @@ along with GCC; see the file COPYING3.  If not see
 #include "config.h"
 #include "system.h"
 #include "coretypes.h"
+#include "tm.h"
 #include "basic-block.h"
+#include "output.h"
+#include "langhooks.h"
+#include "tree.h"
 #include "gcov-io.h"
 #include "params.h"
 #include "diagnostic-core.h"
 
-#include "tree.h"
 #include "profile.h"
-#include "dumpfile.h"
 
 /* CAP_INFINITY: Constant to represent infinite capacity.  */
 #define CAP_INFINITY INTTYPE_MAXIMUM (HOST_WIDEST_INT)
@@ -101,11 +104,13 @@ typedef struct fixup_edge_d
 
 typedef fixup_edge_type *fixup_edge_p;
 
+DEF_VEC_P (fixup_edge_p);
+DEF_VEC_ALLOC_P (fixup_edge_p, heap);
 
 /* Structure to represent a vertex in the fixup graph.  */
 typedef struct fixup_vertex_d
 {
-  vec<fixup_edge_p> succ_edges;
+  VEC (fixup_edge_p, heap) *succ_edges;
 } fixup_vertex_type;
 
 typedef fixup_vertex_type *fixup_vertex_p;
@@ -294,7 +299,7 @@ dump_fixup_graph (FILE *file, fixup_graph_type *fixup_graph, const char *msg)
   fnum_edges = fixup_graph->num_edges;
 
   fprintf (file, "\nDump fixup graph for %s(): %s.\n",
-	   current_function_name (), msg);
+	   lang_hooks.decl_printable_name (current_function_decl, 2), msg);
   fprintf (file,
 	   "There are %d vertices and %d edges. new_exit_index is %d.\n\n",
 	   fnum_vertices, fnum_edges, fixup_graph->new_exit_index);
@@ -303,9 +308,9 @@ dump_fixup_graph (FILE *file, fixup_graph_type *fixup_graph, const char *msg)
     {
       pfvertex = fvertex_list + i;
       fprintf (file, "vertex_list[%d]: %d succ fixup edges.\n",
-	       i, pfvertex->succ_edges.length ());
+	       i, VEC_length (fixup_edge_p, pfvertex->succ_edges));
 
-      for (j = 0; pfvertex->succ_edges.iterate (j, &pfedge);
+      for (j = 0; VEC_iterate (fixup_edge_p, pfvertex->succ_edges, j, pfedge);
 	   j++)
 	{
 	  /* Distinguish forward edges and backward edges in the residual flow
@@ -383,7 +388,7 @@ add_edge (fixup_graph_type *fixup_graph, int src, int dest, gcov_type cost)
   fixup_graph->num_edges++;
   if (dump_file)
     dump_fixup_edge (dump_file, fixup_graph, curr_edge);
-  curr_vertex->succ_edges.safe_push (curr_edge);
+  VEC_safe_push (fixup_edge_p, heap, curr_vertex->succ_edges, curr_edge);
   return curr_edge;
 }
 
@@ -432,7 +437,7 @@ find_fixup_edge (fixup_graph_type *fixup_graph, int src, int dest)
 
   pfvertex = fixup_graph->vertex_list + src;
 
-  for (j = 0; pfvertex->succ_edges.iterate (j, &pfedge);
+  for (j = 0; VEC_iterate (fixup_edge_p, pfvertex->succ_edges, j, pfedge);
        j++)
     if (pfedge->dest == dest)
       return pfedge;
@@ -451,7 +456,7 @@ delete_fixup_graph (fixup_graph_type *fixup_graph)
   fixup_vertex_p pfvertex = fixup_graph->vertex_list;
 
   for (i = 0; i < fnum_vertices; i++, pfvertex++)
-    pfvertex->succ_edges.release ();
+    VEC_free (fixup_edge_p, heap, pfvertex->succ_edges);
 
   free (fixup_graph->vertex_list);
   free (fixup_graph->edge_list);
@@ -1017,7 +1022,7 @@ find_augmenting_path (fixup_graph_type *fixup_graph,
       u = dequeue (queue_list);
       is_visited[u] = 1;
       pfvertex = fvertex_list + u;
-      for (i = 0; pfvertex->succ_edges.iterate (i, &pfedge);
+      for (i = 0; VEC_iterate (fixup_edge_p, pfvertex->succ_edges, i, pfedge);
 	   i++)
 	{
 	  int dest = pfedge->dest;
@@ -1305,8 +1310,8 @@ adjust_cfg_counts (fixup_graph_type *fixup_graph)
   if (dump_file)
     {
       fprintf (dump_file, "\nCheck %s() CFG flow conservation:\n",
-	       current_function_name ());
-      FOR_EACH_BB (bb)
+           lang_hooks.decl_printable_name (current_function_decl, 2));
+      FOR_BB_BETWEEN (bb, ENTRY_BLOCK_PTR->next_bb, EXIT_BLOCK_PTR, next_bb)
         {
           if ((bb->count != sum_edge_counts (bb->preds))
                || (bb->count != sum_edge_counts (bb->succs)))
@@ -1437,12 +1442,11 @@ find_minimum_cost_flow (fixup_graph_type *fixup_graph)
       if (iteration > MAX_ITER (fixup_graph->num_vertices,
                                 fixup_graph->num_edges))
 	{
-          if (dump_enabled_p ())
-            dump_printf_loc (MSG_NOTE,
-                             DECL_SOURCE_LOCATION (current_function_decl),
-                             "Exiting profile correction early to avoid "
-                             "excessive compile time");
-          break;
+          if (flag_opt_info >= OPT_INFO_MAX)
+            inform (DECL_SOURCE_LOCATION (current_function_decl),
+		  "Exiting profile correction early to avoid excessive "
+		  "compile time");
+	  break;
 	}
     }
 
@@ -1460,7 +1464,7 @@ find_minimum_cost_flow (fixup_graph_type *fixup_graph)
 /* Compute the sum of the edge counts in TO_EDGES.  */
 
 gcov_type
-sum_edge_counts (vec<edge, va_gc> *to_edges)
+sum_edge_counts (VEC (edge, gc) *to_edges)
 {
   gcov_type sum = 0;
   edge e;
@@ -1476,7 +1480,7 @@ sum_edge_counts (vec<edge, va_gc> *to_edges)
 }
 
 
-/* Main routine. Smoothes the initial assigned basic block and edge counts using
+/* Main routine. Smoothes the intial assigned basic block and edge counts using
    a minimum cost flow algorithm, to ensure that the flow consistency rule is
    obeyed: sum of outgoing edges = sum of incoming edges for each basic
    block.  */
