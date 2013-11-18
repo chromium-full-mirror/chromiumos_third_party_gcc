@@ -1,7 +1,6 @@
 /* Declarations for variables relating to reading the source file.
    Used by parsers, lexical analyzers, and error message routines.
-   Copyright (C) 1993, 1997, 1998, 2000, 2003, 2004, 2007, 2008, 2009, 2010
-   Free Software Foundation, Inc.
+   Copyright (C) 1993-2013 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -38,6 +37,9 @@ extern char builtins_location_check[(BUILTINS_LOCATION
 				     < RESERVED_LOCATION_COUNT) ? 1 : -1];
 
 extern expanded_location expand_location (source_location);
+extern const char * location_get_source_line(expanded_location xloc);
+extern expanded_location expand_location_to_spelling_point (source_location);
+extern source_location expansion_point_location_if_in_system_header (source_location);
 
 /* Historically GCC used location_t, while cpp used source_location.
    This could be removed but it hardly seems worth the effort.  */
@@ -63,7 +65,7 @@ extern int get_discriminator_from_locus (location_t);
 #define input_filename LOCATION_FILE (input_location)
 #define in_system_header_at(LOC) \
   ((linemap_location_in_system_header_p (line_table, \
-                                         map_discriminator_location (LOC))))
+					 map_discriminator_location (LOC))))
 #define in_system_header (in_system_header_at (input_location))
 
 void dump_line_table_statistics (void);

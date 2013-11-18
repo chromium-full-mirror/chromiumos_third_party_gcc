@@ -1,6 +1,5 @@
 /* Configuration file for ARM GNU/Linux EABI targets.
-   Copyright (C) 2004, 2005, 2006, 2007, 2009, 2010, 2011
-   Free Software Foundation, Inc.
+   Copyright (C) 2004-2013 Free Software Foundation, Inc.
    Contributed by CodeSourcery, LLC   
 
    This file is part of GCC.
@@ -69,10 +68,9 @@
    GLIBC_DYNAMIC_LINKER_DEFAULT and TARGET_DEFAULT_FLOAT_ABI.  */
 
 #undef  GLIBC_DYNAMIC_LINKER
-#define GLIBC_DYNAMIC_LINKER_SOFT_FLOAT \
-  RUNTIME_ROOT_PREFIX "/lib/ld-linux.so.3"
-#define GLIBC_DYNAMIC_LINKER_HARD_FLOAT \
-  RUNTIME_ROOT_PREFIX "/lib/ld-linux-armhf.so.3"
+
+#define GLIBC_DYNAMIC_LINKER_SOFT_FLOAT RUNTIME_ROOT_PREFIX "/lib/ld-linux.so.3"
+#define GLIBC_DYNAMIC_LINKER_HARD_FLOAT RUNTIME_ROOT_PREFIX "/lib/ld-linux-armhf.so.3"
 #define GLIBC_DYNAMIC_LINKER_DEFAULT GLIBC_DYNAMIC_LINKER_SOFT_FLOAT
 
 #define GLIBC_DYNAMIC_LINKER \

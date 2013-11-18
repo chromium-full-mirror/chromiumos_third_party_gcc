@@ -1,6 +1,5 @@
 /* Dump a gcov file, for debugging use.
-   Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011,
-   2012 Free Software Foundation, Inc.
+   Copyright (C) 2002-2013 Free Software Foundation, Inc.
    Contributed by Nathan Sidwell <nathan@codesourcery.com>
 
 Gcov is free software; you can redistribute it and/or modify
@@ -29,7 +28,7 @@ along with Gcov; see the file COPYING3.  If not see
 #include "gcov-io.h"
 #include "gcov-io.c"
 
-static void dump_file (const char *);
+static void dump_gcov_file (const char *);
 static int dump_aux_modules (const char *);
 static void print_prefix (const char *, unsigned, gcov_position_t);
 static void print_usage (void);
@@ -40,12 +39,9 @@ static void tag_arcs (const char *, unsigned, unsigned);
 static void tag_lines (const char *, unsigned, unsigned);
 static void tag_counters (const char *, unsigned, unsigned);
 static void tag_summary (const char *, unsigned, unsigned);
+static void dump_working_sets (const char *filename ATTRIBUTE_UNUSED,
+                               const struct gcov_ctr_summary *summary);
 static void tag_module_info (const char *, unsigned, unsigned);
-static void tag_pmu_load_latency_info (const char *, unsigned, unsigned);
-static void tag_pmu_branch_mispredict_info (const char *, unsigned, unsigned);
-static void tag_pmu_string_table_entry (const char*, unsigned, unsigned);
-static void tag_pmu_tool_header (const char *, unsigned, unsigned);
-
 extern int main (int, char **);
 
 typedef struct tag_format
@@ -57,6 +53,7 @@ typedef struct tag_format
 
 static int flag_dump_contents = 0;
 static int flag_dump_positions = 0;
+static int flag_dump_working_sets = 0;
 static int flag_dump_aux_modules_only = 0;
 
 static const struct option options[] =
@@ -65,6 +62,7 @@ static const struct option options[] =
   { "version",              no_argument,       NULL, 'v' },
   { "long",                 no_argument,       NULL, 'l' },
   { "positions",	    no_argument,       NULL, 'o' },
+  { "working-sets",	    no_argument,       NULL, 'w' },
   { 0, 0, 0, 0 }
 };
 
@@ -80,13 +78,6 @@ static const tag_format_t tag_table[] =
   {GCOV_TAG_OBJECT_SUMMARY, "OBJECT_SUMMARY", tag_summary},
   {GCOV_TAG_PROGRAM_SUMMARY, "PROGRAM_SUMMARY", tag_summary},
   {GCOV_TAG_MODULE_INFO, "MODULE INFO", tag_module_info},
-  {GCOV_TAG_PMU_LOAD_LATENCY_INFO, "PMU_LOAD_LATENCY_INFO",
-   tag_pmu_load_latency_info},
-  {GCOV_TAG_PMU_BRANCH_MISPREDICT_INFO, "PMU_BRANCH_MISPREDICT_INFO",
-   tag_pmu_branch_mispredict_info},
-  {GCOV_TAG_PMU_TOOL_HEADER, "PMU_TOOL_HEADER", tag_pmu_tool_header},
-  {GCOV_TAG_PMU_STRING_TABLE_ENTRY, "PMU_STRING_TABLE_ENTRY",
-   tag_pmu_string_table_entry},
   {0, NULL, NULL}
 };
 
@@ -110,7 +101,7 @@ main (int argc ATTRIBUTE_UNUSED, char **argv)
 
   diagnostic_initialize (global_dc, 0);
 
-  while ((opt = getopt_long (argc, argv, "hlpvx", options, NULL)) != -1)
+  while ((opt = getopt_long (argc, argv, "hlpvwx", options, NULL)) != -1)
     {
       switch (opt)
 	{
@@ -129,6 +120,9 @@ main (int argc ATTRIBUTE_UNUSED, char **argv)
 	case 'x':
 	  flag_dump_aux_modules_only = 1;
 	  break;
+	case 'w':
+	  flag_dump_working_sets = 1;
+	  break;
 	default:
 	  fprintf (stderr, "unknown flag `%c'\n", opt);
 	}
@@ -141,8 +135,8 @@ main (int argc ATTRIBUTE_UNUSED, char **argv)
 	  return 1;
     }
   else
-    while (argv[optind])
-      dump_file (argv[optind++]);
+  while (argv[optind])
+    dump_gcov_file (argv[optind++]);
   return 0;
 }
 
@@ -155,6 +149,7 @@ print_usage (void)
   printf ("  -v, --version        Print version number\n");
   printf ("  -l, --long           Dump record contents too\n");
   printf ("  -p, --positions      Dump record positions\n");
+  printf ("  -w, --working-sets   Dump working set computed from summary\n");
   printf ("  -x                   Dump names of auxiliary modules only\n");
 }
 
@@ -162,7 +157,7 @@ static void
 print_version (void)
 {
   printf ("gcov-dump %s%s\n", pkgversion_string, version_string);
-  printf ("Copyright (C) 2012 Free Software Foundation, Inc.\n");
+  printf ("Copyright (C) 2013 Free Software Foundation, Inc.\n");
   printf ("This is free software; see the source for copying conditions.\n"
   	  "There is NO warranty; not even for MERCHANTABILITY or \n"
 	  "FITNESS FOR A PARTICULAR PURPOSE.\n\n");
@@ -226,7 +221,7 @@ dump_aux_modules (const char *filename)
 }
 
 static void
-dump_file (const char *filename)
+dump_gcov_file (const char *filename)
 {
   unsigned tags[4];
   unsigned depth = 0;
@@ -531,8 +526,7 @@ tag_summary (const char *filename ATTRIBUTE_UNUSED,
       printf ("\n");
       print_prefix (filename, 0, 0);
       printf ("\t\tcounts=%u, runs=%u",
-	      summary.ctrs[ix].num,
-	      summary.ctrs[ix].runs);
+	      summary.ctrs[ix].num, summary.ctrs[ix].runs);
 
       printf (", sum_all=" HOST_WIDEST_INT_PRINT_DEC,
 	      (HOST_WIDEST_INT)summary.ctrs[ix].sum_all);
@@ -559,6 +553,8 @@ tag_summary (const char *filename ATTRIBUTE_UNUSED,
               (HOST_WIDEST_INT)histo_bucket->min_value,
               (HOST_WIDEST_INT)histo_bucket->cum_value);
         }
+      if (flag_dump_working_sets)
+        dump_working_sets (filename, &summary.ctrs[ix]);
     }
 }
 
@@ -578,56 +574,53 @@ tag_module_info (const char *filename ATTRIBUTE_UNUSED,
     }
   else
     {
-      const char *suffix = mod_info->is_primary
-	? (mod_info->is_exported ? "primary, exported" : "primary")
-	: "auxiliary";
-      printf (": %s [%s]", mod_info->source_filename, suffix);
+      const char *primary_suffix =
+               mod_info->is_primary ? "primary" : "auxiliary";
+      const char *export_suffix = "";
+      const char *include_all_suffix = "";
+
+      if (mod_info->is_primary)
+        {
+          if (MODULE_EXPORTED_FLAG (mod_info))
+            export_suffix = ",exported";
+          if (MODULE_INCLUDE_ALL_AUX_FLAG (mod_info))
+            include_all_suffix =",include_all";
+        }
+
+      printf (": %s (ident=%u) [%s%s%s]", mod_info->source_filename,
+              mod_info->ident, primary_suffix, export_suffix,
+              include_all_suffix);
     }
 }
 
-/* Read gcov tag GCOV_TAG_PMU_LOAD_LATENCY_INFO from the gcda file and
-  print the contents in a human readable form.  */
-
 static void
-tag_pmu_load_latency_info (const char *filename ATTRIBUTE_UNUSED,
-                           unsigned tag ATTRIBUTE_UNUSED, unsigned length)
+dump_working_sets (const char *filename ATTRIBUTE_UNUSED,
+                   const struct gcov_ctr_summary *summary)
 {
-  gcov_pmu_ll_info_t ll_info;
-  gcov_read_pmu_load_latency_info (&ll_info, length);
-  print_load_latency_line (stdout, &ll_info, no_newline);
-}
+  gcov_working_set_t gcov_working_sets[NUM_GCOV_WORKING_SETS];
+  unsigned ws_ix, pctinc, pct;
+  gcov_working_set_t *ws_info;
 
-/* Read gcov tag GCOV_TAG_PMU_BRANCH_MISPREDICT_INFO from the gcda
-  file and print the contents in a human readable form.  */
+  compute_working_sets (summary, gcov_working_sets);
 
-static void
-tag_pmu_branch_mispredict_info (const char *filename ATTRIBUTE_UNUSED,
-                                unsigned tag ATTRIBUTE_UNUSED, unsigned length)
-{
-  gcov_pmu_brm_info_t brm_info;
-  gcov_read_pmu_branch_mispredict_info (&brm_info, length);
-  print_branch_mispredict_line (stdout, &brm_info, no_newline);
-}
-
-static void
-tag_pmu_string_table_entry (const char *filename ATTRIBUTE_UNUSED,
-                            unsigned tag ATTRIBUTE_UNUSED, unsigned length)
-{
-  gcov_pmu_st_entry_t st_entry;
-  gcov_read_pmu_string_table_entry(&st_entry, length);
-  print_pmu_string_table_entry(stdout, &st_entry, no_newline);
-  free(st_entry.str);
-}
-
-/* Read gcov tag GCOV_TAG_PMU_TOOL_HEADER from the gcda file and print
-   the contents in a human readable form.  */
-
-static void
-tag_pmu_tool_header (const char *filename ATTRIBUTE_UNUSED,
-                     unsigned tag ATTRIBUTE_UNUSED, unsigned length)
-{
-  gcov_pmu_tool_header_t tool_header;
-  gcov_read_pmu_tool_header (&tool_header, length);
-  print_pmu_tool_header (stdout, &tool_header, no_newline);
-  destroy_pmu_tool_header (&tool_header);
+  printf ("\n");
+  print_prefix (filename, 0, 0);
+  printf ("\t\tcounter working sets:");
+  /* Multiply the percentage by 100 to avoid float.  */
+  pctinc = 100 * 100 / NUM_GCOV_WORKING_SETS;
+  for (ws_ix = 0, pct = pctinc; ws_ix < NUM_GCOV_WORKING_SETS;
+       ws_ix++, pct += pctinc)
+    {
+      if (ws_ix == NUM_GCOV_WORKING_SETS - 1)
+        pct = 9990;
+      ws_info = &gcov_working_sets[ws_ix];
+      /* Print out the percentage using int arithmatic to avoid float.  */
+      printf ("\n");
+      print_prefix (filename, 0, 0);
+      printf ("\t\t%u.%02u%%: num counts=%u, min counter="
+               HOST_WIDEST_INT_PRINT_DEC,
+               pct / 100, pct - (pct / 100 * 100),
+               ws_info->num_counters,
+               (HOST_WIDEST_INT)ws_info->min_counter);
+    }
 }
