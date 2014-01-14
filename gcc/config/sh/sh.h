@@ -138,14 +138,16 @@ extern int code_for_indirect_jump_scratch;
 				  | MASK_SH2 | MASK_SH1)
 #define SELECT_SH2A_NOFPU	 (MASK_HARD_SH2A | MASK_SH2 | MASK_SH1)
 #define SELECT_SH2A_SINGLE_ONLY  (MASK_SH_E | MASK_HARD_SH2A | MASK_SH2 \
-				  | MASK_SH1 | MASK_FPU_SINGLE)
+				  | MASK_SH1 | MASK_FPU_SINGLE \
+				  | MASK_FPU_SINGLE_ONLY)
 #define SELECT_SH2A_SINGLE	 (MASK_SH_E | MASK_HARD_SH2A \
 				  | MASK_FPU_SINGLE | MASK_HARD_SH2A_DOUBLE \
 				  | MASK_SH2 | MASK_SH1)
 #define SELECT_SH3		 (MASK_SH3 | SELECT_SH2)
 #define SELECT_SH3E		 (MASK_SH_E | MASK_FPU_SINGLE | SELECT_SH3)
 #define SELECT_SH4_NOFPU	 (MASK_HARD_SH4 | SELECT_SH3)
-#define SELECT_SH4_SINGLE_ONLY	 (MASK_HARD_SH4 | SELECT_SH3E)
+#define SELECT_SH4_SINGLE_ONLY	 (MASK_HARD_SH4 | SELECT_SH3E \
+				  | MASK_FPU_SINGLE_ONLY)
 #define SELECT_SH4		 (MASK_SH4 | MASK_SH_E | MASK_HARD_SH4 \
 				  | SELECT_SH3)
 #define SELECT_SH4_SINGLE	 (MASK_FPU_SINGLE | SELECT_SH4)
@@ -212,7 +214,8 @@ extern int code_for_indirect_jump_scratch;
 /* Reset all target-selection flags.  */
 #define MASK_ARCH (MASK_SH1 | MASK_SH2 | MASK_SH3 | MASK_SH_E | MASK_SH4 \
 		   | MASK_HARD_SH2A | MASK_HARD_SH2A_DOUBLE | MASK_SH4A \
-		   | MASK_HARD_SH4 | MASK_FPU_SINGLE | MASK_SH5)
+		   | MASK_HARD_SH4 | MASK_FPU_SINGLE | MASK_SH5 \
+		   | MASK_FPU_SINGLE_ONLY)
 
 /* This defaults us to big-endian.  */
 #ifndef TARGET_ENDIAN_DEFAULT
@@ -402,16 +405,21 @@ extern enum sh_divide_strategy_e sh_div_strategy;
 
 /* Target machine storage layout.  */
 
+#define TARGET_BIG_ENDIAN (!TARGET_LITTLE_ENDIAN)
+
+#define SH_REG_MSW_OFFSET (TARGET_LITTLE_ENDIAN ? 1 : 0)
+#define SH_REG_LSW_OFFSET (TARGET_LITTLE_ENDIAN ? 0 : 1)
+
 /* Define this if most significant bit is lowest numbered
    in instructions that operate on numbered bit-fields.  */
 #define BITS_BIG_ENDIAN  0
 
 /* Define this if most significant byte of a word is the lowest numbered.  */
-#define BYTES_BIG_ENDIAN (TARGET_LITTLE_ENDIAN == 0)
+#define BYTES_BIG_ENDIAN TARGET_BIG_ENDIAN
 
 /* Define this if most significant word of a multiword number is the lowest
    numbered.  */
-#define WORDS_BIG_ENDIAN (TARGET_LITTLE_ENDIAN == 0)
+#define WORDS_BIG_ENDIAN TARGET_BIG_ENDIAN
 
 #define MAX_BITS_PER_WORD 64
 
@@ -981,7 +989,6 @@ enum reg_class
   GENERAL_REGS,
   FP0_REGS,
   FP_REGS,
-  DF_HI_REGS,
   DF_REGS,
   FPSCR_REGS,
   GENERAL_FP_REGS,
@@ -1007,7 +1014,6 @@ enum reg_class
   "GENERAL_REGS",	\
   "FP0_REGS",		\
   "FP_REGS",		\
-  "DF_HI_REGS",		\
   "DF_REGS",		\
   "FPSCR_REGS",		\
   "GENERAL_FP_REGS",	\
@@ -1043,8 +1049,6 @@ enum reg_class
   { 0x00000000, 0x00000000, 0x00000001, 0x00000000, 0x00000000 },	\
 /* FP_REGS:  */								\
   { 0x00000000, 0x00000000, 0xffffffff, 0xffffffff, 0x00000000 },	\
-/* DF_HI_REGS:  Initialized in TARGET_CONDITIONAL_REGISTER_USAGE.  */	\
-  { 0x00000000, 0x00000000, 0xffffffff, 0xffffffff, 0x0000ff00 },	\
 /* DF_REGS:  */								\
   { 0x00000000, 0x00000000, 0xffffffff, 0xffffffff, 0x0000ff00 },	\
 /* FPSCR_REGS:  */							\
@@ -1438,7 +1442,7 @@ struct sh_args {
 #define SHCOMPACT_FORCE_ON_STACK(MODE,TYPE) \
   ((MODE) == BLKmode \
    && TARGET_SHCOMPACT \
-   && ! TARGET_LITTLE_ENDIAN \
+   && TARGET_BIG_ENDIAN \
    && int_size_in_bytes (TYPE) > 4 \
    && int_size_in_bytes (TYPE) < 8)
 
@@ -1919,7 +1923,7 @@ struct sh_args {
 
 #define REGCLASS_HAS_FP_REG(CLASS) \
   ((CLASS) == FP0_REGS || (CLASS) == FP_REGS \
-   || (CLASS) == DF_REGS || (CLASS) == DF_HI_REGS)
+   || (CLASS) == DF_REGS)
 
 /* ??? Perhaps make MEMORY_MOVE_COST depend on compiler option?  This
    would be so that people with slow memory systems could generate

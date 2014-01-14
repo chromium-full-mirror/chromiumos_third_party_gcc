@@ -71,7 +71,11 @@ cleanup_auto_inc_dec (rtx src, enum machine_mode mem_mode ATTRIBUTE_UNUSED)
       /* SCRATCH must be shared because they represent distinct values.  */
       return x;
     case CLOBBER:
-      if (REG_P (XEXP (x, 0)) && REGNO (XEXP (x, 0)) < FIRST_PSEUDO_REGISTER)
+      /* Share clobbers of hard registers (like cc0), but do not share pseudo reg
+         clobbers or clobbers of hard registers that originated as pseudos.
+         This is needed to allow safe register renaming.  */
+      if (REG_P (XEXP (x, 0)) && REGNO (XEXP (x, 0)) < FIRST_PSEUDO_REGISTER
+	  && ORIGINAL_REGNO (XEXP (x, 0)) == REGNO (XEXP (x, 0)))
 	return x;
       break;
 
@@ -89,9 +93,10 @@ cleanup_auto_inc_dec (rtx src, enum machine_mode mem_mode ATTRIBUTE_UNUSED)
       gcc_assert (mem_mode != VOIDmode && mem_mode != BLKmode);
       return gen_rtx_PLUS (GET_MODE (x),
 			   cleanup_auto_inc_dec (XEXP (x, 0), mem_mode),
-			   GEN_INT (code == PRE_INC
-				    ? GET_MODE_SIZE (mem_mode)
-				    : -GET_MODE_SIZE (mem_mode)));
+			   gen_int_mode (code == PRE_INC
+					 ? GET_MODE_SIZE (mem_mode)
+					 : -GET_MODE_SIZE (mem_mode),
+					 GET_MODE (x)));
 
     case POST_INC:
     case POST_DEC:

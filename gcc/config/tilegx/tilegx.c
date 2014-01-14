@@ -39,7 +39,24 @@
 #include "function.h"
 #include "dwarf2.h"
 #include "timevar.h"
+#include "tree.h"
+#include "pointer-set.h"
+#include "hash-table.h"
+#include "vec.h"
+#include "ggc.h"
+#include "basic-block.h"
+#include "tree-ssa-alias.h"
+#include "internal-fn.h"
+#include "gimple-fold.h"
+#include "tree-eh.h"
+#include "gimple-expr.h"
+#include "is-a.h"
 #include "gimple.h"
+#include "stringpool.h"
+#include "stor-layout.h"
+#include "varasm.h"
+#include "calls.h"
+#include "gimplify.h"
 #include "cfgloop.h"
 #include "tilegx-builtins.h"
 #include "tilegx-multiply.h"
@@ -1429,14 +1446,16 @@ expand_set_cint64_one_inst (rtx dest_reg,
     }
   else if (!three_wide_only)
     {
-      rtx imm_op = GEN_INT (val);
-
-      if (satisfies_constraint_J (imm_op)
-	  || satisfies_constraint_K (imm_op)
-	  || satisfies_constraint_N (imm_op)
-	  || satisfies_constraint_P (imm_op))
+      /* Test for the following constraints: J, K, N, P.  We avoid
+	 generating an rtx and using existing predicates because we
+	 can be testing and rejecting a lot of constants, and GEN_INT
+	 is O(N).  */
+      if ((val >= -32768 && val <= 65535)
+	  || ((val == (val & 0xFF) * 0x0101010101010101LL))
+	  || (val == ((trunc_int_for_mode (val, QImode) & 0xFFFF)
+		      * 0x0001000100010001LL)))
 	{
-	  emit_move_insn (dest_reg, imm_op);
+	  emit_move_insn (dest_reg, GEN_INT (val));
 	  return true;
 	}
     }
@@ -1870,7 +1889,7 @@ tilegx_expand_unaligned_load (rtx dest_reg, rtx mem, HOST_WIDE_INT bitsize,
       rtx extracted =
 	extract_bit_field (gen_lowpart (DImode, wide_result),
 			   bitsize, bit_offset % BITS_PER_UNIT,
-			   !sign, false, gen_lowpart (DImode, dest_reg),
+			   !sign, gen_lowpart (DImode, dest_reg),
 			   DImode, DImode);
 
       if (extracted != dest_reg)
@@ -2527,7 +2546,7 @@ cbranch_predicted_p (rtx insn)
 
   if (x)
     {
-      int pred_val = INTVAL (XEXP (x, 0));
+      int pred_val = XINT (x, 0);
 
       return pred_val >= REG_BR_PROB_BASE / 2;
     }
@@ -2895,6 +2914,7 @@ static struct tile_builtin_info tilegx_builtin_info[TILEGX_BUILTIN_max] = {
   { CODE_FOR_lshrdi3,                   NULL }, /* shru */
   { CODE_FOR_lshrsi3,                   NULL }, /* shrux */
   { CODE_FOR_insn_shufflebytes,         NULL }, /* shufflebytes */
+  { CODE_FOR_insn_shufflebytes1,        NULL }, /* shufflebytes1 */
   { CODE_FOR_insn_st,                   NULL }, /* st */
   { CODE_FOR_insn_st1,                  NULL }, /* st1 */
   { CODE_FOR_insn_st2,                  NULL }, /* st2 */
@@ -3223,6 +3243,7 @@ static const struct tilegx_builtin_def tilegx_builtins[] = {
   { "__insn_shrux",              TILEGX_INSN_SHRUX,              true,  "iii"  },
   { "__insn_shruxi",             TILEGX_INSN_SHRUX,              true,  "iii"  },
   { "__insn_shufflebytes",       TILEGX_INSN_SHUFFLEBYTES,       true,  "llll" },
+  { "__insn_shufflebytes1",      TILEGX_INSN_SHUFFLEBYTES1,      true,  "lll"  },
   { "__insn_st",                 TILEGX_INSN_ST,                 false, "vpl"  },
   { "__insn_st1",                TILEGX_INSN_ST1,                false, "vpl"  },
   { "__insn_st2",                TILEGX_INSN_ST2,                false, "vpl"  },
@@ -3995,11 +4016,10 @@ tilegx_expand_prologue (void)
 
 	if (r == NULL_RTX)
 	  {
-	    rtx p = compute_frame_addr (offset, &next_scratch_regno);
-	    r = gen_rtx_REG (Pmode, next_scratch_regno--);
-	    reg_save_addr[which_scratch] = r;
-
-	    emit_insn (gen_rtx_SET (VOIDmode, r, p));
+	    int prev_scratch_regno = next_scratch_regno;
+	    r = compute_frame_addr (offset, &next_scratch_regno);
+	    if (prev_scratch_regno != next_scratch_regno)
+	      reg_save_addr[which_scratch] = r;
 	  }
 	else
 	  {
@@ -4363,7 +4383,7 @@ static void
 tilegx_gen_bundles (void)
 {
   basic_block bb;
-  FOR_EACH_BB (bb)
+  FOR_EACH_BB_FN (bb, cfun)
     {
       rtx insn, next;
       rtx end = NEXT_INSN (BB_END (bb));
@@ -4689,7 +4709,7 @@ static void
 reorder_var_tracking_notes (void)
 {
   basic_block bb;
-  FOR_EACH_BB (bb)
+  FOR_EACH_BB_FN (bb, cfun)
   {
     rtx insn, next;
     rtx queue = NULL_RTX;
@@ -4786,13 +4806,8 @@ tilegx_reorg (void)
 int
 tilegx_asm_preferred_eh_data_format (int code ATTRIBUTE_UNUSED, int global)
 {
-  if (flag_pic)
-    {
-      int type = TARGET_32BIT ? DW_EH_PE_sdata4 : DW_EH_PE_sdata8;
-      return (global ? DW_EH_PE_indirect : 0) | DW_EH_PE_pcrel | type;
-    }
-  else
-    return DW_EH_PE_absptr;
+  int type = TARGET_32BIT ? DW_EH_PE_sdata4 : DW_EH_PE_sdata8;
+  return (global ? DW_EH_PE_indirect : 0) | DW_EH_PE_pcrel | type;
 }
 
 
@@ -5579,6 +5594,8 @@ tilegx_file_end (void)
 #undef  TARGET_ASM_ALIGNED_DI_OP
 #define TARGET_ASM_ALIGNED_DI_OP "\t.quad\t"
 
+#undef  TARGET_CAN_USE_DOLOOP_P
+#define TARGET_CAN_USE_DOLOOP_P can_use_doloop_if_innermost
 
 struct gcc_target targetm = TARGET_INITIALIZER;
 

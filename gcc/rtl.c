@@ -222,7 +222,7 @@ shared_const_p (const_rtx orig)
      a LABEL_REF, it isn't sharable.  */
   return (GET_CODE (XEXP (orig, 0)) == PLUS
 	  && GET_CODE (XEXP (XEXP (orig, 0), 0)) == SYMBOL_REF
-	  && CONST_INT_P(XEXP (XEXP (orig, 0), 1)));
+	  && CONST_INT_P (XEXP (XEXP (orig, 0), 1)));
 }
 
 
@@ -256,7 +256,11 @@ copy_rtx (rtx orig)
       /* SCRATCH must be shared because they represent distinct values.  */
       return orig;
     case CLOBBER:
-      if (REG_P (XEXP (orig, 0)) && REGNO (XEXP (orig, 0)) < FIRST_PSEUDO_REGISTER)
+      /* Share clobbers of hard registers (like cc0), but do not share pseudo reg
+         clobbers or clobbers of hard registers that originated as pseudos.
+         This is needed to allow safe register renaming.  */
+      if (REG_P (XEXP (orig, 0)) && REGNO (XEXP (orig, 0)) < FIRST_PSEUDO_REGISTER
+	  && ORIGINAL_REGNO (XEXP (orig, 0)) == REGNO (XEXP (orig, 0)))
 	return orig;
       break;
 

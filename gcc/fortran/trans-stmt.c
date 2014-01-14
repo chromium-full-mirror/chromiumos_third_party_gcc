@@ -24,6 +24,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "system.h"
 #include "coretypes.h"
 #include "tree.h"
+#include "stringpool.h"
 #include "gfortran.h"
 #include "flags.h"
 #include "trans.h"
@@ -53,6 +54,7 @@ typedef struct forall_info
   int nvar;
   tree size;
   struct forall_info  *prev_nest;
+  bool do_concurrent;
 }
 forall_info;
 
@@ -2661,7 +2663,7 @@ check_forall_dependencies (gfc_code *c, stmtblock_t *pre, stmtblock_t *post)
     return need_temp;
 
   new_symtree = NULL;
-  if (find_forall_index (c->expr1, lsym, 2) == SUCCESS)
+  if (find_forall_index (c->expr1, lsym, 2))
     {
       forall_make_variable_temp (c, pre, post);
       need_temp = 0;
@@ -2759,6 +2761,11 @@ gfc_trans_forall_loop (forall_info *forall_tmp, tree body,
       /* The exit condition.  */
       cond = fold_build2_loc (input_location, LE_EXPR, boolean_type_node,
 			      count, build_int_cst (TREE_TYPE (count), 0));
+      if (forall_tmp->do_concurrent)
+	cond = build2 (ANNOTATE_EXPR, TREE_TYPE (cond), cond,
+		       build_int_cst (integer_type_node,
+				      annot_expr_ivdep_kind));
+
       tmp = build1_v (GOTO_EXPR, exit_label);
       tmp = fold_build3_loc (input_location, COND_EXPR, void_type_node,
 			     cond, tmp, build_empty_stmt (input_location));
@@ -3842,6 +3849,7 @@ gfc_trans_forall_1 (gfc_code * code, forall_info * nested_forall_info)
 	}
 
       tmp = gfc_finish_block (&body);
+      nested_forall_info->do_concurrent = true;
       tmp = gfc_trans_nested_forall_loop (nested_forall_info, tmp, 1);
       gfc_add_expr_to_block (&block, tmp);
       goto done;
@@ -4757,21 +4765,21 @@ gfc_trans_where (gfc_code * code)
 	     are the same.  In short, this is VERY conservative and this
 	     is needed because the two loops, required by the standard
 	     are coalesced in gfc_trans_where_3.  */
-	  if (!gfc_check_dependency(cblock->next->expr1,
+	  if (!gfc_check_dependency (cblock->next->expr1,
 				    cblock->expr1, 0)
-	      && !gfc_check_dependency(eblock->next->expr1,
+	      && !gfc_check_dependency (eblock->next->expr1,
 				       cblock->expr1, 0)
-	      && !gfc_check_dependency(cblock->next->expr1,
+	      && !gfc_check_dependency (cblock->next->expr1,
 				       eblock->next->expr2, 1)
-	      && !gfc_check_dependency(eblock->next->expr1,
+	      && !gfc_check_dependency (eblock->next->expr1,
 				       cblock->next->expr2, 1)
-	      && !gfc_check_dependency(cblock->next->expr1,
+	      && !gfc_check_dependency (cblock->next->expr1,
 				       cblock->next->expr2, 1)
-	      && !gfc_check_dependency(eblock->next->expr1,
+	      && !gfc_check_dependency (eblock->next->expr1,
 				       eblock->next->expr2, 1)
-	      && !gfc_check_dependency(cblock->next->expr1,
+	      && !gfc_check_dependency (cblock->next->expr1,
 				       eblock->next->expr1, 0)
-	      && !gfc_check_dependency(eblock->next->expr1,
+	      && !gfc_check_dependency (eblock->next->expr1,
 				       cblock->next->expr1, 0))
 	    return gfc_trans_where_3 (cblock, eblock);
 	}
@@ -4925,7 +4933,7 @@ gfc_trans_allocate (gfc_code * code)
 
       nelems = NULL_TREE;
       if (!gfc_array_allocate (&se, expr, stat, errmsg, errlen, label_finish,
-			       memsz, &nelems, code->expr3))
+			       memsz, &nelems, code->expr3, &code->ext.alloc.ts))
 	{
 	  bool unlimited_char;
 
@@ -5071,16 +5079,6 @@ gfc_trans_allocate (gfc_code * code)
 	      tmp = gfc_nullify_alloc_comp (expr->ts.u.derived, tmp, 0);
 	      gfc_add_expr_to_block (&se.pre, tmp);
 	    }
-	  else if (al->expr->ts.type == BT_CLASS)
-	    {
-	      /* With class objects, it is best to play safe and null the
-		 memory because we cannot know if dynamic types have allocatable
-		 components or not.  */
-	      tmp = build_call_expr_loc (input_location,
-					 builtin_decl_explicit (BUILT_IN_MEMSET),
-					 3, se.expr, integer_zero_node,  memsz);
-	      gfc_add_expr_to_block (&se.pre, tmp);
-	    }
 	}
 
       gfc_add_block_to_block (&block, &se.pre);
@@ -5146,10 +5144,7 @@ gfc_trans_allocate (gfc_code * code)
 
 	      if (ts->type == BT_DERIVED || UNLIMITED_POLY (e))
 		{
-		  if (ts->type == BT_DERIVED)
-		  vtab = gfc_find_derived_vtab (ts->u.derived);
-		  else
-		    vtab = gfc_find_intrinsic_vtab (ts);
+		  vtab = gfc_find_vtab (ts);
 		  gcc_assert (vtab);
 		  gfc_init_se (&lse, NULL);
 		  lse.want_pointer = 1;
@@ -5234,22 +5229,17 @@ gfc_trans_allocate (gfc_code * code)
 		  ppc = gfc_copy_expr (rhs);
 		  gfc_add_vptr_component (ppc);
 		}
-	      else if (rhs->ts.type == BT_DERIVED)
-		ppc = gfc_lval_expr_from_sym
-				(gfc_find_derived_vtab (rhs->ts.u.derived));
 	      else
-		ppc = gfc_lval_expr_from_sym
-				(gfc_find_intrinsic_vtab (&rhs->ts));
+		ppc = gfc_lval_expr_from_sym (gfc_find_vtab (&rhs->ts));
 	      gfc_add_component_ref (ppc, "_copy");
 
-	      ppc_code = gfc_get_code ();
+	      ppc_code = gfc_get_code (EXEC_CALL);
 	      ppc_code->resolved_sym = ppc->symtree->n.sym;
 	      /* Although '_copy' is set to be elemental in class.c, it is
 		 not staying that way.  Find out why, sometime....  */
 	      ppc_code->resolved_sym->attr.elemental = 1;
 	      ppc_code->ext.actual = actual;
 	      ppc_code->expr1 = ppc;
-	      ppc_code->op = EXEC_CALL;
 	      /* Since '_copy' is elemental, the scalarizer will take care
 		 of arrays in gfc_trans_call.  */
 	      tmp = gfc_trans_call (ppc_code, true, NULL, NULL, false);
@@ -5349,30 +5339,6 @@ gfc_trans_allocate (gfc_code * code)
 }
 
 
-/* Reset the vptr after deallocation.  */
-
-static void
-reset_vptr (stmtblock_t *block, gfc_expr *e)
-{
-  gfc_expr *rhs, *lhs = gfc_copy_expr (e);
-  gfc_symbol *vtab;
-  tree tmp;
-
-  if (UNLIMITED_POLY (e))
-    rhs = gfc_get_null_expr (NULL);
-  else
-    {
-      vtab = gfc_find_derived_vtab (e->ts.u.derived);
-      rhs = gfc_lval_expr_from_sym (vtab);
-    }
-  gfc_add_vptr_component (lhs);
-  tmp = gfc_trans_pointer_assignment (lhs, rhs);
-  gfc_add_expr_to_block (block, tmp);
-  gfc_free_expr (lhs);
-  gfc_free_expr (rhs);
-}
-
-
 /* Translate a DEALLOCATE statement.  */
 
 tree
@@ -5432,7 +5398,8 @@ gfc_trans_deallocate (gfc_code *code)
 
       if (expr->rank || gfc_is_coarray (expr))
 	{
-	  if (expr->ts.type == BT_DERIVED && expr->ts.u.derived->attr.alloc_comp)
+	  if (expr->ts.type == BT_DERIVED && expr->ts.u.derived->attr.alloc_comp
+	      && !gfc_is_finalizable (expr->ts.u.derived, NULL))
 	    {
 	      gfc_ref *ref;
 	      gfc_ref *last = NULL;
@@ -5453,8 +5420,8 @@ gfc_trans_deallocate (gfc_code *code)
 	  tmp = gfc_array_deallocate (se.expr, pstat, errmsg, errlen,
 				      label_finish, expr);
 	  gfc_add_expr_to_block (&se.pre, tmp);
-	  if (UNLIMITED_POLY (al->expr))
-	    reset_vptr (&se.pre, al->expr);
+	  if (al->expr->ts.type == BT_CLASS)
+	    gfc_reset_vptr (&se.pre, al->expr);
 	}
       else
 	{
@@ -5469,7 +5436,7 @@ gfc_trans_deallocate (gfc_code *code)
 	  gfc_add_expr_to_block (&se.pre, tmp);
 
 	  if (al->expr->ts.type == BT_CLASS)
-	    reset_vptr (&se.pre, al->expr);
+	    gfc_reset_vptr (&se.pre, al->expr);
 	}
 
       if (code->expr1)

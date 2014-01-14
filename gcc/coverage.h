@@ -35,6 +35,9 @@ extern void coverage_end_function (unsigned, unsigned);
 /* Compute the control flow checksum for the current function.  */
 extern unsigned coverage_compute_cfg_checksum (void);
 
+/* Compute the profile id of function N.  */
+extern unsigned coverage_compute_profile_id (struct cgraph_node *n);
+
 /* Compute the line number checksum for the current function.  */
 extern unsigned coverage_compute_lineno_checksum (void);
 
@@ -69,10 +72,9 @@ extern void coverage_dc_end_function (void);
    is present in the coverage internal data structures.  */
 extern bool coverage_function_present (unsigned fn_ident);
 
-extern void emit_function_name (void);
-
 extern tree get_gcov_type (void);
 extern tree get_gcov_unsigned_t (void);
+extern tree get_const_string_type (void);
 
 /* Mark this module as containing asm statements.  */
 extern void coverage_has_asm_stmt (void);
@@ -80,5 +82,6 @@ extern void coverage_has_asm_stmt (void);
 /* Defined in tree-profile.c.  */
 extern void tree_init_instrumentation_sampling (void);
 extern void tree_init_dyn_ipa_parameters (void);
+extern void tree_init_instrumentation (void);
 
 #endif

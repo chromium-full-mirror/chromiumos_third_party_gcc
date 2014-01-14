@@ -400,6 +400,9 @@
 /* Define to 1 if you have the <sys/resource.h> header file. */
 #undef HAVE_SYS_RESOURCE_H
 
+/* Define to 1 if you have a suitable <sys/sdt.h> header file */
+#undef HAVE_SYS_SDT_H
+
 /* Define to 1 if you have the <sys/sem.h> header file. */
 #undef HAVE_SYS_SEM_H
 
@@ -807,6 +810,10 @@
    namespace std::tr1. */
 #undef _GLIBCXX_USE_C99_STDINT_TR1
 
+/* Defined if clock_gettime syscall has monotonic and realtime clock support.
+   */
+#undef _GLIBCXX_USE_CLOCK_GETTIME_SYSCALL
+
 /* Defined if clock_gettime has monotonic clock support. */
 #undef _GLIBCXX_USE_CLOCK_MONOTONIC
 
@@ -869,8 +876,11 @@
 /* Define to 1 if a verbose library is built, or 0 otherwise. */
 #undef _GLIBCXX_VERBOSE
 
-/* Defined if as can handle rdrand. */
+/* Defined if as can handle rdrand.
+   Disable when building with Clang.  Google ref b/8680429 */
+#ifndef __clang__
 #undef _GLIBCXX_X86_RDRAND
+#endif
 
 /* Define to 1 if mutex_timedlock is available. */
 #undef _GTHREAD_USE_MUTEX_TIMEDLOCK

@@ -21,6 +21,9 @@ along with GCC; see the file COPYING3.  If not see
 #ifndef GCC_L_IPO_H
 #define GCC_L_IPO_H
 
+/* Used in profile-gen  */
+extern unsigned ggc_total_memory; /* in KB */
+
 /* Primary module's id (non-zero). If no module-info was read in, this will
    be zero.  */
 extern unsigned primary_module_id;
@@ -41,6 +44,7 @@ extern unsigned primary_module_id;
 
 /* Current module id.  */
 extern unsigned current_module_id;
+extern unsigned include_all_aux;
 extern struct gcov_module_info **module_infos;
 extern int is_last_module (unsigned mod_id);
 
@@ -56,6 +60,7 @@ void add_decl_to_current_module_scope (tree decl, void *b);
 int lipo_cmp_type (tree t1, tree t2);
 tree get_type_or_decl_name (tree);
 int equivalent_struct_types_for_tbaa (const_tree t1, const_tree t2);
+void lipo_fixup_cgraph_edge_call_target (gimple);
 extern void copy_defined_module_set (tree, tree);
 extern bool is_parsing_done_p (void);
 

@@ -24,6 +24,9 @@
 #include "tm.h"
 #include "rtl.h"
 #include "tree.h"
+#include "stor-layout.h"
+#include "varasm.h"
+#include "calls.h"
 #include "regs.h"
 #include "hard-reg-set.h"
 #include "insn-config.h"
@@ -622,6 +625,7 @@ mn10300_can_use_rets_insn (void)
 
 /* Returns the set of live, callee-saved registers as a bitmask.  The
    callee-saved extended registers cannot be stored individually, so
+   all of them will be included in the mask if any one of them is used.
    Also returns the number of bytes in the registers in the mask if
    BYTES_SAVED is not NULL.  */
 
@@ -1236,8 +1240,7 @@ mn10300_expand_epilogue (void)
    registers it saves.  Return 0 otherwise.  */
 
 int
-mn10300_store_multiple_operation (rtx op,
-				  enum machine_mode mode ATTRIBUTE_UNUSED)
+mn10300_store_multiple_operation_p (rtx op)
 {
   int count;
   int mask;
@@ -3225,7 +3228,6 @@ mn10300_loop_contains_call_insn (loop_p loop)
 static void
 mn10300_scan_for_setlb_lcc (void)
 {
-  loop_iterator liter;
   loop_p loop;
 
   DUMP ("Looking for loops that can use the SETLB insn", NULL_RTX);
@@ -3240,7 +3242,7 @@ mn10300_scan_for_setlb_lcc (void)
      if an inner loop is not suitable for use with the SETLB/Lcc insns, it may
      be the case that its parent loop is suitable.  Thus we should check all
      loops, but work from the innermost outwards.  */
-  FOR_EACH_LOOP (liter, loop, LI_ONLY_INNERMOST)
+  FOR_EACH_LOOP (loop, LI_ONLY_INNERMOST)
     {
       const char * reason = NULL;
 

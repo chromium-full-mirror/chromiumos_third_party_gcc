@@ -43,8 +43,8 @@
 #ifndef _ALLOCATOR_H
 #define _ALLOCATOR_H 1
 
-// Define the base class to std::allocator.
-#include <bits/c++allocator.h>
+#include <bits/c++allocator.h> // Define the base class to std::allocator.
+#include <bits/memoryfwd.h>
 #if __cplusplus >= 201103L
 #include <type_traits>
 #endif
@@ -54,16 +54,9 @@ namespace std _GLIBCXX_VISIBILITY(default)
 _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   /**
-   * @defgroup allocators Allocators
-   * @ingroup memory
-   *
-   * Classes encapsulating memory operations.
-   *
-   * @{
+   *  @addtogroup allocators
+   *  @{
    */
-
-  template<typename _Tp>
-    class allocator;
 
   /// allocator<void> specialization.
   template<>
@@ -150,13 +143,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     operator!=(const allocator<_Tp>&, const allocator<_Tp>&)
     { return false; }
 
-  /// Declare uses_allocator so it can be specialized in \<queue\> etc.
-  template<typename, typename>
-    struct uses_allocator;
-
-  /**
-   * @}
-   */
+  /// @} group allocator
 
   // Inhibit implicit instantiations for required instantiations,
   // which are defined via explicit instantiations elsewhere.
@@ -171,13 +158,13 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   // To implement Option 3 of DR 431.
   template<typename _Alloc, bool = __is_empty(_Alloc)>
     struct __alloc_swap
-    { static void _S_do_it(_Alloc&, _Alloc&) { } };
+    { static void _S_do_it(_Alloc&, _Alloc&) _GLIBCXX_NOEXCEPT { } };
 
   template<typename _Alloc>
     struct __alloc_swap<_Alloc, false>
     {
       static void
-      _S_do_it(_Alloc& __one, _Alloc& __two)
+      _S_do_it(_Alloc& __one, _Alloc& __two) _GLIBCXX_NOEXCEPT
       {
 	// Precondition: swappable allocators.
 	if (__one != __two)
@@ -207,13 +194,13 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     = __or_<is_copy_constructible<typename _Tp::value_type>,
             is_nothrow_move_constructible<typename _Tp::value_type>>::value>
     struct __shrink_to_fit_aux
-    { static bool _S_do_it(_Tp&) { return false; } };
+    { static bool _S_do_it(_Tp&) noexcept { return false; } };
 
   template<typename _Tp>
     struct __shrink_to_fit_aux<_Tp, true>
     {
       static bool
-      _S_do_it(_Tp& __c)
+      _S_do_it(_Tp& __c) noexcept
       {
 	__try
 	  {

@@ -44,6 +44,8 @@ static const struct default_options aarch_option_optimization_table[] =
   {
     /* Enable section anchors by default at -O1 or higher.  */
     { OPT_LEVELS_1_PLUS, OPT_fsection_anchors, NULL, 1 },
+    /* Enable redundant extension instructions removal at -O2 and higher.  */
+    { OPT_LEVELS_2_PLUS, OPT_free, NULL, 1 },
     { OPT_LEVELS_NONE, 0, NULL, 0 }
   };
 
@@ -86,3 +88,38 @@ aarch64_handle_option (struct gcc_options *opts,
 }
 
 struct gcc_targetm_common targetm_common = TARGETM_COMMON_INITIALIZER;
+
+#define AARCH64_CPU_NAME_LENGTH 20
+
+/* Truncate NAME at the first '.' character seen, or return
+   NAME unmodified.  */
+
+const char *
+aarch64_rewrite_selected_cpu (const char *name)
+{
+  static char output_buf[AARCH64_CPU_NAME_LENGTH + 1] = {0};
+  char *arg_pos;
+
+  strncpy (output_buf, name, AARCH64_CPU_NAME_LENGTH);
+  arg_pos = strchr (output_buf, '.');
+
+  /* If we found a '.' truncate the entry at that point.  */
+  if (arg_pos)
+    *arg_pos = '\0';
+
+  return output_buf;
+}
+
+/* Called by the driver to rewrite a name passed to the -mcpu
+   argument in preparation to be passed to the assembler.  The
+   name will be in ARGV[0], ARGC should always be 1.  */
+
+const char *
+aarch64_rewrite_mcpu (int argc, const char **argv)
+{
+  gcc_assert (argc == 1);
+  return aarch64_rewrite_selected_cpu (argv[0]);
+}
+
+#undef AARCH64_CPU_NAME_LENGTH
+

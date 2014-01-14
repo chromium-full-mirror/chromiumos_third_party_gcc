@@ -147,7 +147,7 @@ find_opt (const char *input, unsigned int lang_mask)
   return match_wrong_lang;
 }
 
-/* If ARG is a non-negative integer made up solely of digits, return its
+/* If ARG is a non-negative decimal or hexadecimal integer, return its
    value, otherwise return -1.  */
 
 int
@@ -160,6 +160,17 @@ integral_argument (const char *arg)
 
   if (*p == '\0')
     return atoi (arg);
+
+  /* It wasn't a decimal number - try hexadecimal.  */
+  if (arg[0] == '0' && (arg[1] == 'x' || arg[1] == 'X'))
+    {
+      p = arg + 2;
+      while (*p && ISXDIGIT (*p))
+	p++;
+
+      if (p != arg + 2 && *p == '\0')
+	return strtol (arg, NULL, 16);
+    }
 
   return -1;
 }
@@ -690,6 +701,40 @@ decode_cmdline_option (const char **argv, unsigned int lang_mask,
     }
 
   return result;
+}
+
+/* Obstack for option strings.  */
+
+struct obstack opts_obstack;
+
+/* Like libiberty concat, but allocate using opts_obstack.  */
+
+char *
+opts_concat (const char *first, ...)
+{
+  char *newstr, *end;
+  size_t length = 0;
+  const char *arg;
+  va_list ap;
+
+  /* First compute the size of the result and get sufficient memory.  */
+  va_start (ap, first);
+  for (arg = first; arg; arg = va_arg (ap, const char *))
+    length += strlen (arg);
+  newstr = XOBNEWVEC (&opts_obstack, char, length + 1);
+  va_end (ap);
+
+  /* Now copy the individual pieces to the result string. */
+  va_start (ap, first);
+  for (arg = first, end = newstr; arg; arg = va_arg (ap, const char *))
+    {
+      length = strlen (arg);
+      memcpy (end, arg, length);
+      end += length;
+    }
+  *end = '\0';
+  va_end (ap);
+  return newstr;
 }
 
 /* Decode command-line options (ARGC and ARGV being the arguments of

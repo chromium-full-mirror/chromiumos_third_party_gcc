@@ -680,8 +680,8 @@ find_valid_class (enum machine_mode outer ATTRIBUTE_UNUSED,
 	    if (HARD_REGNO_MODE_OK (regno, inner))
 	      {
 		good = 1;
-		if (! TEST_HARD_REG_BIT (reg_class_contents[rclass], regno + n)
-		    || ! HARD_REGNO_MODE_OK (regno + n, outer))
+		if (TEST_HARD_REG_BIT (reg_class_contents[rclass], regno + n)
+		    && ! HARD_REGNO_MODE_OK (regno + n, outer))
 		  bad = 1;
 	      }
 	  }
@@ -895,7 +895,7 @@ can_reload_into (rtx in, int regno, enum machine_mode mode)
 {
   rtx dst, test_insn;
   int r = 0;
-  struct recog_data save_recog_data;
+  struct recog_data_d save_recog_data;
 
   /* For matching constraints, we often get notional input reloads where
      we want to use the original register as the reload register.  I.e.
@@ -1615,7 +1615,7 @@ push_reload (rtx in, rtx out, rtx *inloc, rtx *outloc,
 	    && reg_mentioned_p (XEXP (note, 0), in)
 	    /* Check that a former pseudo is valid; see find_dummy_reload.  */
 	    && (ORIGINAL_REGNO (XEXP (note, 0)) < FIRST_PSEUDO_REGISTER
-		|| (! bitmap_bit_p (DF_LR_OUT (ENTRY_BLOCK_PTR),
+		|| (! bitmap_bit_p (DF_LR_OUT (ENTRY_BLOCK_PTR_FOR_FN (cfun)),
 				    ORIGINAL_REGNO (XEXP (note, 0)))
 		    && hard_regno_nregs[regno][GET_MODE (XEXP (note, 0))] == 1))
 	    && ! refers_to_regno_for_reload_p (regno,
@@ -1939,7 +1939,7 @@ combine_reloads (void)
 	&& !fixed_regs[regno]
 	/* Check that a former pseudo is valid; see find_dummy_reload.  */
 	&& (ORIGINAL_REGNO (XEXP (note, 0)) < FIRST_PSEUDO_REGISTER
-	    || (!bitmap_bit_p (DF_LR_OUT (ENTRY_BLOCK_PTR),
+	    || (!bitmap_bit_p (DF_LR_OUT (ENTRY_BLOCK_PTR_FOR_FN (cfun)),
 			       ORIGINAL_REGNO (XEXP (note, 0)))
 		&& hard_regno_nregs[regno][GET_MODE (XEXP (note, 0))] == 1)))
       {
@@ -2098,7 +2098,7 @@ find_dummy_reload (rtx real_in, rtx real_out, rtx *inloc, rtx *outloc,
 	     can ignore the conflict).  We must never introduce writes
 	     to such hardregs, as they would clobber the other live
 	     pseudo.  See PR 20973.  */
-          || (!bitmap_bit_p (DF_LR_OUT (ENTRY_BLOCK_PTR),
+	  || (!bitmap_bit_p (DF_LR_OUT (ENTRY_BLOCK_PTR_FOR_FN (cfun)),
 			     ORIGINAL_REGNO (in))
 	      /* Similarly, only do this if we can be sure that the death
 		 note is still valid.  global can assign some hardreg to
@@ -3324,7 +3324,10 @@ find_reloads (rtx insn, int replace, int ind_levels, int live_known,
 		      for (j = 0; j < i; j++)
 			if (this_alternative_matches[j]
 			    == this_alternative_matches[i])
-			  badop = 1;
+			  {
+			    badop = 1;
+			    break;
+			  }
 		    break;
 
 		  case 'p':
@@ -4640,7 +4643,10 @@ find_reloads (rtx insn, int replace, int ind_levels, int live_known,
 
 	    for (nri = 1; nri < nr; nri ++)
 	      if (! TEST_HARD_REG_BIT (reg_class_contents[rld[i].rclass], regno + nri))
-		ok = 0;
+		{
+		  ok = 0;
+		  break;
+		}
 
 	    if (ok)
 	      rld[i].reg_rtx = dest;

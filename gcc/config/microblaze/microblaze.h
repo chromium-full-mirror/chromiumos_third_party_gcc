@@ -65,6 +65,9 @@ extern enum pipeline_type microblaze_pipe;
 /* The default is to support PIC.  */
 #define TARGET_SUPPORTS_PIC 1
 
+/* The default is to not need GOT for TLS.  */
+#define TLS_NEEDS_GOT 0
+
 /* What is the default setting for -mcpu= . We set it to v4.00.a even though 
    we are actually ahead. This is safest version that has generate code 
    compatible for the original ISA */
@@ -78,6 +81,7 @@ extern enum pipeline_type microblaze_pipe;
 	"%{mno-xl-barrel-shift:%<mxl-barrel-shift}", 	\
 	"%{mno-xl-pattern-compare:%<mxl-pattern-compare}", \
 	"%{mxl-soft-div:%<mno-xl-soft-div}", 		\
+	"%{mxl-reorder:%<mno-xl-reorder}", 		\
 	"%{msoft-float:%<mhard-float}"
 
 /* Tell collect what flags to pass to nm.  */
@@ -189,7 +193,6 @@ extern enum pipeline_type microblaze_pipe;
 #define BITS_BIG_ENDIAN 0
 #define BYTES_BIG_ENDIAN (TARGET_LITTLE_ENDIAN == 0)
 #define WORDS_BIG_ENDIAN (BYTES_BIG_ENDIAN)
-#define BITS_PER_UNIT           8
 #define BITS_PER_WORD           32
 #define UNITS_PER_WORD          4
 #define MIN_UNITS_PER_WORD      4
@@ -325,9 +328,7 @@ extern char microblaze_hard_regno_mode_ok[][FIRST_PSEUDO_REGISTER];
 
 #define NO_FUNCTION_CSE                 1
 
-#define PIC_OFFSET_TABLE_REGNUM         \
-        (flag_pic ? (GP_REG_FIRST + MB_ABI_PIC_ADDR_REGNUM) : \
-        INVALID_REGNUM)
+#define PIC_OFFSET_TABLE_REGNUM   (GP_REG_FIRST + MB_ABI_PIC_ADDR_REGNUM)
 
 enum reg_class
 {
@@ -540,7 +541,7 @@ typedef struct microblaze_args
 
 /* Define this, so that when PIC, reload won't try to reload invalid
    addresses which require two reload registers.  */
-#define LEGITIMATE_PIC_OPERAND_P(X)  (!pic_address_needs_scratch (X))
+#define LEGITIMATE_PIC_OPERAND_P(X)  microblaze_legitimate_pic_operand (X)
 
 #define CASE_VECTOR_MODE			(SImode)
 
@@ -755,9 +756,11 @@ do {									\
 
 /* Handle interrupt attribute.  */
 extern int interrupt_handler;
+extern int fast_interrupt;
 extern int save_volatiles;
 
 #define INTERRUPT_HANDLER_NAME "_interrupt_handler"
+#define FAST_INTERRUPT_NAME "_fast_interrupt"
 
 /* The following #defines are used in the headers files. Always retain these.  */
 
@@ -887,6 +890,10 @@ do {									 \
 "%{!nostdlib: \
 %{pg:-start-group -lxilprofile -lgloss -lxil -lc -lm -end-group } \
 %{!pg:-start-group -lgloss -lxil -lc -lm -end-group }} "
+
+/* microblaze-unknown-elf target has no support of C99 runtime */
+#undef TARGET_LIBC_HAS_FUNCTION
+#define TARGET_LIBC_HAS_FUNCTION no_c99_libc_has_function
 
 #undef  ENDFILE_SPEC
 #define ENDFILE_SPEC "crtend.o%s crtn.o%s"

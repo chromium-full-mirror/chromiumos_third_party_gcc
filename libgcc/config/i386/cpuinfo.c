@@ -14,9 +14,14 @@ WARRANTY; without even the implied warranty of MERCHANTABILITY or
 FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
 for more details.
 
-You should have received a copy of the GNU General Public License
-along with GCC; see the file COPYING3.  If not see
-<http://www.gnu.org/licenses/>. */
+Under Section 7 of GPL version 3, you are granted additional
+permissions described in the GCC Runtime Library Exception, version
+3.1, as published by the Free Software Foundation.
+
+You should have received a copy of the GNU General Public License and
+a copy of the GCC Runtime Library Exception along with this program;
+see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+<http://www.gnu.org/licenses/>.  */
 
 #include "cpuid.h"
 #include "tsystem.h"
@@ -47,6 +52,8 @@ enum processor_vendor
   VENDOR_MAX
 };
 
+/* Any new types or subtypes have to be inserted at the end. */
+
 enum processor_types
 {
   INTEL_ATOM = 1,
@@ -54,6 +61,7 @@ enum processor_types
   INTEL_COREI7,
   AMDFAM10H,
   AMDFAM15H,
+  INTEL_SLM,
   CPU_TYPE_MAX
 };
 
@@ -162,6 +170,11 @@ get_intel_cpu (unsigned int family, unsigned int model, unsigned int brand_id)
 	      /* Atom.  */
 	      __cpu_model.__cpu_type = INTEL_ATOM;
 	      break;
+	    case 0x37:
+	    case 0x4d:
+	      /* Silvermont.  */
+	      __cpu_model.__cpu_type = INTEL_SLM;
+	      break;
 	    case 0x1a:
 	    case 0x1e:
 	    case 0x1f:
@@ -178,6 +191,7 @@ get_intel_cpu (unsigned int family, unsigned int model, unsigned int brand_id)
 	      __cpu_model.__cpu_subtype = INTEL_COREI7_WESTMERE;
 	      break;
 	    case 0x2a:
+	    case 0x2d:
 	      /* Sandy Bridge.  */
 	      __cpu_model.__cpu_type = INTEL_COREI7;
 	      __cpu_model.__cpu_subtype = INTEL_COREI7_SANDYBRIDGE;

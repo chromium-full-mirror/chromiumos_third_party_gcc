@@ -115,6 +115,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm.h"
 #include "rtl.h"
 #include "tree.h"
+#include "stringpool.h"
+#include "stor-layout.h"
 #include "flags.h"
 #include "function.h"
 #include "expr.h"
@@ -122,15 +124,13 @@ along with GCC; see the file COPYING3.  If not see
 #include "insn-config.h"
 #include "except.h"
 #include "hard-reg-set.h"
-#include "basic-block.h"
 #include "output.h"
 #include "dwarf2asm.h"
 #include "dwarf2out.h"
 #include "dwarf2.h"
 #include "toplev.h"
-#include "hashtab.h"
+#include "hash-table.h"
 #include "intl.h"
-#include "ggc.h"
 #include "tm_p.h"
 #include "target.h"
 #include "common/common-target.h"
@@ -139,7 +139,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "diagnostic.h"
 #include "tree-pretty-print.h"
 #include "tree-pass.h"
-#include "tree-flow.h"
+#include "pointer-set.h"
 #include "cfgloop.h"
 
 /* Provide defaults for stuff that may not be defined when using
@@ -166,6 +166,49 @@ struct GTY(()) call_site_record_d
   rtx landing_pad;
   int action;
 };
+
+/* In the following structure and associated functions,
+   we represent entries in the action table as 1-based indices.
+   Special cases are:
+
+	 0:	null action record, non-null landing pad; implies cleanups
+	-1:	null action record, null landing pad; implies no action
+	-2:	no call-site entry; implies must_not_throw
+	-3:	we have yet to process outer regions
+
+   Further, no special cases apply to the "next" field of the record.
+   For next, 0 means end of list.  */
+
+struct action_record
+{
+  int offset;
+  int filter;
+  int next;
+};
+
+/* Hashtable helpers.  */
+
+struct action_record_hasher : typed_free_remove <action_record>
+{
+  typedef action_record value_type;
+  typedef action_record compare_type;
+  static inline hashval_t hash (const value_type *);
+  static inline bool equal (const value_type *, const compare_type *);
+};
+
+inline hashval_t
+action_record_hasher::hash (const value_type *entry)
+{
+  return entry->next * 1009 + entry->filter;
+}
+
+inline bool
+action_record_hasher::equal (const value_type *entry, const compare_type *data)
+{
+  return entry->filter == data->filter && entry->next == data->next;
+}
+
+typedef hash_table <action_record_hasher> action_hash_type;
 
 static bool get_eh_region_and_lp_from_rtx (const_rtx, eh_region *,
 					   eh_landing_pad *);
@@ -173,18 +216,9 @@ static bool get_eh_region_and_lp_from_rtx (const_rtx, eh_region *,
 static int t2r_eq (const void *, const void *);
 static hashval_t t2r_hash (const void *);
 
-static int ttypes_filter_eq (const void *, const void *);
-static hashval_t ttypes_filter_hash (const void *);
-static int ehspec_filter_eq (const void *, const void *);
-static hashval_t ehspec_filter_hash (const void *);
-static int add_ttypes_entry (htab_t, tree);
-static int add_ehspec_entry (htab_t, htab_t, tree);
 static void dw2_build_landing_pads (void);
 
-static int action_record_eq (const void *, const void *);
-static hashval_t action_record_hash (const void *);
-static int add_action_record (htab_t, int, int);
-static int collect_one_action_chain (htab_t, eh_region);
+static int collect_one_action_chain (action_hash_type, eh_region);
 static int add_call_site (rtx, int, int);
 
 static void push_uleb128 (vec<uchar, va_gc> **, unsigned int);
@@ -279,20 +313,20 @@ init_eh (void)
       /* Cache the interesting field offsets so that we have
 	 easy access from rtl.  */
       sjlj_fc_call_site_ofs
-	= (tree_low_cst (DECL_FIELD_OFFSET (f_cs), 1)
-	   + tree_low_cst (DECL_FIELD_BIT_OFFSET (f_cs), 1) / BITS_PER_UNIT);
+	= (tree_to_uhwi (DECL_FIELD_OFFSET (f_cs))
+	   + tree_to_uhwi (DECL_FIELD_BIT_OFFSET (f_cs)) / BITS_PER_UNIT);
       sjlj_fc_data_ofs
-	= (tree_low_cst (DECL_FIELD_OFFSET (f_data), 1)
-	   + tree_low_cst (DECL_FIELD_BIT_OFFSET (f_data), 1) / BITS_PER_UNIT);
+	= (tree_to_uhwi (DECL_FIELD_OFFSET (f_data))
+	   + tree_to_uhwi (DECL_FIELD_BIT_OFFSET (f_data)) / BITS_PER_UNIT);
       sjlj_fc_personality_ofs
-	= (tree_low_cst (DECL_FIELD_OFFSET (f_per), 1)
-	   + tree_low_cst (DECL_FIELD_BIT_OFFSET (f_per), 1) / BITS_PER_UNIT);
+	= (tree_to_uhwi (DECL_FIELD_OFFSET (f_per))
+	   + tree_to_uhwi (DECL_FIELD_BIT_OFFSET (f_per)) / BITS_PER_UNIT);
       sjlj_fc_lsda_ofs
-	= (tree_low_cst (DECL_FIELD_OFFSET (f_lsda), 1)
-	   + tree_low_cst (DECL_FIELD_BIT_OFFSET (f_lsda), 1) / BITS_PER_UNIT);
+	= (tree_to_uhwi (DECL_FIELD_OFFSET (f_lsda))
+	   + tree_to_uhwi (DECL_FIELD_BIT_OFFSET (f_lsda)) / BITS_PER_UNIT);
       sjlj_fc_jbuf_ofs
-	= (tree_low_cst (DECL_FIELD_OFFSET (f_jbuf), 1)
-	   + tree_low_cst (DECL_FIELD_BIT_OFFSET (f_jbuf), 1) / BITS_PER_UNIT);
+	= (tree_to_uhwi (DECL_FIELD_OFFSET (f_jbuf))
+	   + tree_to_uhwi (DECL_FIELD_BIT_OFFSET (f_jbuf)) / BITS_PER_UNIT);
     }
 }
 
@@ -607,7 +641,7 @@ eh_region_outermost (struct function *ifun, eh_region region_a,
   gcc_assert (ifun->eh->region_array);
   gcc_assert (ifun->eh->region_tree);
 
-  b_outer = sbitmap_alloc (ifun->eh->region_array->length());
+  b_outer = sbitmap_alloc (ifun->eh->region_array->length ());
   bitmap_clear (b_outer);
 
   do
@@ -687,46 +721,60 @@ struct ttypes_filter {
   int filter;
 };
 
+/* Helper for ttypes_filter hashing.  */
+
+struct ttypes_filter_hasher : typed_free_remove <ttypes_filter>
+{
+  typedef ttypes_filter value_type;
+  typedef tree_node compare_type;
+  static inline hashval_t hash (const value_type *);
+  static inline bool equal (const value_type *, const compare_type *);
+};
+
 /* Compare ENTRY (a ttypes_filter entry in the hash table) with DATA
    (a tree) for a @TTypes type node we are thinking about adding.  */
 
-static int
-ttypes_filter_eq (const void *pentry, const void *pdata)
+inline bool
+ttypes_filter_hasher::equal (const value_type *entry, const compare_type *data)
 {
-  const struct ttypes_filter *const entry
-    = (const struct ttypes_filter *) pentry;
-  const_tree const data = (const_tree) pdata;
-
   return entry->t == data;
 }
 
-static hashval_t
-ttypes_filter_hash (const void *pentry)
+inline hashval_t
+ttypes_filter_hasher::hash (const value_type *entry)
 {
-  const struct ttypes_filter *entry = (const struct ttypes_filter *) pentry;
   return TREE_HASH (entry->t);
 }
+
+typedef hash_table <ttypes_filter_hasher> ttypes_hash_type;
+
+
+/* Helper for ehspec hashing.  */
+
+struct ehspec_hasher : typed_free_remove <ttypes_filter>
+{
+  typedef ttypes_filter value_type;
+  typedef ttypes_filter compare_type;
+  static inline hashval_t hash (const value_type *);
+  static inline bool equal (const value_type *, const compare_type *);
+};
 
 /* Compare ENTRY with DATA (both struct ttypes_filter) for a @TTypes
    exception specification list we are thinking about adding.  */
 /* ??? Currently we use the type lists in the order given.  Someone
    should put these in some canonical order.  */
 
-static int
-ehspec_filter_eq (const void *pentry, const void *pdata)
+inline bool
+ehspec_hasher::equal (const value_type *entry, const compare_type *data)
 {
-  const struct ttypes_filter *entry = (const struct ttypes_filter *) pentry;
-  const struct ttypes_filter *data = (const struct ttypes_filter *) pdata;
-
   return type_list_equal (entry->t, data->t);
 }
 
 /* Hash function for exception specification lists.  */
 
-static hashval_t
-ehspec_filter_hash (const void *pentry)
+inline hashval_t
+ehspec_hasher::hash (const value_type *entry)
 {
-  const struct ttypes_filter *entry = (const struct ttypes_filter *) pentry;
   hashval_t h = 0;
   tree list;
 
@@ -735,16 +783,19 @@ ehspec_filter_hash (const void *pentry)
   return h;
 }
 
+typedef hash_table <ehspec_hasher> ehspec_hash_type;
+
+
 /* Add TYPE (which may be NULL) to cfun->eh->ttype_data, using TYPES_HASH
    to speed up the search.  Return the filter value to be used.  */
 
 static int
-add_ttypes_entry (htab_t ttypes_hash, tree type)
+add_ttypes_entry (ttypes_hash_type ttypes_hash, tree type)
 {
   struct ttypes_filter **slot, *n;
 
-  slot = (struct ttypes_filter **)
-    htab_find_slot_with_hash (ttypes_hash, type, TREE_HASH (type), INSERT);
+  slot = ttypes_hash.find_slot_with_hash (type, (hashval_t) TREE_HASH (type),
+					  INSERT);
 
   if ((n = *slot) == NULL)
     {
@@ -765,14 +816,14 @@ add_ttypes_entry (htab_t ttypes_hash, tree type)
    to speed up the search.  Return the filter value to be used.  */
 
 static int
-add_ehspec_entry (htab_t ehspec_hash, htab_t ttypes_hash, tree list)
+add_ehspec_entry (ehspec_hash_type ehspec_hash, ttypes_hash_type ttypes_hash,
+		  tree list)
 {
   struct ttypes_filter **slot, *n;
   struct ttypes_filter dummy;
 
   dummy.t = list;
-  slot = (struct ttypes_filter **)
-    htab_find_slot (ehspec_hash, &dummy, INSERT);
+  slot = ehspec_hash.find_slot (&dummy, INSERT);
 
   if ((n = *slot) == NULL)
     {
@@ -821,7 +872,8 @@ void
 assign_filter_values (void)
 {
   int i;
-  htab_t ttypes, ehspec;
+  ttypes_hash_type ttypes;
+  ehspec_hash_type ehspec;
   eh_region r;
   eh_catch c;
 
@@ -831,8 +883,8 @@ assign_filter_values (void)
   else
     vec_alloc (cfun->eh->ehspec_data.other, 64);
 
-  ttypes = htab_create (31, ttypes_filter_hash, ttypes_filter_eq, free);
-  ehspec = htab_create (31, ehspec_filter_hash, ehspec_filter_eq, free);
+  ttypes.create (31);
+  ehspec.create (31);
 
   for (i = 1; vec_safe_iterate (cfun->eh->region_array, i, &r); ++i)
     {
@@ -886,8 +938,8 @@ assign_filter_values (void)
 	}
     }
 
-  htab_delete (ttypes);
-  htab_delete (ehspec);
+  ttypes.dispose ();
+  ehspec.dispose ();
 }
 
 /* Emit SEQ into basic block just before INSN (that is assumed to be
@@ -1009,12 +1061,12 @@ static vec<int> sjlj_lp_call_site_index;
 static int
 sjlj_assign_call_site_values (void)
 {
-  htab_t ar_hash;
+  action_hash_type ar_hash;
   int i, disp_index;
   eh_landing_pad lp;
 
   vec_alloc (crtl->eh.action_record_data, 64);
-  ar_hash = htab_create (31, action_record_hash, action_record_eq, free);
+  ar_hash.create (31);
 
   disp_index = 0;
   call_site_base = 1;
@@ -1043,7 +1095,7 @@ sjlj_assign_call_site_values (void)
 	disp_index++;
       }
 
-  htab_delete (ar_hash);
+  ar_hash.dispose ();
 
   return disp_index;
 }
@@ -1104,7 +1156,7 @@ sjlj_mark_call_sites (void)
       start_sequence ();
       mem = adjust_address (crtl->eh.sjlj_fc, TYPE_MODE (integer_type_node),
 			    sjlj_fc_call_site_ofs);
-      emit_move_insn (mem, GEN_INT (this_call_site));
+      emit_move_insn (mem, gen_int_mode (this_call_site, GET_MODE (mem)));
       p = get_insns ();
       end_sequence ();
 
@@ -1187,7 +1239,7 @@ sjlj_emit_function_enter (rtx dispatch_label)
       }
 
   if (fn_begin_outside_block)
-    insert_insn_on_edge (seq, single_succ_edge (ENTRY_BLOCK_PTR));
+    insert_insn_on_edge (seq, single_succ_edge (ENTRY_BLOCK_PTR_FOR_FN (cfun)));
   else
     emit_insn_after (seq, fn_begin);
 }
@@ -1455,11 +1507,11 @@ finish_eh_generation (void)
 
   if (targetm_common.except_unwind_info (&global_options) == UI_SJLJ
       /* Kludge for Alpha (see alpha_gp_save_rtx).  */
-      || single_succ_edge (ENTRY_BLOCK_PTR)->insns.r)
+      || single_succ_edge (ENTRY_BLOCK_PTR_FOR_FN (cfun))->insns.r)
     commit_edge_insertions ();
 
   /* Redirect all EH edges from the post_landing_pad to the landing pad.  */
-  FOR_EACH_BB (bb)
+  FOR_EACH_BB_FN (bb, cfun)
     {
       eh_landing_pad lp;
       edge_iterator ei;
@@ -1505,12 +1557,12 @@ remove_eh_landing_pad (eh_landing_pad lp)
   (*cfun->eh->lp_array)[lp->index] = NULL;
 }
 
-/* Splice REGION from the region tree.  */
+/* Splice the EH region at PP from the region tree.  */
 
-void
-remove_eh_handler (eh_region region)
+static void
+remove_eh_handler_splicer (eh_region *pp)
 {
-  eh_region *pp, *pp_start, p, outer;
+  eh_region region = *pp;
   eh_landing_pad lp;
 
   for (lp = region->landing_pads; lp ; lp = lp->next_lp)
@@ -1520,15 +1572,11 @@ remove_eh_handler (eh_region region)
       (*cfun->eh->lp_array)[lp->index] = NULL;
     }
 
-  outer = region->outer;
-  if (outer)
-    pp_start = &outer->inner;
-  else
-    pp_start = &cfun->eh->region_tree;
-  for (pp = pp_start, p = *pp; p != region; pp = &p->next_peer, p = *pp)
-    continue;
   if (region->inner)
     {
+      eh_region p, outer;
+      outer = region->outer;
+
       *pp = p = region->inner;
       do
 	{
@@ -1541,6 +1589,59 @@ remove_eh_handler (eh_region region)
   *pp = region->next_peer;
 
   (*cfun->eh->region_array)[region->index] = NULL;
+}
+
+/* Splice a single EH region REGION from the region tree.
+
+   To unlink REGION, we need to find the pointer to it with a relatively
+   expensive search in REGION's outer region.  If you are going to
+   remove a number of handlers, using remove_unreachable_eh_regions may
+   be a better option.  */
+
+void
+remove_eh_handler (eh_region region)
+{
+  eh_region *pp, *pp_start, p, outer;
+
+  outer = region->outer;
+  if (outer)
+    pp_start = &outer->inner;
+  else
+    pp_start = &cfun->eh->region_tree;
+  for (pp = pp_start, p = *pp; p != region; pp = &p->next_peer, p = *pp)
+    continue;
+
+  remove_eh_handler_splicer (pp);
+}
+
+/* Worker for remove_unreachable_eh_regions.
+   PP is a pointer to the region to start a region tree depth-first
+   search from.  R_REACHABLE is the set of regions that have to be
+   preserved.  */
+
+static void
+remove_unreachable_eh_regions_worker (eh_region *pp, sbitmap r_reachable)
+{
+  while (*pp)
+    {
+      eh_region region = *pp;
+      remove_unreachable_eh_regions_worker (&region->inner, r_reachable);
+      if (!bitmap_bit_p (r_reachable, region->index))
+	remove_eh_handler_splicer (pp);
+      else
+	pp = &region->next_peer;
+    }
+}
+
+/* Splice all EH regions *not* marked in R_REACHABLE from the region tree.
+   Do this by traversing the EH tree top-down and splice out regions that
+   are not marked.  By removing regions from the leaves, we avoid costly
+   searches in the region tree.  */
+
+void
+remove_unreachable_eh_regions (sbitmap r_reachable)
+{
+  remove_unreachable_eh_regions_worker (&cfun->eh->region_tree, r_reachable);
 }
 
 /* Invokes CALLBACK for every exception handler landing pad label.
@@ -1900,25 +2001,42 @@ set_nothrow_function_flags (void)
   return 0;
 }
 
-struct rtl_opt_pass pass_set_nothrow_function_flags =
+namespace {
+
+const pass_data pass_data_set_nothrow_function_flags =
 {
- {
-  RTL_PASS,
-  "nothrow",                            /* name */
-  OPTGROUP_NONE,                        /* optinfo_flags */
-  NULL,                                 /* gate */
-  set_nothrow_function_flags,           /* execute */
-  NULL,                                 /* sub */
-  NULL,                                 /* next */
-  0,                                    /* static_pass_number */
-  TV_NONE,                              /* tv_id */
-  0,                                    /* properties_required */
-  0,                                    /* properties_provided */
-  0,                                    /* properties_destroyed */
-  0,                                    /* todo_flags_start */
-  0                                     /* todo_flags_finish */
- }
+  RTL_PASS, /* type */
+  "nothrow", /* name */
+  OPTGROUP_NONE, /* optinfo_flags */
+  false, /* has_gate */
+  true, /* has_execute */
+  TV_NONE, /* tv_id */
+  0, /* properties_required */
+  0, /* properties_provided */
+  0, /* properties_destroyed */
+  0, /* todo_flags_start */
+  0, /* todo_flags_finish */
 };
+
+class pass_set_nothrow_function_flags : public rtl_opt_pass
+{
+public:
+  pass_set_nothrow_function_flags (gcc::context *ctxt)
+    : rtl_opt_pass (pass_data_set_nothrow_function_flags, ctxt)
+  {}
+
+  /* opt_pass methods: */
+  unsigned int execute () { return set_nothrow_function_flags (); }
+
+}; // class pass_set_nothrow_function_flags
+
+} // anon namespace
+
+rtl_opt_pass *
+make_pass_set_nothrow_function_flags (gcc::context *ctxt)
+{
+  return new pass_set_nothrow_function_flags (ctxt);
+}
 
 
 /* Various hooks for unwind library.  */
@@ -1932,8 +2050,8 @@ expand_builtin_eh_common (tree region_nr_t)
   HOST_WIDE_INT region_nr;
   eh_region region;
 
-  gcc_assert (host_integerp (region_nr_t, 0));
-  region_nr = tree_low_cst (region_nr_t, 0);
+  gcc_assert (tree_fits_shwi_p (region_nr_t));
+  region_nr = tree_to_shwi (region_nr_t);
 
   region = (*cfun->eh->region_array)[region_nr];
 
@@ -2027,7 +2145,7 @@ expand_builtin_eh_return_data_regno (tree exp)
       return constm1_rtx;
     }
 
-  iwhich = tree_low_cst (which, 1);
+  iwhich = tree_to_uhwi (which);
   iwhich = EH_RETURN_DATA_REGNO (iwhich);
   if (iwhich == INVALID_REGNUM)
     return constm1_rtx;
@@ -2187,47 +2305,14 @@ expand_builtin_extend_pointer (tree addr_tree)
   return convert_modes (targetm.unwind_word_mode (), ptr_mode, addr, extend);
 }
 
-/* In the following functions, we represent entries in the action table
-   as 1-based indices.  Special cases are:
-
-	 0:	null action record, non-null landing pad; implies cleanups
-	-1:	null action record, null landing pad; implies no action
-	-2:	no call-site entry; implies must_not_throw
-	-3:	we have yet to process outer regions
-
-   Further, no special cases apply to the "next" field of the record.
-   For next, 0 means end of list.  */
-
-struct action_record
-{
-  int offset;
-  int filter;
-  int next;
-};
-
 static int
-action_record_eq (const void *pentry, const void *pdata)
-{
-  const struct action_record *entry = (const struct action_record *) pentry;
-  const struct action_record *data = (const struct action_record *) pdata;
-  return entry->filter == data->filter && entry->next == data->next;
-}
-
-static hashval_t
-action_record_hash (const void *pentry)
-{
-  const struct action_record *entry = (const struct action_record *) pentry;
-  return entry->next * 1009 + entry->filter;
-}
-
-static int
-add_action_record (htab_t ar_hash, int filter, int next)
+add_action_record (action_hash_type ar_hash, int filter, int next)
 {
   struct action_record **slot, *new_ar, tmp;
 
   tmp.filter = filter;
   tmp.next = next;
-  slot = (struct action_record **) htab_find_slot (ar_hash, &tmp, INSERT);
+  slot = ar_hash.find_slot (&tmp, INSERT);
 
   if ((new_ar = *slot) == NULL)
     {
@@ -2252,7 +2337,7 @@ add_action_record (htab_t ar_hash, int filter, int next)
 }
 
 static int
-collect_one_action_chain (htab_t ar_hash, eh_region region)
+collect_one_action_chain (action_hash_type ar_hash, eh_region region)
 {
   int next;
 
@@ -2381,7 +2466,7 @@ static unsigned int
 convert_to_eh_region_ranges (void)
 {
   rtx insn, iter, note;
-  htab_t ar_hash;
+  action_hash_type ar_hash;
   int last_action = -3;
   rtx last_action_insn = NULL_RTX;
   rtx last_landing_pad = NULL_RTX;
@@ -2395,7 +2480,7 @@ convert_to_eh_region_ranges (void)
 
   vec_alloc (crtl->eh.action_record_data, 64);
 
-  ar_hash = htab_create (31, action_record_hash, action_record_eq, free);
+  ar_hash.create (31);
 
   for (iter = get_insns (); iter ; iter = NEXT_INSN (iter))
     if (INSN_P (iter))
@@ -2532,7 +2617,7 @@ convert_to_eh_region_ranges (void)
 
   call_site_base = saved_call_site_base;
 
-  htab_delete (ar_hash);
+  ar_hash.dispose ();
   return 0;
 }
 
@@ -2547,25 +2632,43 @@ gate_convert_to_eh_region_ranges (void)
   return true;
 }
 
-struct rtl_opt_pass pass_convert_to_eh_region_ranges =
+namespace {
+
+const pass_data pass_data_convert_to_eh_region_ranges =
 {
- {
-  RTL_PASS,
-  "eh_ranges",                          /* name */
-  OPTGROUP_NONE,                        /* optinfo_flags */
-  gate_convert_to_eh_region_ranges,	/* gate */
-  convert_to_eh_region_ranges,          /* execute */
-  NULL,                                 /* sub */
-  NULL,                                 /* next */
-  0,                                    /* static_pass_number */
-  TV_NONE,                              /* tv_id */
-  0,                                    /* properties_required */
-  0,                                    /* properties_provided */
-  0,                                    /* properties_destroyed */
-  0,                                    /* todo_flags_start */
-  0              			/* todo_flags_finish */
- }
+  RTL_PASS, /* type */
+  "eh_ranges", /* name */
+  OPTGROUP_NONE, /* optinfo_flags */
+  true, /* has_gate */
+  true, /* has_execute */
+  TV_NONE, /* tv_id */
+  0, /* properties_required */
+  0, /* properties_provided */
+  0, /* properties_destroyed */
+  0, /* todo_flags_start */
+  0, /* todo_flags_finish */
 };
+
+class pass_convert_to_eh_region_ranges : public rtl_opt_pass
+{
+public:
+  pass_convert_to_eh_region_ranges (gcc::context *ctxt)
+    : rtl_opt_pass (pass_data_convert_to_eh_region_ranges, ctxt)
+  {}
+
+  /* opt_pass methods: */
+  bool gate () { return gate_convert_to_eh_region_ranges (); }
+  unsigned int execute () { return convert_to_eh_region_ranges (); }
+
+}; // class pass_convert_to_eh_region_ranges
+
+} // anon namespace
+
+rtl_opt_pass *
+make_pass_convert_to_eh_region_ranges (gcc::context *ctxt)
+{
+  return new pass_convert_to_eh_region_ranges (ctxt);
+}
 
 static void
 push_uleb128 (vec<uchar, va_gc> **data_area, unsigned int value)

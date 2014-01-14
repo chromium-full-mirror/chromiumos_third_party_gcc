@@ -166,7 +166,7 @@ BUILD_EXPORTS = \
 	WINDMC="$(WINDMC_FOR_BUILD)"; export WINDMC;
 
 # These variables must be set on the make command line for directories
-# built for the build system to override those in BASE_FLAGS_TO_PASSS.
+# built for the build system to override those in BASE_FLAGS_TO_PASS.
 EXTRA_BUILD_FLAGS = \
 	CFLAGS="$(CFLAGS_FOR_BUILD)" \
 	LDFLAGS="$(LDFLAGS_FOR_BUILD)"
@@ -492,8 +492,10 @@ STAGE1_LANGUAGES = @stage1_languages@
 #   the last argument when conflicting --enable arguments are passed.
 # * Likewise, we force-disable coverage flags, since the installed
 #   compiler probably has never heard of them.
+# * We also disable -Wformat, since older GCCs don't understand newer %s.
 STAGE1_CONFIGURE_FLAGS = --disable-intermodule $(STAGE1_CHECKING) \
-	  --disable-coverage --enable-languages="$(STAGE1_LANGUAGES)"
+	  --disable-coverage --enable-languages="$(STAGE1_LANGUAGES)" \
+	  --disable-build-format-warnings
 
 STAGEprofile_CFLAGS = $(STAGE2_CFLAGS) -fprofile-generate
 STAGEprofile_TFLAGS = $(STAGE2_TFLAGS)
@@ -569,19 +571,23 @@ all:
 
 # This is the list of directories that may be needed in RPATH_ENVVAR
 # so that programs built for the target machine work.
-TARGET_LIB_PATH = $(TARGET_LIB_PATH_libstdc++-v3)$(TARGET_LIB_PATH_libmudflap)$(TARGET_LIB_PATH_libsanitizer)$(TARGET_LIB_PATH_libssp)$(TARGET_LIB_PATH_libgomp)$(TARGET_LIB_PATH_libitm)$(TARGET_LIB_PATH_libatomic)$(HOST_LIB_PATH_gcc)
+TARGET_LIB_PATH = $(TARGET_LIB_PATH_libstdc++-v3)$(TARGET_LIB_PATH_libsanitizer)$(TARGET_LIB_PATH_libvtv)$(TARGET_LIB_PATH_libcilkrts)$(TARGET_LIB_PATH_libssp)$(TARGET_LIB_PATH_libgomp)$(TARGET_LIB_PATH_libitm)$(TARGET_LIB_PATH_libatomic)$(HOST_LIB_PATH_gcc)
 
 @if target-libstdc++-v3
 TARGET_LIB_PATH_libstdc++-v3 = $$r/$(TARGET_SUBDIR)/libstdc++-v3/src/.libs:
 @endif target-libstdc++-v3
 
-@if target-libmudflap
-TARGET_LIB_PATH_libmudflap = $$r/$(TARGET_SUBDIR)/libmudflap/.libs:
-@endif target-libmudflap
-
 @if target-libsanitizer
 TARGET_LIB_PATH_libsanitizer = $$r/$(TARGET_SUBDIR)/libsanitizer/.libs:
 @endif target-libsanitizer
+
+@if target-libvtv
+TARGET_LIB_PATH_libvtv = $$r/$(TARGET_SUBDIR)/libvtv/.libs:
+@endif target-libvtv
+
+@if target-libcilkrts
+TARGET_LIB_PATH_libcilkrts = $$r/$(TARGET_SUBDIR)/libcilkrts/.libs:
+@endif target-libcilkrts
 
 @if target-libssp
 TARGET_LIB_PATH_libssp = $$r/$(TARGET_SUBDIR)/libssp/.libs:
@@ -913,12 +919,14 @@ configure-host:  \
     maybe-configure-libtermcap \
     maybe-configure-utils \
     maybe-configure-gnattools \
-    maybe-configure-lto-plugin
+    maybe-configure-lto-plugin \
+    maybe-configure-function_reordering_plugin
 .PHONY: configure-target
 configure-target:  \
     maybe-configure-target-libstdc++-v3 \
-    maybe-configure-target-libmudflap \
     maybe-configure-target-libsanitizer \
+    maybe-configure-target-libvtv \
+    maybe-configure-target-libcilkrts \
     maybe-configure-target-libssp \
     maybe-configure-target-newlib \
     maybe-configure-target-libgcc \
@@ -1060,16 +1068,22 @@ all-host: maybe-all-gnattools
 @if lto-plugin-no-bootstrap
 all-host: maybe-all-lto-plugin
 @endif lto-plugin-no-bootstrap
+@if function_reordering_plugin-no-bootstrap
+all-host: maybe-all-function_reordering_plugin
+@endif function_reordering_plugin-no-bootstrap
 
 .PHONY: all-target
 
 @if target-libstdc++-v3-no-bootstrap
 all-target: maybe-all-target-libstdc++-v3
 @endif target-libstdc++-v3-no-bootstrap
-all-target: maybe-all-target-libmudflap
 @if target-libsanitizer-no-bootstrap
 all-target: maybe-all-target-libsanitizer
 @endif target-libsanitizer-no-bootstrap
+@if target-libvtv-no-bootstrap
+all-target: maybe-all-target-libvtv
+@endif target-libvtv-no-bootstrap
+all-target: maybe-all-target-libcilkrts
 all-target: maybe-all-target-libssp
 all-target: maybe-all-target-newlib
 @if target-libgcc-no-bootstrap
@@ -1155,12 +1169,14 @@ info-host: maybe-info-libtermcap
 info-host: maybe-info-utils
 info-host: maybe-info-gnattools
 info-host: maybe-info-lto-plugin
+info-host: maybe-info-function_reordering_plugin
 
 .PHONY: info-target
 
 info-target: maybe-info-target-libstdc++-v3
-info-target: maybe-info-target-libmudflap
 info-target: maybe-info-target-libsanitizer
+info-target: maybe-info-target-libvtv
+info-target: maybe-info-target-libcilkrts
 info-target: maybe-info-target-libssp
 info-target: maybe-info-target-newlib
 info-target: maybe-info-target-libgcc
@@ -1237,12 +1253,14 @@ dvi-host: maybe-dvi-libtermcap
 dvi-host: maybe-dvi-utils
 dvi-host: maybe-dvi-gnattools
 dvi-host: maybe-dvi-lto-plugin
+dvi-host: maybe-dvi-function_reordering_plugin
 
 .PHONY: dvi-target
 
 dvi-target: maybe-dvi-target-libstdc++-v3
-dvi-target: maybe-dvi-target-libmudflap
 dvi-target: maybe-dvi-target-libsanitizer
+dvi-target: maybe-dvi-target-libvtv
+dvi-target: maybe-dvi-target-libcilkrts
 dvi-target: maybe-dvi-target-libssp
 dvi-target: maybe-dvi-target-newlib
 dvi-target: maybe-dvi-target-libgcc
@@ -1319,12 +1337,14 @@ pdf-host: maybe-pdf-libtermcap
 pdf-host: maybe-pdf-utils
 pdf-host: maybe-pdf-gnattools
 pdf-host: maybe-pdf-lto-plugin
+pdf-host: maybe-pdf-function_reordering_plugin
 
 .PHONY: pdf-target
 
 pdf-target: maybe-pdf-target-libstdc++-v3
-pdf-target: maybe-pdf-target-libmudflap
 pdf-target: maybe-pdf-target-libsanitizer
+pdf-target: maybe-pdf-target-libvtv
+pdf-target: maybe-pdf-target-libcilkrts
 pdf-target: maybe-pdf-target-libssp
 pdf-target: maybe-pdf-target-newlib
 pdf-target: maybe-pdf-target-libgcc
@@ -1401,12 +1421,14 @@ html-host: maybe-html-libtermcap
 html-host: maybe-html-utils
 html-host: maybe-html-gnattools
 html-host: maybe-html-lto-plugin
+html-host: maybe-html-function_reordering_plugin
 
 .PHONY: html-target
 
 html-target: maybe-html-target-libstdc++-v3
-html-target: maybe-html-target-libmudflap
 html-target: maybe-html-target-libsanitizer
+html-target: maybe-html-target-libvtv
+html-target: maybe-html-target-libcilkrts
 html-target: maybe-html-target-libssp
 html-target: maybe-html-target-newlib
 html-target: maybe-html-target-libgcc
@@ -1483,12 +1505,14 @@ TAGS-host: maybe-TAGS-libtermcap
 TAGS-host: maybe-TAGS-utils
 TAGS-host: maybe-TAGS-gnattools
 TAGS-host: maybe-TAGS-lto-plugin
+TAGS-host: maybe-TAGS-function_reordering_plugin
 
 .PHONY: TAGS-target
 
 TAGS-target: maybe-TAGS-target-libstdc++-v3
-TAGS-target: maybe-TAGS-target-libmudflap
 TAGS-target: maybe-TAGS-target-libsanitizer
+TAGS-target: maybe-TAGS-target-libvtv
+TAGS-target: maybe-TAGS-target-libcilkrts
 TAGS-target: maybe-TAGS-target-libssp
 TAGS-target: maybe-TAGS-target-newlib
 TAGS-target: maybe-TAGS-target-libgcc
@@ -1565,12 +1589,14 @@ install-info-host: maybe-install-info-libtermcap
 install-info-host: maybe-install-info-utils
 install-info-host: maybe-install-info-gnattools
 install-info-host: maybe-install-info-lto-plugin
+install-info-host: maybe-install-info-function_reordering_plugin
 
 .PHONY: install-info-target
 
 install-info-target: maybe-install-info-target-libstdc++-v3
-install-info-target: maybe-install-info-target-libmudflap
 install-info-target: maybe-install-info-target-libsanitizer
+install-info-target: maybe-install-info-target-libvtv
+install-info-target: maybe-install-info-target-libcilkrts
 install-info-target: maybe-install-info-target-libssp
 install-info-target: maybe-install-info-target-newlib
 install-info-target: maybe-install-info-target-libgcc
@@ -1647,12 +1673,14 @@ install-pdf-host: maybe-install-pdf-libtermcap
 install-pdf-host: maybe-install-pdf-utils
 install-pdf-host: maybe-install-pdf-gnattools
 install-pdf-host: maybe-install-pdf-lto-plugin
+install-pdf-host: maybe-install-pdf-function_reordering_plugin
 
 .PHONY: install-pdf-target
 
 install-pdf-target: maybe-install-pdf-target-libstdc++-v3
-install-pdf-target: maybe-install-pdf-target-libmudflap
 install-pdf-target: maybe-install-pdf-target-libsanitizer
+install-pdf-target: maybe-install-pdf-target-libvtv
+install-pdf-target: maybe-install-pdf-target-libcilkrts
 install-pdf-target: maybe-install-pdf-target-libssp
 install-pdf-target: maybe-install-pdf-target-newlib
 install-pdf-target: maybe-install-pdf-target-libgcc
@@ -1729,12 +1757,14 @@ install-html-host: maybe-install-html-libtermcap
 install-html-host: maybe-install-html-utils
 install-html-host: maybe-install-html-gnattools
 install-html-host: maybe-install-html-lto-plugin
+install-html-host: maybe-install-html-function_reordering_plugin
 
 .PHONY: install-html-target
 
 install-html-target: maybe-install-html-target-libstdc++-v3
-install-html-target: maybe-install-html-target-libmudflap
 install-html-target: maybe-install-html-target-libsanitizer
+install-html-target: maybe-install-html-target-libvtv
+install-html-target: maybe-install-html-target-libcilkrts
 install-html-target: maybe-install-html-target-libssp
 install-html-target: maybe-install-html-target-newlib
 install-html-target: maybe-install-html-target-libgcc
@@ -1811,12 +1841,14 @@ installcheck-host: maybe-installcheck-libtermcap
 installcheck-host: maybe-installcheck-utils
 installcheck-host: maybe-installcheck-gnattools
 installcheck-host: maybe-installcheck-lto-plugin
+installcheck-host: maybe-installcheck-function_reordering_plugin
 
 .PHONY: installcheck-target
 
 installcheck-target: maybe-installcheck-target-libstdc++-v3
-installcheck-target: maybe-installcheck-target-libmudflap
 installcheck-target: maybe-installcheck-target-libsanitizer
+installcheck-target: maybe-installcheck-target-libvtv
+installcheck-target: maybe-installcheck-target-libcilkrts
 installcheck-target: maybe-installcheck-target-libssp
 installcheck-target: maybe-installcheck-target-newlib
 installcheck-target: maybe-installcheck-target-libgcc
@@ -1893,12 +1925,14 @@ mostlyclean-host: maybe-mostlyclean-libtermcap
 mostlyclean-host: maybe-mostlyclean-utils
 mostlyclean-host: maybe-mostlyclean-gnattools
 mostlyclean-host: maybe-mostlyclean-lto-plugin
+mostlyclean-host: maybe-mostlyclean-function_reordering_plugin
 
 .PHONY: mostlyclean-target
 
 mostlyclean-target: maybe-mostlyclean-target-libstdc++-v3
-mostlyclean-target: maybe-mostlyclean-target-libmudflap
 mostlyclean-target: maybe-mostlyclean-target-libsanitizer
+mostlyclean-target: maybe-mostlyclean-target-libvtv
+mostlyclean-target: maybe-mostlyclean-target-libcilkrts
 mostlyclean-target: maybe-mostlyclean-target-libssp
 mostlyclean-target: maybe-mostlyclean-target-newlib
 mostlyclean-target: maybe-mostlyclean-target-libgcc
@@ -1975,12 +2009,14 @@ clean-host: maybe-clean-libtermcap
 clean-host: maybe-clean-utils
 clean-host: maybe-clean-gnattools
 clean-host: maybe-clean-lto-plugin
+clean-host: maybe-clean-function_reordering_plugin
 
 .PHONY: clean-target
 
 clean-target: maybe-clean-target-libstdc++-v3
-clean-target: maybe-clean-target-libmudflap
 clean-target: maybe-clean-target-libsanitizer
+clean-target: maybe-clean-target-libvtv
+clean-target: maybe-clean-target-libcilkrts
 clean-target: maybe-clean-target-libssp
 clean-target: maybe-clean-target-newlib
 clean-target: maybe-clean-target-libgcc
@@ -2057,12 +2093,14 @@ distclean-host: maybe-distclean-libtermcap
 distclean-host: maybe-distclean-utils
 distclean-host: maybe-distclean-gnattools
 distclean-host: maybe-distclean-lto-plugin
+distclean-host: maybe-distclean-function_reordering_plugin
 
 .PHONY: distclean-target
 
 distclean-target: maybe-distclean-target-libstdc++-v3
-distclean-target: maybe-distclean-target-libmudflap
 distclean-target: maybe-distclean-target-libsanitizer
+distclean-target: maybe-distclean-target-libvtv
+distclean-target: maybe-distclean-target-libcilkrts
 distclean-target: maybe-distclean-target-libssp
 distclean-target: maybe-distclean-target-newlib
 distclean-target: maybe-distclean-target-libgcc
@@ -2139,12 +2177,14 @@ maintainer-clean-host: maybe-maintainer-clean-libtermcap
 maintainer-clean-host: maybe-maintainer-clean-utils
 maintainer-clean-host: maybe-maintainer-clean-gnattools
 maintainer-clean-host: maybe-maintainer-clean-lto-plugin
+maintainer-clean-host: maybe-maintainer-clean-function_reordering_plugin
 
 .PHONY: maintainer-clean-target
 
 maintainer-clean-target: maybe-maintainer-clean-target-libstdc++-v3
-maintainer-clean-target: maybe-maintainer-clean-target-libmudflap
 maintainer-clean-target: maybe-maintainer-clean-target-libsanitizer
+maintainer-clean-target: maybe-maintainer-clean-target-libvtv
+maintainer-clean-target: maybe-maintainer-clean-target-libcilkrts
 maintainer-clean-target: maybe-maintainer-clean-target-libssp
 maintainer-clean-target: maybe-maintainer-clean-target-newlib
 maintainer-clean-target: maybe-maintainer-clean-target-libgcc
@@ -2275,13 +2315,15 @@ check-host:  \
     maybe-check-libtermcap \
     maybe-check-utils \
     maybe-check-gnattools \
-    maybe-check-lto-plugin
+    maybe-check-lto-plugin \
+    maybe-check-function_reordering_plugin
 
 .PHONY: check-target
 check-target:  \
     maybe-check-target-libstdc++-v3 \
-    maybe-check-target-libmudflap \
     maybe-check-target-libsanitizer \
+    maybe-check-target-libvtv \
+    maybe-check-target-libcilkrts \
     maybe-check-target-libssp \
     maybe-check-target-newlib \
     maybe-check-target-libgcc \
@@ -2383,7 +2425,8 @@ install-host-nogcc:  \
     maybe-install-libtermcap \
     maybe-install-utils \
     maybe-install-gnattools \
-    maybe-install-lto-plugin
+    maybe-install-lto-plugin \
+    maybe-install-function_reordering_plugin
 
 .PHONY: install-host
 install-host:  \
@@ -2430,13 +2473,15 @@ install-host:  \
     maybe-install-libtermcap \
     maybe-install-utils \
     maybe-install-gnattools \
-    maybe-install-lto-plugin
+    maybe-install-lto-plugin \
+    maybe-install-function_reordering_plugin
 
 .PHONY: install-target
 install-target:  \
     maybe-install-target-libstdc++-v3 \
-    maybe-install-target-libmudflap \
     maybe-install-target-libsanitizer \
+    maybe-install-target-libvtv \
+    maybe-install-target-libcilkrts \
     maybe-install-target-libssp \
     maybe-install-target-newlib \
     maybe-install-target-libgcc \
@@ -2532,13 +2577,15 @@ install-strip-host:  \
     maybe-install-strip-libtermcap \
     maybe-install-strip-utils \
     maybe-install-strip-gnattools \
-    maybe-install-strip-lto-plugin
+    maybe-install-strip-lto-plugin \
+    maybe-install-strip-function_reordering_plugin
 
 .PHONY: install-strip-target
 install-strip-target:  \
     maybe-install-strip-target-libstdc++-v3 \
-    maybe-install-strip-target-libmudflap \
     maybe-install-strip-target-libsanitizer \
+    maybe-install-strip-target-libvtv \
+    maybe-install-strip-target-libcilkrts \
     maybe-install-strip-target-libssp \
     maybe-install-strip-target-newlib \
     maybe-install-strip-target-libgcc \
@@ -30734,6 +30781,884 @@ maintainer-clean-lto-plugin:
 
 
 
+.PHONY: configure-function_reordering_plugin maybe-configure-function_reordering_plugin
+maybe-configure-function_reordering_plugin:
+@if gcc-bootstrap
+configure-function_reordering_plugin: stage_current
+@endif gcc-bootstrap
+@if function_reordering_plugin
+maybe-configure-function_reordering_plugin: configure-function_reordering_plugin
+configure-function_reordering_plugin: 
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	test ! -f $(HOST_SUBDIR)/function_reordering_plugin/Makefile || exit 0; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/function_reordering_plugin ; \
+	$(HOST_EXPORTS)  \
+	echo Configuring in $(HOST_SUBDIR)/function_reordering_plugin; \
+	cd "$(HOST_SUBDIR)/function_reordering_plugin" || exit 1; \
+	case $(srcdir) in \
+	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  *) topdir=`echo $(HOST_SUBDIR)/function_reordering_plugin/ | \
+		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+	esac; \
+	srcdiroption="--srcdir=$${topdir}/function_reordering_plugin"; \
+	libsrcdir="$$s/function_reordering_plugin"; \
+	$(SHELL) $${libsrcdir}/configure \
+	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+	  --target=${target_alias} $${srcdiroption} --enable-shared \
+	  || exit 1
+@endif function_reordering_plugin
+
+
+
+.PHONY: configure-stage1-function_reordering_plugin maybe-configure-stage1-function_reordering_plugin
+maybe-configure-stage1-function_reordering_plugin:
+@if function_reordering_plugin-bootstrap
+maybe-configure-stage1-function_reordering_plugin: configure-stage1-function_reordering_plugin
+configure-stage1-function_reordering_plugin:
+	@[ $(current_stage) = stage1 ] || $(MAKE) stage1-start
+	@$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/function_reordering_plugin
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE1_TFLAGS)"; \
+	test ! -f $(HOST_SUBDIR)/function_reordering_plugin/Makefile || exit 0; \
+	$(HOST_EXPORTS) \
+	CFLAGS="$(STAGE1_CFLAGS)"; export CFLAGS; \
+	CXXFLAGS="$(STAGE1_CXXFLAGS)"; export CXXFLAGS; \
+	LIBCFLAGS="$(LIBCFLAGS)"; export LIBCFLAGS;  \
+	echo Configuring stage 1 in $(HOST_SUBDIR)/function_reordering_plugin ; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/function_reordering_plugin ; \
+	cd $(HOST_SUBDIR)/function_reordering_plugin || exit 1; \
+	case $(srcdir) in \
+	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  *) topdir=`echo $(HOST_SUBDIR)/function_reordering_plugin/ | \
+		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+	esac; \
+	srcdiroption="--srcdir=$${topdir}/function_reordering_plugin"; \
+	libsrcdir="$$s/function_reordering_plugin"; \
+	$(SHELL) $${libsrcdir}/configure \
+	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+	  --target=${target_alias} $${srcdiroption} \
+	  $(STAGE1_CONFIGURE_FLAGS) \
+	  --enable-shared
+@endif function_reordering_plugin-bootstrap
+
+.PHONY: configure-stage2-function_reordering_plugin maybe-configure-stage2-function_reordering_plugin
+maybe-configure-stage2-function_reordering_plugin:
+@if function_reordering_plugin-bootstrap
+maybe-configure-stage2-function_reordering_plugin: configure-stage2-function_reordering_plugin
+configure-stage2-function_reordering_plugin:
+	@[ $(current_stage) = stage2 ] || $(MAKE) stage2-start
+	@$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/function_reordering_plugin
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE2_TFLAGS)"; \
+	test ! -f $(HOST_SUBDIR)/function_reordering_plugin/Makefile || exit 0; \
+	$(HOST_EXPORTS) \
+	$(POSTSTAGE1_HOST_EXPORTS) \
+	CFLAGS="$(STAGE2_CFLAGS)"; export CFLAGS; \
+	CXXFLAGS="$(STAGE2_CXXFLAGS)"; export CXXFLAGS; \
+	LIBCFLAGS="$(STAGE2_CFLAGS)"; export LIBCFLAGS;  \
+	echo Configuring stage 2 in $(HOST_SUBDIR)/function_reordering_plugin ; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/function_reordering_plugin ; \
+	cd $(HOST_SUBDIR)/function_reordering_plugin || exit 1; \
+	case $(srcdir) in \
+	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  *) topdir=`echo $(HOST_SUBDIR)/function_reordering_plugin/ | \
+		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+	esac; \
+	srcdiroption="--srcdir=$${topdir}/function_reordering_plugin"; \
+	libsrcdir="$$s/function_reordering_plugin"; \
+	$(SHELL) $${libsrcdir}/configure \
+	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+	  --target=${target_alias} $${srcdiroption} \
+	  --with-build-libsubdir=$(HOST_SUBDIR) \
+	  $(STAGE2_CONFIGURE_FLAGS) \
+	  --enable-shared
+@endif function_reordering_plugin-bootstrap
+
+.PHONY: configure-stage3-function_reordering_plugin maybe-configure-stage3-function_reordering_plugin
+maybe-configure-stage3-function_reordering_plugin:
+@if function_reordering_plugin-bootstrap
+maybe-configure-stage3-function_reordering_plugin: configure-stage3-function_reordering_plugin
+configure-stage3-function_reordering_plugin:
+	@[ $(current_stage) = stage3 ] || $(MAKE) stage3-start
+	@$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/function_reordering_plugin
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE3_TFLAGS)"; \
+	test ! -f $(HOST_SUBDIR)/function_reordering_plugin/Makefile || exit 0; \
+	$(HOST_EXPORTS) \
+	$(POSTSTAGE1_HOST_EXPORTS) \
+	CFLAGS="$(STAGE3_CFLAGS)"; export CFLAGS; \
+	CXXFLAGS="$(STAGE3_CXXFLAGS)"; export CXXFLAGS; \
+	LIBCFLAGS="$(STAGE3_CFLAGS)"; export LIBCFLAGS;  \
+	echo Configuring stage 3 in $(HOST_SUBDIR)/function_reordering_plugin ; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/function_reordering_plugin ; \
+	cd $(HOST_SUBDIR)/function_reordering_plugin || exit 1; \
+	case $(srcdir) in \
+	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  *) topdir=`echo $(HOST_SUBDIR)/function_reordering_plugin/ | \
+		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+	esac; \
+	srcdiroption="--srcdir=$${topdir}/function_reordering_plugin"; \
+	libsrcdir="$$s/function_reordering_plugin"; \
+	$(SHELL) $${libsrcdir}/configure \
+	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+	  --target=${target_alias} $${srcdiroption} \
+	  --with-build-libsubdir=$(HOST_SUBDIR) \
+	  $(STAGE3_CONFIGURE_FLAGS) \
+	  --enable-shared
+@endif function_reordering_plugin-bootstrap
+
+.PHONY: configure-stage4-function_reordering_plugin maybe-configure-stage4-function_reordering_plugin
+maybe-configure-stage4-function_reordering_plugin:
+@if function_reordering_plugin-bootstrap
+maybe-configure-stage4-function_reordering_plugin: configure-stage4-function_reordering_plugin
+configure-stage4-function_reordering_plugin:
+	@[ $(current_stage) = stage4 ] || $(MAKE) stage4-start
+	@$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/function_reordering_plugin
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE4_TFLAGS)"; \
+	test ! -f $(HOST_SUBDIR)/function_reordering_plugin/Makefile || exit 0; \
+	$(HOST_EXPORTS) \
+	$(POSTSTAGE1_HOST_EXPORTS) \
+	CFLAGS="$(STAGE4_CFLAGS)"; export CFLAGS; \
+	CXXFLAGS="$(STAGE4_CXXFLAGS)"; export CXXFLAGS; \
+	LIBCFLAGS="$(STAGE4_CFLAGS)"; export LIBCFLAGS;  \
+	echo Configuring stage 4 in $(HOST_SUBDIR)/function_reordering_plugin ; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/function_reordering_plugin ; \
+	cd $(HOST_SUBDIR)/function_reordering_plugin || exit 1; \
+	case $(srcdir) in \
+	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  *) topdir=`echo $(HOST_SUBDIR)/function_reordering_plugin/ | \
+		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+	esac; \
+	srcdiroption="--srcdir=$${topdir}/function_reordering_plugin"; \
+	libsrcdir="$$s/function_reordering_plugin"; \
+	$(SHELL) $${libsrcdir}/configure \
+	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+	  --target=${target_alias} $${srcdiroption} \
+	  --with-build-libsubdir=$(HOST_SUBDIR) \
+	  $(STAGE4_CONFIGURE_FLAGS) \
+	  --enable-shared
+@endif function_reordering_plugin-bootstrap
+
+.PHONY: configure-stageprofile-function_reordering_plugin maybe-configure-stageprofile-function_reordering_plugin
+maybe-configure-stageprofile-function_reordering_plugin:
+@if function_reordering_plugin-bootstrap
+maybe-configure-stageprofile-function_reordering_plugin: configure-stageprofile-function_reordering_plugin
+configure-stageprofile-function_reordering_plugin:
+	@[ $(current_stage) = stageprofile ] || $(MAKE) stageprofile-start
+	@$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/function_reordering_plugin
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGEprofile_TFLAGS)"; \
+	test ! -f $(HOST_SUBDIR)/function_reordering_plugin/Makefile || exit 0; \
+	$(HOST_EXPORTS) \
+	$(POSTSTAGE1_HOST_EXPORTS) \
+	CFLAGS="$(STAGEprofile_CFLAGS)"; export CFLAGS; \
+	CXXFLAGS="$(STAGEprofile_CXXFLAGS)"; export CXXFLAGS; \
+	LIBCFLAGS="$(STAGEprofile_CFLAGS)"; export LIBCFLAGS;  \
+	echo Configuring stage profile in $(HOST_SUBDIR)/function_reordering_plugin ; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/function_reordering_plugin ; \
+	cd $(HOST_SUBDIR)/function_reordering_plugin || exit 1; \
+	case $(srcdir) in \
+	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  *) topdir=`echo $(HOST_SUBDIR)/function_reordering_plugin/ | \
+		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+	esac; \
+	srcdiroption="--srcdir=$${topdir}/function_reordering_plugin"; \
+	libsrcdir="$$s/function_reordering_plugin"; \
+	$(SHELL) $${libsrcdir}/configure \
+	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+	  --target=${target_alias} $${srcdiroption} \
+	  --with-build-libsubdir=$(HOST_SUBDIR) \
+	  $(STAGEprofile_CONFIGURE_FLAGS) \
+	  --enable-shared
+@endif function_reordering_plugin-bootstrap
+
+.PHONY: configure-stagefeedback-function_reordering_plugin maybe-configure-stagefeedback-function_reordering_plugin
+maybe-configure-stagefeedback-function_reordering_plugin:
+@if function_reordering_plugin-bootstrap
+maybe-configure-stagefeedback-function_reordering_plugin: configure-stagefeedback-function_reordering_plugin
+configure-stagefeedback-function_reordering_plugin:
+	@[ $(current_stage) = stagefeedback ] || $(MAKE) stagefeedback-start
+	@$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/function_reordering_plugin
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGEfeedback_TFLAGS)"; \
+	test ! -f $(HOST_SUBDIR)/function_reordering_plugin/Makefile || exit 0; \
+	$(HOST_EXPORTS) \
+	$(POSTSTAGE1_HOST_EXPORTS) \
+	CFLAGS="$(STAGEfeedback_CFLAGS)"; export CFLAGS; \
+	CXXFLAGS="$(STAGEfeedback_CXXFLAGS)"; export CXXFLAGS; \
+	LIBCFLAGS="$(STAGEfeedback_CFLAGS)"; export LIBCFLAGS;  \
+	echo Configuring stage feedback in $(HOST_SUBDIR)/function_reordering_plugin ; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(HOST_SUBDIR)/function_reordering_plugin ; \
+	cd $(HOST_SUBDIR)/function_reordering_plugin || exit 1; \
+	case $(srcdir) in \
+	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  *) topdir=`echo $(HOST_SUBDIR)/function_reordering_plugin/ | \
+		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+	esac; \
+	srcdiroption="--srcdir=$${topdir}/function_reordering_plugin"; \
+	libsrcdir="$$s/function_reordering_plugin"; \
+	$(SHELL) $${libsrcdir}/configure \
+	  $(HOST_CONFIGARGS) --build=${build_alias} --host=${host_alias} \
+	  --target=${target_alias} $${srcdiroption} \
+	  --with-build-libsubdir=$(HOST_SUBDIR) \
+	  $(STAGEfeedback_CONFIGURE_FLAGS) \
+	  --enable-shared
+@endif function_reordering_plugin-bootstrap
+
+
+
+
+
+.PHONY: all-function_reordering_plugin maybe-all-function_reordering_plugin
+maybe-all-function_reordering_plugin:
+@if gcc-bootstrap
+all-function_reordering_plugin: stage_current
+@endif gcc-bootstrap
+@if function_reordering_plugin
+TARGET-function_reordering_plugin=all
+maybe-all-function_reordering_plugin: all-function_reordering_plugin
+all-function_reordering_plugin: configure-function_reordering_plugin
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS)  \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) $(EXTRA_HOST_FLAGS) $(STAGE1_FLAGS_TO_PASS)  \
+		$(TARGET-function_reordering_plugin))
+@endif function_reordering_plugin
+
+
+
+.PHONY: all-stage1-function_reordering_plugin maybe-all-stage1-function_reordering_plugin
+.PHONY: clean-stage1-function_reordering_plugin maybe-clean-stage1-function_reordering_plugin
+maybe-all-stage1-function_reordering_plugin:
+maybe-clean-stage1-function_reordering_plugin:
+@if function_reordering_plugin-bootstrap
+maybe-all-stage1-function_reordering_plugin: all-stage1-function_reordering_plugin
+all-stage1: all-stage1-function_reordering_plugin
+TARGET-stage1-function_reordering_plugin = $(TARGET-function_reordering_plugin)
+all-stage1-function_reordering_plugin: configure-stage1-function_reordering_plugin
+	@[ $(current_stage) = stage1 ] || $(MAKE) stage1-start
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE1_TFLAGS)"; \
+	$(HOST_EXPORTS)  \
+	cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	$(MAKE) $(BASE_FLAGS_TO_PASS) \
+		CFLAGS="$(STAGE1_CFLAGS)" \
+		CXXFLAGS="$(STAGE1_CXXFLAGS)" \
+		LIBCFLAGS="$(LIBCFLAGS)" \
+		CFLAGS_FOR_TARGET="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS_FOR_TARGET="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS_FOR_TARGET="$(LIBCFLAGS_FOR_TARGET)" \
+		$(EXTRA_HOST_FLAGS)  \
+		$(STAGE1_FLAGS_TO_PASS)  \
+		TFLAGS="$(STAGE1_TFLAGS)" \
+		$(TARGET-stage1-function_reordering_plugin)
+
+maybe-clean-stage1-function_reordering_plugin: clean-stage1-function_reordering_plugin
+clean-stage1: clean-stage1-function_reordering_plugin
+clean-stage1-function_reordering_plugin:
+	@if [ $(current_stage) = stage1 ]; then \
+	  [ -f $(HOST_SUBDIR)/function_reordering_plugin/Makefile ] || exit 0; \
+	else \
+	  [ -f $(HOST_SUBDIR)/stage1-function_reordering_plugin/Makefile ] || exit 0; \
+	  $(MAKE) stage1-start; \
+	fi; \
+	cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	$(MAKE) $(EXTRA_HOST_FLAGS)  \
+	$(STAGE1_FLAGS_TO_PASS)  clean
+@endif function_reordering_plugin-bootstrap
+
+
+.PHONY: all-stage2-function_reordering_plugin maybe-all-stage2-function_reordering_plugin
+.PHONY: clean-stage2-function_reordering_plugin maybe-clean-stage2-function_reordering_plugin
+maybe-all-stage2-function_reordering_plugin:
+maybe-clean-stage2-function_reordering_plugin:
+@if function_reordering_plugin-bootstrap
+maybe-all-stage2-function_reordering_plugin: all-stage2-function_reordering_plugin
+all-stage2: all-stage2-function_reordering_plugin
+TARGET-stage2-function_reordering_plugin = $(TARGET-function_reordering_plugin)
+all-stage2-function_reordering_plugin: configure-stage2-function_reordering_plugin
+	@[ $(current_stage) = stage2 ] || $(MAKE) stage2-start
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE2_TFLAGS)"; \
+	$(HOST_EXPORTS) \
+	$(POSTSTAGE1_HOST_EXPORTS)  \
+	cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	$(MAKE) $(BASE_FLAGS_TO_PASS) \
+		CFLAGS="$(STAGE2_CFLAGS)" \
+		CXXFLAGS="$(STAGE2_CXXFLAGS)" \
+		LIBCFLAGS="$(STAGE2_CFLAGS)" \
+		CFLAGS_FOR_TARGET="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS_FOR_TARGET="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS_FOR_TARGET="$(LIBCFLAGS_FOR_TARGET)" \
+		$(EXTRA_HOST_FLAGS) $(POSTSTAGE1_FLAGS_TO_PASS)  \
+		TFLAGS="$(STAGE2_TFLAGS)" \
+		$(TARGET-stage2-function_reordering_plugin)
+
+maybe-clean-stage2-function_reordering_plugin: clean-stage2-function_reordering_plugin
+clean-stage2: clean-stage2-function_reordering_plugin
+clean-stage2-function_reordering_plugin:
+	@if [ $(current_stage) = stage2 ]; then \
+	  [ -f $(HOST_SUBDIR)/function_reordering_plugin/Makefile ] || exit 0; \
+	else \
+	  [ -f $(HOST_SUBDIR)/stage2-function_reordering_plugin/Makefile ] || exit 0; \
+	  $(MAKE) stage2-start; \
+	fi; \
+	cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	$(MAKE) $(EXTRA_HOST_FLAGS) $(POSTSTAGE1_FLAGS_TO_PASS)  clean
+@endif function_reordering_plugin-bootstrap
+
+
+.PHONY: all-stage3-function_reordering_plugin maybe-all-stage3-function_reordering_plugin
+.PHONY: clean-stage3-function_reordering_plugin maybe-clean-stage3-function_reordering_plugin
+maybe-all-stage3-function_reordering_plugin:
+maybe-clean-stage3-function_reordering_plugin:
+@if function_reordering_plugin-bootstrap
+maybe-all-stage3-function_reordering_plugin: all-stage3-function_reordering_plugin
+all-stage3: all-stage3-function_reordering_plugin
+TARGET-stage3-function_reordering_plugin = $(TARGET-function_reordering_plugin)
+all-stage3-function_reordering_plugin: configure-stage3-function_reordering_plugin
+	@[ $(current_stage) = stage3 ] || $(MAKE) stage3-start
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE3_TFLAGS)"; \
+	$(HOST_EXPORTS) \
+	$(POSTSTAGE1_HOST_EXPORTS)  \
+	cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	$(MAKE) $(BASE_FLAGS_TO_PASS) \
+		CFLAGS="$(STAGE3_CFLAGS)" \
+		CXXFLAGS="$(STAGE3_CXXFLAGS)" \
+		LIBCFLAGS="$(STAGE3_CFLAGS)" \
+		CFLAGS_FOR_TARGET="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS_FOR_TARGET="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS_FOR_TARGET="$(LIBCFLAGS_FOR_TARGET)" \
+		$(EXTRA_HOST_FLAGS) $(POSTSTAGE1_FLAGS_TO_PASS)  \
+		TFLAGS="$(STAGE3_TFLAGS)" \
+		$(TARGET-stage3-function_reordering_plugin)
+
+maybe-clean-stage3-function_reordering_plugin: clean-stage3-function_reordering_plugin
+clean-stage3: clean-stage3-function_reordering_plugin
+clean-stage3-function_reordering_plugin:
+	@if [ $(current_stage) = stage3 ]; then \
+	  [ -f $(HOST_SUBDIR)/function_reordering_plugin/Makefile ] || exit 0; \
+	else \
+	  [ -f $(HOST_SUBDIR)/stage3-function_reordering_plugin/Makefile ] || exit 0; \
+	  $(MAKE) stage3-start; \
+	fi; \
+	cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	$(MAKE) $(EXTRA_HOST_FLAGS) $(POSTSTAGE1_FLAGS_TO_PASS)  clean
+@endif function_reordering_plugin-bootstrap
+
+
+.PHONY: all-stage4-function_reordering_plugin maybe-all-stage4-function_reordering_plugin
+.PHONY: clean-stage4-function_reordering_plugin maybe-clean-stage4-function_reordering_plugin
+maybe-all-stage4-function_reordering_plugin:
+maybe-clean-stage4-function_reordering_plugin:
+@if function_reordering_plugin-bootstrap
+maybe-all-stage4-function_reordering_plugin: all-stage4-function_reordering_plugin
+all-stage4: all-stage4-function_reordering_plugin
+TARGET-stage4-function_reordering_plugin = $(TARGET-function_reordering_plugin)
+all-stage4-function_reordering_plugin: configure-stage4-function_reordering_plugin
+	@[ $(current_stage) = stage4 ] || $(MAKE) stage4-start
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE4_TFLAGS)"; \
+	$(HOST_EXPORTS) \
+	$(POSTSTAGE1_HOST_EXPORTS)  \
+	cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	$(MAKE) $(BASE_FLAGS_TO_PASS) \
+		CFLAGS="$(STAGE4_CFLAGS)" \
+		CXXFLAGS="$(STAGE4_CXXFLAGS)" \
+		LIBCFLAGS="$(STAGE4_CFLAGS)" \
+		CFLAGS_FOR_TARGET="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS_FOR_TARGET="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS_FOR_TARGET="$(LIBCFLAGS_FOR_TARGET)" \
+		$(EXTRA_HOST_FLAGS) $(POSTSTAGE1_FLAGS_TO_PASS)  \
+		TFLAGS="$(STAGE4_TFLAGS)" \
+		$(TARGET-stage4-function_reordering_plugin)
+
+maybe-clean-stage4-function_reordering_plugin: clean-stage4-function_reordering_plugin
+clean-stage4: clean-stage4-function_reordering_plugin
+clean-stage4-function_reordering_plugin:
+	@if [ $(current_stage) = stage4 ]; then \
+	  [ -f $(HOST_SUBDIR)/function_reordering_plugin/Makefile ] || exit 0; \
+	else \
+	  [ -f $(HOST_SUBDIR)/stage4-function_reordering_plugin/Makefile ] || exit 0; \
+	  $(MAKE) stage4-start; \
+	fi; \
+	cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	$(MAKE) $(EXTRA_HOST_FLAGS) $(POSTSTAGE1_FLAGS_TO_PASS)  clean
+@endif function_reordering_plugin-bootstrap
+
+
+.PHONY: all-stageprofile-function_reordering_plugin maybe-all-stageprofile-function_reordering_plugin
+.PHONY: clean-stageprofile-function_reordering_plugin maybe-clean-stageprofile-function_reordering_plugin
+maybe-all-stageprofile-function_reordering_plugin:
+maybe-clean-stageprofile-function_reordering_plugin:
+@if function_reordering_plugin-bootstrap
+maybe-all-stageprofile-function_reordering_plugin: all-stageprofile-function_reordering_plugin
+all-stageprofile: all-stageprofile-function_reordering_plugin
+TARGET-stageprofile-function_reordering_plugin = $(TARGET-function_reordering_plugin)
+all-stageprofile-function_reordering_plugin: configure-stageprofile-function_reordering_plugin
+	@[ $(current_stage) = stageprofile ] || $(MAKE) stageprofile-start
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGEprofile_TFLAGS)"; \
+	$(HOST_EXPORTS) \
+	$(POSTSTAGE1_HOST_EXPORTS)  \
+	cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	$(MAKE) $(BASE_FLAGS_TO_PASS) \
+		CFLAGS="$(STAGEprofile_CFLAGS)" \
+		CXXFLAGS="$(STAGEprofile_CXXFLAGS)" \
+		LIBCFLAGS="$(STAGEprofile_CFLAGS)" \
+		CFLAGS_FOR_TARGET="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS_FOR_TARGET="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS_FOR_TARGET="$(LIBCFLAGS_FOR_TARGET)" \
+		$(EXTRA_HOST_FLAGS) $(POSTSTAGE1_FLAGS_TO_PASS)  \
+		TFLAGS="$(STAGEprofile_TFLAGS)" \
+		$(TARGET-stageprofile-function_reordering_plugin)
+
+maybe-clean-stageprofile-function_reordering_plugin: clean-stageprofile-function_reordering_plugin
+clean-stageprofile: clean-stageprofile-function_reordering_plugin
+clean-stageprofile-function_reordering_plugin:
+	@if [ $(current_stage) = stageprofile ]; then \
+	  [ -f $(HOST_SUBDIR)/function_reordering_plugin/Makefile ] || exit 0; \
+	else \
+	  [ -f $(HOST_SUBDIR)/stageprofile-function_reordering_plugin/Makefile ] || exit 0; \
+	  $(MAKE) stageprofile-start; \
+	fi; \
+	cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	$(MAKE) $(EXTRA_HOST_FLAGS) $(POSTSTAGE1_FLAGS_TO_PASS)  clean
+@endif function_reordering_plugin-bootstrap
+
+
+.PHONY: all-stagefeedback-function_reordering_plugin maybe-all-stagefeedback-function_reordering_plugin
+.PHONY: clean-stagefeedback-function_reordering_plugin maybe-clean-stagefeedback-function_reordering_plugin
+maybe-all-stagefeedback-function_reordering_plugin:
+maybe-clean-stagefeedback-function_reordering_plugin:
+@if function_reordering_plugin-bootstrap
+maybe-all-stagefeedback-function_reordering_plugin: all-stagefeedback-function_reordering_plugin
+all-stagefeedback: all-stagefeedback-function_reordering_plugin
+TARGET-stagefeedback-function_reordering_plugin = $(TARGET-function_reordering_plugin)
+all-stagefeedback-function_reordering_plugin: configure-stagefeedback-function_reordering_plugin
+	@[ $(current_stage) = stagefeedback ] || $(MAKE) stagefeedback-start
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGEfeedback_TFLAGS)"; \
+	$(HOST_EXPORTS) \
+	$(POSTSTAGE1_HOST_EXPORTS)  \
+	cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	$(MAKE) $(BASE_FLAGS_TO_PASS) \
+		CFLAGS="$(STAGEfeedback_CFLAGS)" \
+		CXXFLAGS="$(STAGEfeedback_CXXFLAGS)" \
+		LIBCFLAGS="$(STAGEfeedback_CFLAGS)" \
+		CFLAGS_FOR_TARGET="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS_FOR_TARGET="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS_FOR_TARGET="$(LIBCFLAGS_FOR_TARGET)" \
+		$(EXTRA_HOST_FLAGS) $(POSTSTAGE1_FLAGS_TO_PASS)  \
+		TFLAGS="$(STAGEfeedback_TFLAGS)" \
+		$(TARGET-stagefeedback-function_reordering_plugin)
+
+maybe-clean-stagefeedback-function_reordering_plugin: clean-stagefeedback-function_reordering_plugin
+clean-stagefeedback: clean-stagefeedback-function_reordering_plugin
+clean-stagefeedback-function_reordering_plugin:
+	@if [ $(current_stage) = stagefeedback ]; then \
+	  [ -f $(HOST_SUBDIR)/function_reordering_plugin/Makefile ] || exit 0; \
+	else \
+	  [ -f $(HOST_SUBDIR)/stagefeedback-function_reordering_plugin/Makefile ] || exit 0; \
+	  $(MAKE) stagefeedback-start; \
+	fi; \
+	cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	$(MAKE) $(EXTRA_HOST_FLAGS) $(POSTSTAGE1_FLAGS_TO_PASS)  clean
+@endif function_reordering_plugin-bootstrap
+
+
+
+
+
+.PHONY: check-function_reordering_plugin maybe-check-function_reordering_plugin
+maybe-check-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-check-function_reordering_plugin: check-function_reordering_plugin
+
+check-function_reordering_plugin:
+	@: $(MAKE); $(unstage)
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(FLAGS_TO_PASS)  check)
+
+@endif function_reordering_plugin
+
+.PHONY: install-function_reordering_plugin maybe-install-function_reordering_plugin
+maybe-install-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-install-function_reordering_plugin: install-function_reordering_plugin
+
+install-function_reordering_plugin: installdirs
+	@: $(MAKE); $(unstage)
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(FLAGS_TO_PASS)  install)
+
+@endif function_reordering_plugin
+
+.PHONY: install-strip-function_reordering_plugin maybe-install-strip-function_reordering_plugin
+maybe-install-strip-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-install-strip-function_reordering_plugin: install-strip-function_reordering_plugin
+
+install-strip-function_reordering_plugin: installdirs
+	@: $(MAKE); $(unstage)
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(FLAGS_TO_PASS)  install-strip)
+
+@endif function_reordering_plugin
+
+# Other targets (info, dvi, pdf, etc.)
+
+.PHONY: maybe-info-function_reordering_plugin info-function_reordering_plugin
+maybe-info-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-info-function_reordering_plugin: info-function_reordering_plugin
+
+info-function_reordering_plugin: \
+    configure-function_reordering_plugin 
+	@[ -f ./function_reordering_plugin/Makefile ] || exit 0; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	for flag in $(EXTRA_HOST_FLAGS) ; do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	echo "Doing info in function_reordering_plugin" ; \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	          info) \
+	  || exit 1
+
+@endif function_reordering_plugin
+
+.PHONY: maybe-dvi-function_reordering_plugin dvi-function_reordering_plugin
+maybe-dvi-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-dvi-function_reordering_plugin: dvi-function_reordering_plugin
+
+dvi-function_reordering_plugin: \
+    configure-function_reordering_plugin 
+	@[ -f ./function_reordering_plugin/Makefile ] || exit 0; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	for flag in $(EXTRA_HOST_FLAGS) ; do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	echo "Doing dvi in function_reordering_plugin" ; \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	          dvi) \
+	  || exit 1
+
+@endif function_reordering_plugin
+
+.PHONY: maybe-pdf-function_reordering_plugin pdf-function_reordering_plugin
+maybe-pdf-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-pdf-function_reordering_plugin: pdf-function_reordering_plugin
+
+pdf-function_reordering_plugin: \
+    configure-function_reordering_plugin 
+	@[ -f ./function_reordering_plugin/Makefile ] || exit 0; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	for flag in $(EXTRA_HOST_FLAGS) ; do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	echo "Doing pdf in function_reordering_plugin" ; \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	          pdf) \
+	  || exit 1
+
+@endif function_reordering_plugin
+
+.PHONY: maybe-html-function_reordering_plugin html-function_reordering_plugin
+maybe-html-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-html-function_reordering_plugin: html-function_reordering_plugin
+
+html-function_reordering_plugin: \
+    configure-function_reordering_plugin 
+	@[ -f ./function_reordering_plugin/Makefile ] || exit 0; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	for flag in $(EXTRA_HOST_FLAGS) ; do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	echo "Doing html in function_reordering_plugin" ; \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	          html) \
+	  || exit 1
+
+@endif function_reordering_plugin
+
+.PHONY: maybe-TAGS-function_reordering_plugin TAGS-function_reordering_plugin
+maybe-TAGS-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-TAGS-function_reordering_plugin: TAGS-function_reordering_plugin
+
+TAGS-function_reordering_plugin: \
+    configure-function_reordering_plugin 
+	@[ -f ./function_reordering_plugin/Makefile ] || exit 0; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	for flag in $(EXTRA_HOST_FLAGS) ; do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	echo "Doing TAGS in function_reordering_plugin" ; \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	          TAGS) \
+	  || exit 1
+
+@endif function_reordering_plugin
+
+.PHONY: maybe-install-info-function_reordering_plugin install-info-function_reordering_plugin
+maybe-install-info-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-install-info-function_reordering_plugin: install-info-function_reordering_plugin
+
+install-info-function_reordering_plugin: \
+    configure-function_reordering_plugin \
+    info-function_reordering_plugin 
+	@[ -f ./function_reordering_plugin/Makefile ] || exit 0; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	for flag in $(EXTRA_HOST_FLAGS) ; do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	echo "Doing install-info in function_reordering_plugin" ; \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	          install-info) \
+	  || exit 1
+
+@endif function_reordering_plugin
+
+.PHONY: maybe-install-pdf-function_reordering_plugin install-pdf-function_reordering_plugin
+maybe-install-pdf-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-install-pdf-function_reordering_plugin: install-pdf-function_reordering_plugin
+
+install-pdf-function_reordering_plugin: \
+    configure-function_reordering_plugin \
+    pdf-function_reordering_plugin 
+	@[ -f ./function_reordering_plugin/Makefile ] || exit 0; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	for flag in $(EXTRA_HOST_FLAGS) ; do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	echo "Doing install-pdf in function_reordering_plugin" ; \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	          install-pdf) \
+	  || exit 1
+
+@endif function_reordering_plugin
+
+.PHONY: maybe-install-html-function_reordering_plugin install-html-function_reordering_plugin
+maybe-install-html-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-install-html-function_reordering_plugin: install-html-function_reordering_plugin
+
+install-html-function_reordering_plugin: \
+    configure-function_reordering_plugin \
+    html-function_reordering_plugin 
+	@[ -f ./function_reordering_plugin/Makefile ] || exit 0; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	for flag in $(EXTRA_HOST_FLAGS) ; do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	echo "Doing install-html in function_reordering_plugin" ; \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	          install-html) \
+	  || exit 1
+
+@endif function_reordering_plugin
+
+.PHONY: maybe-installcheck-function_reordering_plugin installcheck-function_reordering_plugin
+maybe-installcheck-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-installcheck-function_reordering_plugin: installcheck-function_reordering_plugin
+
+installcheck-function_reordering_plugin: \
+    configure-function_reordering_plugin 
+	@[ -f ./function_reordering_plugin/Makefile ] || exit 0; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	for flag in $(EXTRA_HOST_FLAGS) ; do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	echo "Doing installcheck in function_reordering_plugin" ; \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	          installcheck) \
+	  || exit 1
+
+@endif function_reordering_plugin
+
+.PHONY: maybe-mostlyclean-function_reordering_plugin mostlyclean-function_reordering_plugin
+maybe-mostlyclean-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-mostlyclean-function_reordering_plugin: mostlyclean-function_reordering_plugin
+
+mostlyclean-function_reordering_plugin: 
+	@[ -f ./function_reordering_plugin/Makefile ] || exit 0; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	for flag in $(EXTRA_HOST_FLAGS) ; do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	echo "Doing mostlyclean in function_reordering_plugin" ; \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	          mostlyclean) \
+	  || exit 1
+
+@endif function_reordering_plugin
+
+.PHONY: maybe-clean-function_reordering_plugin clean-function_reordering_plugin
+maybe-clean-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-clean-function_reordering_plugin: clean-function_reordering_plugin
+
+clean-function_reordering_plugin: 
+	@[ -f ./function_reordering_plugin/Makefile ] || exit 0; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	for flag in $(EXTRA_HOST_FLAGS) ; do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	echo "Doing clean in function_reordering_plugin" ; \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	          clean) \
+	  || exit 1
+
+@endif function_reordering_plugin
+
+.PHONY: maybe-distclean-function_reordering_plugin distclean-function_reordering_plugin
+maybe-distclean-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-distclean-function_reordering_plugin: distclean-function_reordering_plugin
+
+distclean-function_reordering_plugin: 
+	@[ -f ./function_reordering_plugin/Makefile ] || exit 0; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	for flag in $(EXTRA_HOST_FLAGS) ; do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	echo "Doing distclean in function_reordering_plugin" ; \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	          distclean) \
+	  || exit 1
+
+@endif function_reordering_plugin
+
+.PHONY: maybe-maintainer-clean-function_reordering_plugin maintainer-clean-function_reordering_plugin
+maybe-maintainer-clean-function_reordering_plugin:
+@if function_reordering_plugin
+maybe-maintainer-clean-function_reordering_plugin: maintainer-clean-function_reordering_plugin
+
+maintainer-clean-function_reordering_plugin: 
+	@[ -f ./function_reordering_plugin/Makefile ] || exit 0; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(HOST_EXPORTS) \
+	for flag in $(EXTRA_HOST_FLAGS) ; do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	echo "Doing maintainer-clean in function_reordering_plugin" ; \
+	(cd $(HOST_SUBDIR)/function_reordering_plugin && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	          maintainer-clean) \
+	  || exit 1
+
+@endif function_reordering_plugin
+
+
+
 # ---------------------------------------
 # Modules which run on the target machine
 # ---------------------------------------
@@ -31715,463 +32640,6 @@ maintainer-clean-target-libstdc++-v3:
 
 
 
-.PHONY: configure-target-libmudflap maybe-configure-target-libmudflap
-maybe-configure-target-libmudflap:
-@if gcc-bootstrap
-configure-target-libmudflap: stage_current
-@endif gcc-bootstrap
-@if target-libmudflap
-maybe-configure-target-libmudflap: configure-target-libmudflap
-configure-target-libmudflap: 
-	@: $(MAKE); $(unstage)
-	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	echo "Checking multilib configuration for libmudflap..."; \
-	$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libmudflap ; \
-	$(CC_FOR_TARGET) --print-multi-lib > $(TARGET_SUBDIR)/libmudflap/multilib.tmp 2> /dev/null ; \
-	if test -r $(TARGET_SUBDIR)/libmudflap/multilib.out; then \
-	  if cmp -s $(TARGET_SUBDIR)/libmudflap/multilib.tmp $(TARGET_SUBDIR)/libmudflap/multilib.out; then \
-	    rm -f $(TARGET_SUBDIR)/libmudflap/multilib.tmp; \
-	  else \
-	    rm -f $(TARGET_SUBDIR)/libmudflap/Makefile; \
-	    mv $(TARGET_SUBDIR)/libmudflap/multilib.tmp $(TARGET_SUBDIR)/libmudflap/multilib.out; \
-	  fi; \
-	else \
-	  mv $(TARGET_SUBDIR)/libmudflap/multilib.tmp $(TARGET_SUBDIR)/libmudflap/multilib.out; \
-	fi; \
-	test ! -f $(TARGET_SUBDIR)/libmudflap/Makefile || exit 0; \
-	$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libmudflap ; \
-	$(NORMAL_TARGET_EXPORTS)  \
-	echo Configuring in $(TARGET_SUBDIR)/libmudflap; \
-	cd "$(TARGET_SUBDIR)/libmudflap" || exit 1; \
-	case $(srcdir) in \
-	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
-	  *) topdir=`echo $(TARGET_SUBDIR)/libmudflap/ | \
-		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
-	esac; \
-	srcdiroption="--srcdir=$${topdir}/libmudflap"; \
-	libsrcdir="$$s/libmudflap"; \
-	rm -f no-such-file || : ; \
-	CONFIG_SITE=no-such-file $(SHELL) $${libsrcdir}/configure \
-	  $(TARGET_CONFIGARGS) --build=${build_alias} --host=${target_alias} \
-	  --target=${target_alias} $${srcdiroption}  \
-	  || exit 1
-@endif target-libmudflap
-
-
-
-
-
-.PHONY: all-target-libmudflap maybe-all-target-libmudflap
-maybe-all-target-libmudflap:
-@if gcc-bootstrap
-all-target-libmudflap: stage_current
-@endif gcc-bootstrap
-@if target-libmudflap
-TARGET-target-libmudflap=all
-maybe-all-target-libmudflap: all-target-libmudflap
-all-target-libmudflap: configure-target-libmudflap
-	@: $(MAKE); $(unstage)
-	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS)  \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(BASE_FLAGS_TO_PASS) $(EXTRA_TARGET_FLAGS)   \
-		$(TARGET-target-libmudflap))
-@endif target-libmudflap
-
-
-
-
-
-.PHONY: check-target-libmudflap maybe-check-target-libmudflap
-maybe-check-target-libmudflap:
-@if target-libmudflap
-maybe-check-target-libmudflap: check-target-libmudflap
-
-check-target-libmudflap:
-	@: $(MAKE); $(unstage)
-	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(TARGET_FLAGS_TO_PASS)   check)
-
-@endif target-libmudflap
-
-.PHONY: install-target-libmudflap maybe-install-target-libmudflap
-maybe-install-target-libmudflap:
-@if target-libmudflap
-maybe-install-target-libmudflap: install-target-libmudflap
-
-install-target-libmudflap: installdirs
-	@: $(MAKE); $(unstage)
-	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(TARGET_FLAGS_TO_PASS)  install)
-
-@endif target-libmudflap
-
-.PHONY: install-strip-target-libmudflap maybe-install-strip-target-libmudflap
-maybe-install-strip-target-libmudflap:
-@if target-libmudflap
-maybe-install-strip-target-libmudflap: install-strip-target-libmudflap
-
-install-strip-target-libmudflap: installdirs
-	@: $(MAKE); $(unstage)
-	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(TARGET_FLAGS_TO_PASS)  install-strip)
-
-@endif target-libmudflap
-
-# Other targets (info, dvi, pdf, etc.)
-
-.PHONY: maybe-info-target-libmudflap info-target-libmudflap
-maybe-info-target-libmudflap:
-@if target-libmudflap
-maybe-info-target-libmudflap: info-target-libmudflap
-
-info-target-libmudflap: \
-    configure-target-libmudflap 
-	@: $(MAKE); $(unstage)
-	@[ -f $(TARGET_SUBDIR)/libmudflap/Makefile ] || exit 0 ; \
-	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	echo "Doing info in $(TARGET_SUBDIR)/libmudflap" ; \
-	for flag in $(EXTRA_TARGET_FLAGS); do \
-	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
-	done; \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
-	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
-	          "RANLIB=$${RANLIB}" \
-	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
-	           info) \
-	  || exit 1
-
-@endif target-libmudflap
-
-.PHONY: maybe-dvi-target-libmudflap dvi-target-libmudflap
-maybe-dvi-target-libmudflap:
-@if target-libmudflap
-maybe-dvi-target-libmudflap: dvi-target-libmudflap
-
-dvi-target-libmudflap: \
-    configure-target-libmudflap 
-	@: $(MAKE); $(unstage)
-	@[ -f $(TARGET_SUBDIR)/libmudflap/Makefile ] || exit 0 ; \
-	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	echo "Doing dvi in $(TARGET_SUBDIR)/libmudflap" ; \
-	for flag in $(EXTRA_TARGET_FLAGS); do \
-	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
-	done; \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
-	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
-	          "RANLIB=$${RANLIB}" \
-	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
-	           dvi) \
-	  || exit 1
-
-@endif target-libmudflap
-
-.PHONY: maybe-pdf-target-libmudflap pdf-target-libmudflap
-maybe-pdf-target-libmudflap:
-@if target-libmudflap
-maybe-pdf-target-libmudflap: pdf-target-libmudflap
-
-pdf-target-libmudflap: \
-    configure-target-libmudflap 
-	@: $(MAKE); $(unstage)
-	@[ -f $(TARGET_SUBDIR)/libmudflap/Makefile ] || exit 0 ; \
-	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	echo "Doing pdf in $(TARGET_SUBDIR)/libmudflap" ; \
-	for flag in $(EXTRA_TARGET_FLAGS); do \
-	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
-	done; \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
-	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
-	          "RANLIB=$${RANLIB}" \
-	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
-	           pdf) \
-	  || exit 1
-
-@endif target-libmudflap
-
-.PHONY: maybe-html-target-libmudflap html-target-libmudflap
-maybe-html-target-libmudflap:
-@if target-libmudflap
-maybe-html-target-libmudflap: html-target-libmudflap
-
-html-target-libmudflap: \
-    configure-target-libmudflap 
-	@: $(MAKE); $(unstage)
-	@[ -f $(TARGET_SUBDIR)/libmudflap/Makefile ] || exit 0 ; \
-	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	echo "Doing html in $(TARGET_SUBDIR)/libmudflap" ; \
-	for flag in $(EXTRA_TARGET_FLAGS); do \
-	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
-	done; \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
-	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
-	          "RANLIB=$${RANLIB}" \
-	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
-	           html) \
-	  || exit 1
-
-@endif target-libmudflap
-
-.PHONY: maybe-TAGS-target-libmudflap TAGS-target-libmudflap
-maybe-TAGS-target-libmudflap:
-@if target-libmudflap
-maybe-TAGS-target-libmudflap: TAGS-target-libmudflap
-
-TAGS-target-libmudflap: \
-    configure-target-libmudflap 
-	@: $(MAKE); $(unstage)
-	@[ -f $(TARGET_SUBDIR)/libmudflap/Makefile ] || exit 0 ; \
-	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	echo "Doing TAGS in $(TARGET_SUBDIR)/libmudflap" ; \
-	for flag in $(EXTRA_TARGET_FLAGS); do \
-	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
-	done; \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
-	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
-	          "RANLIB=$${RANLIB}" \
-	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
-	           TAGS) \
-	  || exit 1
-
-@endif target-libmudflap
-
-.PHONY: maybe-install-info-target-libmudflap install-info-target-libmudflap
-maybe-install-info-target-libmudflap:
-@if target-libmudflap
-maybe-install-info-target-libmudflap: install-info-target-libmudflap
-
-install-info-target-libmudflap: \
-    configure-target-libmudflap \
-    info-target-libmudflap 
-	@: $(MAKE); $(unstage)
-	@[ -f $(TARGET_SUBDIR)/libmudflap/Makefile ] || exit 0 ; \
-	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	echo "Doing install-info in $(TARGET_SUBDIR)/libmudflap" ; \
-	for flag in $(EXTRA_TARGET_FLAGS); do \
-	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
-	done; \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
-	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
-	          "RANLIB=$${RANLIB}" \
-	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
-	           install-info) \
-	  || exit 1
-
-@endif target-libmudflap
-
-.PHONY: maybe-install-pdf-target-libmudflap install-pdf-target-libmudflap
-maybe-install-pdf-target-libmudflap:
-@if target-libmudflap
-maybe-install-pdf-target-libmudflap: install-pdf-target-libmudflap
-
-install-pdf-target-libmudflap: \
-    configure-target-libmudflap \
-    pdf-target-libmudflap 
-	@: $(MAKE); $(unstage)
-	@[ -f $(TARGET_SUBDIR)/libmudflap/Makefile ] || exit 0 ; \
-	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	echo "Doing install-pdf in $(TARGET_SUBDIR)/libmudflap" ; \
-	for flag in $(EXTRA_TARGET_FLAGS); do \
-	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
-	done; \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
-	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
-	          "RANLIB=$${RANLIB}" \
-	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
-	           install-pdf) \
-	  || exit 1
-
-@endif target-libmudflap
-
-.PHONY: maybe-install-html-target-libmudflap install-html-target-libmudflap
-maybe-install-html-target-libmudflap:
-@if target-libmudflap
-maybe-install-html-target-libmudflap: install-html-target-libmudflap
-
-install-html-target-libmudflap: \
-    configure-target-libmudflap \
-    html-target-libmudflap 
-	@: $(MAKE); $(unstage)
-	@[ -f $(TARGET_SUBDIR)/libmudflap/Makefile ] || exit 0 ; \
-	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	echo "Doing install-html in $(TARGET_SUBDIR)/libmudflap" ; \
-	for flag in $(EXTRA_TARGET_FLAGS); do \
-	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
-	done; \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
-	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
-	          "RANLIB=$${RANLIB}" \
-	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
-	           install-html) \
-	  || exit 1
-
-@endif target-libmudflap
-
-.PHONY: maybe-installcheck-target-libmudflap installcheck-target-libmudflap
-maybe-installcheck-target-libmudflap:
-@if target-libmudflap
-maybe-installcheck-target-libmudflap: installcheck-target-libmudflap
-
-installcheck-target-libmudflap: \
-    configure-target-libmudflap 
-	@: $(MAKE); $(unstage)
-	@[ -f $(TARGET_SUBDIR)/libmudflap/Makefile ] || exit 0 ; \
-	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	echo "Doing installcheck in $(TARGET_SUBDIR)/libmudflap" ; \
-	for flag in $(EXTRA_TARGET_FLAGS); do \
-	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
-	done; \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
-	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
-	          "RANLIB=$${RANLIB}" \
-	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
-	           installcheck) \
-	  || exit 1
-
-@endif target-libmudflap
-
-.PHONY: maybe-mostlyclean-target-libmudflap mostlyclean-target-libmudflap
-maybe-mostlyclean-target-libmudflap:
-@if target-libmudflap
-maybe-mostlyclean-target-libmudflap: mostlyclean-target-libmudflap
-
-mostlyclean-target-libmudflap: 
-	@: $(MAKE); $(unstage)
-	@[ -f $(TARGET_SUBDIR)/libmudflap/Makefile ] || exit 0 ; \
-	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	echo "Doing mostlyclean in $(TARGET_SUBDIR)/libmudflap" ; \
-	for flag in $(EXTRA_TARGET_FLAGS); do \
-	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
-	done; \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
-	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
-	          "RANLIB=$${RANLIB}" \
-	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
-	           mostlyclean) \
-	  || exit 1
-
-@endif target-libmudflap
-
-.PHONY: maybe-clean-target-libmudflap clean-target-libmudflap
-maybe-clean-target-libmudflap:
-@if target-libmudflap
-maybe-clean-target-libmudflap: clean-target-libmudflap
-
-clean-target-libmudflap: 
-	@: $(MAKE); $(unstage)
-	@[ -f $(TARGET_SUBDIR)/libmudflap/Makefile ] || exit 0 ; \
-	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	echo "Doing clean in $(TARGET_SUBDIR)/libmudflap" ; \
-	for flag in $(EXTRA_TARGET_FLAGS); do \
-	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
-	done; \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
-	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
-	          "RANLIB=$${RANLIB}" \
-	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
-	           clean) \
-	  || exit 1
-
-@endif target-libmudflap
-
-.PHONY: maybe-distclean-target-libmudflap distclean-target-libmudflap
-maybe-distclean-target-libmudflap:
-@if target-libmudflap
-maybe-distclean-target-libmudflap: distclean-target-libmudflap
-
-distclean-target-libmudflap: 
-	@: $(MAKE); $(unstage)
-	@[ -f $(TARGET_SUBDIR)/libmudflap/Makefile ] || exit 0 ; \
-	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	echo "Doing distclean in $(TARGET_SUBDIR)/libmudflap" ; \
-	for flag in $(EXTRA_TARGET_FLAGS); do \
-	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
-	done; \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
-	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
-	          "RANLIB=$${RANLIB}" \
-	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
-	           distclean) \
-	  || exit 1
-
-@endif target-libmudflap
-
-.PHONY: maybe-maintainer-clean-target-libmudflap maintainer-clean-target-libmudflap
-maybe-maintainer-clean-target-libmudflap:
-@if target-libmudflap
-maybe-maintainer-clean-target-libmudflap: maintainer-clean-target-libmudflap
-
-maintainer-clean-target-libmudflap: 
-	@: $(MAKE); $(unstage)
-	@[ -f $(TARGET_SUBDIR)/libmudflap/Makefile ] || exit 0 ; \
-	r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	echo "Doing maintainer-clean in $(TARGET_SUBDIR)/libmudflap" ; \
-	for flag in $(EXTRA_TARGET_FLAGS); do \
-	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
-	done; \
-	(cd $(TARGET_SUBDIR)/libmudflap && \
-	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
-	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
-	          "RANLIB=$${RANLIB}" \
-	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
-	           maintainer-clean) \
-	  || exit 1
-
-@endif target-libmudflap
-
-
-
-
-
 .PHONY: configure-target-libsanitizer maybe-configure-target-libsanitizer
 maybe-configure-target-libsanitizer:
 @if gcc-bootstrap
@@ -33141,6 +33609,1437 @@ maintainer-clean-target-libsanitizer:
 	  || exit 1
 
 @endif target-libsanitizer
+
+
+
+
+
+.PHONY: configure-target-libvtv maybe-configure-target-libvtv
+maybe-configure-target-libvtv:
+@if gcc-bootstrap
+configure-target-libvtv: stage_current
+@endif gcc-bootstrap
+@if target-libvtv
+maybe-configure-target-libvtv: configure-target-libvtv
+configure-target-libvtv: 
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	echo "Checking multilib configuration for libvtv..."; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libvtv ; \
+	$(CC_FOR_TARGET) --print-multi-lib > $(TARGET_SUBDIR)/libvtv/multilib.tmp 2> /dev/null ; \
+	if test -r $(TARGET_SUBDIR)/libvtv/multilib.out; then \
+	  if cmp -s $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; then \
+	    rm -f $(TARGET_SUBDIR)/libvtv/multilib.tmp; \
+	  else \
+	    rm -f $(TARGET_SUBDIR)/libvtv/Makefile; \
+	    mv $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; \
+	  fi; \
+	else \
+	  mv $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; \
+	fi; \
+	test ! -f $(TARGET_SUBDIR)/libvtv/Makefile || exit 0; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libvtv ; \
+	$(RAW_CXX_TARGET_EXPORTS)  \
+	echo Configuring in $(TARGET_SUBDIR)/libvtv; \
+	cd "$(TARGET_SUBDIR)/libvtv" || exit 1; \
+	case $(srcdir) in \
+	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  *) topdir=`echo $(TARGET_SUBDIR)/libvtv/ | \
+		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+	esac; \
+	srcdiroption="--srcdir=$${topdir}/libvtv"; \
+	libsrcdir="$$s/libvtv"; \
+	rm -f no-such-file || : ; \
+	CONFIG_SITE=no-such-file $(SHELL) $${libsrcdir}/configure \
+	  $(TARGET_CONFIGARGS) --build=${build_alias} --host=${target_alias} \
+	  --target=${target_alias} $${srcdiroption}  \
+	  || exit 1
+@endif target-libvtv
+
+
+
+.PHONY: configure-stage1-target-libvtv maybe-configure-stage1-target-libvtv
+maybe-configure-stage1-target-libvtv:
+@if target-libvtv-bootstrap
+maybe-configure-stage1-target-libvtv: configure-stage1-target-libvtv
+configure-stage1-target-libvtv:
+	@[ $(current_stage) = stage1 ] || $(MAKE) stage1-start
+	@$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libvtv
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE1_TFLAGS)"; \
+	echo "Checking multilib configuration for libvtv..."; \
+	$(CC_FOR_TARGET) --print-multi-lib > $(TARGET_SUBDIR)/libvtv/multilib.tmp 2> /dev/null ; \
+	if test -r $(TARGET_SUBDIR)/libvtv/multilib.out; then \
+	  if cmp -s $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; then \
+	    rm -f $(TARGET_SUBDIR)/libvtv/multilib.tmp; \
+	  else \
+	    rm -f $(TARGET_SUBDIR)/libvtv/Makefile; \
+	    mv $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; \
+	  fi; \
+	else \
+	  mv $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; \
+	fi; \
+	test ! -f $(TARGET_SUBDIR)/libvtv/Makefile || exit 0; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	CFLAGS="$(CFLAGS_FOR_TARGET)"; export CFLAGS; \
+	CXXFLAGS="$(CXXFLAGS_FOR_TARGET)"; export CXXFLAGS; \
+	LIBCFLAGS="$(LIBCFLAGS_FOR_TARGET)"; export LIBCFLAGS;  \
+	echo Configuring stage 1 in $(TARGET_SUBDIR)/libvtv ; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libvtv ; \
+	cd $(TARGET_SUBDIR)/libvtv || exit 1; \
+	case $(srcdir) in \
+	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  *) topdir=`echo $(TARGET_SUBDIR)/libvtv/ | \
+		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+	esac; \
+	srcdiroption="--srcdir=$${topdir}/libvtv"; \
+	libsrcdir="$$s/libvtv"; \
+	$(SHELL) $${libsrcdir}/configure \
+	  $(TARGET_CONFIGARGS) --build=${build_alias} --host=${target_alias} \
+	  --target=${target_alias} $${srcdiroption} \
+	  $(STAGE1_CONFIGURE_FLAGS)
+@endif target-libvtv-bootstrap
+
+.PHONY: configure-stage2-target-libvtv maybe-configure-stage2-target-libvtv
+maybe-configure-stage2-target-libvtv:
+@if target-libvtv-bootstrap
+maybe-configure-stage2-target-libvtv: configure-stage2-target-libvtv
+configure-stage2-target-libvtv:
+	@[ $(current_stage) = stage2 ] || $(MAKE) stage2-start
+	@$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libvtv
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE2_TFLAGS)"; \
+	echo "Checking multilib configuration for libvtv..."; \
+	$(CC_FOR_TARGET) --print-multi-lib > $(TARGET_SUBDIR)/libvtv/multilib.tmp 2> /dev/null ; \
+	if test -r $(TARGET_SUBDIR)/libvtv/multilib.out; then \
+	  if cmp -s $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; then \
+	    rm -f $(TARGET_SUBDIR)/libvtv/multilib.tmp; \
+	  else \
+	    rm -f $(TARGET_SUBDIR)/libvtv/Makefile; \
+	    mv $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; \
+	  fi; \
+	else \
+	  mv $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; \
+	fi; \
+	test ! -f $(TARGET_SUBDIR)/libvtv/Makefile || exit 0; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	 \
+	CFLAGS="$(CFLAGS_FOR_TARGET)"; export CFLAGS; \
+	CXXFLAGS="$(CXXFLAGS_FOR_TARGET)"; export CXXFLAGS; \
+	LIBCFLAGS="$(LIBCFLAGS_FOR_TARGET)"; export LIBCFLAGS;  \
+	echo Configuring stage 2 in $(TARGET_SUBDIR)/libvtv ; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libvtv ; \
+	cd $(TARGET_SUBDIR)/libvtv || exit 1; \
+	case $(srcdir) in \
+	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  *) topdir=`echo $(TARGET_SUBDIR)/libvtv/ | \
+		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+	esac; \
+	srcdiroption="--srcdir=$${topdir}/libvtv"; \
+	libsrcdir="$$s/libvtv"; \
+	$(SHELL) $${libsrcdir}/configure \
+	  $(TARGET_CONFIGARGS) --build=${build_alias} --host=${target_alias} \
+	  --target=${target_alias} $${srcdiroption} \
+	  --with-build-libsubdir=$(HOST_SUBDIR) \
+	  $(STAGE2_CONFIGURE_FLAGS)
+@endif target-libvtv-bootstrap
+
+.PHONY: configure-stage3-target-libvtv maybe-configure-stage3-target-libvtv
+maybe-configure-stage3-target-libvtv:
+@if target-libvtv-bootstrap
+maybe-configure-stage3-target-libvtv: configure-stage3-target-libvtv
+configure-stage3-target-libvtv:
+	@[ $(current_stage) = stage3 ] || $(MAKE) stage3-start
+	@$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libvtv
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE3_TFLAGS)"; \
+	echo "Checking multilib configuration for libvtv..."; \
+	$(CC_FOR_TARGET) --print-multi-lib > $(TARGET_SUBDIR)/libvtv/multilib.tmp 2> /dev/null ; \
+	if test -r $(TARGET_SUBDIR)/libvtv/multilib.out; then \
+	  if cmp -s $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; then \
+	    rm -f $(TARGET_SUBDIR)/libvtv/multilib.tmp; \
+	  else \
+	    rm -f $(TARGET_SUBDIR)/libvtv/Makefile; \
+	    mv $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; \
+	  fi; \
+	else \
+	  mv $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; \
+	fi; \
+	test ! -f $(TARGET_SUBDIR)/libvtv/Makefile || exit 0; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	 \
+	CFLAGS="$(CFLAGS_FOR_TARGET)"; export CFLAGS; \
+	CXXFLAGS="$(CXXFLAGS_FOR_TARGET)"; export CXXFLAGS; \
+	LIBCFLAGS="$(LIBCFLAGS_FOR_TARGET)"; export LIBCFLAGS;  \
+	echo Configuring stage 3 in $(TARGET_SUBDIR)/libvtv ; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libvtv ; \
+	cd $(TARGET_SUBDIR)/libvtv || exit 1; \
+	case $(srcdir) in \
+	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  *) topdir=`echo $(TARGET_SUBDIR)/libvtv/ | \
+		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+	esac; \
+	srcdiroption="--srcdir=$${topdir}/libvtv"; \
+	libsrcdir="$$s/libvtv"; \
+	$(SHELL) $${libsrcdir}/configure \
+	  $(TARGET_CONFIGARGS) --build=${build_alias} --host=${target_alias} \
+	  --target=${target_alias} $${srcdiroption} \
+	  --with-build-libsubdir=$(HOST_SUBDIR) \
+	  $(STAGE3_CONFIGURE_FLAGS)
+@endif target-libvtv-bootstrap
+
+.PHONY: configure-stage4-target-libvtv maybe-configure-stage4-target-libvtv
+maybe-configure-stage4-target-libvtv:
+@if target-libvtv-bootstrap
+maybe-configure-stage4-target-libvtv: configure-stage4-target-libvtv
+configure-stage4-target-libvtv:
+	@[ $(current_stage) = stage4 ] || $(MAKE) stage4-start
+	@$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libvtv
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE4_TFLAGS)"; \
+	echo "Checking multilib configuration for libvtv..."; \
+	$(CC_FOR_TARGET) --print-multi-lib > $(TARGET_SUBDIR)/libvtv/multilib.tmp 2> /dev/null ; \
+	if test -r $(TARGET_SUBDIR)/libvtv/multilib.out; then \
+	  if cmp -s $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; then \
+	    rm -f $(TARGET_SUBDIR)/libvtv/multilib.tmp; \
+	  else \
+	    rm -f $(TARGET_SUBDIR)/libvtv/Makefile; \
+	    mv $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; \
+	  fi; \
+	else \
+	  mv $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; \
+	fi; \
+	test ! -f $(TARGET_SUBDIR)/libvtv/Makefile || exit 0; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	 \
+	CFLAGS="$(CFLAGS_FOR_TARGET)"; export CFLAGS; \
+	CXXFLAGS="$(CXXFLAGS_FOR_TARGET)"; export CXXFLAGS; \
+	LIBCFLAGS="$(LIBCFLAGS_FOR_TARGET)"; export LIBCFLAGS;  \
+	echo Configuring stage 4 in $(TARGET_SUBDIR)/libvtv ; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libvtv ; \
+	cd $(TARGET_SUBDIR)/libvtv || exit 1; \
+	case $(srcdir) in \
+	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  *) topdir=`echo $(TARGET_SUBDIR)/libvtv/ | \
+		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+	esac; \
+	srcdiroption="--srcdir=$${topdir}/libvtv"; \
+	libsrcdir="$$s/libvtv"; \
+	$(SHELL) $${libsrcdir}/configure \
+	  $(TARGET_CONFIGARGS) --build=${build_alias} --host=${target_alias} \
+	  --target=${target_alias} $${srcdiroption} \
+	  --with-build-libsubdir=$(HOST_SUBDIR) \
+	  $(STAGE4_CONFIGURE_FLAGS)
+@endif target-libvtv-bootstrap
+
+.PHONY: configure-stageprofile-target-libvtv maybe-configure-stageprofile-target-libvtv
+maybe-configure-stageprofile-target-libvtv:
+@if target-libvtv-bootstrap
+maybe-configure-stageprofile-target-libvtv: configure-stageprofile-target-libvtv
+configure-stageprofile-target-libvtv:
+	@[ $(current_stage) = stageprofile ] || $(MAKE) stageprofile-start
+	@$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libvtv
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGEprofile_TFLAGS)"; \
+	echo "Checking multilib configuration for libvtv..."; \
+	$(CC_FOR_TARGET) --print-multi-lib > $(TARGET_SUBDIR)/libvtv/multilib.tmp 2> /dev/null ; \
+	if test -r $(TARGET_SUBDIR)/libvtv/multilib.out; then \
+	  if cmp -s $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; then \
+	    rm -f $(TARGET_SUBDIR)/libvtv/multilib.tmp; \
+	  else \
+	    rm -f $(TARGET_SUBDIR)/libvtv/Makefile; \
+	    mv $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; \
+	  fi; \
+	else \
+	  mv $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; \
+	fi; \
+	test ! -f $(TARGET_SUBDIR)/libvtv/Makefile || exit 0; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	 \
+	CFLAGS="$(CFLAGS_FOR_TARGET)"; export CFLAGS; \
+	CXXFLAGS="$(CXXFLAGS_FOR_TARGET)"; export CXXFLAGS; \
+	LIBCFLAGS="$(LIBCFLAGS_FOR_TARGET)"; export LIBCFLAGS;  \
+	echo Configuring stage profile in $(TARGET_SUBDIR)/libvtv ; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libvtv ; \
+	cd $(TARGET_SUBDIR)/libvtv || exit 1; \
+	case $(srcdir) in \
+	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  *) topdir=`echo $(TARGET_SUBDIR)/libvtv/ | \
+		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+	esac; \
+	srcdiroption="--srcdir=$${topdir}/libvtv"; \
+	libsrcdir="$$s/libvtv"; \
+	$(SHELL) $${libsrcdir}/configure \
+	  $(TARGET_CONFIGARGS) --build=${build_alias} --host=${target_alias} \
+	  --target=${target_alias} $${srcdiroption} \
+	  --with-build-libsubdir=$(HOST_SUBDIR) \
+	  $(STAGEprofile_CONFIGURE_FLAGS)
+@endif target-libvtv-bootstrap
+
+.PHONY: configure-stagefeedback-target-libvtv maybe-configure-stagefeedback-target-libvtv
+maybe-configure-stagefeedback-target-libvtv:
+@if target-libvtv-bootstrap
+maybe-configure-stagefeedback-target-libvtv: configure-stagefeedback-target-libvtv
+configure-stagefeedback-target-libvtv:
+	@[ $(current_stage) = stagefeedback ] || $(MAKE) stagefeedback-start
+	@$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libvtv
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGEfeedback_TFLAGS)"; \
+	echo "Checking multilib configuration for libvtv..."; \
+	$(CC_FOR_TARGET) --print-multi-lib > $(TARGET_SUBDIR)/libvtv/multilib.tmp 2> /dev/null ; \
+	if test -r $(TARGET_SUBDIR)/libvtv/multilib.out; then \
+	  if cmp -s $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; then \
+	    rm -f $(TARGET_SUBDIR)/libvtv/multilib.tmp; \
+	  else \
+	    rm -f $(TARGET_SUBDIR)/libvtv/Makefile; \
+	    mv $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; \
+	  fi; \
+	else \
+	  mv $(TARGET_SUBDIR)/libvtv/multilib.tmp $(TARGET_SUBDIR)/libvtv/multilib.out; \
+	fi; \
+	test ! -f $(TARGET_SUBDIR)/libvtv/Makefile || exit 0; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	 \
+	CFLAGS="$(CFLAGS_FOR_TARGET)"; export CFLAGS; \
+	CXXFLAGS="$(CXXFLAGS_FOR_TARGET)"; export CXXFLAGS; \
+	LIBCFLAGS="$(LIBCFLAGS_FOR_TARGET)"; export LIBCFLAGS;  \
+	echo Configuring stage feedback in $(TARGET_SUBDIR)/libvtv ; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libvtv ; \
+	cd $(TARGET_SUBDIR)/libvtv || exit 1; \
+	case $(srcdir) in \
+	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  *) topdir=`echo $(TARGET_SUBDIR)/libvtv/ | \
+		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+	esac; \
+	srcdiroption="--srcdir=$${topdir}/libvtv"; \
+	libsrcdir="$$s/libvtv"; \
+	$(SHELL) $${libsrcdir}/configure \
+	  $(TARGET_CONFIGARGS) --build=${build_alias} --host=${target_alias} \
+	  --target=${target_alias} $${srcdiroption} \
+	  --with-build-libsubdir=$(HOST_SUBDIR) \
+	  $(STAGEfeedback_CONFIGURE_FLAGS)
+@endif target-libvtv-bootstrap
+
+
+
+
+
+.PHONY: all-target-libvtv maybe-all-target-libvtv
+maybe-all-target-libvtv:
+@if gcc-bootstrap
+all-target-libvtv: stage_current
+@endif gcc-bootstrap
+@if target-libvtv
+TARGET-target-libvtv=all
+maybe-all-target-libvtv: all-target-libvtv
+all-target-libvtv: configure-target-libvtv
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS)  \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) $(EXTRA_TARGET_FLAGS) 'CXX=$$(RAW_CXX_FOR_TARGET)' 'CXX_FOR_TARGET=$$(RAW_CXX_FOR_TARGET)'   \
+		$(TARGET-target-libvtv))
+@endif target-libvtv
+
+
+
+.PHONY: all-stage1-target-libvtv maybe-all-stage1-target-libvtv
+.PHONY: clean-stage1-target-libvtv maybe-clean-stage1-target-libvtv
+maybe-all-stage1-target-libvtv:
+maybe-clean-stage1-target-libvtv:
+@if target-libvtv-bootstrap
+maybe-all-stage1-target-libvtv: all-stage1-target-libvtv
+all-stage1: all-stage1-target-libvtv
+TARGET-stage1-target-libvtv = $(TARGET-target-libvtv)
+all-stage1-target-libvtv: configure-stage1-target-libvtv
+	@[ $(current_stage) = stage1 ] || $(MAKE) stage1-start
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE1_TFLAGS)"; \
+	$(RAW_CXX_TARGET_EXPORTS)  \
+	cd $(TARGET_SUBDIR)/libvtv && \
+	$(MAKE) $(BASE_FLAGS_TO_PASS) \
+		CFLAGS="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS="$(LIBCFLAGS_FOR_TARGET)" \
+		CFLAGS_FOR_TARGET="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS_FOR_TARGET="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS_FOR_TARGET="$(LIBCFLAGS_FOR_TARGET)" \
+		$(EXTRA_TARGET_FLAGS) 'CXX=$$(RAW_CXX_FOR_TARGET)' 'CXX_FOR_TARGET=$$(RAW_CXX_FOR_TARGET)'  \
+		  \
+		TFLAGS="$(STAGE1_TFLAGS)" \
+		$(TARGET-stage1-target-libvtv)
+
+maybe-clean-stage1-target-libvtv: clean-stage1-target-libvtv
+clean-stage1: clean-stage1-target-libvtv
+clean-stage1-target-libvtv:
+	@if [ $(current_stage) = stage1 ]; then \
+	  [ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0; \
+	else \
+	  [ -f $(TARGET_SUBDIR)/stage1-libvtv/Makefile ] || exit 0; \
+	  $(MAKE) stage1-start; \
+	fi; \
+	cd $(TARGET_SUBDIR)/libvtv && \
+	$(MAKE) $(EXTRA_TARGET_FLAGS) 'CXX=$$(RAW_CXX_FOR_TARGET)' 'CXX_FOR_TARGET=$$(RAW_CXX_FOR_TARGET)'  \
+	  clean
+@endif target-libvtv-bootstrap
+
+
+.PHONY: all-stage2-target-libvtv maybe-all-stage2-target-libvtv
+.PHONY: clean-stage2-target-libvtv maybe-clean-stage2-target-libvtv
+maybe-all-stage2-target-libvtv:
+maybe-clean-stage2-target-libvtv:
+@if target-libvtv-bootstrap
+maybe-all-stage2-target-libvtv: all-stage2-target-libvtv
+all-stage2: all-stage2-target-libvtv
+TARGET-stage2-target-libvtv = $(TARGET-target-libvtv)
+all-stage2-target-libvtv: configure-stage2-target-libvtv
+	@[ $(current_stage) = stage2 ] || $(MAKE) stage2-start
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE2_TFLAGS)"; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	  \
+	cd $(TARGET_SUBDIR)/libvtv && \
+	$(MAKE) $(BASE_FLAGS_TO_PASS) \
+		CFLAGS="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS="$(LIBCFLAGS_FOR_TARGET)" \
+		CFLAGS_FOR_TARGET="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS_FOR_TARGET="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS_FOR_TARGET="$(LIBCFLAGS_FOR_TARGET)" \
+		$(EXTRA_TARGET_FLAGS) 'CXX=$$(RAW_CXX_FOR_TARGET)' 'CXX_FOR_TARGET=$$(RAW_CXX_FOR_TARGET)'   \
+		TFLAGS="$(STAGE2_TFLAGS)" \
+		$(TARGET-stage2-target-libvtv)
+
+maybe-clean-stage2-target-libvtv: clean-stage2-target-libvtv
+clean-stage2: clean-stage2-target-libvtv
+clean-stage2-target-libvtv:
+	@if [ $(current_stage) = stage2 ]; then \
+	  [ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0; \
+	else \
+	  [ -f $(TARGET_SUBDIR)/stage2-libvtv/Makefile ] || exit 0; \
+	  $(MAKE) stage2-start; \
+	fi; \
+	cd $(TARGET_SUBDIR)/libvtv && \
+	$(MAKE) $(EXTRA_TARGET_FLAGS) 'CXX=$$(RAW_CXX_FOR_TARGET)' 'CXX_FOR_TARGET=$$(RAW_CXX_FOR_TARGET)'   clean
+@endif target-libvtv-bootstrap
+
+
+.PHONY: all-stage3-target-libvtv maybe-all-stage3-target-libvtv
+.PHONY: clean-stage3-target-libvtv maybe-clean-stage3-target-libvtv
+maybe-all-stage3-target-libvtv:
+maybe-clean-stage3-target-libvtv:
+@if target-libvtv-bootstrap
+maybe-all-stage3-target-libvtv: all-stage3-target-libvtv
+all-stage3: all-stage3-target-libvtv
+TARGET-stage3-target-libvtv = $(TARGET-target-libvtv)
+all-stage3-target-libvtv: configure-stage3-target-libvtv
+	@[ $(current_stage) = stage3 ] || $(MAKE) stage3-start
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE3_TFLAGS)"; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	  \
+	cd $(TARGET_SUBDIR)/libvtv && \
+	$(MAKE) $(BASE_FLAGS_TO_PASS) \
+		CFLAGS="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS="$(LIBCFLAGS_FOR_TARGET)" \
+		CFLAGS_FOR_TARGET="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS_FOR_TARGET="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS_FOR_TARGET="$(LIBCFLAGS_FOR_TARGET)" \
+		$(EXTRA_TARGET_FLAGS) 'CXX=$$(RAW_CXX_FOR_TARGET)' 'CXX_FOR_TARGET=$$(RAW_CXX_FOR_TARGET)'   \
+		TFLAGS="$(STAGE3_TFLAGS)" \
+		$(TARGET-stage3-target-libvtv)
+
+maybe-clean-stage3-target-libvtv: clean-stage3-target-libvtv
+clean-stage3: clean-stage3-target-libvtv
+clean-stage3-target-libvtv:
+	@if [ $(current_stage) = stage3 ]; then \
+	  [ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0; \
+	else \
+	  [ -f $(TARGET_SUBDIR)/stage3-libvtv/Makefile ] || exit 0; \
+	  $(MAKE) stage3-start; \
+	fi; \
+	cd $(TARGET_SUBDIR)/libvtv && \
+	$(MAKE) $(EXTRA_TARGET_FLAGS) 'CXX=$$(RAW_CXX_FOR_TARGET)' 'CXX_FOR_TARGET=$$(RAW_CXX_FOR_TARGET)'   clean
+@endif target-libvtv-bootstrap
+
+
+.PHONY: all-stage4-target-libvtv maybe-all-stage4-target-libvtv
+.PHONY: clean-stage4-target-libvtv maybe-clean-stage4-target-libvtv
+maybe-all-stage4-target-libvtv:
+maybe-clean-stage4-target-libvtv:
+@if target-libvtv-bootstrap
+maybe-all-stage4-target-libvtv: all-stage4-target-libvtv
+all-stage4: all-stage4-target-libvtv
+TARGET-stage4-target-libvtv = $(TARGET-target-libvtv)
+all-stage4-target-libvtv: configure-stage4-target-libvtv
+	@[ $(current_stage) = stage4 ] || $(MAKE) stage4-start
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGE4_TFLAGS)"; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	  \
+	cd $(TARGET_SUBDIR)/libvtv && \
+	$(MAKE) $(BASE_FLAGS_TO_PASS) \
+		CFLAGS="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS="$(LIBCFLAGS_FOR_TARGET)" \
+		CFLAGS_FOR_TARGET="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS_FOR_TARGET="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS_FOR_TARGET="$(LIBCFLAGS_FOR_TARGET)" \
+		$(EXTRA_TARGET_FLAGS) 'CXX=$$(RAW_CXX_FOR_TARGET)' 'CXX_FOR_TARGET=$$(RAW_CXX_FOR_TARGET)'   \
+		TFLAGS="$(STAGE4_TFLAGS)" \
+		$(TARGET-stage4-target-libvtv)
+
+maybe-clean-stage4-target-libvtv: clean-stage4-target-libvtv
+clean-stage4: clean-stage4-target-libvtv
+clean-stage4-target-libvtv:
+	@if [ $(current_stage) = stage4 ]; then \
+	  [ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0; \
+	else \
+	  [ -f $(TARGET_SUBDIR)/stage4-libvtv/Makefile ] || exit 0; \
+	  $(MAKE) stage4-start; \
+	fi; \
+	cd $(TARGET_SUBDIR)/libvtv && \
+	$(MAKE) $(EXTRA_TARGET_FLAGS) 'CXX=$$(RAW_CXX_FOR_TARGET)' 'CXX_FOR_TARGET=$$(RAW_CXX_FOR_TARGET)'   clean
+@endif target-libvtv-bootstrap
+
+
+.PHONY: all-stageprofile-target-libvtv maybe-all-stageprofile-target-libvtv
+.PHONY: clean-stageprofile-target-libvtv maybe-clean-stageprofile-target-libvtv
+maybe-all-stageprofile-target-libvtv:
+maybe-clean-stageprofile-target-libvtv:
+@if target-libvtv-bootstrap
+maybe-all-stageprofile-target-libvtv: all-stageprofile-target-libvtv
+all-stageprofile: all-stageprofile-target-libvtv
+TARGET-stageprofile-target-libvtv = $(TARGET-target-libvtv)
+all-stageprofile-target-libvtv: configure-stageprofile-target-libvtv
+	@[ $(current_stage) = stageprofile ] || $(MAKE) stageprofile-start
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGEprofile_TFLAGS)"; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	  \
+	cd $(TARGET_SUBDIR)/libvtv && \
+	$(MAKE) $(BASE_FLAGS_TO_PASS) \
+		CFLAGS="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS="$(LIBCFLAGS_FOR_TARGET)" \
+		CFLAGS_FOR_TARGET="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS_FOR_TARGET="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS_FOR_TARGET="$(LIBCFLAGS_FOR_TARGET)" \
+		$(EXTRA_TARGET_FLAGS) 'CXX=$$(RAW_CXX_FOR_TARGET)' 'CXX_FOR_TARGET=$$(RAW_CXX_FOR_TARGET)'   \
+		TFLAGS="$(STAGEprofile_TFLAGS)" \
+		$(TARGET-stageprofile-target-libvtv)
+
+maybe-clean-stageprofile-target-libvtv: clean-stageprofile-target-libvtv
+clean-stageprofile: clean-stageprofile-target-libvtv
+clean-stageprofile-target-libvtv:
+	@if [ $(current_stage) = stageprofile ]; then \
+	  [ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0; \
+	else \
+	  [ -f $(TARGET_SUBDIR)/stageprofile-libvtv/Makefile ] || exit 0; \
+	  $(MAKE) stageprofile-start; \
+	fi; \
+	cd $(TARGET_SUBDIR)/libvtv && \
+	$(MAKE) $(EXTRA_TARGET_FLAGS) 'CXX=$$(RAW_CXX_FOR_TARGET)' 'CXX_FOR_TARGET=$$(RAW_CXX_FOR_TARGET)'   clean
+@endif target-libvtv-bootstrap
+
+
+.PHONY: all-stagefeedback-target-libvtv maybe-all-stagefeedback-target-libvtv
+.PHONY: clean-stagefeedback-target-libvtv maybe-clean-stagefeedback-target-libvtv
+maybe-all-stagefeedback-target-libvtv:
+maybe-clean-stagefeedback-target-libvtv:
+@if target-libvtv-bootstrap
+maybe-all-stagefeedback-target-libvtv: all-stagefeedback-target-libvtv
+all-stagefeedback: all-stagefeedback-target-libvtv
+TARGET-stagefeedback-target-libvtv = $(TARGET-target-libvtv)
+all-stagefeedback-target-libvtv: configure-stagefeedback-target-libvtv
+	@[ $(current_stage) = stagefeedback ] || $(MAKE) stagefeedback-start
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	TFLAGS="$(STAGEfeedback_TFLAGS)"; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	  \
+	cd $(TARGET_SUBDIR)/libvtv && \
+	$(MAKE) $(BASE_FLAGS_TO_PASS) \
+		CFLAGS="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS="$(LIBCFLAGS_FOR_TARGET)" \
+		CFLAGS_FOR_TARGET="$(CFLAGS_FOR_TARGET)" \
+		CXXFLAGS_FOR_TARGET="$(CXXFLAGS_FOR_TARGET)" \
+		LIBCFLAGS_FOR_TARGET="$(LIBCFLAGS_FOR_TARGET)" \
+		$(EXTRA_TARGET_FLAGS) 'CXX=$$(RAW_CXX_FOR_TARGET)' 'CXX_FOR_TARGET=$$(RAW_CXX_FOR_TARGET)'   \
+		TFLAGS="$(STAGEfeedback_TFLAGS)" \
+		$(TARGET-stagefeedback-target-libvtv)
+
+maybe-clean-stagefeedback-target-libvtv: clean-stagefeedback-target-libvtv
+clean-stagefeedback: clean-stagefeedback-target-libvtv
+clean-stagefeedback-target-libvtv:
+	@if [ $(current_stage) = stagefeedback ]; then \
+	  [ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0; \
+	else \
+	  [ -f $(TARGET_SUBDIR)/stagefeedback-libvtv/Makefile ] || exit 0; \
+	  $(MAKE) stagefeedback-start; \
+	fi; \
+	cd $(TARGET_SUBDIR)/libvtv && \
+	$(MAKE) $(EXTRA_TARGET_FLAGS) 'CXX=$$(RAW_CXX_FOR_TARGET)' 'CXX_FOR_TARGET=$$(RAW_CXX_FOR_TARGET)'   clean
+@endif target-libvtv-bootstrap
+
+
+
+
+
+
+.PHONY: check-target-libvtv maybe-check-target-libvtv
+maybe-check-target-libvtv:
+@if target-libvtv
+maybe-check-target-libvtv: check-target-libvtv
+
+check-target-libvtv:
+	@: $(MAKE); $(unstage)
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(TARGET_FLAGS_TO_PASS)  'CXX=$$(RAW_CXX_FOR_TARGET)' 'CXX_FOR_TARGET=$$(RAW_CXX_FOR_TARGET)'   check)
+
+@endif target-libvtv
+
+.PHONY: install-target-libvtv maybe-install-target-libvtv
+maybe-install-target-libvtv:
+@if target-libvtv
+maybe-install-target-libvtv: install-target-libvtv
+
+install-target-libvtv: installdirs
+	@: $(MAKE); $(unstage)
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(TARGET_FLAGS_TO_PASS)  install)
+
+@endif target-libvtv
+
+.PHONY: install-strip-target-libvtv maybe-install-strip-target-libvtv
+maybe-install-strip-target-libvtv:
+@if target-libvtv
+maybe-install-strip-target-libvtv: install-strip-target-libvtv
+
+install-strip-target-libvtv: installdirs
+	@: $(MAKE); $(unstage)
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(TARGET_FLAGS_TO_PASS)  install-strip)
+
+@endif target-libvtv
+
+# Other targets (info, dvi, pdf, etc.)
+
+.PHONY: maybe-info-target-libvtv info-target-libvtv
+maybe-info-target-libvtv:
+@if target-libvtv
+maybe-info-target-libvtv: info-target-libvtv
+
+info-target-libvtv: \
+    configure-target-libvtv 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	echo "Doing info in $(TARGET_SUBDIR)/libvtv" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           info) \
+	  || exit 1
+
+@endif target-libvtv
+
+.PHONY: maybe-dvi-target-libvtv dvi-target-libvtv
+maybe-dvi-target-libvtv:
+@if target-libvtv
+maybe-dvi-target-libvtv: dvi-target-libvtv
+
+dvi-target-libvtv: \
+    configure-target-libvtv 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	echo "Doing dvi in $(TARGET_SUBDIR)/libvtv" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           dvi) \
+	  || exit 1
+
+@endif target-libvtv
+
+.PHONY: maybe-pdf-target-libvtv pdf-target-libvtv
+maybe-pdf-target-libvtv:
+@if target-libvtv
+maybe-pdf-target-libvtv: pdf-target-libvtv
+
+pdf-target-libvtv: \
+    configure-target-libvtv 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	echo "Doing pdf in $(TARGET_SUBDIR)/libvtv" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           pdf) \
+	  || exit 1
+
+@endif target-libvtv
+
+.PHONY: maybe-html-target-libvtv html-target-libvtv
+maybe-html-target-libvtv:
+@if target-libvtv
+maybe-html-target-libvtv: html-target-libvtv
+
+html-target-libvtv: \
+    configure-target-libvtv 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	echo "Doing html in $(TARGET_SUBDIR)/libvtv" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           html) \
+	  || exit 1
+
+@endif target-libvtv
+
+.PHONY: maybe-TAGS-target-libvtv TAGS-target-libvtv
+maybe-TAGS-target-libvtv:
+@if target-libvtv
+maybe-TAGS-target-libvtv: TAGS-target-libvtv
+
+TAGS-target-libvtv: \
+    configure-target-libvtv 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	echo "Doing TAGS in $(TARGET_SUBDIR)/libvtv" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           TAGS) \
+	  || exit 1
+
+@endif target-libvtv
+
+.PHONY: maybe-install-info-target-libvtv install-info-target-libvtv
+maybe-install-info-target-libvtv:
+@if target-libvtv
+maybe-install-info-target-libvtv: install-info-target-libvtv
+
+install-info-target-libvtv: \
+    configure-target-libvtv \
+    info-target-libvtv 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	echo "Doing install-info in $(TARGET_SUBDIR)/libvtv" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           install-info) \
+	  || exit 1
+
+@endif target-libvtv
+
+.PHONY: maybe-install-pdf-target-libvtv install-pdf-target-libvtv
+maybe-install-pdf-target-libvtv:
+@if target-libvtv
+maybe-install-pdf-target-libvtv: install-pdf-target-libvtv
+
+install-pdf-target-libvtv: \
+    configure-target-libvtv \
+    pdf-target-libvtv 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	echo "Doing install-pdf in $(TARGET_SUBDIR)/libvtv" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           install-pdf) \
+	  || exit 1
+
+@endif target-libvtv
+
+.PHONY: maybe-install-html-target-libvtv install-html-target-libvtv
+maybe-install-html-target-libvtv:
+@if target-libvtv
+maybe-install-html-target-libvtv: install-html-target-libvtv
+
+install-html-target-libvtv: \
+    configure-target-libvtv \
+    html-target-libvtv 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	echo "Doing install-html in $(TARGET_SUBDIR)/libvtv" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           install-html) \
+	  || exit 1
+
+@endif target-libvtv
+
+.PHONY: maybe-installcheck-target-libvtv installcheck-target-libvtv
+maybe-installcheck-target-libvtv:
+@if target-libvtv
+maybe-installcheck-target-libvtv: installcheck-target-libvtv
+
+installcheck-target-libvtv: \
+    configure-target-libvtv 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	echo "Doing installcheck in $(TARGET_SUBDIR)/libvtv" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           installcheck) \
+	  || exit 1
+
+@endif target-libvtv
+
+.PHONY: maybe-mostlyclean-target-libvtv mostlyclean-target-libvtv
+maybe-mostlyclean-target-libvtv:
+@if target-libvtv
+maybe-mostlyclean-target-libvtv: mostlyclean-target-libvtv
+
+mostlyclean-target-libvtv: 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	echo "Doing mostlyclean in $(TARGET_SUBDIR)/libvtv" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           mostlyclean) \
+	  || exit 1
+
+@endif target-libvtv
+
+.PHONY: maybe-clean-target-libvtv clean-target-libvtv
+maybe-clean-target-libvtv:
+@if target-libvtv
+maybe-clean-target-libvtv: clean-target-libvtv
+
+clean-target-libvtv: 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	echo "Doing clean in $(TARGET_SUBDIR)/libvtv" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           clean) \
+	  || exit 1
+
+@endif target-libvtv
+
+.PHONY: maybe-distclean-target-libvtv distclean-target-libvtv
+maybe-distclean-target-libvtv:
+@if target-libvtv
+maybe-distclean-target-libvtv: distclean-target-libvtv
+
+distclean-target-libvtv: 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	echo "Doing distclean in $(TARGET_SUBDIR)/libvtv" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           distclean) \
+	  || exit 1
+
+@endif target-libvtv
+
+.PHONY: maybe-maintainer-clean-target-libvtv maintainer-clean-target-libvtv
+maybe-maintainer-clean-target-libvtv:
+@if target-libvtv
+maybe-maintainer-clean-target-libvtv: maintainer-clean-target-libvtv
+
+maintainer-clean-target-libvtv: 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libvtv/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(RAW_CXX_TARGET_EXPORTS) \
+	echo "Doing maintainer-clean in $(TARGET_SUBDIR)/libvtv" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libvtv && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           maintainer-clean) \
+	  || exit 1
+
+@endif target-libvtv
+
+
+
+
+
+.PHONY: configure-target-libcilkrts maybe-configure-target-libcilkrts
+maybe-configure-target-libcilkrts:
+@if gcc-bootstrap
+configure-target-libcilkrts: stage_current
+@endif gcc-bootstrap
+@if target-libcilkrts
+maybe-configure-target-libcilkrts: configure-target-libcilkrts
+configure-target-libcilkrts: 
+	@: $(MAKE); $(unstage)
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	echo "Checking multilib configuration for libcilkrts..."; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libcilkrts ; \
+	$(CC_FOR_TARGET) --print-multi-lib > $(TARGET_SUBDIR)/libcilkrts/multilib.tmp 2> /dev/null ; \
+	if test -r $(TARGET_SUBDIR)/libcilkrts/multilib.out; then \
+	  if cmp -s $(TARGET_SUBDIR)/libcilkrts/multilib.tmp $(TARGET_SUBDIR)/libcilkrts/multilib.out; then \
+	    rm -f $(TARGET_SUBDIR)/libcilkrts/multilib.tmp; \
+	  else \
+	    rm -f $(TARGET_SUBDIR)/libcilkrts/Makefile; \
+	    mv $(TARGET_SUBDIR)/libcilkrts/multilib.tmp $(TARGET_SUBDIR)/libcilkrts/multilib.out; \
+	  fi; \
+	else \
+	  mv $(TARGET_SUBDIR)/libcilkrts/multilib.tmp $(TARGET_SUBDIR)/libcilkrts/multilib.out; \
+	fi; \
+	test ! -f $(TARGET_SUBDIR)/libcilkrts/Makefile || exit 0; \
+	$(SHELL) $(srcdir)/mkinstalldirs $(TARGET_SUBDIR)/libcilkrts ; \
+	$(NORMAL_TARGET_EXPORTS)  \
+	echo Configuring in $(TARGET_SUBDIR)/libcilkrts; \
+	cd "$(TARGET_SUBDIR)/libcilkrts" || exit 1; \
+	case $(srcdir) in \
+	  /* | [A-Za-z]:[\\/]*) topdir=$(srcdir) ;; \
+	  *) topdir=`echo $(TARGET_SUBDIR)/libcilkrts/ | \
+		sed -e 's,\./,,g' -e 's,[^/]*/,../,g' `$(srcdir) ;; \
+	esac; \
+	srcdiroption="--srcdir=$${topdir}/libcilkrts"; \
+	libsrcdir="$$s/libcilkrts"; \
+	rm -f no-such-file || : ; \
+	CONFIG_SITE=no-such-file $(SHELL) $${libsrcdir}/configure \
+	  $(TARGET_CONFIGARGS) --build=${build_alias} --host=${target_alias} \
+	  --target=${target_alias} $${srcdiroption}  \
+	  || exit 1
+@endif target-libcilkrts
+
+
+
+
+
+.PHONY: all-target-libcilkrts maybe-all-target-libcilkrts
+maybe-all-target-libcilkrts:
+@if gcc-bootstrap
+all-target-libcilkrts: stage_current
+@endif gcc-bootstrap
+@if target-libcilkrts
+TARGET-target-libcilkrts=all
+maybe-all-target-libcilkrts: all-target-libcilkrts
+all-target-libcilkrts: configure-target-libcilkrts
+	@: $(MAKE); $(unstage)
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS)  \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) $(EXTRA_TARGET_FLAGS)   \
+		$(TARGET-target-libcilkrts))
+@endif target-libcilkrts
+
+
+
+
+
+.PHONY: check-target-libcilkrts maybe-check-target-libcilkrts
+maybe-check-target-libcilkrts:
+@if target-libcilkrts
+maybe-check-target-libcilkrts: check-target-libcilkrts
+
+check-target-libcilkrts:
+	@: $(MAKE); $(unstage)
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(TARGET_FLAGS_TO_PASS)   check)
+
+@endif target-libcilkrts
+
+.PHONY: install-target-libcilkrts maybe-install-target-libcilkrts
+maybe-install-target-libcilkrts:
+@if target-libcilkrts
+maybe-install-target-libcilkrts: install-target-libcilkrts
+
+install-target-libcilkrts: installdirs
+	@: $(MAKE); $(unstage)
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(TARGET_FLAGS_TO_PASS)  install)
+
+@endif target-libcilkrts
+
+.PHONY: install-strip-target-libcilkrts maybe-install-strip-target-libcilkrts
+maybe-install-strip-target-libcilkrts:
+@if target-libcilkrts
+maybe-install-strip-target-libcilkrts: install-strip-target-libcilkrts
+
+install-strip-target-libcilkrts: installdirs
+	@: $(MAKE); $(unstage)
+	@r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(TARGET_FLAGS_TO_PASS)  install-strip)
+
+@endif target-libcilkrts
+
+# Other targets (info, dvi, pdf, etc.)
+
+.PHONY: maybe-info-target-libcilkrts info-target-libcilkrts
+maybe-info-target-libcilkrts:
+@if target-libcilkrts
+maybe-info-target-libcilkrts: info-target-libcilkrts
+
+info-target-libcilkrts: \
+    configure-target-libcilkrts 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libcilkrts/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	echo "Doing info in $(TARGET_SUBDIR)/libcilkrts" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           info) \
+	  || exit 1
+
+@endif target-libcilkrts
+
+.PHONY: maybe-dvi-target-libcilkrts dvi-target-libcilkrts
+maybe-dvi-target-libcilkrts:
+@if target-libcilkrts
+maybe-dvi-target-libcilkrts: dvi-target-libcilkrts
+
+dvi-target-libcilkrts: \
+    configure-target-libcilkrts 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libcilkrts/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	echo "Doing dvi in $(TARGET_SUBDIR)/libcilkrts" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           dvi) \
+	  || exit 1
+
+@endif target-libcilkrts
+
+.PHONY: maybe-pdf-target-libcilkrts pdf-target-libcilkrts
+maybe-pdf-target-libcilkrts:
+@if target-libcilkrts
+maybe-pdf-target-libcilkrts: pdf-target-libcilkrts
+
+pdf-target-libcilkrts: \
+    configure-target-libcilkrts 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libcilkrts/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	echo "Doing pdf in $(TARGET_SUBDIR)/libcilkrts" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           pdf) \
+	  || exit 1
+
+@endif target-libcilkrts
+
+.PHONY: maybe-html-target-libcilkrts html-target-libcilkrts
+maybe-html-target-libcilkrts:
+@if target-libcilkrts
+maybe-html-target-libcilkrts: html-target-libcilkrts
+
+html-target-libcilkrts: \
+    configure-target-libcilkrts 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libcilkrts/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	echo "Doing html in $(TARGET_SUBDIR)/libcilkrts" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           html) \
+	  || exit 1
+
+@endif target-libcilkrts
+
+.PHONY: maybe-TAGS-target-libcilkrts TAGS-target-libcilkrts
+maybe-TAGS-target-libcilkrts:
+@if target-libcilkrts
+maybe-TAGS-target-libcilkrts: TAGS-target-libcilkrts
+
+TAGS-target-libcilkrts: \
+    configure-target-libcilkrts 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libcilkrts/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	echo "Doing TAGS in $(TARGET_SUBDIR)/libcilkrts" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           TAGS) \
+	  || exit 1
+
+@endif target-libcilkrts
+
+.PHONY: maybe-install-info-target-libcilkrts install-info-target-libcilkrts
+maybe-install-info-target-libcilkrts:
+@if target-libcilkrts
+maybe-install-info-target-libcilkrts: install-info-target-libcilkrts
+
+install-info-target-libcilkrts: \
+    configure-target-libcilkrts \
+    info-target-libcilkrts 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libcilkrts/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	echo "Doing install-info in $(TARGET_SUBDIR)/libcilkrts" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           install-info) \
+	  || exit 1
+
+@endif target-libcilkrts
+
+.PHONY: maybe-install-pdf-target-libcilkrts install-pdf-target-libcilkrts
+maybe-install-pdf-target-libcilkrts:
+@if target-libcilkrts
+maybe-install-pdf-target-libcilkrts: install-pdf-target-libcilkrts
+
+install-pdf-target-libcilkrts: \
+    configure-target-libcilkrts \
+    pdf-target-libcilkrts 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libcilkrts/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	echo "Doing install-pdf in $(TARGET_SUBDIR)/libcilkrts" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           install-pdf) \
+	  || exit 1
+
+@endif target-libcilkrts
+
+.PHONY: maybe-install-html-target-libcilkrts install-html-target-libcilkrts
+maybe-install-html-target-libcilkrts:
+@if target-libcilkrts
+maybe-install-html-target-libcilkrts: install-html-target-libcilkrts
+
+install-html-target-libcilkrts: \
+    configure-target-libcilkrts \
+    html-target-libcilkrts 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libcilkrts/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	echo "Doing install-html in $(TARGET_SUBDIR)/libcilkrts" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           install-html) \
+	  || exit 1
+
+@endif target-libcilkrts
+
+.PHONY: maybe-installcheck-target-libcilkrts installcheck-target-libcilkrts
+maybe-installcheck-target-libcilkrts:
+@if target-libcilkrts
+maybe-installcheck-target-libcilkrts: installcheck-target-libcilkrts
+
+installcheck-target-libcilkrts: \
+    configure-target-libcilkrts 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libcilkrts/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	echo "Doing installcheck in $(TARGET_SUBDIR)/libcilkrts" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           installcheck) \
+	  || exit 1
+
+@endif target-libcilkrts
+
+.PHONY: maybe-mostlyclean-target-libcilkrts mostlyclean-target-libcilkrts
+maybe-mostlyclean-target-libcilkrts:
+@if target-libcilkrts
+maybe-mostlyclean-target-libcilkrts: mostlyclean-target-libcilkrts
+
+mostlyclean-target-libcilkrts: 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libcilkrts/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	echo "Doing mostlyclean in $(TARGET_SUBDIR)/libcilkrts" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           mostlyclean) \
+	  || exit 1
+
+@endif target-libcilkrts
+
+.PHONY: maybe-clean-target-libcilkrts clean-target-libcilkrts
+maybe-clean-target-libcilkrts:
+@if target-libcilkrts
+maybe-clean-target-libcilkrts: clean-target-libcilkrts
+
+clean-target-libcilkrts: 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libcilkrts/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	echo "Doing clean in $(TARGET_SUBDIR)/libcilkrts" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           clean) \
+	  || exit 1
+
+@endif target-libcilkrts
+
+.PHONY: maybe-distclean-target-libcilkrts distclean-target-libcilkrts
+maybe-distclean-target-libcilkrts:
+@if target-libcilkrts
+maybe-distclean-target-libcilkrts: distclean-target-libcilkrts
+
+distclean-target-libcilkrts: 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libcilkrts/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	echo "Doing distclean in $(TARGET_SUBDIR)/libcilkrts" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           distclean) \
+	  || exit 1
+
+@endif target-libcilkrts
+
+.PHONY: maybe-maintainer-clean-target-libcilkrts maintainer-clean-target-libcilkrts
+maybe-maintainer-clean-target-libcilkrts:
+@if target-libcilkrts
+maybe-maintainer-clean-target-libcilkrts: maintainer-clean-target-libcilkrts
+
+maintainer-clean-target-libcilkrts: 
+	@: $(MAKE); $(unstage)
+	@[ -f $(TARGET_SUBDIR)/libcilkrts/Makefile ] || exit 0 ; \
+	r=`${PWD_COMMAND}`; export r; \
+	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
+	$(NORMAL_TARGET_EXPORTS) \
+	echo "Doing maintainer-clean in $(TARGET_SUBDIR)/libcilkrts" ; \
+	for flag in $(EXTRA_TARGET_FLAGS); do \
+	  eval `echo "$$flag" | sed -e "s|^\([^=]*\)=\(.*\)|\1='\2'; export \1|"`; \
+	done; \
+	(cd $(TARGET_SUBDIR)/libcilkrts && \
+	  $(MAKE) $(BASE_FLAGS_TO_PASS) "AR=$${AR}" "AS=$${AS}" \
+	          "CC=$${CC}" "CXX=$${CXX}" "LD=$${LD}" "NM=$${NM}" \
+	          "RANLIB=$${RANLIB}" \
+	          "DLLTOOL=$${DLLTOOL}" "WINDRES=$${WINDRES}" "WINDMC=$${WINDMC}" \
+	           maintainer-clean) \
+	  || exit 1
+
+@endif target-libcilkrts
 
 
 
@@ -38704,13 +40603,8 @@ maybe-install-target-libffi:
 @if target-libffi
 maybe-install-target-libffi: install-target-libffi
 
-install-target-libffi: installdirs
-	@: $(MAKE); $(unstage)
-	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	(cd $(TARGET_SUBDIR)/libffi && \
-	  $(MAKE) $(TARGET_FLAGS_TO_PASS)  install)
+# Dummy target for uninstallable.
+install-target-libffi:
 
 @endif target-libffi
 
@@ -38719,13 +40613,8 @@ maybe-install-strip-target-libffi:
 @if target-libffi
 maybe-install-strip-target-libffi: install-strip-target-libffi
 
-install-strip-target-libffi: installdirs
-	@: $(MAKE); $(unstage)
-	@r=`${PWD_COMMAND}`; export r; \
-	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
-	$(NORMAL_TARGET_EXPORTS) \
-	(cd $(TARGET_SUBDIR)/libffi && \
-	  $(MAKE) $(TARGET_FLAGS_TO_PASS)  install-strip)
+# Dummy target for uninstallable.
+install-strip-target-libffi:
 
 @endif target-libffi
 
@@ -43243,13 +45132,6 @@ maintainer-clean-target-libatomic:
 
 
 
-@if target-libmudflap
-.PHONY: check-target-libmudflap-c++
-check-target-libmudflap-c++:
-	$(MAKE) RUNTESTFLAGS="$(RUNTESTFLAGS) c++frags.exp" check-target-libmudflap
-
-@endif target-libmudflap
-
 @if target-libgomp
 .PHONY: check-target-libgomp-c++
 check-target-libgomp-c++:
@@ -43298,7 +45180,7 @@ check-gcc-c++:
 	s=`cd $(srcdir); ${PWD_COMMAND}`; export s; \
 	$(HOST_EXPORTS) \
 	(cd gcc && $(MAKE) $(GCC_FLAGS_TO_PASS) check-c++);
-check-c++: check-gcc-c++ check-target-libstdc++-v3 check-target-libmudflap-c++ check-target-libitm-c++ check-target-libgomp-c++
+check-c++: check-gcc-c++ check-target-libstdc++-v3 check-target-libitm-c++ check-target-libgomp-c++
 
 .PHONY: check-gcc-fortran check-fortran
 check-gcc-fortran:
@@ -43520,6 +45402,11 @@ stage1-start::
 	  mkdir stage1-lto-plugin; \
 	mv stage1-lto-plugin lto-plugin 
 @endif lto-plugin
+@if function_reordering_plugin
+	@cd $(HOST_SUBDIR); [ -d stage1-function_reordering_plugin ] || \
+	  mkdir stage1-function_reordering_plugin; \
+	mv stage1-function_reordering_plugin function_reordering_plugin 
+@endif function_reordering_plugin
 	@[ -d stage1-$(TARGET_SUBDIR) ] || \
 	  mkdir stage1-$(TARGET_SUBDIR); \
 	mv stage1-$(TARGET_SUBDIR) $(TARGET_SUBDIR) 
@@ -43625,6 +45512,11 @@ stage1-end::
 	  cd $(HOST_SUBDIR); mv lto-plugin stage1-lto-plugin  ; \
 	fi
 @endif lto-plugin
+@if function_reordering_plugin
+	@if test -d $(HOST_SUBDIR)/function_reordering_plugin ; then \
+	  cd $(HOST_SUBDIR); mv function_reordering_plugin stage1-function_reordering_plugin  ; \
+	fi
+@endif function_reordering_plugin
 	@if test -d $(TARGET_SUBDIR) ; then \
 	  mv $(TARGET_SUBDIR) stage1-$(TARGET_SUBDIR)  ; \
 	fi
@@ -43793,6 +45685,12 @@ stage2-start::
 	mv stage2-lto-plugin lto-plugin  ; \
 	mv stage1-lto-plugin prev-lto-plugin || test -f stage1-lean 
 @endif lto-plugin
+@if function_reordering_plugin
+	@cd $(HOST_SUBDIR); [ -d stage2-function_reordering_plugin ] || \
+	  mkdir stage2-function_reordering_plugin; \
+	mv stage2-function_reordering_plugin function_reordering_plugin  ; \
+	mv stage1-function_reordering_plugin prev-function_reordering_plugin || test -f stage1-lean 
+@endif function_reordering_plugin
 	@[ -d stage2-$(TARGET_SUBDIR) ] || \
 	  mkdir stage2-$(TARGET_SUBDIR); \
 	mv stage2-$(TARGET_SUBDIR) $(TARGET_SUBDIR)  ; \
@@ -43919,6 +45817,12 @@ stage2-end::
 	  mv prev-lto-plugin stage1-lto-plugin ; :  ; \
 	fi
 @endif lto-plugin
+@if function_reordering_plugin
+	@if test -d $(HOST_SUBDIR)/function_reordering_plugin ; then \
+	  cd $(HOST_SUBDIR); mv function_reordering_plugin stage2-function_reordering_plugin ; \
+	  mv prev-function_reordering_plugin stage1-function_reordering_plugin ; :  ; \
+	fi
+@endif function_reordering_plugin
 	@if test -d $(TARGET_SUBDIR) ; then \
 	  mv $(TARGET_SUBDIR) stage2-$(TARGET_SUBDIR)  ; \
 	  mv prev-$(TARGET_SUBDIR) stage1-$(TARGET_SUBDIR) ; :  ; \
@@ -44111,6 +46015,12 @@ stage3-start::
 	mv stage3-lto-plugin lto-plugin  ; \
 	mv stage2-lto-plugin prev-lto-plugin || test -f stage2-lean 
 @endif lto-plugin
+@if function_reordering_plugin
+	@cd $(HOST_SUBDIR); [ -d stage3-function_reordering_plugin ] || \
+	  mkdir stage3-function_reordering_plugin; \
+	mv stage3-function_reordering_plugin function_reordering_plugin  ; \
+	mv stage2-function_reordering_plugin prev-function_reordering_plugin || test -f stage2-lean 
+@endif function_reordering_plugin
 	@[ -d stage3-$(TARGET_SUBDIR) ] || \
 	  mkdir stage3-$(TARGET_SUBDIR); \
 	mv stage3-$(TARGET_SUBDIR) $(TARGET_SUBDIR)  ; \
@@ -44237,6 +46147,12 @@ stage3-end::
 	  mv prev-lto-plugin stage2-lto-plugin ; :  ; \
 	fi
 @endif lto-plugin
+@if function_reordering_plugin
+	@if test -d $(HOST_SUBDIR)/function_reordering_plugin ; then \
+	  cd $(HOST_SUBDIR); mv function_reordering_plugin stage3-function_reordering_plugin ; \
+	  mv prev-function_reordering_plugin stage2-function_reordering_plugin ; :  ; \
+	fi
+@endif function_reordering_plugin
 	@if test -d $(TARGET_SUBDIR) ; then \
 	  mv $(TARGET_SUBDIR) stage3-$(TARGET_SUBDIR)  ; \
 	  mv prev-$(TARGET_SUBDIR) stage2-$(TARGET_SUBDIR) ; :  ; \
@@ -44485,6 +46401,12 @@ stage4-start::
 	mv stage4-lto-plugin lto-plugin  ; \
 	mv stage3-lto-plugin prev-lto-plugin || test -f stage3-lean 
 @endif lto-plugin
+@if function_reordering_plugin
+	@cd $(HOST_SUBDIR); [ -d stage4-function_reordering_plugin ] || \
+	  mkdir stage4-function_reordering_plugin; \
+	mv stage4-function_reordering_plugin function_reordering_plugin  ; \
+	mv stage3-function_reordering_plugin prev-function_reordering_plugin || test -f stage3-lean 
+@endif function_reordering_plugin
 	@[ -d stage4-$(TARGET_SUBDIR) ] || \
 	  mkdir stage4-$(TARGET_SUBDIR); \
 	mv stage4-$(TARGET_SUBDIR) $(TARGET_SUBDIR)  ; \
@@ -44611,6 +46533,12 @@ stage4-end::
 	  mv prev-lto-plugin stage3-lto-plugin ; :  ; \
 	fi
 @endif lto-plugin
+@if function_reordering_plugin
+	@if test -d $(HOST_SUBDIR)/function_reordering_plugin ; then \
+	  cd $(HOST_SUBDIR); mv function_reordering_plugin stage4-function_reordering_plugin ; \
+	  mv prev-function_reordering_plugin stage3-function_reordering_plugin ; :  ; \
+	fi
+@endif function_reordering_plugin
 	@if test -d $(TARGET_SUBDIR) ; then \
 	  mv $(TARGET_SUBDIR) stage4-$(TARGET_SUBDIR)  ; \
 	  mv prev-$(TARGET_SUBDIR) stage3-$(TARGET_SUBDIR) ; :  ; \
@@ -44847,6 +46775,12 @@ stageprofile-start::
 	mv stageprofile-lto-plugin lto-plugin  ; \
 	mv stage1-lto-plugin prev-lto-plugin || test -f stage1-lean 
 @endif lto-plugin
+@if function_reordering_plugin
+	@cd $(HOST_SUBDIR); [ -d stageprofile-function_reordering_plugin ] || \
+	  mkdir stageprofile-function_reordering_plugin; \
+	mv stageprofile-function_reordering_plugin function_reordering_plugin  ; \
+	mv stage1-function_reordering_plugin prev-function_reordering_plugin || test -f stage1-lean 
+@endif function_reordering_plugin
 	@[ -d stageprofile-$(TARGET_SUBDIR) ] || \
 	  mkdir stageprofile-$(TARGET_SUBDIR); \
 	mv stageprofile-$(TARGET_SUBDIR) $(TARGET_SUBDIR)  ; \
@@ -44973,6 +46907,12 @@ stageprofile-end::
 	  mv prev-lto-plugin stage1-lto-plugin ; :  ; \
 	fi
 @endif lto-plugin
+@if function_reordering_plugin
+	@if test -d $(HOST_SUBDIR)/function_reordering_plugin ; then \
+	  cd $(HOST_SUBDIR); mv function_reordering_plugin stageprofile-function_reordering_plugin ; \
+	  mv prev-function_reordering_plugin stage1-function_reordering_plugin ; :  ; \
+	fi
+@endif function_reordering_plugin
 	@if test -d $(TARGET_SUBDIR) ; then \
 	  mv $(TARGET_SUBDIR) stageprofile-$(TARGET_SUBDIR)  ; \
 	  mv prev-$(TARGET_SUBDIR) stage1-$(TARGET_SUBDIR) ; :  ; \
@@ -45142,6 +47082,12 @@ stagefeedback-start::
 	mv stagefeedback-lto-plugin lto-plugin  ; \
 	mv stageprofile-lto-plugin prev-lto-plugin || test -f stageprofile-lean 
 @endif lto-plugin
+@if function_reordering_plugin
+	@cd $(HOST_SUBDIR); [ -d stagefeedback-function_reordering_plugin ] || \
+	  mkdir stagefeedback-function_reordering_plugin; \
+	mv stagefeedback-function_reordering_plugin function_reordering_plugin  ; \
+	mv stageprofile-function_reordering_plugin prev-function_reordering_plugin || test -f stageprofile-lean 
+@endif function_reordering_plugin
 	@[ -d stagefeedback-$(TARGET_SUBDIR) ] || \
 	  mkdir stagefeedback-$(TARGET_SUBDIR); \
 	mv stagefeedback-$(TARGET_SUBDIR) $(TARGET_SUBDIR)  ; \
@@ -45268,6 +47214,12 @@ stagefeedback-end::
 	  mv prev-lto-plugin stageprofile-lto-plugin ; :  ; \
 	fi
 @endif lto-plugin
+@if function_reordering_plugin
+	@if test -d $(HOST_SUBDIR)/function_reordering_plugin ; then \
+	  cd $(HOST_SUBDIR); mv function_reordering_plugin stagefeedback-function_reordering_plugin ; \
+	  mv prev-function_reordering_plugin stageprofile-function_reordering_plugin ; :  ; \
+	fi
+@endif function_reordering_plugin
 	@if test -d $(TARGET_SUBDIR) ; then \
 	  mv $(TARGET_SUBDIR) stagefeedback-$(TARGET_SUBDIR)  ; \
 	  mv prev-$(TARGET_SUBDIR) stageprofile-$(TARGET_SUBDIR) ; :  ; \
@@ -45381,13 +47333,19 @@ configure-stage3-target-libstdc++-v3: maybe-all-stage3-gcc
 configure-stage4-target-libstdc++-v3: maybe-all-stage4-gcc
 configure-stageprofile-target-libstdc++-v3: maybe-all-stageprofile-gcc
 configure-stagefeedback-target-libstdc++-v3: maybe-all-stagefeedback-gcc
-configure-target-libmudflap: stage_last
 configure-stage1-target-libsanitizer: maybe-all-stage1-gcc
 configure-stage2-target-libsanitizer: maybe-all-stage2-gcc
 configure-stage3-target-libsanitizer: maybe-all-stage3-gcc
 configure-stage4-target-libsanitizer: maybe-all-stage4-gcc
 configure-stageprofile-target-libsanitizer: maybe-all-stageprofile-gcc
 configure-stagefeedback-target-libsanitizer: maybe-all-stagefeedback-gcc
+configure-stage1-target-libvtv: maybe-all-stage1-gcc
+configure-stage2-target-libvtv: maybe-all-stage2-gcc
+configure-stage3-target-libvtv: maybe-all-stage3-gcc
+configure-stage4-target-libvtv: maybe-all-stage4-gcc
+configure-stageprofile-target-libvtv: maybe-all-stageprofile-gcc
+configure-stagefeedback-target-libvtv: maybe-all-stagefeedback-gcc
+configure-target-libcilkrts: stage_last
 configure-target-libssp: stage_last
 configure-target-newlib: stage_last
 configure-stage1-target-libgcc: maybe-all-stage1-gcc
@@ -45422,8 +47380,9 @@ configure-target-libatomic: stage_last
 
 @if gcc-no-bootstrap
 configure-target-libstdc++-v3: maybe-all-gcc
-configure-target-libmudflap: maybe-all-gcc
 configure-target-libsanitizer: maybe-all-gcc
+configure-target-libvtv: maybe-all-gcc
+configure-target-libcilkrts: maybe-all-gcc
 configure-target-libssp: maybe-all-gcc
 configure-target-newlib: maybe-all-gcc
 configure-target-libgcc: maybe-all-gcc
@@ -45495,6 +47454,14 @@ configure-stage3-gcc: maybe-all-stage3-lto-plugin
 configure-stage4-gcc: maybe-all-stage4-lto-plugin
 configure-stageprofile-gcc: maybe-all-stageprofile-lto-plugin
 configure-stagefeedback-gcc: maybe-all-stagefeedback-lto-plugin
+configure-gcc: maybe-all-function_reordering_plugin
+
+configure-stage1-gcc: maybe-all-stage1-function_reordering_plugin
+configure-stage2-gcc: maybe-all-stage2-function_reordering_plugin
+configure-stage3-gcc: maybe-all-stage3-function_reordering_plugin
+configure-stage4-gcc: maybe-all-stage4-function_reordering_plugin
+configure-stageprofile-gcc: maybe-all-stageprofile-function_reordering_plugin
+configure-stagefeedback-gcc: maybe-all-stagefeedback-function_reordering_plugin
 configure-gcc: maybe-all-binutils
 
 configure-stage1-gcc: maybe-all-stage1-binutils
@@ -45664,6 +47631,14 @@ all-stage3-gcc: maybe-all-stage3-lto-plugin
 all-stage4-gcc: maybe-all-stage4-lto-plugin
 all-stageprofile-gcc: maybe-all-stageprofile-lto-plugin
 all-stagefeedback-gcc: maybe-all-stagefeedback-lto-plugin
+all-gcc: maybe-all-function_reordering_plugin
+
+all-stage1-gcc: maybe-all-stage1-function_reordering_plugin
+all-stage2-gcc: maybe-all-stage2-function_reordering_plugin
+all-stage3-gcc: maybe-all-stage3-function_reordering_plugin
+all-stage4-gcc: maybe-all-stage4-function_reordering_plugin
+all-stageprofile-gcc: maybe-all-stageprofile-function_reordering_plugin
+all-stagefeedback-gcc: maybe-all-stagefeedback-function_reordering_plugin
 info-gcc: maybe-all-build-libiberty
 
 info-stage1-gcc: maybe-all-build-libiberty
@@ -45698,8 +47673,10 @@ html-stageprofile-gcc: maybe-all-build-libiberty
 html-stagefeedback-gcc: maybe-all-build-libiberty
 install-gcc: maybe-install-fixincludes
 install-gcc: maybe-install-lto-plugin
+install-gcc: maybe-install-function_reordering_plugin
 install-strip-gcc: maybe-install-strip-fixincludes
 install-strip-gcc: maybe-install-strip-lto-plugin
+install-strip-gcc: maybe-install-strip-function_reordering_plugin
 configure-libcpp: configure-libiberty
 
 configure-stage1-libcpp: configure-stage1-libiberty
@@ -45742,6 +47719,14 @@ all-stage3-lto-plugin: maybe-all-stage3-libiberty
 all-stage4-lto-plugin: maybe-all-stage4-libiberty
 all-stageprofile-lto-plugin: maybe-all-stageprofile-libiberty
 all-stagefeedback-lto-plugin: maybe-all-stagefeedback-libiberty
+all-function_reordering_plugin: maybe-all-libiberty
+
+all-stage1-function_reordering_plugin: maybe-all-stage1-libiberty
+all-stage2-function_reordering_plugin: maybe-all-stage2-libiberty
+all-stage3-function_reordering_plugin: maybe-all-stage3-libiberty
+all-stage4-function_reordering_plugin: maybe-all-stage4-libiberty
+all-stageprofile-function_reordering_plugin: maybe-all-stageprofile-libiberty
+all-stagefeedback-function_reordering_plugin: maybe-all-stagefeedback-libiberty
 all-utils: maybe-all-libiberty
 configure-mpfr: maybe-all-gmp
 
@@ -46199,6 +48184,14 @@ configure-stage3-target-libsanitizer: maybe-all-stage3-target-libstdc++-v3
 configure-stage4-target-libsanitizer: maybe-all-stage4-target-libstdc++-v3
 configure-stageprofile-target-libsanitizer: maybe-all-stageprofile-target-libstdc++-v3
 configure-stagefeedback-target-libsanitizer: maybe-all-stagefeedback-target-libstdc++-v3
+configure-target-libvtv: maybe-all-target-libstdc++-v3
+
+configure-stage1-target-libvtv: maybe-all-stage1-target-libstdc++-v3
+configure-stage2-target-libvtv: maybe-all-stage2-target-libstdc++-v3
+configure-stage3-target-libvtv: maybe-all-stage3-target-libstdc++-v3
+configure-stage4-target-libvtv: maybe-all-stage4-target-libstdc++-v3
+configure-stageprofile-target-libvtv: maybe-all-stageprofile-target-libstdc++-v3
+configure-stagefeedback-target-libvtv: maybe-all-stagefeedback-target-libstdc++-v3
 all-target-libstdc++-v3: maybe-configure-target-libgomp
 
 all-stage1-target-libstdc++-v3: maybe-configure-stage1-target-libgomp
@@ -46212,6 +48205,10 @@ install-target-libgfortran: maybe-install-target-libquadmath
 install-target-libgfortran: maybe-install-target-libgcc
 install-target-libsanitizer: maybe-install-target-libstdc++-v3
 install-target-libsanitizer: maybe-install-target-libgcc
+install-target-libvtv: maybe-install-target-libstdc++-v3
+install-target-libvtv: maybe-install-target-libgcc
+install-target-libcilkrts: maybe-install-target-libstdc++-v3
+install-target-libcilkrts: maybe-install-target-libgcc
 install-target-libjava: maybe-install-target-libgcc
 install-target-libitm: maybe-install-target-libgcc
 install-target-libobjc: maybe-install-target-libgcc
@@ -46241,6 +48238,12 @@ configure-stage3-target-libsanitizer: maybe-all-stage3-target-libgcc
 configure-stage4-target-libsanitizer: maybe-all-stage4-target-libgcc
 configure-stageprofile-target-libsanitizer: maybe-all-stageprofile-target-libgcc
 configure-stagefeedback-target-libsanitizer: maybe-all-stagefeedback-target-libgcc
+configure-stage1-target-libvtv: maybe-all-stage1-target-libgcc
+configure-stage2-target-libvtv: maybe-all-stage2-target-libgcc
+configure-stage3-target-libvtv: maybe-all-stage3-target-libgcc
+configure-stage4-target-libvtv: maybe-all-stage4-target-libgcc
+configure-stageprofile-target-libvtv: maybe-all-stageprofile-target-libgcc
+configure-stagefeedback-target-libvtv: maybe-all-stagefeedback-target-libgcc
 configure-stage1-target-libgomp: maybe-all-stage1-target-libgcc
 configure-stage2-target-libgomp: maybe-all-stage2-target-libgcc
 configure-stage3-target-libgomp: maybe-all-stage3-target-libgcc
@@ -46251,8 +48254,9 @@ configure-stagefeedback-target-libgomp: maybe-all-stagefeedback-target-libgcc
 
 @if gcc-no-bootstrap
 configure-target-libstdc++-v3: maybe-all-target-libgcc
-configure-target-libmudflap: maybe-all-target-libgcc
 configure-target-libsanitizer: maybe-all-target-libgcc
+configure-target-libvtv: maybe-all-target-libgcc
+configure-target-libcilkrts: maybe-all-target-libgcc
 configure-target-libssp: maybe-all-target-libgcc
 configure-target-newlib: maybe-all-target-libgcc
 configure-target-libbacktrace: maybe-all-target-libgcc
@@ -46277,9 +48281,12 @@ configure-target-libatomic: maybe-all-target-libgcc
 
 configure-target-libstdc++-v3: maybe-all-target-newlib maybe-all-target-libgloss
 
-configure-target-libmudflap: maybe-all-target-newlib maybe-all-target-libgloss
-
 configure-target-libsanitizer: maybe-all-target-newlib maybe-all-target-libgloss
+
+configure-target-libvtv: maybe-all-target-newlib maybe-all-target-libgloss
+
+configure-target-libcilkrts: maybe-all-target-newlib maybe-all-target-libgloss
+configure-target-libcilkrts: maybe-all-target-libstdc++-v3
 
 configure-target-libssp: maybe-all-target-newlib maybe-all-target-libgloss
 

@@ -32,15 +32,13 @@
 
 #if __cplusplus >= 201103L
 
+#include <bits/memoryfwd.h>
 #include <bits/ptr_traits.h>
 #include <ext/numeric_traits.h>
 
 namespace std _GLIBCXX_VISIBILITY(default)
 {
 _GLIBCXX_BEGIN_NAMESPACE_VERSION
-
-  template<typename _Tp>
-    class allocator;
 
   template<typename _Alloc, typename _Tp>
     class __alloctr_rebind_helper
@@ -414,7 +412,7 @@ _GLIBCXX_ALLOC_TR_NESTED_TYPE(propagate_on_container_swap,
        *  Returns @c __a.max_size() if that expression is well-formed,
        *  otherwise returns @c numeric_limits<size_type>::max()
       */
-      static size_type max_size(const _Alloc& __a)
+      static size_type max_size(const _Alloc& __a) noexcept
       { return _S_max_size(__a); }
 
       /**
@@ -542,24 +540,6 @@ _GLIBCXX_ALLOC_TR_NESTED_TYPE(propagate_on_container_swap,
     struct __is_copy_insertable<allocator<_Tp>>
     : is_copy_constructible<_Tp>
     { };
-
-  // Used to allow copy construction of unordered containers
-  template<bool> struct __allow_copy_cons { };
-
-  // Used to delete copy constructor of unordered containers
-  template<>
-    struct __allow_copy_cons<false>
-    {
-      __allow_copy_cons() = default;
-      __allow_copy_cons(const __allow_copy_cons&) = delete;
-      __allow_copy_cons(__allow_copy_cons&&) = default;
-      __allow_copy_cons& operator=(const __allow_copy_cons&) = default;
-      __allow_copy_cons& operator=(__allow_copy_cons&&) = default;
-    };
-
-  template<typename _Alloc>
-    using __check_copy_constructible
-      = __allow_copy_cons<__is_copy_insertable<_Alloc>::value>;
 
 _GLIBCXX_END_NAMESPACE_VERSION
 } // namespace std

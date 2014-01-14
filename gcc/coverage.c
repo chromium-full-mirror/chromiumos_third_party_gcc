@@ -30,6 +30,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm.h"
 #include "rtl.h"
 #include "tree.h"
+#include "stringpool.h"
+#include "stor-layout.h"
 #include "flags.h"
 #include "output.h"
 #include "regs.h"
@@ -43,11 +45,21 @@ along with GCC; see the file COPYING3.  If not see
 #include "langhooks.h"
 #include "hash-table.h"
 #include "tree-iterator.h"
+#include "context.h"
+#include "pass_manager.h"
+#include "tree-pass.h"
 #include "cgraph.h"
 #include "dumpfile.h"
 #include "opts.h"
 #include "gcov-io.h"
-#include "tree-flow.h"
+#include "tree-ssa-alias.h"
+#include "internal-fn.h"
+#include "gimple-expr.h"
+#include "gimple.h"
+#include "gimplify.h"
+#include "gimple-iterator.h"
+#include "gimplify-me.h"
+#include "gimple-ssa.h"
 #include "cpplib.h"
 #include "incpath.h"
 #include "diagnostic-core.h"
@@ -62,6 +74,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "params.h"
 #include "dbgcnt.h"
 #include "input.h"
+#include "pointer-set.h"
 
 struct GTY((chain_next ("%h.next"))) coverage_data
 {
@@ -187,6 +200,15 @@ get_gcov_unsigned_t (void)
   return lang_hooks.types.type_for_mode (mode, true);
 }
 
+/* Return the type node for const char *.  */
+
+tree
+get_const_string_type (void)
+{
+  return build_pointer_type
+    (build_qualified_type (char_type_node, TYPE_QUAL_CONST));
+}
+
 inline hashval_t
 counts_entry::hash (const value_type *entry)
 {
@@ -262,6 +284,10 @@ static struct opt_desc force_matching_cg_opts[] =
     { "-fsized-delete", "-fno-sized-delete", false },
     { "-frtti", "-fno-rtti", true },
     { "-fstrict-aliasing", "-fno-strict-aliasing", true },
+    { "-fsigned-char", "-funsigned-char", true },
+    /* { "-fsigned-char", "-fno-signed-char", true },
+       { "-funsigned-char", "-fno-unsigned-char", false }, */
+    { "-ansi", "", false },
     { NULL, NULL, false }
   };
 
@@ -310,19 +336,20 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
   char **warning_opts2 = XNEWVEC (char *, mod_info2->num_cl_args);
   char **non_warning_opts1 = XNEWVEC (char *, mod_info1->num_cl_args);
   char **non_warning_opts2 = XNEWVEC (char *, mod_info2->num_cl_args);
+  char *std_opts1 = NULL, *std_opts2 = NULL;
   unsigned int i, num_warning_opts1 = 0, num_warning_opts2 = 0;
   unsigned int num_non_warning_opts1 = 0, num_non_warning_opts2 = 0;
   bool warning_mismatch = false;
   bool non_warning_mismatch = false;
   hash_table <string_hasher> option_tab1, option_tab2;
-  unsigned int start_index1 = mod_info1->num_quote_paths +
-    mod_info1->num_bracket_paths + mod_info1->num_cpp_defines +
-    mod_info1->num_cpp_includes;
-  unsigned int start_index2 = mod_info2->num_quote_paths +
-    mod_info2->num_bracket_paths + mod_info2->num_cpp_defines +
-    mod_info2->num_cpp_includes;
+  unsigned int start_index1 = mod_info1->num_quote_paths 
+    + mod_info1->num_bracket_paths + mod_info1->num_system_paths 
+    + mod_info1->num_cpp_defines + mod_info1->num_cpp_includes;
+  unsigned int start_index2 = mod_info2->num_quote_paths
+    + mod_info2->num_bracket_paths + mod_info2->num_system_paths
+    + mod_info2->num_cpp_defines + mod_info2->num_cpp_includes;
 
-  bool *cg_opts1, *cg_opts2, has_any_incompatible_cg_opts;
+  bool *cg_opts1, *cg_opts2, has_any_incompatible_cg_opts, has_incompatible_std;
   unsigned int num_cg_opts = 0;
 
   for (i = 0; force_matching_cg_opts[i].opt_str; i++)
@@ -352,6 +379,8 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
         char *option_string = mod_info1->string_array[start_index1 + i];
 
         check_cg_opts (cg_opts1, option_string);
+	if (strstr (option_string, "-std="))
+	  std_opts1 = option_string;
 
         slot = option_tab1.find_slot (option_string, INSERT);
         if (!*slot)
@@ -371,6 +400,8 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
         char *option_string = mod_info2->string_array[start_index2 + i];
 
         check_cg_opts (cg_opts2, option_string);
+	if (strstr (option_string, "-std="))
+	  std_opts2 = option_string;
 
         slot = option_tab2.find_slot (option_string, INSERT);
         if (!*slot)
@@ -379,6 +410,10 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
             non_warning_opts2[num_non_warning_opts2++] = option_string;
           }
       }
+
+  has_incompatible_std =
+      std_opts1 != std_opts2 && (std_opts1 == NULL || std_opts2 == NULL
+				 || strcmp (std_opts1, std_opts2));
 
   /* Compare warning options. If these mismatch, we emit a warning.  */
   if (num_warning_opts1 != num_warning_opts2)
@@ -423,7 +458,205 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
    option_tab1.dispose ();
    option_tab2.dispose ();
    return ((flag_ripa_disallow_opt_mismatch && non_warning_mismatch)
-           || has_any_incompatible_cg_opts);
+           || has_any_incompatible_cg_opts || has_incompatible_std);
+}
+
+
+/* Support for module sorting based on user specfication.  */
+struct module_name_entry
+{
+  typedef module_name_entry value_type;
+  typedef module_name_entry compare_type;
+  static inline hashval_t hash (const value_type *entry);
+  static inline int equal (const value_type *entry1, const compare_type *entry2);
+  static inline void remove (value_type *v);
+
+  const char *source_name;
+  int order;
+};
+
+/* Hash function for module name  */
+
+hashval_t
+module_name_entry::hash (const value_type *s)
+{
+  return htab_hash_string (s->source_name);
+}
+
+/* Delete function for module name  */
+
+void
+module_name_entry::remove (value_type  *entry)
+{
+  /* XDELETE (entry->source_name); */
+  XDELETE (entry);
+}
+
+/* Equal function for module name  */
+
+int
+module_name_entry::equal (const value_type *s1, const compare_type *s2)
+{
+  return !strcmp (s1->source_name, s2->source_name);
+}
+
+static  hash_table<module_name_entry> module_name_tab;
+
+/* Comparison function for sorting module_infos array.  */
+
+static int
+cmp_module_name_entry (const void *p1, const void *p2)
+{
+  module_name_entry **slot1, **slot2;
+  module_name_entry *m_e1, *m_e2;
+
+  struct gcov_module_info *const *e1 = (struct gcov_module_info *const *) p1;
+  struct gcov_module_info *const *e2 = (struct gcov_module_info *const *) p2;
+
+  module_name_entry e;
+  e.source_name = (*e1)->source_filename;
+  slot1 = module_name_tab.find_slot (&e, NO_INSERT);
+  e.source_name = (*e2)->source_filename;
+  slot2 = module_name_tab.find_slot (&e, NO_INSERT);
+
+  if (!slot1 || !*slot1)
+    return 1;
+
+  if (!slot2 || !*slot2)
+    return -1;
+
+  gcc_assert (slot1 && *slot1 && slot2 && *slot2);
+  m_e1 = *slot1;
+  m_e2 = *slot2;
+
+  return m_e1->order - m_e2->order;
+}
+
+/* Comparison function for sorting fname array  */
+
+static int
+cmp_fname_entry (const void *p1, const void *p2)
+{
+  module_name_entry **slot1, **slot2;
+  module_name_entry *m_e1, *m_e2;
+
+  const char *const *e1 = (const char *const *) p1;
+  const char *const *e2 = (const char *const *) p2;
+
+  module_name_entry e;
+
+  e.source_name = *e1;
+  slot1 = module_name_tab.find_slot (&e, NO_INSERT);
+  e.source_name = *e2;
+  slot2 = module_name_tab.find_slot (&e, NO_INSERT);
+
+  if (!slot1 || !*slot1)
+    return 1;
+
+  if (!slot2 || !*slot2)
+    return -1;
+
+  gcc_assert (slot1 && *slot1 && slot2 && *slot2);
+  m_e1 = *slot1;
+  m_e2 = *slot2;
+
+  return m_e1->order - m_e2->order;
+}
+
+/* Reorder module group according to file IMPORTS_FILE  */
+
+static void
+reorder_module_groups (const char *imports_file, unsigned max_group)
+{
+  FILE *f;
+  int n, order = 0;
+  size_t len;
+  char *line = NULL;
+
+  module_name_tab.create (20);
+
+  f = fopen (imports_file, "r");
+  if (!f)
+    error ("Can't open file %s", imports_file);
+
+  while ((n = getline (&line, &len, f)) != -1)
+    {
+      module_name_entry **slot;
+      module_name_entry *m_e = XCNEW (module_name_entry);
+
+      line[n - 1] = '\0';
+      m_e->source_name = line;
+      m_e->order = order;
+
+      slot = module_name_tab.find_slot (m_e, INSERT);
+      gcc_assert (!*slot);
+      *slot = m_e;
+
+      line = NULL;
+      order++;
+    }
+
+  /* Now do the sorting  */
+
+  qsort (&module_infos[1], num_in_fnames - 1, sizeof (void *),
+         cmp_module_name_entry);
+  qsort (&in_fnames[1], num_in_fnames - 1, sizeof (void *),
+         cmp_fname_entry);
+
+  {
+    unsigned i;
+
+    for (i = 0; i < num_in_fnames; i++)
+      fprintf (stderr, "*** %s (%s)\n", in_fnames[i],
+	       i < max_group ? "Kept":"Skipped");
+
+    for (i = 0; i < num_in_fnames; i++)
+      fprintf (stderr, "### %s (%s)\n", module_infos[i]->source_filename,
+	       i < max_group ? "Kept":"Skipped");
+
+  }
+
+  if (num_in_fnames > max_group)
+    num_in_fnames = max_group;
+
+  module_name_tab.dispose ();
+}
+
+typedef struct {
+  unsigned int mod_id;
+  const char *mod_name;
+} mod_id_to_name_t;
+
+static vec<mod_id_to_name_t> *mod_names;
+
+static void
+record_module_name (unsigned int mod_id, const char *name)
+{
+  mod_id_to_name_t t;
+
+  t.mod_id = mod_id;
+  t.mod_name = xstrdup (name);
+  if (!mod_names)
+    vec_alloc (mod_names, 10);
+  mod_names->safe_push (t);
+}
+
+/* Return the module name for module with MOD_ID.  */
+
+const char *
+get_module_name (unsigned int mod_id)
+{
+  size_t i;
+  mod_id_to_name_t *elt;
+
+  for (i = 0; mod_names->iterate (i, &elt); i++)
+    {
+      if (elt->mod_id == mod_id)
+        return elt->mod_name;
+    }
+
+  gcc_assert (0);
+  return NULL;
 }
 
 /* Read in the counts file, if available. DA_FILE_NAME is the
@@ -443,6 +676,7 @@ read_counts_file (const char *da_file_name, unsigned module_id)
   unsigned max_group = PARAM_VALUE (PARAM_MAX_LIPO_GROUP);
   unsigned lineno_checksum = 0;
   unsigned cfg_checksum = 0;
+  const char *imports_filename;
 
   if (max_group == 0)
     max_group = (unsigned) -1;
@@ -604,6 +838,7 @@ read_counts_file (const char *da_file_name, unsigned module_id)
           info_sz = (sizeof (struct gcov_module_info) +
 		     sizeof (void *) * (mod_info->num_quote_paths +
 					mod_info->num_bracket_paths +
+					mod_info->num_system_paths +
 					mod_info->num_cpp_defines +
 					mod_info->num_cpp_includes +
 					mod_info->num_cl_args));
@@ -615,6 +850,7 @@ read_counts_file (const char *da_file_name, unsigned module_id)
               modset = pointer_set_create ();
               pointer_set_insert (modset, (void *)(size_t)mod_info->ident);
 	      primary_module_id = mod_info->ident;
+              include_all_aux = MODULE_INCLUDE_ALL_AUX_FLAG (mod_info);
               module_infos = XCNEWVEC (struct gcov_module_info *, 1);
               module_infos[0] = XCNEWVAR (struct gcov_module_info, info_sz);
               memcpy (module_infos[0], mod_info, info_sz);
@@ -632,7 +868,10 @@ read_counts_file (const char *da_file_name, unsigned module_id)
 		inform (input_location, "Not importing %s: source language"
 			" different from primary module's source language",
 			mod_info->source_filename);
-	      else if (module_infos_read == max_group)
+	      else if (module_infos_read == max_group
+                       /* If reordering is specified, delay the cutoff
+			  until after sorting.  */
+		       && !getenv ("LIPO_REORDER_GROUP"))
 		inform (input_location, "Not importing %s: maximum group size"
 			" reached", mod_info->source_filename);
 	      else if (incompatible_cl_args (module_infos[0], mod_info))
@@ -646,6 +885,13 @@ read_counts_file (const char *da_file_name, unsigned module_id)
 		       && flag_ripa_disallow_asm_modules)
 		inform (input_location, "Not importing %s: contains assembler"
 			" statements", mod_info->source_filename);
+              else if (mod_info->is_primary == false 
+                       && MODULE_EXPORTED_FLAG (mod_info) == false)
+                {
+                  warning (0, "MODULE_ID=%d (%s) is an auxiliary module, "
+                              "but export_bit is not set. \n",
+                              mod_info->ident, mod_info->source_filename);
+                }
 	      else
 		{
 		  close (fd);
@@ -661,13 +907,18 @@ read_counts_file (const char *da_file_name, unsigned module_id)
 		}
             }
 
+          record_module_name (mod_info->ident,
+                              lbasename (mod_info->source_filename));
+
           if (flag_ripa_verbose)
             {
               inform (input_location,
                       "MODULE Id=%d, Is_Primary=%s,"
-                      " Is_Exported=%s, Name=%s (%s)",
+                      " Is_Exported=%s, Include_all=%s, Name=%s (%s)",
                       mod_info->ident, mod_info->is_primary?"yes":"no",
-                      mod_info->is_exported?"yes":"no", mod_info->source_filename,
+                      MODULE_EXPORTED_FLAG (mod_info)?"yes":"no",
+                      MODULE_INCLUDE_ALL_AUX_FLAG (mod_info)?"yes":"no",
+                      mod_info->source_filename,
                       mod_info->da_filename);
             }
         }
@@ -679,6 +930,14 @@ read_counts_file (const char *da_file_name, unsigned module_id)
 	  counts_hash.dispose ();
 	  break;
 	}
+    }
+
+  if ((imports_filename = getenv ("LIPO_REORDER_GROUP"))
+      && flag_dyn_ipa && !module_id)
+    {
+      reorder_module_groups (imports_filename, max_group);
+      if (module_infos_read != num_in_fnames)
+	module_infos_read = num_in_fnames;
     }
 
   /* TODO: profile based multiple module compilation does not work
@@ -725,11 +984,13 @@ get_coverage_counts (unsigned counter, unsigned expected,
     {
       static int warned = 0;
 
-      if (!warned++)
-	inform (input_location, (flag_guess_branch_prob
-		 ? "file %s not found, execution counts estimated"
-		 : "file %s not found, execution counts assumed to be zero"),
-		da_file_name);
+      if (!warned++ && dump_enabled_p ())
+	dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                         (flag_guess_branch_prob
+                          ? "file %s not found, execution counts estimated\n"
+                          : "file %s not found, execution counts assumed to "
+                            "be zero\n"),
+                         da_file_name);
       return NULL;
     }
 
@@ -754,21 +1015,25 @@ get_coverage_counts (unsigned counter, unsigned expected,
 	warning_at (input_location, OPT_Wcoverage_mismatch,
 		    "the control flow of function %qE does not match "
 		    "its profile data (counter %qs)", id, ctr_names[counter]);
-      if (warning_printed)
+      if (warning_printed && dump_enabled_p ())
 	{
-	 inform (input_location, "use -Wno-error=coverage-mismatch to tolerate "
-	 	 "the mismatch but performance may drop if the function is hot");
+          dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                           "use -Wno-error=coverage-mismatch to tolerate "
+                           "the mismatch but performance may drop if the "
+                           "function is hot\n");
 	  
 	  if (!seen_error ()
 	      && !warned++)
 	    {
-	      inform (input_location, "coverage mismatch ignored");
-	      inform (input_location, flag_guess_branch_prob
-		      ? G_("execution counts estimated")
-		      : G_("execution counts assumed to be zero"));
+	      dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
+                               "coverage mismatch ignored\n");
+	      dump_printf (MSG_OPTIMIZED_LOCATIONS,
+                           flag_guess_branch_prob
+                           ? G_("execution counts estimated\n")
+                           : G_("execution counts assumed to be zero\n"));
 	      if (!flag_guess_branch_prob)
-		inform (input_location,
-			"this can result in poorly optimized code");
+		dump_printf (MSG_OPTIMIZED_LOCATIONS,
+                             "this can result in poorly optimized code\n");
 	    }
 	}
 
@@ -1005,6 +1270,28 @@ coverage_compute_lineno_checksum (void)
   return chksum;
 }
 
+/* Compute profile ID.  This is better to be unique in whole program.  */
+
+unsigned
+coverage_compute_profile_id (struct cgraph_node *n)
+{
+  expanded_location xloc
+    = expand_location (DECL_SOURCE_LOCATION (n->decl));
+  unsigned chksum = xloc.line;
+
+  chksum = coverage_checksum_string (chksum, xloc.file);
+  chksum = coverage_checksum_string
+    (chksum, IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (n->decl)));
+  if (first_global_object_name)
+    chksum = coverage_checksum_string
+      (chksum, first_global_object_name);
+  chksum = coverage_checksum_string
+    (chksum, aux_base_name);
+
+  /* Non-negative integers are hopefully small enough to fit in all targets.  */
+  return chksum & 0x7fffffff;
+}
+
 /* Compute cfg checksum for the current function.
    The checksum is calculated carefully so that
    source code changes that doesn't affect the control flow graph
@@ -1019,9 +1306,9 @@ unsigned
 coverage_compute_cfg_checksum (void)
 {
   basic_block bb;
-  unsigned chksum = n_basic_blocks;
+  unsigned chksum = n_basic_blocks_for_fn (cfun);
 
-  FOR_EACH_BB (bb)
+  FOR_EACH_BB_FN (bb, cfun)
     {
       edge e;
       edge_iterator ei;
@@ -1329,7 +1616,7 @@ build_fn_info (const struct coverage_data *data, tree type, tree key)
 
 	if (var)
 	  count
-	    = tree_low_cst (TYPE_MAX_VALUE (TYPE_DOMAIN (TREE_TYPE (var))), 0)
+	    = tree_to_shwi (TYPE_MAX_VALUE (TYPE_DOMAIN (TREE_TYPE (var))))
 	    + 1;
 
 	CONSTRUCTOR_APPEND_ELT (ctr, TYPE_FIELDS (ctr_type),
@@ -1394,6 +1681,12 @@ build_info_type (tree type, tree fn_info_ptr_type)
   field = build_decl (BUILTINS_LOCATION, FIELD_DECL, NULL_TREE,
 		      build_pointer_type (build_qualified_type
 					  (char_type_node, TYPE_QUAL_CONST)));
+  DECL_CHAIN (field) = fields;
+  fields = field;
+
+  /* eof_pos */
+  field = build_decl (BUILTINS_LOCATION, FIELD_DECL,
+                      NULL_TREE, get_gcov_unsigned_t ());
   DECL_CHAIN (field) = fields;
   fields = field;
 
@@ -1505,19 +1798,6 @@ build_cl_args_array_value (tree string_type, vec<constructor_elt, va_gc> **v)
   return;
 }
 
-/* Emit mapping between module name and function id to the function's
-   assembler name, for use in correlating function idents in the gcda file
-   with the function name.  */
-
-void
-emit_function_name (void)
-{
-  fprintf (stderr, "Module %s FuncId %u Name %s\n",
-           main_input_file_name,
-           FUNC_DECL_FUNC_ID (cfun),
-           IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (current_function_decl)));
-}
-
 /* Returns the type of the module info associated with the
    current source module being compiled.  */
 
@@ -1527,8 +1807,8 @@ build_gcov_module_info_type (void)
   tree type, field, fields = NULL_TREE;
   tree string_type, index_type, string_array_type;
 
-  cpp_dir *quote_paths, *bracket_paths, *pdir;
-  int num_quote_paths = 0, num_bracket_paths = 0;
+  cpp_dir *quote_paths, *bracket_paths, *system_paths, *pdir;
+  int num_quote_paths = 0, num_bracket_paths = 0, num_system_paths = 0;
 
   type = lang_hooks.types.make_type (RECORD_TYPE);
   string_type = build_pointer_type (
@@ -1552,13 +1832,19 @@ build_gcov_module_info_type (void)
   DECL_CHAIN (field) = fields;
   fields = field;
 
-  /* is_exported */
+  /* flags: is_exported and include_all_aux flag.  */
   field = build_decl (BUILTINS_LOCATION, FIELD_DECL,
                       NULL_TREE, get_gcov_unsigned_t ());
   DECL_CHAIN (field) = fields;
   fields = field;
 
   /* lang field */
+  field = build_decl (BUILTINS_LOCATION, FIELD_DECL,
+                      NULL_TREE, get_gcov_unsigned_t ());
+  DECL_CHAIN (field) = fields;
+  fields = field;
+
+  /* ggc_memory field */
   field = build_decl (BUILTINS_LOCATION, FIELD_DECL,
                       NULL_TREE, get_gcov_unsigned_t ());
   DECL_CHAIN (field) = fields;
@@ -1588,6 +1874,12 @@ build_gcov_module_info_type (void)
   DECL_CHAIN (field) = fields;
   fields = field;
 
+  /* Num system paths  */
+  field = build_decl (BUILTINS_LOCATION, FIELD_DECL,
+                      NULL_TREE, get_gcov_unsigned_t ());
+  DECL_CHAIN (field) = fields;
+  fields = field;
+
   /* Num -D/-U options.  */
   field = build_decl (BUILTINS_LOCATION, FIELD_DECL,
                       NULL_TREE, get_gcov_unsigned_t ());
@@ -1606,7 +1898,7 @@ build_gcov_module_info_type (void)
   DECL_CHAIN (field) = fields;
   fields = field;
 
-  get_include_chains (&quote_paths, &bracket_paths);
+  get_include_chains (&quote_paths, &bracket_paths, &system_paths);
   for (pdir = quote_paths; pdir; pdir = pdir->next)
     {
       if (pdir == bracket_paths)
@@ -1614,15 +1906,23 @@ build_gcov_module_info_type (void)
       num_quote_paths++;
     }
   for (pdir = bracket_paths; pdir; pdir = pdir->next)
-    num_bracket_paths++;
+    {
+      if (pdir == system_paths)
+        break;
+      num_bracket_paths++;
+    }
+  for (pdir = system_paths; pdir; pdir = pdir->next)
+    num_system_paths++;
 
   /* string array  */
   index_type = build_index_type (build_int_cst (NULL_TREE,
 						num_quote_paths	+
 						num_bracket_paths +
+                                                num_system_paths +
 						num_cpp_defines +
 						num_cpp_includes +
 						num_lipo_cl_args));
+
   string_array_type = build_array_type (string_type, index_type);
   field = build_decl (BUILTINS_LOCATION, FIELD_DECL,
                       NULL_TREE, string_array_type);
@@ -1644,8 +1944,8 @@ build_gcov_module_info_value (tree mod_type)
   tree value = NULL_TREE;
   int file_name_len;
   tree filename_string, string_array_type,  string_type;
-  cpp_dir *quote_paths, *bracket_paths, *pdir;
-  int num_quote_paths = 0, num_bracket_paths = 0;
+  cpp_dir *quote_paths, *bracket_paths, *system_paths, *pdir;
+  int num_quote_paths = 0, num_bracket_paths = 0, num_system_paths = 0;
   unsigned lang;
   char name_buf[50];
   vec<constructor_elt,va_gc> *v = NULL, *path_v = NULL;
@@ -1669,7 +1969,7 @@ build_gcov_module_info_value (tree mod_type)
                                           flag_dyn_ipa ? 1 : 0));
   info_fields = DECL_CHAIN (info_fields);
 
-  /* is_exported */
+  /* flags */
   CONSTRUCTOR_APPEND_ELT (v, info_fields,
                           build_int_cstu (get_gcov_unsigned_t (), 0));
   info_fields = DECL_CHAIN (info_fields);
@@ -1686,6 +1986,11 @@ build_gcov_module_info_value (tree mod_type)
 
   CONSTRUCTOR_APPEND_ELT (v, info_fields,
                           build_int_cstu (get_gcov_unsigned_t (), lang));
+  info_fields = DECL_CHAIN (info_fields);
+
+  /* ggc_memory field */
+  CONSTRUCTOR_APPEND_ELT (v, info_fields,
+                          build_int_cstu (get_gcov_unsigned_t (), ggc_total_memory));
   info_fields = DECL_CHAIN (info_fields);
 
   /* da_filename */
@@ -1711,7 +2016,7 @@ build_gcov_module_info_value (tree mod_type)
                           build1 (ADDR_EXPR, string_type, filename_string));
   info_fields = DECL_CHAIN (info_fields);
 
-  get_include_chains (&quote_paths, &bracket_paths);
+  get_include_chains (&quote_paths, &bracket_paths, &system_paths);
   for (pdir = quote_paths; pdir; pdir = pdir->next)
     {
       if (pdir == bracket_paths)
@@ -1719,7 +2024,13 @@ build_gcov_module_info_value (tree mod_type)
       num_quote_paths++;
     }
   for (pdir = bracket_paths; pdir; pdir = pdir->next)
-    num_bracket_paths++;
+    {
+      if (pdir == system_paths)
+        break;
+      num_bracket_paths++;
+    }
+  for (pdir = system_paths; pdir; pdir = pdir->next)
+    num_system_paths++;
 
   /* Num quote paths  */
   CONSTRUCTOR_APPEND_ELT (v, info_fields,
@@ -1731,6 +2042,12 @@ build_gcov_module_info_value (tree mod_type)
   CONSTRUCTOR_APPEND_ELT (v, info_fields,
                           build_int_cstu (get_gcov_unsigned_t (),
                                           num_bracket_paths));
+  info_fields = DECL_CHAIN (info_fields);
+
+  /* Num system paths  */
+  CONSTRUCTOR_APPEND_ELT (v, info_fields,
+                          build_int_cstu (get_gcov_unsigned_t (),
+                                          num_system_paths));
   info_fields = DECL_CHAIN (info_fields);
 
   /* Num -D/-U options.  */
@@ -1757,6 +2074,8 @@ build_gcov_module_info_value (tree mod_type)
                               quote_paths, num_quote_paths);
   build_inc_path_array_value (string_type, &path_v,
                               bracket_paths, num_bracket_paths);
+  build_inc_path_array_value (string_type, &path_v,
+                              system_paths, num_system_paths);
   build_str_array_value (string_type, &path_v,
                          cpp_defines_head);
   build_str_array_value (string_type, &path_v,
@@ -1832,6 +2151,11 @@ build_info (tree info_type, tree fn_ary)
 				  filename_string));
   info_fields = DECL_CHAIN (info_fields);
 
+  /* eof_pos */
+  CONSTRUCTOR_APPEND_ELT (v1, info_fields,
+                          build_int_cstu (TREE_TYPE (info_fields), 0));
+  info_fields = DECL_CHAIN (info_fields);
+
   /* merge fn array -- NULL slots indicate unmeasured counters */
   merge_fn_type = TREE_TYPE (TREE_TYPE (info_fields));
   for (ix = 0; ix != GCOV_COUNTERS; ix++)
@@ -1874,6 +2198,32 @@ build_info (tree info_type, tree fn_ary)
   return build_constructor (info_type, v1);
 }
 
+/* Generate the constructor function to call __gcov_init.  */
+
+static void
+build_init_ctor (tree gcov_info_type)
+{
+  tree ctor, stmt, init_fn;
+
+  /* Build a decl for __gcov_init.  */
+  init_fn = build_pointer_type (gcov_info_type);
+  init_fn = build_function_type_list (void_type_node, init_fn, NULL);
+  init_fn = build_decl (BUILTINS_LOCATION, FUNCTION_DECL,
+			get_identifier ("__gcov_init"), init_fn);
+  TREE_PUBLIC (init_fn) = 1;
+  DECL_EXTERNAL (init_fn) = 1;
+  DECL_ASSEMBLER_NAME (init_fn);
+
+  /* Generate a call to __gcov_init(&gcov_info).  */
+  ctor = NULL;
+  stmt = build_fold_addr_expr (gcov_info_var);
+  stmt = build_call_expr (init_fn, 1, stmt);
+  append_to_statement_list (stmt, &ctor);
+
+  /* Generate a constructor to run it.  */
+  cgraph_build_static_cdtor ('I', ctor, DEFAULT_INIT_PRIORITY);
+}
+
 /* Create the gcov_info types and object.  Generate the constructor
    function to call __gcov_init.  Does not generate the initializer
    for the object.  Returns TRUE if coverage data is being emitted.  */
@@ -1881,7 +2231,7 @@ build_info (tree info_type, tree fn_ary)
 static bool
 coverage_obj_init (void)
 {
-  tree gcov_info_type, ctor, stmt, init_fn;
+  tree gcov_info_type;
   unsigned n_counters = 0;
   unsigned ix;
   struct coverage_data *fn;
@@ -1930,24 +2280,6 @@ coverage_obj_init (void)
   ASM_GENERATE_INTERNAL_LABEL (name_buf, "LPBX", 0);
   DECL_NAME (gcov_info_var) = get_identifier (name_buf);
 
-  /* Build a decl for __gcov_init.  */
-  init_fn = build_pointer_type (gcov_info_type);
-  init_fn = build_function_type_list (void_type_node, init_fn, NULL);
-  init_fn = build_decl (BUILTINS_LOCATION, FUNCTION_DECL,
-			get_identifier ("__gcov_init"), init_fn);
-  TREE_PUBLIC (init_fn) = 1;
-  DECL_EXTERNAL (init_fn) = 1;
-  DECL_ASSEMBLER_NAME (init_fn);
-
-  /* Generate a call to __gcov_init(&gcov_info).  */
-  ctor = NULL;
-  stmt = build_fold_addr_expr (gcov_info_var);
-  stmt = build_call_expr (init_fn, 1, stmt);
-  append_to_statement_list (stmt, &ctor);
-
-  /* Generate a constructor to run it.  */
-  cgraph_build_static_cdtor ('I', ctor, DEFAULT_INIT_PRIORITY);
-
   return true;
 }
 
@@ -1970,7 +2302,8 @@ coverage_obj_fn (vec<constructor_elt, va_gc> *ctor, tree fn,
 }
 
 /* Finalize the coverage data.  Generates the array of pointers to
-   function objects from CTOR.  Generate the gcov_info initializer.  */
+   function objects from CTOR.  Generate the gcov_info initializer.
+   Generate the constructor function to call __gcov_init.  */
 
 static void
 coverage_obj_finish (vec<constructor_elt, va_gc> *ctor)
@@ -1988,9 +2321,12 @@ coverage_obj_finish (vec<constructor_elt, va_gc> *ctor)
   DECL_NAME (fn_info_ary) = get_identifier (name_buf);
   DECL_INITIAL (fn_info_ary) = build_constructor (fn_info_ary_type, ctor);
   varpool_finalize_decl (fn_info_ary);
-  
+
   DECL_INITIAL (gcov_info_var)
     = build_info (TREE_TYPE (gcov_info_var), fn_info_ary);
+
+  build_init_ctor (TREE_TYPE (gcov_info_var));
+
   varpool_finalize_decl (gcov_info_var);
 }
 
@@ -2009,6 +2345,12 @@ get_da_file_name (const char *base_file_name)
       profile_data_prefix = getpwd ();
       prefix = profile_data_prefix;
     }
+  /* Since coverage_init is invoked very early, before the pass
+     manager, we need to set up the dumping explicitly. This is
+     similar to the handling in finish_optimization_passes.  */
+  int profile_pass_num =
+    g->get_passes ()->get_pass_profile ()->static_pass_number;
+  g->get_dumps ()->dump_start (profile_pass_num, NULL);
 
   prefix_len = (prefix) ? strlen (prefix) + 1 : 0;
 
@@ -2112,7 +2454,7 @@ add_module_info (unsigned module_id, bool is_primary, int index)
   module_infos[index] = XNEW (struct gcov_module_info);
   cur_info = module_infos[index];
   cur_info->ident = module_id;
-  cur_info->is_exported = true;
+  SET_MODULE_EXPORTED (cur_info);
   cur_info->num_quote_paths = 0;
   cur_info->num_bracket_paths = 0;
   cur_info->da_filename = NULL;
@@ -2240,21 +2582,21 @@ set_lipo_c_parsing_context (struct cpp_reader *parse_in, int i, bool verbose)
 	   i < mod_info->num_bracket_paths; i++, j++)
         add_path (xstrdup (mod_info->string_array[j]),
                   BRACKET, 0, 1);
+      for (i = 0; i < mod_info->num_system_paths; i++, j++)
+        add_path (xstrdup (mod_info->string_array[j]),
+                  SYSTEM, 0, 1);
       register_include_chains (parse_in, NULL, NULL, NULL,
                                0, 0, verbose);
 
       /* Setup defines/undefs.  */
-      for (i = 0, j = mod_info->num_quote_paths + mod_info->num_bracket_paths;
-	   i < mod_info->num_cpp_defines; i++, j++)
+      for (i = 0; i < mod_info->num_cpp_defines; i++, j++)
 	if (mod_info->string_array[j][0] == 'D')
 	  cpp_define (parse_in, mod_info->string_array[j] + 1);
 	else
 	  cpp_undef (parse_in, mod_info->string_array[j] + 1);
 
       /* Setup -imacro/-include.  */
-      for (i = 0, j = mod_info->num_quote_paths + mod_info->num_bracket_paths +
-	     mod_info->num_cpp_defines; i < mod_info->num_cpp_includes;
-	   i++, j++)
+      for (i = 0; i < mod_info->num_cpp_includes; i++, j++)
 	cpp_push_include (parse_in, mod_info->string_array[j]);
     }
 }
@@ -2309,6 +2651,7 @@ coverage_init (const char *filename, const char* source_name)
   /* Define variables which are referenced at runtime by libgcov.  */
   if (profiling_enabled_p ())
     {
+      tree_init_instrumentation ();
       tree_init_dyn_ipa_parameters ();
       tree_init_instrumentation_sampling ();
     }
@@ -2331,6 +2674,10 @@ coverage_init (const char *filename, const char* source_name)
 	  gcov_write_unsigned (bbg_file_stamp);
 	}
     }
+
+  int profile_pass_num =
+    g->get_passes ()->get_pass_profile ()->static_pass_number;
+  g->get_dumps ()->dump_finish (profile_pass_num);
 }
 
 /* Return True if any type of profiling is enabled which requires linking
@@ -2367,6 +2714,9 @@ coverage_finish (void)
 	fn_ctor = coverage_obj_fn (fn_ctor, fn->fn_decl, fn);
       coverage_obj_finish (fn_ctor);
     }
+
+  XDELETEVEC (da_file_name);
+  da_file_name = NULL;
 }
 
 /* Add S to the end of the string-list, the head and tail of which are
@@ -2423,12 +2773,13 @@ void
 write_opts_to_asm (void)
 {
   size_t i;
-  cpp_dir *quote_paths, *bracket_paths, *pdir;
+  cpp_dir *quote_paths, *bracket_paths, *system_paths, *pdir;
   struct str_list *pdef, *pinc;
   int num_quote_paths = 0;
   int num_bracket_paths = 0;
+  int num_system_paths = 0;
 
-  get_include_chains (&quote_paths, &bracket_paths);
+  get_include_chains (&quote_paths, &bracket_paths, &system_paths);
 
   /* Write quote_paths to ASM section.  */
   switch_to_section (get_section (".gnu.switches.text.quote_paths",
@@ -2452,10 +2803,28 @@ write_opts_to_asm (void)
   switch_to_section (get_section (".gnu.switches.text.bracket_paths",
 				  SECTION_DEBUG, NULL));
   for (pdir = bracket_paths; pdir; pdir = pdir->next)
-    num_bracket_paths++;
+    {
+      if (pdir == system_paths)
+	break;
+      num_bracket_paths++;
+    }
   dw2_asm_output_nstring (in_fnames[0], (size_t)-1, NULL);
   dw2_asm_output_data_uleb128 (num_bracket_paths, NULL);
   for (pdir = bracket_paths; pdir; pdir = pdir->next)
+    {
+      if (pdir == system_paths)
+	break;
+      dw2_asm_output_nstring (pdir->name, (size_t)-1, NULL);
+    }
+
+  /* Write system_paths to ASM section.  */
+  switch_to_section (get_section (".gnu.switches.text.system_paths",
+				  SECTION_DEBUG, NULL));
+  for (pdir = system_paths; pdir; pdir = pdir->next)
+    num_system_paths++;
+  dw2_asm_output_nstring (in_fnames[0], (size_t)-1, NULL);
+  dw2_asm_output_data_uleb128 (num_system_paths, NULL);
+  for (pdir = system_paths; pdir; pdir = pdir->next)
     dw2_asm_output_nstring (pdir->name, (size_t)-1, NULL);
 
   /* Write cpp_defines to ASM section.  */

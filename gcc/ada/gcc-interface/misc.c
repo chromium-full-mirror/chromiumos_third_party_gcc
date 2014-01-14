@@ -6,7 +6,7 @@
  *                                                                          *
  *                           C Implementation File                          *
  *                                                                          *
- *          Copyright (C) 1992-2012, Free Software Foundation, Inc.         *
+ *          Copyright (C) 1992-2013, Free Software Foundation, Inc.         *
  *                                                                          *
  * GNAT is free software;  you can  redistribute it  and/or modify it under *
  * terms of the  GNU General Public License as published  by the Free Soft- *
@@ -30,6 +30,8 @@
 #include "options.h"
 #include "tm.h"
 #include "tree.h"
+#include "stor-layout.h"
+#include "print-tree.h"
 #include "diagnostic.h"
 #include "target.h"
 #include "ggc.h"
@@ -346,9 +348,7 @@ gnat_init (void)
   return true;
 }
 
-/* If we are using the GCC mechanism to process exception handling, we
-   have to register the personality routine for Ada and to initialize
-   various language dependent hooks.  */
+/* Initialize the GCC support for exception handling.  */
 
 void
 gnat_init_gcc_eh (void)
@@ -379,6 +379,28 @@ gnat_init_gcc_eh (void)
   flag_non_call_exceptions = 1;
 
   init_eh ();
+}
+
+/* Initialize the GCC support for floating-point operations.  */
+
+void
+gnat_init_gcc_fp (void)
+{
+  /* Disable FP optimizations that ignore the signedness of zero if
+     S'Signed_Zeros is true, but don't override the user if not.  */
+  if (Signed_Zeros_On_Target)
+    flag_signed_zeros = 1;
+  else if (!global_options_set.x_flag_signed_zeros)
+    flag_signed_zeros = 0;
+
+  /* Assume that FP operations can trap if S'Machine_Overflow is true,
+     but don't override the user if not.
+
+     ??? Alpha/VMS enables FP traps without declaring it.  */
+  if (Machine_Overflows_On_Target || TARGET_ABI_OPEN_VMS)
+    flag_trapping_math = 1;
+  else if (!global_options_set.x_flag_trapping_math)
+    flag_trapping_math = 0;
 }
 
 /* Print language-specific items in declaration NODE.  */
@@ -571,7 +593,7 @@ gnat_type_max_size (const_tree gnu_type)
 
   /* If we don't have a constant, see what we can get from TYPE_ADA_SIZE,
      which should stay untouched.  */
-  if (!host_integerp (max_unitsize, 1)
+  if (!tree_fits_uhwi_p (max_unitsize)
       && RECORD_OR_UNION_TYPE_P (gnu_type)
       && !TYPE_FAT_POINTER_P (gnu_type)
       && TYPE_ADA_SIZE (gnu_type))
@@ -580,7 +602,7 @@ gnat_type_max_size (const_tree gnu_type)
 
       /* If we have succeeded in finding a constant, round it up to the
 	 type's alignment and return the result in units.  */
-      if (host_integerp (max_adasize, 1))
+      if (tree_fits_uhwi_p (max_adasize))
 	max_unitsize
 	  = size_binop (CEIL_DIV_EXPR,
 			round_up (max_adasize, TYPE_ALIGN (gnu_type)),

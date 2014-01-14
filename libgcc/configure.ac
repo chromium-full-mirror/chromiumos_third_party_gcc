@@ -66,6 +66,16 @@ AC_ARG_ENABLE(shared,
 ], [enable_shared=yes])
 AC_SUBST(enable_shared)
 
+AC_ARG_ENABLE(vtable-verify,
+[  --enable-vtable-verify    Enable vtable verification feature ],
+[case "$enableval" in
+ yes) enable_vtable_verify=yes ;;
+ no)  enable_vtable_verify=no ;;
+ *)   enable_vtable_verify=no;;
+ esac],
+[enable_vtable_verify=no])
+AC_SUBST(enable_vtable_verify)
+
 GCC_PICFLAG
 AC_SUBST(PICFLAG)
 
@@ -172,7 +182,14 @@ AC_SUBST(long_double_type_size)
 
 # Check for decimal float support.
 AC_CACHE_CHECK([whether decimal floating point is supported], [libgcc_cv_dfp],
-	       [AC_COMPILE_IFELSE([_Decimal32 x;], [libgcc_cv_dfp=yes],
+	       [AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <fenv.h>
+]], [[
+_Decimal32 x;
+int fe_except =
+  FE_INVALID|FE_DIVBYZERO|FE_OVERFLOW|FE_UNDERFLOW|FE_INEXACT;
+]])],
+				  [libgcc_cv_dfp=yes],
 				  [libgcc_cv_dfp=no])])
 decimal_float=$libgcc_cv_dfp
 AC_SUBST(decimal_float)
@@ -382,6 +399,7 @@ GCC_AC_THREAD_HEADER([$target_thread_file])
 # Substitute configuration variables
 AC_SUBST(cpu_type)
 AC_SUBST(extra_parts)
+AC_SUBST(vtv_extra_parts)
 AC_SUBST(asm_hidden_op)
 AC_CONFIG_LINKS([enable-execute-stack.c:$enable_execute_stack])
 AC_CONFIG_LINKS([unwind.h:$unwind_header])
