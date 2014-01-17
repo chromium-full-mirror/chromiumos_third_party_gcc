@@ -872,7 +872,10 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       _M_range_check(size_type __n) const
       {
 	if (__n >= this->size())
-	  __throw_out_of_range(__N("vector::_M_range_check"));
+	  __throw_out_of_range_fmt(__N("vector::_M_range_check: __n "
+				       "(which is %zu) >= this->size() "
+				       "(which is %zu)"),
+				   __n, this->size());
       }
 
     public:
@@ -1047,6 +1050,10 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       void
       pop_back()
       {
+#if __google_stl_debug_vector
+	if (this->empty())
+	  __throw_logic_error(__N("pop_back() on empty vector"));
+#endif
 	--this->_M_impl._M_finish;
 	_Alloc_traits::destroy(this->_M_impl, this->_M_impl._M_finish);
       }
@@ -1132,7 +1139,13 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        */
       void
       insert(iterator __position, size_type __n, const value_type& __x)
-      { _M_fill_insert(__position, __n, __x); }
+      {
+#if __google_stl_debug_vector
+	if (__position < this->begin() || __position > this->end())
+	  __throw_out_of_range(__N("insert() at invalid position"));
+#endif
+	_M_fill_insert(__position, __n, __x);
+      }
 
       /**
        *  @brief  Inserts a range into the %vector.
@@ -1154,13 +1167,23 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
         void
         insert(iterator __position, _InputIterator __first,
 	       _InputIterator __last)
-        { _M_insert_dispatch(__position, __first, __last, __false_type()); }
+        {
+#if __google_stl_debug_vector
+	  if (__position < this->begin() || __position > this->end())
+	    __throw_out_of_range(__N("insert() at invalid position"));
+#endif
+	  _M_insert_dispatch(__position, __first, __last, __false_type());
+	}
 #else
       template<typename _InputIterator>
         void
         insert(iterator __position, _InputIterator __first,
 	       _InputIterator __last)
         {
+#if __google_stl_debug_vector
+	  if (__position < this->begin() || __position > this->end())
+	    __throw_out_of_range(__N("insert() at invalid position"));
+#endif
 	  // Check whether it's an integral type.  If so, it's not an iterator.
 	  typedef typename std::__is_integer<_InputIterator>::__type _Integral;
 	  _M_insert_dispatch(__position, __first, __last, _Integral());

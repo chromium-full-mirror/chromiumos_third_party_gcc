@@ -9829,6 +9829,11 @@ invalid_indirection_error (location_t loc, tree type, ref_operator errstring)
 		"invalid type argument of %<->%> (have %qT)",
 		type);
       break;
+    case RO_ARROW_STAR:
+      error_at (loc,
+		"invalid type argument of %<->*%> (have %qT)",
+		type);
+      break;
     case RO_IMPLICIT_CONVERSION:
       error_at (loc,
 		"invalid type argument of implicit conversion (have %qT)",
@@ -11284,11 +11289,11 @@ maybe_warn_unused_local_typedefs (void)
   if (warn_unused_local_typedefs
       && errorcount == unused_local_typedefs_warn_count)
     {
-      /* FOR_EACH_VEC_SAFE_ELT (l->local_typedefs, i, decl) */
-      /* 	if (!TREE_USED (decl)) */
-      /* 	  warning_at (DECL_SOURCE_LOCATION (decl), */
-      /* 		      OPT_Wunused_local_typedefs, */
-      /* 		      "typedef %qD locally defined but not used", decl); */
+      FOR_EACH_VEC_SAFE_ELT (l->local_typedefs, i, decl)
+	if (!TREE_USED (decl))
+	  warning_at (DECL_SOURCE_LOCATION (decl),
+		      OPT_Wunused_local_typedefs,
+		      "typedef %qD locally defined but not used", decl);
       unused_local_typedefs_warn_count = errorcount;
     }
 

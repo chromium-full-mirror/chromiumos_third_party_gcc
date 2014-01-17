@@ -1053,7 +1053,7 @@ connect_traces (int n_traces, struct trace *traces)
   current_partition = BB_PARTITION (traces[0].first);
   two_passes = false;
 
-  if (flag_reorder_blocks_and_partition)
+  if (crtl->has_bb_partition)
     for (i = 0; i < n_traces && !two_passes; i++)
       if (BB_PARTITION (traces[0].first)
 	  != BB_PARTITION (traces[i].first))
@@ -1262,7 +1262,7 @@ connect_traces (int n_traces, struct trace *traces)
 		      }
 		  }
 
-	      if (flag_reorder_blocks_and_partition)
+	      if (crtl->has_bb_partition)
 		try_copy = false;
 
 	      /* Copy tiny blocks always; copy larger blocks only when the
@@ -1380,15 +1380,6 @@ get_uncond_jump_length (void)
   return length;
 }
 
-/* Emit a barrier into the footer of BB.  */
-
-static void
-emit_barrier_after_bb (basic_block bb)
-{
-  rtx barrier = emit_barrier_after (BB_END (bb));
-  BB_FOOTER (bb) = unlink_insn_chain (barrier, barrier);
-}
-
 /* The landing pad OLD_LP, in block OLD_BB, has edges from both partitions.
    Duplicate the landing pad and split the edges so that no EH edge
    crosses partitions.  */
@@ -1453,25 +1444,171 @@ fix_up_crossing_landing_pad (eh_landing_pad old_lp, basic_block old_bb)
       ei_next (&ei);
 }
 
+
+/* Ensure that all hot bbs are included in a hot path through the
+   procedure. This is done by calling this function twice, once
+   with WALK_UP true (to look for paths from the entry to hot bbs) and
+   once with WALK_UP false (to look for paths from hot bbs to the exit).
+   Returns the updated value of COLD_BB_COUNT and adds newly-hot bbs
+   to BBS_IN_HOT_PARTITION.  */
+
+static unsigned int
+sanitize_hot_paths (bool walk_up, unsigned int cold_bb_count,
+                    vec<basic_block> *bbs_in_hot_partition)
+{
+  /* Callers check this.  */
+  gcc_checking_assert (cold_bb_count);
+
+  /* Keep examining hot bbs while we still have some left to check
+     and there are remaining cold bbs.  */
+  vec<basic_block> hot_bbs_to_check = bbs_in_hot_partition->copy ();
+  while (! hot_bbs_to_check.is_empty ()
+         && cold_bb_count)
+    {
+      basic_block bb = hot_bbs_to_check.pop ();
+      vec<edge, va_gc> *edges = walk_up ? bb->preds : bb->succs;
+      edge e;
+      edge_iterator ei;
+      int highest_probability = 0;
+      int highest_freq = 0;
+      gcov_type highest_count = 0;
+      bool found = false;
+
+      /* Walk the preds/succs and check if there is at least one already
+         marked hot. Keep track of the most frequent pred/succ so that we
+         can mark it hot if we don't find one.  */
+      FOR_EACH_EDGE (e, ei, edges)
+        {
+          basic_block reach_bb = walk_up ? e->src : e->dest;
+
+          if (e->flags & EDGE_DFS_BACK)
+            continue;
+
+          if (BB_PARTITION (reach_bb) != BB_COLD_PARTITION)
+          {
+            found = true;
+            break;
+          }
+          /* The following loop will look for the hottest edge via
+             the edge count, if it is non-zero, then fallback to the edge
+             frequency and finally the edge probability.  */
+          if (e->count > highest_count)
+            highest_count = e->count;
+          int edge_freq = EDGE_FREQUENCY (e);
+          if (edge_freq > highest_freq)
+            highest_freq = edge_freq;
+          if (e->probability > highest_probability)
+            highest_probability = e->probability;
+        }
+
+      /* If bb is reached by (or reaches, in the case of !WALK_UP) another hot
+         block (or unpartitioned, e.g. the entry block) then it is ok. If not,
+         then the most frequent pred (or succ) needs to be adjusted.  In the
+         case where multiple preds/succs have the same frequency (e.g. a
+         50-50 branch), then both will be adjusted.  */
+      if (found)
+        continue;
+
+      FOR_EACH_EDGE (e, ei, edges)
+        {
+          if (e->flags & EDGE_DFS_BACK)
+            continue;
+          /* Select the hottest edge using the edge count, if it is non-zero,
+             then fallback to the edge frequency and finally the edge
+             probability.  */
+          if (highest_count)
+            {
+              if (e->count < highest_count)
+                continue;
+            }
+          else if (highest_freq)
+            {
+              if (EDGE_FREQUENCY (e) < highest_freq)
+                continue;
+            }
+          else if (e->probability < highest_probability)
+            continue;
+
+          basic_block reach_bb = walk_up ? e->src : e->dest;
+
+          /* We have a hot bb with an immediate dominator that is cold.
+             The dominator needs to be re-marked hot.  */
+          BB_SET_PARTITION (reach_bb, BB_HOT_PARTITION);
+          cold_bb_count--;
+
+          /* Now we need to examine newly-hot reach_bb to see if it is also
+             dominated by a cold bb.  */
+          bbs_in_hot_partition->safe_push (reach_bb);
+          hot_bbs_to_check.safe_push (reach_bb);
+        }
+    }
+
+  return cold_bb_count;
+}
+
+
 /* Find the basic blocks that are rarely executed and need to be moved to
    a separate section of the .o file (to cut down on paging and improve
    cache locality).  Return a vector of all edges that cross.  */
 
-static vec<edge> 
+static vec<edge>
 find_rarely_executed_basic_blocks_and_crossing_edges (void)
 {
   vec<edge> crossing_edges = vNULL;
   basic_block bb;
   edge e;
   edge_iterator ei;
+  unsigned int cold_bb_count = 0;
+  vec<basic_block> bbs_in_hot_partition = vNULL;
 
   /* Mark which partition (hot/cold) each basic block belongs in.  */
   FOR_EACH_BB (bb)
     {
+      bool cold_bb = false;
+
       if (probably_never_executed_bb_p (cfun, bb))
-	BB_SET_PARTITION (bb, BB_COLD_PARTITION);
+        {
+          /* Handle profile insanities created by upstream optimizations
+             by also checking the incoming edge weights. If there is a non-cold
+             incoming edge, conservatively prevent this block from being split
+             into the cold section.  */
+          cold_bb = true;
+          FOR_EACH_EDGE (e, ei, bb->preds)
+            if (!probably_never_executed_edge_p (cfun, e))
+              {
+                cold_bb = false;
+                break;
+              }
+        }
+      if (cold_bb)
+        {
+          BB_SET_PARTITION (bb, BB_COLD_PARTITION);
+          cold_bb_count++;
+        }
       else
-	BB_SET_PARTITION (bb, BB_HOT_PARTITION);
+        {
+          BB_SET_PARTITION (bb, BB_HOT_PARTITION);
+          bbs_in_hot_partition.safe_push (bb);
+        }
+    }
+
+  /* Ensure that hot bbs are included along a hot path from the entry to exit.
+     Several different possibilities may include cold bbs along all paths
+     to/from a hot bb. One is that there are edge weight insanities
+     due to optimization phases that do not properly update basic block profile
+     counts. The second is that the entry of the function may not be hot, because
+     it is entered fewer times than the number of profile training runs, but there
+     is a loop inside the function that causes blocks within the function to be
+     above the threshold for hotness. This is fixed by walking up from hot bbs
+     to the entry block, and then down from hot bbs to the exit, performing
+     partitioning fixups as necessary.  */
+  if (cold_bb_count)
+    {
+      mark_dfs_back_edges ();
+      cold_bb_count = sanitize_hot_paths (true, cold_bb_count,
+                                          &bbs_in_hot_partition);
+      if (cold_bb_count)
+        sanitize_hot_paths (false, cold_bb_count, &bbs_in_hot_partition);
     }
 
   /* The format of .gcc_except_table does not allow landing pads to
@@ -1720,8 +1857,7 @@ fix_up_fall_thru_edges (void)
 		     (i.e. fix it so the fall through does not cross and
 		     the cond jump does).  */
 
-		  if (!cond_jump_crosses
-		      && cur_bb->aux == cond_jump->dest)
+		  if (!cond_jump_crosses)
 		    {
 		      /* Find label in fall_thru block. We've already added
 			 any missing labels, so there must be one.  */
@@ -1765,10 +1901,10 @@ fix_up_fall_thru_edges (void)
 		      new_bb->aux = cur_bb->aux;
 		      cur_bb->aux = new_bb;
 
-		      /* Make sure new fall-through bb is in same
-			 partition as bb it's falling through from.  */
+                      /* This is done by force_nonfallthru_and_redirect.  */
+		      gcc_assert (BB_PARTITION (new_bb)
+                                  == BB_PARTITION (cur_bb));
 
-		      BB_COPY_PARTITION (new_bb, cur_bb);
 		      single_succ_edge (new_bb)->flags |= EDGE_CROSSING;
 		    }
 		  else
@@ -2066,45 +2202,11 @@ add_reg_crossing_jump_notes (void)
   FOR_EACH_BB (bb)
     FOR_EACH_EDGE (e, ei, bb->succs)
       if ((e->flags & EDGE_CROSSING)
-	  && JUMP_P (BB_END (e->src)))
+	  && JUMP_P (BB_END (e->src))
+          /* Some notes were added during fix_up_fall_thru_edges, via
+             force_nonfallthru_and_redirect.  */
+          && !find_reg_note (BB_END (e->src), REG_CROSSING_JUMP, NULL_RTX))
 	add_reg_note (BB_END (e->src), REG_CROSSING_JUMP, NULL_RTX);
-}
-
-/* Verify, in the basic block chain, that there is at most one switch
-   between hot/cold partitions. This is modelled on
-   rtl_verify_flow_info_1, but it cannot go inside that function
-   because this condition will not be true until after
-   reorder_basic_blocks is called.  */
-
-static void
-verify_hot_cold_block_grouping (void)
-{
-  basic_block bb;
-  int err = 0;
-  bool switched_sections = false;
-  int current_partition = 0;
-
-  FOR_EACH_BB (bb)
-    {
-      if (!current_partition)
-	current_partition = BB_PARTITION (bb);
-      if (BB_PARTITION (bb) != current_partition)
-	{
-	  if (switched_sections)
-	    {
-	      error ("multiple hot/cold transitions found (bb %i)",
-		     bb->index);
-	      err = 1;
-	    }
-	  else
-	    {
-	      switched_sections = true;
-	      current_partition = BB_PARTITION (bb);
-	    }
-	}
-    }
-
-  gcc_assert(!err);
 }
 
 /* Reorder basic blocks.  The main entry point to this file.  FLAGS is
@@ -2159,8 +2261,9 @@ reorder_basic_blocks (void)
       dump_flow_info (dump_file, dump_flags);
     }
 
-  if (flag_reorder_blocks_and_partition)
-    verify_hot_cold_block_grouping ();
+  /* Signal that rtl_verify_flow_info_1 can now verify that there
+     is at most one switch between hot/cold sections.  */
+  crtl->bb_reorder_complete = true;
 }
 
 /* Determine which partition the first basic block in the function
@@ -2171,28 +2274,27 @@ reorder_basic_blocks (void)
    encountering this note will make the compiler switch between the
    hot and cold text sections.  */
 
-static void
+void
 insert_section_boundary_note (void)
 {
   basic_block bb;
   rtx new_note;
-  int first_partition = 0;
+  bool switched_sections = false;
+  int current_partition = 0;
 
-  if (!flag_reorder_blocks_and_partition)
+  if (!crtl->has_bb_partition)
     return;
 
   FOR_EACH_BB (bb)
     {
-      if (!first_partition)
-	first_partition = BB_PARTITION (bb);
-      if (BB_PARTITION (bb) != first_partition)
+      if (!current_partition)
+	current_partition = BB_PARTITION (bb);
+      if (BB_PARTITION (bb) != current_partition)
 	{
-	  new_note = emit_note_before (NOTE_INSN_SWITCH_TEXT_SECTIONS,
-				       BB_HEAD (bb));
-	  /* ??? This kind of note always lives between basic blocks,
-	     but add_insn_before will set BLOCK_FOR_INSN anyway.  */
-	  BLOCK_FOR_INSN (new_note) = NULL;
-	  break;
+	  gcc_assert (!switched_sections);
+          switched_sections = true;
+          emit_note_before (NOTE_INSN_SWITCH_TEXT_SECTIONS, BB_HEAD (bb));
+          current_partition = BB_PARTITION (bb);
 	}
     }
 }
@@ -2223,8 +2325,6 @@ rest_of_handle_reorder_blocks (void)
       bb->aux = bb->next_bb;
   cfg_layout_finalize ();
 
-  /* Add NOTE_INSN_SWITCH_TEXT_SECTIONS notes.  */
-  insert_section_boundary_note ();
   return 0;
 }
 
@@ -2356,6 +2456,11 @@ duplicate_computed_gotos (void)
 
       /* The successor block has to be a duplication candidate.  */
       if (!bitmap_bit_p (candidates, single_succ (bb)->index))
+	continue;
+
+      /* Don't duplicate a partition crossing edge, which requires difficult
+         fixup.  */
+      if (find_reg_note (BB_END (bb), REG_CROSSING_JUMP, NULL_RTX))
 	continue;
 
       new_bb = duplicate_block (single_succ (bb), single_succ_edge (bb), bb);
@@ -2509,6 +2614,8 @@ partition_hot_cold_basic_blocks (void)
   crossing_edges = find_rarely_executed_basic_blocks_and_crossing_edges ();
   if (!crossing_edges.exists ())
     return 0;
+
+  crtl->has_bb_partition = true;
 
   /* Make sure the source of any crossing edge ends in a jump and the
      destination of any crossing edge has a label.  */

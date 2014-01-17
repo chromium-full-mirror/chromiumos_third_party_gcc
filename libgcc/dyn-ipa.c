@@ -24,23 +24,7 @@ a copy of the GCC Runtime Library Exception along with this program;
 see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 <http://www.gnu.org/licenses/>.  */
 
-#include "tconfig.h"
-#include "tsystem.h"
-#include "coretypes.h"
-#include "tm.h"
-
-#if defined(inhibit_libc)
-#define IN_LIBGCOV (-1)
-#else
-#undef NULL /* Avoid errors if stdio.h and our stddef.h mismatch.  */
-#include <stdio.h>
-#include <stdlib.h>
-#define IN_LIBGCOV 1
-#if defined(L_gcov)
-#define GCOV_LINKAGE /* nothing */
-#endif
-#endif
-#include "gcov-io.h"
+#include "libgcov.h"
 
 struct dyn_pointer_set;
 
@@ -232,7 +216,7 @@ init_dyn_cgraph_node (struct dyn_cgraph_node *node, gcov_type guid)
   node->visited = 0;
 }
 
-/* Return module_id. FUNC_GUID is the global unique id.  
+/* Return module_id. FUNC_GUID is the global unique id.
    This id is 1 based. 0 is the invalid id.  */
 
 static inline gcov_unsigned_t
@@ -317,8 +301,6 @@ get_module_info (gcov_unsigned_t module_id)
   return the_dyn_call_graph.modules[module_id - 1];
 }
 
-struct gcov_info *__gcov_list ATTRIBUTE_HIDDEN;
-
 static inline unsigned
 cgraph_node_get_key (const void *p)
 {
@@ -371,6 +353,9 @@ get_imported_modus (unsigned module_ident)
   return p;
 }
 
+/* Defined in libgcov-driver.c.  */
+extern struct gcov_info *get_gcov_list (void);
+
 /* Initialize dynamic call graph.  */
 
 static void
@@ -380,6 +365,7 @@ init_dyn_call_graph (void)
   struct gcov_info *gi_ptr;
   const char *env_str;
   int do_dump = (do_cgraph_dump () != 0);
+  struct gcov_info *gcov_list = get_gcov_list ();
 
   the_dyn_call_graph.call_graph_nodes = 0;
   the_dyn_call_graph.modules = 0;
@@ -390,7 +376,7 @@ init_dyn_call_graph (void)
   flag_weak_inclusion = __gcov_lipo_weak_inclusion;
   mem_threshold = __gcov_lipo_max_mem * 1.25;
 
-  gi_ptr = __gcov_list;
+  gi_ptr = gcov_list;
 
   for (; gi_ptr; gi_ptr = gi_ptr->next)
     num_modules++;
@@ -408,7 +394,7 @@ init_dyn_call_graph (void)
   the_dyn_call_graph.call_graph_nodes
     = XNEWVEC (struct dyn_pointer_set *, num_modules);
 
-  gi_ptr = __gcov_list;
+  gi_ptr = gcov_list;
 
   if ((env_str = getenv ("GCOV_DYN_ALG")))
     {
@@ -421,7 +407,7 @@ init_dyn_call_graph (void)
         flag_weak_inclusion = atoi (env_str);
 
       if (do_dump)
-	fprintf (stderr, 
+	fprintf (stderr,
             "!!!! Using ALG=%d merge_edges=%d weak_inclusion=%d. \n",
             flag_alg_mode, flag_modu_merge_edges, flag_weak_inclusion);
     }
@@ -1613,7 +1599,7 @@ modu_graph_process_dyn_cgraph_node (struct dyn_cgraph_node *node,
   while (callees != 0)
     {
       callee = callees->callee;
-      unsigned callee_m_id = 
+      unsigned callee_m_id =
         get_module_ident_from_func_glob_uid (callee->guid);
       if (callee_m_id != m_id)
         {
@@ -1769,7 +1755,7 @@ modu_add_auxiliary (unsigned t_mid, unsigned s_mid, gcov_type count)
 
 /* Check if inserting the module specified by DATA1 (including
    it's imported list to grouping VALUE, makes the ggc_memory
-   size exceed the memory threshold. 
+   size exceed the memory threshold.
    Return 0 if size is great than the thereshold and 0 otherwise.  */
 
 static int
@@ -2095,7 +2081,7 @@ gcov_write_module_info (const struct gcov_info *mod_info,
       len += 1; /* Each string is lead by a length.  */
     }
 
-  len += 10; /* 9 more fields */
+  len += 11; /* 11 more fields */
 
   gcov_write_tag_length (GCOV_TAG_MODULE_INFO, len);
   gcov_write_unsigned (module_info->ident);
@@ -2104,6 +2090,7 @@ gcov_write_module_info (const struct gcov_info *mod_info,
     SET_MODULE_INCLUDE_ALL_AUX (module_info);
   gcov_write_unsigned (module_info->flags);
   gcov_write_unsigned (module_info->lang);
+  gcov_write_unsigned (module_info->ggc_memory);
   gcov_write_unsigned (module_info->num_quote_paths);
   gcov_write_unsigned (module_info->num_bracket_paths);
   gcov_write_unsigned (module_info->num_system_paths);

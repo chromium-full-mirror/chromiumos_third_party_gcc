@@ -7995,6 +7995,12 @@ unmark_all_dies (dw_die_ref die)
 static bool
 include_pubname_in_output (vec<pubname_entry, va_gc> *table, pubname_entry *p)
 {
+  /* By limiting gnu pubnames to definitions only, gold can generate a
+     gdb index without entries for declarations, which don't include
+     enough information to be useful.  */
+  if (debug_generate_pub_sections == 2 && is_declaration_die (p->die))
+    return false;
+
   if (table == pubname_table)
     {
       /* Enumerator names are part of the pubname table, but the
@@ -9243,7 +9249,8 @@ output_pubname (dw_offset die_offset, pubname_entry *entry)
 	    GDB_INDEX_SYMBOL_STATIC_SET_VALUE(flags, 1);
           break;
         default:
-          gcc_unreachable ();
+          /* An unusual tag.  Leave the flag-byte empty.  */
+          break;
       }
       dw2_asm_output_data (1, flags >> GDB_INDEX_CU_BITSIZE,
                            "GDB-index flags");
@@ -9303,7 +9310,7 @@ output_pubnames (vec<pubname_entry, va_gc> *names)
 	      if (type_node != NULL)
 	        die_offset = (type_node->skeleton_die != NULL
 			      ? type_node->skeleton_die->die_offset
-			      : 0);
+			      : comp_unit_die ()->die_offset);
 	    }
 
           output_pubname (die_offset, pub);
