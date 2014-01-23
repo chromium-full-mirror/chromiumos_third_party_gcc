@@ -11289,11 +11289,11 @@ maybe_warn_unused_local_typedefs (void)
   if (warn_unused_local_typedefs
       && errorcount == unused_local_typedefs_warn_count)
     {
-      FOR_EACH_VEC_SAFE_ELT (l->local_typedefs, i, decl)
-	if (!TREE_USED (decl))
-	  warning_at (DECL_SOURCE_LOCATION (decl),
-		      OPT_Wunused_local_typedefs,
-		      "typedef %qD locally defined but not used", decl);
+      /* FOR_EACH_VEC_SAFE_ELT (l->local_typedefs, i, decl) */
+      /* 	if (!TREE_USED (decl)) */
+      /* 	  warning_at (DECL_SOURCE_LOCATION (decl), */
+      /* 		      OPT_Wunused_local_typedefs, */
+      /* 		      "typedef %qD locally defined but not used", decl); */
       unused_local_typedefs_warn_count = errorcount;
     }
 
