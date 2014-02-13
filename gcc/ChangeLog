@@ -1,3 +1,24 @@
+2014-02-11  Cong Hou  <congh@google.com>
+
+	* c-family/c-opts.c (c_common_init_options_struct): 
+	Don't set x_flag_complex_method to 2 for C++.
+
+2014-02-11  Cong Hou  <congh@google.com>
+
+	* config/i386/i386.c: Add m_GENERIC to
+	X86_TUNE_SSE_UNALIGNED_LOAD_OPTIMAL and
+	X86_TUNE_SSE_UNALIGNED_STORE_OPTIMAL.
+
+2014-02-03  Cong Hou  <congh@google.com>
+
+	Backport from mainline
+	2014-02-03  Cong Hou  <congh@google.com>
+
+	PR tree-optimization/60000
+	* tree-vect-loop.c (vect_transform_loop): Set pattern_def_seq to NULL
+	if the vectorized statement is a store.  A store statement can only
+	appear at the end of pattern statements.
+
 2014-01-13  Cong Hou  <congh@google.com>
 
 	* opts.c (struct default_options default_options_table):

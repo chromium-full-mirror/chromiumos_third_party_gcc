@@ -267,6 +267,114 @@ read_gcda_finalize (struct gcov_info *obj_info)
 extern void gcov_read_module_info (struct gcov_module_info *mod_info,
     gcov_unsigned_t len);
 
+/* Substitute string is of this format:
+     old_sub1:new_sub1[,old_sub2:new_sub2]
+   Note that we only apply the substutution ONE time, for the first match.  */
+
+static const char *substitute_string;
+
+/* A global function to set the substitute string.  */
+
+void
+lipo_set_substitute_string (const char *str)
+{
+  char *sub_dup = xstrdup (str);
+  char *cur_sub = sub_dup;
+
+  /* First check if the str is in the right form.
+     Dup the string and split it into tokens with
+     ',' and ':' as the delimiters.  */
+  do
+    {
+      char *new_str;
+      char *next = strchr (cur_sub, ',');
+      if (next)
+        *next++ = '\0';
+      new_str = strchr (cur_sub, ':');
+      if (!new_str)
+        {
+          fprintf (stderr, "Warning: Skip invalid substibution string:%s\n",
+                   str);
+          free (sub_dup);
+          return;
+        }
+      *new_str++ = '\0';
+      cur_sub = next;
+    } while (cur_sub);
+
+  free (sub_dup);
+  substitute_string = str;
+}
+
+/* Replace the first occurance of CUT_STR to NEW_STR in INPUT_STR.  */
+
+static char *
+lipo_process_substitute_string_1 (char *input_str,
+                                  const char *cur_str,
+                                  const char *new_str)
+{
+  char *p;
+
+  if (!input_str || !cur_str || !new_str)
+    return input_str;
+
+  if ((p = strstr (input_str, cur_str)) != NULL)
+    {
+      char *t;
+
+      if (verbose)
+        printf ("Substitute: %s \n", input_str);
+      t = (char*) xmalloc (strlen (input_str) + 1
+          + strlen (new_str) - strlen (cur_str));
+      *p = 0;
+
+      strcpy (t, input_str);
+      strcat (t, new_str);
+      strcat (t, p + strlen (cur_str));
+      if (verbose)
+        printf ("       -->  %s\n", t);
+      return t;
+    }
+
+  return input_str;
+}
+
+/* Parse the substitute string and apply to the INPUT_STR.  */
+
+static char *
+lipo_process_substitute_string (char *input_str)
+{
+  char *sub_dup, *cur_sub, *ret;
+
+  if (substitute_string == NULL)
+    return input_str;
+
+  sub_dup = xstrdup (substitute_string);
+  cur_sub = sub_dup;
+  ret = input_str;
+
+  /* Dup the string and split it into tokens with
+     ',' and ':' as the delimiters.  */
+  do
+    {
+      char *new_str, *new_input;
+      char *next = strchr (cur_sub, ',');
+      if (next)
+        *next++ = '\0';
+      new_str = strchr (cur_sub, ':');
+      gcc_assert (new_str);
+      *new_str++ = '\0';
+      new_input = ret;
+      ret = lipo_process_substitute_string_1 (new_input, cur_sub, new_str);
+      if (ret != new_input)
+        free (new_input);
+      cur_sub = next;
+    } while (cur_sub);
+
+  free (sub_dup);
+  return ret;
+}
+
 /* This function reads module_info from a gcda file.  */
 
 static void
@@ -280,7 +388,11 @@ tag_module_info (unsigned tag ATTRIBUTE_UNUSED, unsigned length)
   gcov_read_module_info (mod_info, length);
 
   if (mod_info->is_primary)
-    curr_module_info = mod_info;
+    {
+      mod_info->da_filename =
+          lipo_process_substitute_string (mod_info->da_filename);
+      curr_module_info = mod_info;
+    }
   else
     free (mod_info);
 }
@@ -295,7 +407,8 @@ read_gcda_file (const char *filename)
   unsigned depth = 0;
   unsigned magic, version;
   struct gcov_info *obj_info;
-  int i;
+  int i, len;
+  char *str_dup;
 
   for (i=0; i< GCOV_COUNTERS; i++)
     k_ctrs_mask[i] = 0;
@@ -335,15 +448,11 @@ read_gcda_file (const char *filename)
   curr_fn_info = 0;
   curr_module_info = 0;
 
-  {
-    char *str_dup = (char*) xmalloc (strlen (filename) + 1);
-    int len;
+  str_dup = lipo_process_substitute_string (xstrdup (filename));
+  obj_info->filename = str_dup;
 
-    strcpy (str_dup, filename);
-    obj_info->filename = str_dup;
-    if ((len = strlen (filename)) > max_filename_len)
-      max_filename_len = len;
-  }
+  if ((len = strlen (str_dup)) > max_filename_len)
+    max_filename_len = len;
 
   /* Read stamp.  */
   obj_info->stamp = gcov_read_unsigned ();
@@ -420,6 +529,21 @@ read_gcda_file (const char *filename)
   return obj_info;
 }
 
+extern int is_module_available (const char *, unsigned *, int);
+
+/* If only use the modules in the modu_list.  */
+
+static int flag_use_modu_list;
+
+/* Set to use only the modules in the modu_list file.  */
+
+void
+set_use_modu_list (void)
+{
+  flag_use_modu_list = 1;
+}
+
+
 /* This will be called by ftw(). It opens and read a gcda file FILENAME.
    Return a non-zero value to stop the tree walk.  */
 
@@ -450,10 +574,37 @@ ftw_read_file (const char *filename,
 
   obj_info = read_gcda_file (filename);
 
+  if (obj_info->mod_info)
+    {
+      unsigned mod_id = obj_info->mod_info->ident;
+      int create = (flag_use_modu_list ? 0 : 1);
+
+      if (!is_module_available (obj_info->mod_info->source_filename,
+                                &mod_id, create))
+        {
+          if (verbose)
+            fprintf (stderr, "warning: module %s (%d) is not avail\n",
+                     obj_info->mod_info->source_filename, mod_id);
+          return 0;
+        }
+    }
+
   obj_info->next = gcov_info_head;
   gcov_info_head = obj_info;
 
   return 0;
+}
+
+/* Source profile directory name.  */
+
+static const char *source_profile_dir;
+
+/* Return Source profile directory name.  */
+
+const char *
+get_source_profile_dir (void)
+{
+  return source_profile_dir;
 }
 
 /* Initializer for reading a profile dir.  */
@@ -490,6 +641,8 @@ gcov_read_profile_dir (const char* dir_name, int recompute_summary ATTRIBUTE_UNU
       fprintf (stderr, "%s is not a directory\n", dir_name);
       return NULL;
     }
+  source_profile_dir = getcwd (NULL, 0);
+
   ftw (".", ftw_read_file, 50);
   ret = chdir (pwd);
   free (pwd);
@@ -720,39 +873,38 @@ gcov_profile_merge (struct gcov_info *tgt_profile, struct gcov_info *src_profile
   return 0;
 }
 
-/* This part of code is to scale profile counters.  */
+typedef gcov_type (*counter_op_fn) (gcov_type, void*, void*);
 
-/* Type of function used to normalize counters.  */
-typedef void (*gcov_scale_fn) (gcov_type *, gcov_unsigned_t, double);
-
-/* Scale arc counters. N_COUNTERS of counter value in COUNTERS array are
-   multiplied by a factor F.  */
+/* Performing FN upon arc counters.  */
 
 static void
-__gcov_scale_add (gcov_type *counters, unsigned n_counters, double f)
+__gcov_add_counter_op (gcov_type *counters, unsigned n_counters,
+                       counter_op_fn fn, void *data1, void *data2)
 {
   for (; n_counters; counters++, n_counters--)
     {
       gcov_type val = *counters;
-      *counters = val * f;
+      *counters = fn(val, data1, data2);
     }
 }
 
-/* Scale ior counters.  */
+/* Performing FN upon ior counters.  */
 
 static void
-__gcov_scale_ior (gcov_type *counters ATTRIBUTE_UNUSED,
-                      unsigned n_counters ATTRIBUTE_UNUSED,
-                      double f ATTRIBUTE_UNUSED)
+__gcov_ior_counter_op (gcov_type *counters ATTRIBUTE_UNUSED,
+                       unsigned n_counters ATTRIBUTE_UNUSED,
+                       counter_op_fn fn ATTRIBUTE_UNUSED,
+                       void *data1 ATTRIBUTE_UNUSED,
+                       void *data2 ATTRIBUTE_UNUSED)
 {
   /* Do nothing.  */
 }
 
-/* Scale delta counters. Multiplied the counters in COUNTERS array
-   by a factor of F.  */
+/* Performaing FN upon delta counters.  */
 
 static void
-__gcov_scale_delta (gcov_type *counters, unsigned n_counters, double f)
+__gcov_delta_counter_op (gcov_type *counters, unsigned n_counters,
+                         counter_op_fn fn, void *data1, void *data2)
 {
   unsigned i, n_measures;
 
@@ -760,16 +912,16 @@ __gcov_scale_delta (gcov_type *counters, unsigned n_counters, double f)
   n_measures = n_counters / 4;
   for (i = 0; i < n_measures; i++, counters += 4)
     {
-      counters[2] *= f;
-      counters[3] *= f;
+      counters[2] = fn (counters[2], data1, data2);
+      counters[3] = fn (counters[3], data1, data2);
     }
 }
 
-/* Scale single counters. Multiplied the counters in COUNTERS array
-   by a factor of F.  */
+/* Performing FN upon single counters.  */
 
 static void
-__gcov_scale_single (gcov_type *counters, unsigned n_counters, double f)
+__gcov_single_counter_op (gcov_type *counters, unsigned n_counters,
+                          counter_op_fn fn, void *data1, void *data2)
 {
   unsigned i, n_measures;
 
@@ -777,16 +929,16 @@ __gcov_scale_single (gcov_type *counters, unsigned n_counters, double f)
   n_measures = n_counters / 3;
   for (i = 0; i < n_measures; i++, counters += 3)
     {
-      counters[1] *= f;
-      counters[2] *= f;
+      counters[1] = fn (counters[1], data1, data2);
+      counters[2] = fn (counters[2], data1, data2);
     }
 }
 
-/* Scale indirect-call profile counters. Multiplied the counters in COUNTERS
-   array by a factor of F.  */
+/* Performing FN upon indirect-call profile counters.  */
 
 static void
-__gcov_scale_icall_topn (gcov_type *counters, unsigned n_counters, double f)
+__gcov_icall_topn_op (gcov_type *counters, unsigned n_counters,
+                      counter_op_fn fn, void *data1, void *data2)
 {
   unsigned i;
 
@@ -797,41 +949,65 @@ __gcov_scale_icall_topn (gcov_type *counters, unsigned n_counters, double f)
       gcov_type *value_array = &counters[i + 1];
 
       for (j = 0; j < GCOV_ICALL_TOPN_NCOUNTS - 1; j += 2)
-        value_array[1] *= f;
+        value_array[j + 1] = fn (value_array[j + 1], data1, data2);
     }
 }
 
-/* Scale direct-call profile counters. Multiplied the counters in COUNTERS
-   by a factor of F.  */
+/* Performing FN upon direct-call profile counters.  */
 
 static void
-__gcov_scale_dc (gcov_type *counters, unsigned n_counters, double f)
+__gcov_dc_op (gcov_type *counters, unsigned n_counters,
+              counter_op_fn fn, void *data1, void *data2)
 {
   unsigned i;
 
   gcc_assert (!(n_counters % 2));
   for (i = 0; i < n_counters; i += 2)
-    counters[1] *= f;
+    counters[i + 1] = fn (counters[i + 1], data1, data2);
 }
 
-/* Scaling functions for counters.  */
-static gcov_scale_fn ctr_scale_functions[GCOV_COUNTERS] = {
-    __gcov_scale_add,
-    __gcov_scale_add,
-    __gcov_scale_add,
-    __gcov_scale_single,
-    __gcov_scale_delta,
-    __gcov_scale_single,
-    __gcov_scale_add,
-    __gcov_scale_ior,
-    __gcov_scale_icall_topn,
-    __gcov_scale_dc,
+
+/* Scaling the counter value V by multiplying *(float*) DATA1.  */
+
+static gcov_type
+fp_scale (gcov_type v, void *data1, void *data2 ATTRIBUTE_UNUSED)
+{
+  float f = *(float *) data1;
+  return (gcov_type) (v * f);
+}
+
+/* Scaling the counter value V by multiplying DATA2/DATA1.  */
+
+static gcov_type
+int_scale (gcov_type v, void *data1, void *data2)
+{
+  int n = *(int *) data1;
+  int d = *(int *) data2;
+  return (gcov_type) ((v / d) * n);
+}
+
+/* Type of function used to process counters.  */
+typedef void (*gcov_counter_fn) (gcov_type *, gcov_unsigned_t,
+                          counter_op_fn, void *, void *); 
+
+/* Function array to process profile counters.  */
+static gcov_counter_fn ctr_functions[GCOV_COUNTERS] = { 
+    __gcov_add_counter_op,
+    __gcov_add_counter_op,
+    __gcov_add_counter_op,
+    __gcov_single_counter_op,
+    __gcov_delta_counter_op,
+    __gcov_single_counter_op,
+    __gcov_add_counter_op,
+    __gcov_ior_counter_op,
+    __gcov_icall_topn_op,
+    __gcov_dc_op,
 };
 
 /* Driver for scaling profile counters.  */
 
 int
-gcov_profile_scale (struct gcov_info *profile, float scale_factor)
+gcov_profile_scale (struct gcov_info *profile, float scale_factor, int n, int d)
 {
   struct gcov_info *gi_ptr;
   unsigned f_ix;
@@ -857,7 +1033,12 @@ gcov_profile_scale (struct gcov_info *profile, float scale_factor)
 
             if (!merge)
               continue;
-            (*ctr_scale_functions[t_ix]) (ci_ptr->values, ci_ptr->num, scale_factor);
+            if (d == 0)
+              (*ctr_functions[t_ix]) (ci_ptr->values, ci_ptr->num,
+                                      fp_scale, &scale_factor, NULL);
+            else
+              (*ctr_functions[t_ix]) (ci_ptr->values, ci_ptr->num,
+                                      int_scale, &n, &d);
             ci_ptr++;
           }
       }
@@ -865,7 +1046,7 @@ gcov_profile_scale (struct gcov_info *profile, float scale_factor)
   return 0;
 }
 
-/* Driver for normalize profile counters.  */
+/* Driver to normalize profile counters.  */
 
 int
 gcov_profile_normalize (struct gcov_info *profile, gcov_type max_val)
@@ -876,7 +1057,7 @@ gcov_profile_normalize (struct gcov_info *profile, gcov_type max_val)
   unsigned int i;
   float scale_factor;
 
-  /* Find the larest count value.  */
+  /* Find the largest count value.  */
   for (gi_ptr = profile; gi_ptr; gi_ptr = gi_ptr->next)
     for (f_ix = 0; f_ix < gi_ptr->n_functions; f_ix++)
       {
@@ -901,149 +1082,5 @@ gcov_profile_normalize (struct gcov_info *profile, gcov_type max_val)
   if (verbose)
     fprintf (stdout, "max_val is %lld\n", (long long) curr_max_val);
 
-  return gcov_profile_scale (profile, scale_factor);
+  return gcov_profile_scale (profile, scale_factor, 0, 0);
 }
-
-/* Type of function used to normalize counters.  */
-typedef void (*gcov_scale2_fn) (gcov_type *, gcov_unsigned_t, int, int);
-
-/* Scale2 arc counters.  */
-
-static void
-__gcov_scale2_add (gcov_type *counters, unsigned n_counters, int n, int d)
-{
-  for (; n_counters; counters++, n_counters--)
-    {
-      gcov_type val = *counters;
-      *counters = (val / d) * n;
-    }
-}
-
-/* Scale2 ior counters.  */
-
-static void
-__gcov_scale2_ior (gcov_type *counters ATTRIBUTE_UNUSED,
-                      unsigned n_counters ATTRIBUTE_UNUSED,
-                      int n ATTRIBUTE_UNUSED,
-                      int d ATTRIBUTE_UNUSED)
-{
-  /* do nothing.  */
-}
-
-/* Scale2 delta counters.  */
-
-static void
-__gcov_scale2_delta (gcov_type *counters, unsigned n_counters, int n, int d)
-{
-  unsigned i, n_measures;
-
-  gcc_assert (!(n_counters % 4));
-  n_measures = n_counters / 4;
-  for (i = 0; i < n_measures; i++, counters += 4)
-    {
-      counters[2] = (counters[2] / d) * n;
-      counters[3] = (counters[3] / d) * n;
-    }
-}
-
-/* Scale2 single counters.  */
-
-static void
-__gcov_scale2_single (gcov_type *counters, unsigned n_counters, int n, int d)
-{
-  unsigned i, n_measures;
-
-  gcc_assert (!(n_counters % 3));
-  n_measures = n_counters / 3;
-  for (i = 0; i < n_measures; i++, counters += 3)
-    {
-      counters[1] = (counters[1] / d) * n;
-      counters[2] = (counters[2] / d) * n;
-    }
-}
-
-/* Scale2 indirect-call profile counters. Multiplied the counters in COUNTERS
-   array by a factor of F.  */
-
-static void
-__gcov_scale2_icall_topn (gcov_type *counters, unsigned n_counters, int n, int d)
-{
-  unsigned i;
-
-  gcc_assert (!(n_counters % GCOV_ICALL_TOPN_NCOUNTS));
-  for (i = 0; i < n_counters; i += GCOV_ICALL_TOPN_NCOUNTS)
-    {
-      unsigned j;
-      gcov_type *value_array = &counters[i+1];
-
-      for (j = 0; j < GCOV_ICALL_TOPN_NCOUNTS - 1; j += 2)
-        value_array[j+1] = (value_array[j+1] / d) * n;
-    }
-}
-
-/* Scale2 direct-call profile counters. Multiplied the counters in COUNTERS
-   by a factor of F.  */
-
-static void
-__gcov_scale2_dc (gcov_type *counters, unsigned n_counters, int n, int d)
-{
-  unsigned i;
-
-  gcc_assert (!(n_counters % 2));
-  for (i = 0; i < n_counters; i += 2)
-    counters[i+1] = (counters[i+1] / d) * n;
-}
-
-/* Scale2 functions for counters.  */
-static gcov_scale2_fn ctr_scale2_functions[GCOV_COUNTERS] = {
-    __gcov_scale2_add,
-    __gcov_scale2_add,
-    __gcov_scale2_add,
-    __gcov_scale2_single,
-    __gcov_scale2_delta,
-    __gcov_scale2_single,
-    __gcov_scale2_add,
-    __gcov_scale2_ior,
-    __gcov_scale2_icall_topn,
-    __gcov_scale2_dc,
-};
-
-/* Driver for scale2 profile counters.  */
-
-int
-gcov_profile_scale2 (struct gcov_info *profile, int n, int d)
-{
-  struct gcov_info *gi_ptr;
-  unsigned f_ix;
-
-  if (verbose)
-    fprintf (stdout, "scale_factor is %d/%d\n", n, d);
-
-  gcc_assert (n >= 0 && d > 0);
-
-  /* Scale the counters.  */
-  for (gi_ptr = profile; gi_ptr; gi_ptr = gi_ptr->next)
-    for (f_ix = 0; f_ix < gi_ptr->n_functions; f_ix++)
-      {
-        unsigned t_ix;
-        const struct gcov_fn_info *gfi_ptr = gi_ptr->functions[f_ix];
-        const struct gcov_ctr_info *ci_ptr;
-
-        if (!gfi_ptr || gfi_ptr->key != gi_ptr)
-          continue;
-
-        ci_ptr = gfi_ptr->ctrs;
-        for (t_ix = 0; t_ix != GCOV_COUNTERS; t_ix++)
-          {
-            gcov_merge_fn merge = gi_ptr->merge[t_ix];
-
-            if (!merge)
-              continue;
-            (*ctr_scale2_functions[t_ix]) (ci_ptr->values, ci_ptr->num, n, d);
-            ci_ptr++;
-          }
-      }
-
-  return 0;
-}
-

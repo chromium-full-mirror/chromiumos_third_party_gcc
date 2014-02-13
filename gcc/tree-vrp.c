@@ -6026,7 +6026,7 @@ check_array_ref (location_t location, tree ref, bool ignore_off_by_one)
           TREE_NO_WARNING (ref) = 1;
         }
     }
-  else if (TREE_CODE (up_sub) == INTEGER_CST
+  else if (0 && TREE_CODE (up_sub) == INTEGER_CST
 	   && (ignore_off_by_one
 	       ? (tree_int_cst_lt (up_bound, up_sub)
 		  && !tree_int_cst_equal (up_bound_p1, up_sub))
