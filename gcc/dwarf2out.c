@@ -7995,6 +7995,12 @@ unmark_all_dies (dw_die_ref die)
 static bool
 include_pubname_in_output (vec<pubname_entry, va_gc> *table, pubname_entry *p)
 {
+  /* By limiting gnu pubnames to definitions only, gold can generate a
+     gdb index without entries for declarations, which don't include
+     enough information to be useful.  */
+  if (debug_generate_pub_sections == 2 && is_declaration_die (p->die))
+    return false;
+
   if (table == pubname_table)
     {
       /* Enumerator names are part of the pubname table, but the
@@ -8912,7 +8918,6 @@ add_top_level_skeleton_die_attrs (dw_die_ref die)
   if (comp_dir != NULL)
     add_skeleton_AT_string (die, DW_AT_comp_dir, comp_dir);
   add_AT_pubnames (die);
-  add_AT_lineptr (die, DW_AT_GNU_addr_base, debug_addr_section_label);
 }
 
 /* Return the single type-unit die for skeleton type units.  */
@@ -9243,7 +9248,8 @@ output_pubname (dw_offset die_offset, pubname_entry *entry)
 	    GDB_INDEX_SYMBOL_STATIC_SET_VALUE(flags, 1);
           break;
         default:
-          gcc_unreachable ();
+          /* An unusual tag.  Leave the flag-byte empty.  */
+          break;
       }
       dw2_asm_output_data (1, flags >> GDB_INDEX_CU_BITSIZE,
                            "GDB-index flags");
@@ -9303,7 +9309,7 @@ output_pubnames (vec<pubname_entry, va_gc> *names)
 	      if (type_node != NULL)
 	        die_offset = (type_node->skeleton_die != NULL
 			      ? type_node->skeleton_die->die_offset
-			      : 0);
+			      : comp_unit_die ()->die_offset);
 	    }
 
           output_pubname (die_offset, pub);
@@ -23922,6 +23928,8 @@ dwarf2out_finish (const char *filename)
          skeleton die attrs are added when the skeleton type unit is
          created, so ensure it is created by this point.  */
       add_top_level_skeleton_die_attrs (main_comp_unit_die);
+      add_AT_lineptr (main_comp_unit_die, DW_AT_GNU_addr_base,
+                      debug_addr_section_label);
       (void) get_skeleton_type_unit ();
       htab_traverse_noresize (debug_str_hash, index_string, &index);
     }

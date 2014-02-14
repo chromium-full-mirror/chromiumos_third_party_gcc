@@ -591,6 +591,19 @@ DEFHOOK
  "",
  int, (FILE *file, int verbose, rtx *ready, int *n_readyp, int clock), NULL)
 
+DEFHOOK
+(macro_fusion_p,
+ "This hook is used to check whether target platform supports macro fusion.",
+ bool, (void), NULL)
+
+DEFHOOK
+(macro_fusion_pair_p,
+ "This hook is used to check whether two insns could be macro fused for\n\
+target microarchitecture. If this hook returns true for the given insn pair\n\
+(@var{condgen} and @var{condjmp}), scheduler will put them into a sched\n\
+group, and they will not be scheduled apart.",
+ bool, (rtx condgen, rtx condjmp), NULL)
+
 /* The following member value is a pointer to a function called
    after evaluation forward dependencies of insns in chain given
    by two parameter values (head and tail correspondingly).  */
@@ -1105,6 +1118,14 @@ HOOK_VECTOR_END (vectorize)
 
 #undef HOOK_PREFIX
 #define HOOK_PREFIX "TARGET_"
+
+DEFHOOK
+(builtin_has_mem_ref_p,
+ "This hook return whether the @var{i}th param of the @var{builtin_function}\n\
+is a memory reference. If @var{i} is -1, return whether the @var{builtin_function}\n\
+contains any memory reference type param.",
+ bool, (int builtin_function, int i),
+ default_builtin_has_mem_ref_p)
 
 /* Allow target specific overriding of option settings after options have
   been changed by an attribute or pragma or when it is reset at the

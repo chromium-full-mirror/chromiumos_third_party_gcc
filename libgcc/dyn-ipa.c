@@ -24,31 +24,17 @@ a copy of the GCC Runtime Library Exception along with this program;
 see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 <http://www.gnu.org/licenses/>.  */
 
-#include "tconfig.h"
-#include "tsystem.h"
-#include "coretypes.h"
-#include "tm.h"
-
-#if defined(inhibit_libc)
-#define IN_LIBGCOV (-1)
-#else
-#undef NULL /* Avoid errors if stdio.h and our stddef.h mismatch.  */
-#include <stdio.h>
-#include <stdlib.h>
-#define IN_LIBGCOV 1
-#if defined(L_gcov)
-#define GCOV_LINKAGE /* nothing */
-#endif
-#endif
-#include "gcov-io.h"
+#include "libgcov.h"
 
 struct dyn_pointer_set;
 
+#ifndef IN_GCOV_TOOL
 #define XNEWVEC(type,ne) (type *)malloc(sizeof(type) * (ne))
 #define XCNEWVEC(type,ne) (type *)calloc(1, sizeof(type) * (ne))
 #define XNEW(type) (type *)malloc(sizeof(type))
 #define XDELETEVEC(p) free(p)
 #define XDELETE(p) free(p)
+#endif
 
 struct dyn_cgraph_node
 {
@@ -196,6 +182,7 @@ enum GROUPING_ALGORITHM
 static int flag_alg_mode;
 static int flag_modu_merge_edges;
 static int flag_weak_inclusion;
+static int flag_use_existing_grouping;
 static gcov_unsigned_t mem_threshold;
 
 /* Returns 0 if no dump is enabled. Returns 1 if text form graph
@@ -232,7 +219,7 @@ init_dyn_cgraph_node (struct dyn_cgraph_node *node, gcov_type guid)
   node->visited = 0;
 }
 
-/* Return module_id. FUNC_GUID is the global unique id.  
+/* Return module_id. FUNC_GUID is the global unique id.
    This id is 1 based. 0 is the invalid id.  */
 
 static inline gcov_unsigned_t
@@ -278,7 +265,7 @@ get_cgraph_node (gcov_type func_guid)
   if (func_id > the_dyn_call_graph.sup_modules[mod_idx].max_func_ident)
     return 0;
 
-  return *(pointer_set_find_or_insert
+  return (struct dyn_cgraph_node*) *(pointer_set_find_or_insert
 	   (the_dyn_call_graph.call_graph_nodes[mod_idx], func_id));
 }
 
@@ -316,8 +303,6 @@ get_module_info (gcov_unsigned_t module_id)
 {
   return the_dyn_call_graph.modules[module_id - 1];
 }
-
-struct gcov_info *__gcov_list ATTRIBUTE_HIDDEN;
 
 static inline unsigned
 cgraph_node_get_key (const void *p)
@@ -371,15 +356,20 @@ get_imported_modus (unsigned module_ident)
   return p;
 }
 
+/* Defined in libgcov-driver.c.  */
+extern struct gcov_info *get_gcov_list (void);
+
 /* Initialize dynamic call graph.  */
 
 static void
 init_dyn_call_graph (void)
 {
   unsigned num_modules = 0;
+  unsigned max_module_id = 0;
   struct gcov_info *gi_ptr;
   const char *env_str;
   int do_dump = (do_cgraph_dump () != 0);
+  struct gcov_info *gcov_list = get_gcov_list ();
 
   the_dyn_call_graph.call_graph_nodes = 0;
   the_dyn_call_graph.modules = 0;
@@ -390,15 +380,25 @@ init_dyn_call_graph (void)
   flag_weak_inclusion = __gcov_lipo_weak_inclusion;
   mem_threshold = __gcov_lipo_max_mem * 1.25;
 
-  gi_ptr = __gcov_list;
+  gi_ptr = gcov_list;
 
   for (; gi_ptr; gi_ptr = gi_ptr->next)
-    num_modules++;
+    {
+      unsigned mod_id = get_module_ident (gi_ptr);
+      num_modules++;
+      if (max_module_id < mod_id)
+        max_module_id = mod_id;
+    }
+
+  if (num_modules < max_module_id)
+    num_modules = max_module_id;
 
   the_dyn_call_graph.num_modules = num_modules;
 
   the_dyn_call_graph.modules
     = XNEWVEC (struct gcov_info *, num_modules);
+  memset (the_dyn_call_graph.modules, 0,
+          num_modules * sizeof (struct gcov_info*));
 
   the_dyn_call_graph.sup_modules
     = XNEWVEC (struct dyn_module_info, num_modules);
@@ -408,7 +408,7 @@ init_dyn_call_graph (void)
   the_dyn_call_graph.call_graph_nodes
     = XNEWVEC (struct dyn_pointer_set *, num_modules);
 
-  gi_ptr = __gcov_list;
+  gi_ptr = gcov_list;
 
   if ((env_str = getenv ("GCOV_DYN_ALG")))
     {
@@ -421,7 +421,7 @@ init_dyn_call_graph (void)
         flag_weak_inclusion = atoi (env_str);
 
       if (do_dump)
-	fprintf (stderr, 
+	fprintf (stderr,
             "!!!! Using ALG=%d merge_edges=%d weak_inclusion=%d. \n",
             flag_alg_mode, flag_modu_merge_edges, flag_weak_inclusion);
     }
@@ -488,19 +488,22 @@ void
 __gcov_finalize_dyn_callgraph (void)
 {
   unsigned i;
-  struct gcov_info *gi_ptr;
 
   for (i = 0; i < the_dyn_call_graph.num_modules; i++)
     {
-      gi_ptr = the_dyn_call_graph.modules[i];
+      struct gcov_info *gi_ptr = the_dyn_call_graph.modules[i];
       const struct gcov_fn_info *fi_ptr;
       unsigned f_ix;
+
+      if (gi_ptr == NULL)
+        continue;
+
       for (f_ix = 0; f_ix < gi_ptr->n_functions; f_ix++)
         {
           struct dyn_cgraph_node *node;
           struct dyn_cgraph_edge *callees, *next_callee;
           fi_ptr = gi_ptr->functions[f_ix];
-          node = *(pointer_set_find_or_insert
+          node = (struct dyn_cgraph_node *) *(pointer_set_find_or_insert
                    (the_dyn_call_graph.call_graph_nodes[i], fi_ptr->ident));
           gcc_assert (node);
           callees = node->callees;
@@ -663,6 +666,8 @@ gcov_build_callgraph (void)
       unsigned f_ix, i;
 
       gi_ptr = the_dyn_call_graph.modules[m_ix];
+      if (gi_ptr == NULL)
+        continue;
 
       for (f_ix = 0; f_ix < gi_ptr->n_functions; f_ix++)
         {
@@ -672,7 +677,7 @@ gcov_build_callgraph (void)
           fi_ptr = gi_ptr->functions[f_ix];
           ci_ptr = fi_ptr->ctrs;
 
-          caller = *(pointer_set_find_or_insert
+          caller = (struct dyn_cgraph_node *) *(pointer_set_find_or_insert
                     (the_dyn_call_graph.call_graph_nodes[m_ix],
                      fi_ptr->ident));
           gcc_assert (caller);
@@ -913,6 +918,8 @@ gcov_compute_cutoff_count (void)
       unsigned f_ix;
 
       gi_ptr = the_dyn_call_graph.modules[m_ix];
+      if (gi_ptr == NULL)
+        continue;
 
       for (f_ix = 0; f_ix < gi_ptr->n_functions; f_ix++)
 	{
@@ -921,7 +928,7 @@ gcov_compute_cutoff_count (void)
 
 	  fi_ptr = gi_ptr->functions[f_ix];
 
-	  node = *(pointer_set_find_or_insert
+	  node = (struct dyn_cgraph_node *) *(pointer_set_find_or_insert
 		   (the_dyn_call_graph.call_graph_nodes[m_ix], fi_ptr->ident));
 	  gcc_assert (node);
 
@@ -934,7 +941,7 @@ gcov_compute_cutoff_count (void)
               else
                 {
                   capacity = capacity + (capacity >> 1);
-                  edges = (struct dyn_cgraph_edge **)realloc (edges, sizeof (void*) * capacity);
+                  edges = (struct dyn_cgraph_edge **)xrealloc (edges, sizeof (void*) * capacity);
                   edges[num_edges - 1] = callees;
                 }
               callees = callees->next_callee;
@@ -1251,7 +1258,8 @@ gcov_process_cgraph_node (struct dyn_cgraph_node *node,
             {
               struct gcov_info *callee_mod_info
                   = get_module_info (callee_mod_id);
-              imp_mod_set_insert (imp_modules, callee_mod_info, callee_mod_wt);
+              if (callee_mod_info)
+                imp_mod_set_insert (imp_modules, callee_mod_info, callee_mod_wt);
             }
         }
 
@@ -1281,7 +1289,7 @@ static fibnode_t fibnode_remove (fibnode_t);
 static dyn_fibheap_t
 dyn_fibheap_new (void)
 {
-  return (dyn_fibheap_t) calloc (1, sizeof (struct dyn_fibheap));
+  return (dyn_fibheap_t) xcalloc (1, sizeof (struct dyn_fibheap));
 }
 
 /* Create a new fibonacci heap node.  */
@@ -1290,7 +1298,7 @@ fibnode_new (void)
 {
   fibnode_t node;
 
-  node = (fibnode_t) calloc (1, sizeof *node);
+  node = (fibnode_t) xcalloc (1, sizeof *node);
   node->left = node;
   node->right = node;
 
@@ -1613,7 +1621,7 @@ modu_graph_process_dyn_cgraph_node (struct dyn_cgraph_node *node,
   while (callees != 0)
     {
       callee = callees->callee;
-      unsigned callee_m_id = 
+      unsigned callee_m_id =
         get_module_ident_from_func_glob_uid (callee->guid);
       if (callee_m_id != m_id)
         {
@@ -1641,6 +1649,8 @@ build_modu_graph (gcov_type cutoff_count)
       unsigned f_ix;
 
       gi_ptr = the_dyn_call_graph.modules[m_ix];
+      if (gi_ptr == NULL)
+        continue;
       modu_nodes[m_ix].module = gi_ptr;
 
       for (f_ix = 0; f_ix < gi_ptr->n_functions; f_ix++)
@@ -1648,7 +1658,7 @@ build_modu_graph (gcov_type cutoff_count)
 	  struct dyn_cgraph_node *node;
 
 	  fi_ptr = gi_ptr->functions[f_ix];
-	  node = *(pointer_set_find_or_insert
+	  node = (struct dyn_cgraph_node *) *(pointer_set_find_or_insert
 		   (the_dyn_call_graph.call_graph_nodes[m_ix], fi_ptr->ident));
 	  if (!node)
             {
@@ -1769,7 +1779,7 @@ modu_add_auxiliary (unsigned t_mid, unsigned s_mid, gcov_type count)
 
 /* Check if inserting the module specified by DATA1 (including
    it's imported list to grouping VALUE, makes the ggc_memory
-   size exceed the memory threshold. 
+   size exceed the memory threshold.
    Return 0 if size is great than the thereshold and 0 otherwise.  */
 
 static int
@@ -1962,13 +1972,15 @@ gcov_compute_module_groups_eager_propagation (gcov_type cutoff_count)
       unsigned f_ix;
 
       gi_ptr = the_dyn_call_graph.modules[m_ix];
+      if (gi_ptr == NULL)
+        continue;
 
       for (f_ix = 0; f_ix < gi_ptr->n_functions; f_ix++)
 	{
 	  struct dyn_cgraph_node *node;
 
 	  fi_ptr = gi_ptr->functions[f_ix];
-	  node = *(pointer_set_find_or_insert
+	  node = (struct dyn_cgraph_node *) *(pointer_set_find_or_insert
 		   (the_dyn_call_graph.call_graph_nodes[m_ix], fi_ptr->ident));
 	  gcc_assert (node);
           if (node->visited)
@@ -1984,6 +1996,8 @@ gcov_compute_module_groups_eager_propagation (gcov_type cutoff_count)
       unsigned f_ix;
 
       gi_ptr = the_dyn_call_graph.modules[m_ix];
+      if (gi_ptr == NULL)
+        continue;
 
       for (f_ix = 0; f_ix < gi_ptr->n_functions; f_ix++)
 	{
@@ -1992,7 +2006,7 @@ gcov_compute_module_groups_eager_propagation (gcov_type cutoff_count)
           struct dyn_pointer_set *imp_modules;
 
 	  fi_ptr = gi_ptr->functions[f_ix];
-	  node = *(pointer_set_find_or_insert
+	  node = (struct dyn_cgraph_node *) *(pointer_set_find_or_insert
 		   (the_dyn_call_graph.call_graph_nodes[m_ix], fi_ptr->ident));
 	  gcc_assert (node);
 
@@ -2048,7 +2062,8 @@ gcov_compute_random_module_groups (unsigned max_group_size)
 	  if (mod_idx == m_ix)
 	    continue;
 	  imp_mod_info = get_module_info (mod_idx + 1);
-	  if (!imp_mod_set_insert (imp_modules, imp_mod_info, 1.0))
+          if (imp_mod_info &&
+	      !imp_mod_set_insert (imp_modules, imp_mod_info, 1.0))
 	    i++;
 	}
     }
@@ -2095,7 +2110,7 @@ gcov_write_module_info (const struct gcov_info *mod_info,
       len += 1; /* Each string is lead by a length.  */
     }
 
-  len += 10; /* 9 more fields */
+  len += 11; /* 11 more fields */
 
   gcov_write_tag_length (GCOV_TAG_MODULE_INFO, len);
   gcov_write_unsigned (module_info->ident);
@@ -2104,6 +2119,7 @@ gcov_write_module_info (const struct gcov_info *mod_info,
     SET_MODULE_INCLUDE_ALL_AUX (module_info);
   gcov_write_unsigned (module_info->flags);
   gcov_write_unsigned (module_info->lang);
+  gcov_write_unsigned (module_info->ggc_memory);
   gcov_write_unsigned (module_info->num_quote_paths);
   gcov_write_unsigned (module_info->num_bracket_paths);
   gcov_write_unsigned (module_info->num_system_paths);
@@ -2166,6 +2182,112 @@ gcov_write_module_infos (struct gcov_info *mod_info)
     }
 }
 
+/* Set to use module grouping from existing imports files in
+   the profile directory.  */
+void set_use_existing_grouping (void);
+
+void
+set_use_existing_grouping (void)
+{
+  flag_use_existing_grouping = 1;
+}
+
+#ifdef IN_GCOV_TOOL
+extern const char *get_source_profile_dir (void);
+
+/* find and open the imports files based on da_filename
+   in GI_PTR.  */
+
+static FILE *
+open_imports_file (struct gcov_info *gi_ptr)
+{
+  const char *gcda_name;
+  char *imports_name;
+  const char *source_dir = "";
+
+  if (gi_ptr == NULL || gi_ptr->mod_info == NULL)
+    return NULL;
+
+  gcda_name = gi_ptr->mod_info->da_filename;
+  gcc_assert (gcda_name);
+
+  source_dir = get_source_profile_dir ();
+  gcc_assert (source_dir);
+  imports_name = (char *) alloca (strlen (gcda_name) + strlen (source_dir) +
+                                  strlen (".gcda.imports") + 2);
+  strcpy (imports_name, source_dir);
+  strcat (imports_name, "/");
+  strcat (imports_name, gcda_name);
+  strcat (imports_name, ".gcda.imports");
+  return fopen (imports_name, "r");
+}
+
+extern int get_module_id_from_name (const char *);
+
+#endif /* IN_GCOV_TOOL */
+
+/* Use the module grouping from existing imports files in
+   the profile directory.  */
+
+static void
+read_modu_groups_from_imports_files (void)
+{
+#ifdef IN_GCOV_TOOL
+  unsigned m_ix;
+
+  init_dyn_call_graph ();
+
+  for (m_ix = 0; m_ix < the_dyn_call_graph.num_modules; m_ix++)
+    {
+      struct gcov_info *gi_ptr = the_dyn_call_graph.modules[m_ix];
+      FILE *fd;
+      struct dyn_pointer_set *imp_modules;
+
+      if (gi_ptr == NULL)
+        continue;
+
+      imp_modules = gcov_get_module_imp_module_set
+                      (&the_dyn_call_graph.sup_modules[m_ix]);
+
+      if ((fd = open_imports_file (gi_ptr)) != NULL)
+	{
+          char *line = NULL;
+          size_t linecap = 0;
+          while (getline (&line, &linecap, fd) != -1)
+            {
+              unsigned mod_id = 0;
+              char *name = strtok (line, " \t\n");
+
+              if (name && (mod_id = get_module_id_from_name (name)))
+                {
+                  struct gcov_info *imp_mod_info;
+           	  unsigned mod_idx = mod_id - 1;
+           	  if (mod_idx == m_ix)
+           	    continue;
+           	  imp_mod_info = get_module_info (mod_idx + 1);
+           	  imp_mod_set_insert (imp_modules, imp_mod_info, 1.0);
+                }
+              free (line);
+              line = NULL;
+            }
+          fclose (fd);
+	}
+    }
+
+  /* Now compute the export attribute  */
+  for (m_ix = 0; m_ix < the_dyn_call_graph.num_modules; m_ix++)
+    {
+      struct dyn_module_info *mi
+	= &the_dyn_call_graph.sup_modules[m_ix];
+      if (mi->imported_modules)
+        pointer_set_traverse (mi->imported_modules,
+                              gcov_mark_export_modules, 0, 0, 0);
+    }
+#else /* !IN_GCOV_TOOL */
+  gcc_assert (0);
+#endif /* IN_GCOV_TOOL */
+}
+
 /* Compute module groups needed for L-IPO compilation.  */
 
 void
@@ -2200,6 +2322,12 @@ __gcov_compute_module_groups (void)
           fprintf (stderr, " Creating random grouping with %s:%s\n",
                    seed, max_group_size);
         }
+      return;
+    }
+
+  if (flag_use_existing_grouping)
+    {
+      read_modu_groups_from_imports_files ();
       return;
     }
 
@@ -2344,13 +2472,15 @@ gcov_dump_callgraph (gcov_type cutoff_count)
       unsigned f_ix;
 
       gi_ptr = the_dyn_call_graph.modules[m_ix];
+      if (gi_ptr == NULL)
+        continue;
 
       for (f_ix = 0; f_ix < gi_ptr->n_functions; f_ix++)
 	{
 	  struct dyn_cgraph_node *node;
 
 	  fi_ptr = gi_ptr->functions[f_ix];
-	  node = *(pointer_set_find_or_insert
+	  node = (struct dyn_cgraph_node *) *(pointer_set_find_or_insert
 		   (the_dyn_call_graph.call_graph_nodes[m_ix], fi_ptr->ident));
 	  gcc_assert (node);
 

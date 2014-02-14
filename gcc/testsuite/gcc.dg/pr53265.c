@@ -1,6 +1,6 @@
 /* PR tree-optimization/53265 */
 /* { dg-do compile } */
-/* { dg-options "-O2 -Wall" } */
+/* { dg-options "-O2 -fno-tree-loop-vectorize -Wall" } */
 
 void bar (void *);
 int baz (int);
@@ -154,3 +154,5 @@ fn12 (void)
   fn11 (1);
   fn11 (1);
 }
+
+/* { dg-prune-output "array subscript is above array bounds" } */

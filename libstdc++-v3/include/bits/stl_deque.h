@@ -1275,7 +1275,10 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       _M_range_check(size_type __n) const
       {
 	if (__n >= this->size())
-	  __throw_out_of_range(__N("deque::_M_range_check"));
+	  __throw_out_of_range_fmt(__N("deque::_M_range_check: __n "
+				       "(which is %zu)>= this->size() "
+				       "(which is %zu)"),
+				   __n, this->size());
       }
 
     public:
@@ -1549,7 +1552,13 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        */
       void
       insert(iterator __position, size_type __n, const value_type& __x)
-      { _M_fill_insert(__position, __n, __x); }
+      {
+#if __google_stl_debug_deque
+	if (__position < this->begin() || __position > this->end())
+	  __throw_logic_error("insert() at invalid position");
+#endif
+	_M_fill_insert(__position, __n, __x);
+      }
 
       /**
        *  @brief  Inserts a range into the %deque.
@@ -1567,7 +1576,13 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
         void
         insert(iterator __position, _InputIterator __first,
 	       _InputIterator __last)
-        { _M_insert_dispatch(__position, __first, __last, __false_type()); }
+        {
+#if __google_stl_debug_deque
+	if (__position < this->begin() || __position > this->end())
+	  __throw_logic_error("insert() at invalid position");
+#endif
+	  _M_insert_dispatch(__position, __first, __last, __false_type());
+	}
 #else
       template<typename _InputIterator>
         void

@@ -132,7 +132,10 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   
       void
       _M_add_ref_lock();
-      
+
+      bool
+      _M_add_ref_lock_nothrow();
+
       void
       _M_release() noexcept
       {
@@ -212,6 +215,51 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	  _M_use_count = 0;
 	  __throw_bad_weak_ptr();
 	}
+    }
+
+  template<>
+    inline bool
+    _Sp_counted_base<_S_single>::
+    _M_add_ref_lock_nothrow()
+    {
+      if (_M_use_count == 0)
+	return false;
+      ++_M_use_count;
+      return true;
+    }
+
+  template<>
+    inline bool
+    _Sp_counted_base<_S_mutex>::
+    _M_add_ref_lock_nothrow()
+    {
+      __gnu_cxx::__scoped_lock sentry(*this);
+      if (__gnu_cxx::__exchange_and_add_dispatch(&_M_use_count, 1) == 0)
+	{
+	  _M_use_count = 0;
+	  return false;
+	}
+      return true;
+    }
+
+  template<>
+    inline bool
+    _Sp_counted_base<_S_atomic>::
+    _M_add_ref_lock_nothrow()
+    {
+      // Perform lock-free add-if-not-zero operation.
+      _Atomic_word __count = _M_get_use_count();
+      do
+	{
+	  if (__count == 0)
+	    return false;
+	  // Replace the current counter value with the old value + 1, as
+	  // long as it's not changed meanwhile.
+	}
+      while (!__atomic_compare_exchange_n(&_M_use_count, &__count, __count + 1,
+					  true, __ATOMIC_ACQ_REL,
+					  __ATOMIC_RELAXED));
+      return true;
     }
 
   template<>
@@ -391,7 +439,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
     public:
       template<typename... _Args>
 	_Sp_counted_ptr_inplace(_Alloc __a, _Args&&... __args)
-	: _M_impl(__a), _M_storage()
+	: _M_impl(__a)
 	{
 	  _M_impl._M_ptr = static_cast<_Tp*>(static_cast<void*>(&_M_storage));
 	  // _GLIBCXX_RESOLVE_LIB_DEFECTS
@@ -459,29 +507,9 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	}
 
       template<typename _Ptr, typename _Deleter>
-	__shared_count(_Ptr __p, _Deleter __d) : _M_pi(0)
-	{
-	  // The allocator's value_type doesn't matter, will rebind it anyway.
-	  typedef std::allocator<int> _Alloc;
-	  typedef _Sp_counted_deleter<_Ptr, _Deleter, _Alloc, _Lp> _Sp_cd_type;
-	  typedef typename allocator_traits<_Alloc>::template
-	    rebind_traits<_Sp_cd_type> _Alloc_traits;
-	  typename _Alloc_traits::allocator_type __a;
-	  _Sp_cd_type* __mem = 0;
-	  __try
-	    {
-	      __mem = _Alloc_traits::allocate(__a, 1);
-	      _Alloc_traits::construct(__a, __mem, __p, std::move(__d));
-	      _M_pi = __mem;
-	    }
-	  __catch(...)
-	    {
-	      __d(__p); // Call _Deleter on __p.
-	      if (__mem)
-	        _Alloc_traits::deallocate(__a, __mem, 1);
-	      __throw_exception_again;
-	    }
-	}
+	__shared_count(_Ptr __p, _Deleter __d)
+	: __shared_count(__p, std::move(__d), allocator<int>())
+	{ }
 
       template<typename _Ptr, typename _Deleter, typename _Alloc>
 	__shared_count(_Ptr __p, _Deleter __d, _Alloc __a) : _M_pi(0)
@@ -540,16 +568,32 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
       // Special case for unique_ptr<_Tp,_Del> to provide the strong guarantee.
       template<typename _Tp, typename _Del>
         explicit
-	__shared_count(std::unique_ptr<_Tp, _Del>&& __r)
-	: _M_pi(_S_create_from_up(std::move(__r)))
-	{ __r.release(); }
+	__shared_count(std::unique_ptr<_Tp, _Del>&& __r) : _M_pi(0)
+	{
+	  using _Ptr = typename unique_ptr<_Tp, _Del>::pointer;
+	  using _Del2 = typename conditional<is_reference<_Del>::value,
+	      reference_wrapper<typename remove_reference<_Del>::type>,
+	      _Del>::type;
+	  using _Sp_cd_type
+	    = _Sp_counted_deleter<_Ptr, _Del2, allocator<void>, _Lp>;
+	  using _Alloc = allocator<_Sp_cd_type>;
+	  using _Alloc_traits = allocator_traits<_Alloc>;
+	  _Alloc __a;
+	  _Sp_cd_type* __mem = _Alloc_traits::allocate(__a, 1);
+	  _Alloc_traits::construct(__a, __mem, __r.release(),
+				   __r.get_deleter());  // non-throwing
+	  _M_pi = __mem;
+	}
 
       // Throw bad_weak_ptr when __r._M_get_use_count() == 0.
       explicit __shared_count(const __weak_count<_Lp>& __r);
 
+      // Does not throw if __r._M_get_use_count() == 0, caller must check.
+      explicit __shared_count(const __weak_count<_Lp>& __r, std::nothrow_t);
+
       ~__shared_count() noexcept
       {
-	if (_M_pi != 0)
+	if (_M_pi != nullptr)
 	  _M_pi->_M_release();
       }
 
@@ -610,28 +654,6 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
     private:
       friend class __weak_count<_Lp>;
-
-      template<typename _Tp, typename _Del>
-	static _Sp_counted_base<_Lp>*
-	_S_create_from_up(std::unique_ptr<_Tp, _Del>&& __r,
-	  typename std::enable_if<!std::is_reference<_Del>::value>::type* = 0)
-	{
-	  typedef typename unique_ptr<_Tp, _Del>::pointer _Ptr;
-	  return new _Sp_counted_deleter<_Ptr, _Del, std::allocator<void>,
-	    _Lp>(__r.get(), __r.get_deleter());
-	}
-
-      template<typename _Tp, typename _Del>
-	static _Sp_counted_base<_Lp>*
-	_S_create_from_up(std::unique_ptr<_Tp, _Del>&& __r,
-	  typename std::enable_if<std::is_reference<_Del>::value>::type* = 0)
-	{
-	  typedef typename unique_ptr<_Tp, _Del>::pointer _Ptr;
-	  typedef typename std::remove_reference<_Del>::type _Del1;
-	  typedef std::reference_wrapper<_Del1> _Del2;
-	  return new _Sp_counted_deleter<_Ptr, _Del2, std::allocator<void>,
-	    _Lp>(__r.get(), std::ref(__r.get_deleter()));
-	}
 
       _Sp_counted_base<_Lp>*  _M_pi;
     };
@@ -721,15 +743,27 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
   // Now that __weak_count is defined we can define this constructor:
   template<_Lock_policy _Lp>
-    inline __shared_count<_Lp>:: __shared_count(const __weak_count<_Lp>& __r)
+    inline
+    __shared_count<_Lp>::__shared_count(const __weak_count<_Lp>& __r)
     : _M_pi(__r._M_pi)
     {
-      if (_M_pi != 0)
+      if (_M_pi != nullptr)
 	_M_pi->_M_add_ref_lock();
       else
 	__throw_bad_weak_ptr();
     }
 
+  // Now that __weak_count is defined we can define this constructor:
+  template<_Lock_policy _Lp>
+    inline
+    __shared_count<_Lp>::
+    __shared_count(const __weak_count<_Lp>& __r, std::nothrow_t)
+    : _M_pi(__r._M_pi)
+    {
+      if (_M_pi != nullptr)
+	if (!_M_pi->_M_add_ref_lock_nothrow())
+	  _M_pi = nullptr;
+    }
 
   // Support for enable_shared_from_this.
 
@@ -848,7 +882,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	: _M_ptr(__r.get()), _M_refcount()
 	{
 	  __glibcxx_function_requires(_ConvertibleConcept<_Tp1*, _Tp*>)
-	  auto __tmp = std::__addressof(*__r.get());
+	  auto __tmp = __r.get();
 	  _M_refcount = __shared_count<_Lp>(std::move(__r));
 	  __enable_shared_from_this_helper(_M_refcount, __tmp, __tmp);
 	}
@@ -1035,6 +1069,16 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 	       typename... _Args>
 	friend __shared_ptr<_Tp1, _Lp1>
 	__allocate_shared(const _Alloc& __a, _Args&&... __args);
+
+      // This constructor is used by __weak_ptr::lock() and
+      // shared_ptr::shared_ptr(const weak_ptr&, std::nothrow_t).
+      __shared_ptr(const __weak_ptr<_Tp, _Lp>& __r, std::nothrow_t)
+      : _M_refcount(__r._M_refcount, std::nothrow)
+      {
+	_M_ptr = _M_refcount._M_get_use_count() ? __r._M_ptr : nullptr;
+      }
+
+      friend class __weak_ptr<_Tp, _Lp>;
 
     private:
       void*
@@ -1271,31 +1315,7 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
 
       __shared_ptr<_Tp, _Lp>
       lock() const noexcept
-      {
-#ifdef __GTHREADS
-	// Optimization: avoid throw overhead.
-	if (expired())
-	  return __shared_ptr<element_type, _Lp>();
-
-	__try
-	  {
-	    return __shared_ptr<element_type, _Lp>(*this);
-	  }
-	__catch(const bad_weak_ptr&)
-	  {
-	    // Q: How can we get here?
-	    // A: Another thread may have invalidated r after the
-	    //    use_count test above.
-	    return __shared_ptr<element_type, _Lp>();
-	  }
-
-#else
-	// Optimization: avoid try/catch overhead when single threaded.
-	return expired() ? __shared_ptr<element_type, _Lp>()
-			 : __shared_ptr<element_type, _Lp>(*this);
-
-#endif
-      } // XXX MT
+      { return __shared_ptr<element_type, _Lp>(*this, std::nothrow); }
 
       long
       use_count() const noexcept

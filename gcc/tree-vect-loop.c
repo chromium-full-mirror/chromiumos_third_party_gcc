@@ -2045,6 +2045,13 @@ vect_is_slp_reduction (loop_vec_info loop_info, gimple phi, gimple first_stmt)
      a3 = ...
      a2 = operation (a3, a1)
 
+   or
+
+   a3 = ...
+   loop_header:
+     a1 = phi < a0, a2 >
+     a2 = operation (a3, a1)
+
    such that:
    1. operation is commutative and associative and it is safe to
       change the order of the computation (if CHECK_REDUCTION is true)
@@ -2400,6 +2407,7 @@ vect_is_simple_reduction_1 (loop_vec_info loop_info, gimple phi,
   if (def2 && def2 == phi
       && (code == COND_EXPR
 	  || !def1 || gimple_nop_p (def1)
+	  || !flow_bb_inside_loop_p (loop, gimple_bb (def1))
           || (def1 && flow_bb_inside_loop_p (loop, gimple_bb (def1))
               && (is_gimple_assign (def1)
 		  || is_gimple_call (def1)
@@ -2418,6 +2426,7 @@ vect_is_simple_reduction_1 (loop_vec_info loop_info, gimple phi,
   if (def1 && def1 == phi
       && (code == COND_EXPR
 	  || !def2 || gimple_nop_p (def2)
+	  || !flow_bb_inside_loop_p (loop, gimple_bb (def2))
           || (def2 && flow_bb_inside_loop_p (loop, gimple_bb (def2))
  	      && (is_gimple_assign (def2)
 		  || is_gimple_call (def2)
@@ -4326,7 +4335,8 @@ vect_finalize_reduction:
          result.  (The reduction result is expected to have two immediate uses -
          one at the latch block, and one at the loop exit).  */
       FOR_EACH_IMM_USE_FAST (use_p, imm_iter, scalar_dest)
-        if (!flow_bb_inside_loop_p (loop, gimple_bb (USE_STMT (use_p))))
+        if (!flow_bb_inside_loop_p (loop, gimple_bb (USE_STMT (use_p)))
+	    && !is_gimple_debug (USE_STMT (use_p)))
           phis.safe_push (USE_STMT (use_p));
 
       /* While we expect to have found an exit_phi because of loop-closed-ssa
@@ -4455,7 +4465,10 @@ vect_finalize_reduction:
       FOR_EACH_IMM_USE_FAST (use_p, imm_iter, scalar_dest)
         {
           if (!flow_bb_inside_loop_p (loop, gimple_bb (USE_STMT (use_p))))
-            phis.safe_push (USE_STMT (use_p));
+	    {
+	      if (!is_gimple_debug (USE_STMT (use_p)))
+		phis.safe_push (USE_STMT (use_p));
+	    }
           else
             {
               if (double_reduc && gimple_code (USE_STMT (use_p)) == GIMPLE_PHI)
@@ -4465,7 +4478,8 @@ vect_finalize_reduction:
                   FOR_EACH_IMM_USE_FAST (phi_use_p, phi_imm_iter, phi_res)
                     {
                       if (!flow_bb_inside_loop_p (loop,
-                                             gimple_bb (USE_STMT (phi_use_p))))
+                                             gimple_bb (USE_STMT (phi_use_p)))
+			  && !is_gimple_debug (USE_STMT (phi_use_p)))
                         phis.safe_push (USE_STMT (phi_use_p));
                     }
                 }
@@ -5729,7 +5743,6 @@ vect_transform_loop (loop_vec_info loop_vinfo)
 		     the chain.  */
 		  gsi_next (&si);
 		  vect_remove_stores (GROUP_FIRST_ELEMENT (stmt_info));
- 		  continue;
 		}
 	      else
 		{
@@ -5739,11 +5752,13 @@ vect_transform_loop (loop_vec_info loop_vinfo)
 		  unlink_stmt_vdef (store);
 		  gsi_remove (&si, true);
 		  release_defs (store);
-		  continue;
 		}
-	    }
 
-	  if (!transform_pattern_stmt && gsi_end_p (pattern_def_si))
+	      /* Stores can only appear at the end of pattern statements.  */
+	      gcc_assert (!transform_pattern_stmt);
+	      pattern_def_seq = NULL;
+	    }
+	  else if (!transform_pattern_stmt && gsi_end_p (pattern_def_si))
 	    {
 	      pattern_def_seq = NULL;
 	      gsi_next (&si);

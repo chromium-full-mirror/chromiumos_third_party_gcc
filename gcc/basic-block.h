@@ -492,6 +492,11 @@ struct edge_list
 #define EDGE_FREQUENCY(e)		RDIV ((e)->src->frequency * (e)->probability, \
 					      REG_BR_PROB_BASE)
 
+/* Compute a scale factor (or probability) suitable for scaling of
+   gcov_type values via apply_probability() and apply_scale().  */
+#define GCOV_COMPUTE_SCALE(num,den) \
+  ((den) ? RDIV ((num) * REG_BR_PROB_BASE, (den)) : REG_BR_PROB_BASE)
+
 /* Return nonzero if edge is critical.  */
 #define EDGE_CRITICAL_P(e)		(EDGE_COUNT ((e)->src->succs) >= 2 \
 					 && EDGE_COUNT ((e)->dest->preds) >= 2)
@@ -715,6 +720,7 @@ extern bool maybe_hot_count_p (struct function *, gcov_type);
 extern bool maybe_hot_bb_p (struct function *, const_basic_block);
 extern bool maybe_hot_edge_p (edge);
 extern bool probably_never_executed_bb_p (struct function *, const_basic_block);
+extern bool probably_never_executed_edge_p (struct function *, edge);
 extern bool optimize_bb_for_size_p (const_basic_block);
 extern bool optimize_bb_for_speed_p (const_basic_block);
 extern bool optimize_edge_for_size_p (edge);
@@ -785,6 +791,8 @@ extern basic_block force_nonfallthru_and_redirect (edge, basic_block, rtx);
 extern bool contains_no_active_insn_p (const_basic_block);
 extern bool forwarder_block_p (const_basic_block);
 extern bool can_fallthru (basic_block, basic_block);
+extern void emit_barrier_after_bb (basic_block bb);
+extern void fixup_partitions (void);
 
 /* In cfgbuild.c.  */
 extern void find_many_sub_basic_blocks (sbitmap);
@@ -941,13 +949,23 @@ combine_probabilities (int prob1, int prob2)
   return RDIV (prob1 * prob2, REG_BR_PROB_BASE);
 }
 
+/* Apply scale factor SCALE on frequency or count FREQ. Use this
+   interface when potentially scaling up, so that SCALE is not
+   constrained to be < REG_BR_PROB_BASE.  */
+
+static inline gcov_type
+apply_scale (gcov_type freq, gcov_type scale)
+{
+  return RDIV (freq * scale, REG_BR_PROB_BASE);
+}
+
 /* Apply probability PROB on frequency or count FREQ.  */
 
 static inline gcov_type
 apply_probability (gcov_type freq, int prob)
 {
   check_probability (prob);
-  return RDIV (freq * prob, REG_BR_PROB_BASE);
+  return apply_scale (freq, prob);
 }
 
 /* Return inverse probability for PROB.  */

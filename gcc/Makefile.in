@@ -123,7 +123,8 @@ SUBDIRS =@subdirs@ build
 
 # Selection of languages to be made.
 CONFIG_LANGUAGES = @all_selected_languages@
-LANGUAGES = c gcov$(exeext) gcov-dump$(exeext) $(CONFIG_LANGUAGES)
+LANGUAGES = c gcov$(exeext) gcov-dump$(exeext) gcov-tool$(exeext) \
+            $(CONFIG_LANGUAGES)
 
 # Default values for variables overridden in Makefile fragments.
 # CFLAGS is for the user to override to, e.g., do a cross build with -O2.
@@ -194,6 +195,7 @@ GCC_WARN_CXXFLAGS = $(LOOSE_WARN) $($(@D)-warn) $(NOCOMMON_FLAG) $($@-warn)
 build/gengtype-lex.o-warn = -Wno-error
 gengtype-lex.o-warn = -Wno-error
 expmed.o-warn = -Wno-error
+libgcov-util.o-warn = -Wno-error
 
 # All warnings have to be shut off in stage1 if the compiler used then
 # isn't gcc; configure determines that.  WARN_CFLAGS will be either
@@ -755,6 +757,7 @@ GCC_TARGET_INSTALL_NAME := $(target_noncanonical)-$(shell echo gcc|sed '$(progra
 CPP_INSTALL_NAME := $(shell echo cpp|sed '$(program_transform_name)')
 GCOV_INSTALL_NAME := $(shell echo gcov|sed '$(program_transform_name)')
 PROFILE_TOOL_INSTALL_NAME := $(shell echo profile_tool|sed '$(program_transform_name)')
+GCOV_TOOL_INSTALL_NAME := $(shell echo gcov-tool|sed '$(program_transform_name)')
 
 # Setup the testing framework, if you have one
 EXPECT = `if [ -f $${rootme}/../expect/expect ] ; then \
@@ -1481,7 +1484,8 @@ ALL_HOST_FRONTEND_OBJS = $(foreach v,$(CONFIG_LANGUAGES),$($(v)_OBJS))
 
 ALL_HOST_BACKEND_OBJS = $(GCC_OBJS) $(OBJS) $(OBJS-libcommon) \
   $(OBJS-libcommon-target) @TREEBROWSER@ main.o c-family/cppspec.o \
-  $(COLLECT2_OBJS) $(EXTRA_GCC_OBJS) $(GCOV_OBJS) $(GCOV_DUMP_OBJS)
+  $(COLLECT2_OBJS) $(EXTRA_GCC_OBJS) $(GCOV_OBJS) $(GCOV_DUMP_OBJS) \
+  $(GCOV_TOOL_OBJS)
 
 # This lists all host object files, whether they are included in this
 # compilation or not.
@@ -1506,6 +1510,7 @@ MOSTLYCLEANFILES = insn-flags.h insn-config.h insn-codes.h \
  $(SPECS) collect2$(exeext) gcc-ar$(exeext) gcc-nm$(exeext) \
  gcc-ranlib$(exeext) \
  gcov-iov$(build_exeext) gcov$(exeext) gcov-dump$(exeext) \
+ gcov-tool$(exeect) \
  gengtype$(exeext) *.[0-9][0-9].* *.[si] *-checksum.c libbackend.a \
  libcommon-target.a libcommon.a libgcc.mk
 
@@ -2381,7 +2386,7 @@ gimple-ssa-strength-reduction.o : gimple-ssa-strength-reduction.c $(CONFIG_H) \
    $(SYSTEM_H) coretypes.h $(TREE_H) $(GIMPLE_H) $(BASIC_BLOCK_H) \
    $(TREE_PASS_H) $(CFGLOOP_H) $(TREE_PRETTY_PRINT_H) \
    $(GIMPLE_PRETTY_PRINT_H) alloc-pool.h $(TREE_FLOW_H) domwalk.h \
-   pointer-set.h expmed.h
+   pointer-set.h expmed.h $(PARAMS_H)
 tree-vrp.o : tree-vrp.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) $(TREE_H) \
    $(TREE_FLOW_H) $(TREE_PASS_H) $(DIAGNOSTIC_CORE_H) $(GGC_H) \
    $(BASIC_BLOCK_H) tree-ssa-propagate.h $(FLAGS_H) $(TREE_DUMP_H) \
@@ -2409,7 +2414,7 @@ tree-ssa-sink.o : tree-ssa-sink.c $(TREE_FLOW_H) $(CONFIG_H) \
    $(TM_H) coretypes.h $(TREE_PASS_H) $(FLAGS_H) alloc-pool.h \
    $(BASIC_BLOCK_H) $(BITMAP_H) $(CFGLOOP_H) $(HASHTAB_H) \
    $(GIMPLE_H) $(TREE_INLINE_H) tree-iterator.h \
-   $(GIMPLE_PRETTY_PRINT_H)
+   $(GIMPLE_PRETTY_PRINT_H) $(PARAMS_H)
 tree-nested.o: tree-nested.c $(CONFIG_H) $(SYSTEM_H) $(TM_H) $(TREE_H) \
    $(TM_P_H) $(FUNCTION_H) $(TREE_DUMP_H) $(TREE_INLINE_H) \
    tree-iterator.h $(GIMPLE_H) $(CGRAPH_H) $(EXPR_H) langhooks.h \
@@ -2593,7 +2598,7 @@ tree-vect-loop.o: tree-vect-loop.c $(CONFIG_H) $(SYSTEM_H) coretypes.h \
    $(TM_H) $(GGC_H) $(TREE_H) $(BASIC_BLOCK_H) $(TREE_FLOW_H) dumpfile.h \
    $(CFGLOOP_H) $(EXPR_H) $(RECOG_H) $(OPTABS_H) \
    $(DIAGNOSTIC_CORE_H) $(SCEV_H) $(TREE_VECTORIZER_H) \
-   $(GIMPLE_PRETTY_PRINT_H) $(TARGET_H) $(TREE_DATA_REF_H)
+   $(GIMPLE_PRETTY_PRINT_H) $(TARGET_H) $(TREE_DATA_REF_H) $(PARAMS_H)
 tree-vect-loop-manip.o: tree-vect-loop-manip.c $(CONFIG_H) $(SYSTEM_H) \
    coretypes.h dumpfile.h $(TM_H) $(GGC_H) $(TREE_H) $(BASIC_BLOCK_H) \
    $(TREE_FLOW_H) $(CFGLOOP_H) $(DIAGNOSTIC_CORE_H) \
@@ -2753,7 +2758,7 @@ varasm.o : varasm.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) $(TREE_H) \
    output.h $(DIAGNOSTIC_CORE_H) xcoffout.h debug.h $(GGC_H) $(TM_P_H) \
    $(HASHTAB_H) $(TARGET_H) langhooks.h gt-varasm.h $(BASIC_BLOCK_H) \
    $(CGRAPH_H) $(TARGET_DEF_H) tree-mudflap.h \
-   pointer-set.h $(COMMON_TARGET_H) asan.h l-ipo.h
+   pointer-set.h $(COMMON_TARGET_H) asan.h l-ipo.h $(PARAMS_H)
 function.o : function.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) $(RTL_ERROR_H) \
    $(TREE_H) $(GIMPLE_H) $(FLAGS_H) $(FUNCTION_H) $(EXPR_H) \
    $(OPTABS_H) $(LIBFUNCS_H) $(REGS_H) hard-reg-set.h insn-config.h $(RECOG_H) \
@@ -2937,7 +2942,7 @@ ipa-inline-transform.o : ipa-inline-transform.c $(CONFIG_H) $(SYSTEM_H) coretype
    $(TREE_H) langhooks.h $(TREE_INLINE_H) $(FLAGS_H) $(CGRAPH_H) intl.h \
    $(TREE_PASS_H) \
    $(HASHTAB_H) $(COVERAGE_H) $(GGC_H) $(TREE_FLOW_H) $(IPA_PROP_H) \
-   $(TREE_PASS_H) l-ipo.h
+   $(TREE_PASS_H) l-ipo.h $(PARAMS_H)
 ipa-utils.o : ipa-utils.c $(IPA_UTILS_H) $(CONFIG_H) $(SYSTEM_H) \
    coretypes.h dumpfile.h $(TM_H) $(TREE_H) $(TREE_FLOW_H) $(TREE_INLINE_H) \
    langhooks.h pointer-set.h $(GGC_H) $(GIMPLE_H) $(SPLAY_TREE_H) \
@@ -2959,7 +2964,7 @@ coverage.o : coverage.c $(GCOV_IO_H) $(CONFIG_H) $(SYSTEM_H) coretypes.h dumpfil
    $(FUNCTION_H) $(BASIC_BLOCK_H) toplev.h $(DIAGNOSTIC_CORE_H) $(GGC_H) langhooks.h $(COVERAGE_H) \
    tree-iterator.h $(CGRAPH_H) gcov-io.c $(TM_P_H) \
    $(DIAGNOSTIC_CORE_H) intl.h gt-coverage.h $(TARGET_H) $(HASH_TABLE_H) l-ipo.h \
-   $(AUTO_PROFILE_H)
+   $(AUTO_PROFILE_H) $(PARAMS_H)
 auto-profile.o : auto-profile.c $(CONFIG_H) $(SYSTEM_H) $(FLAGS_H) \
    $(BASIC_BLOCK_H) $(DIAGNOSTIC_CORE_H) $(GCOV_IO_H) $(INPUT_H) profile.h \
    $(LANGHOOKS_H) $(OPTS_H) $(TREE_PASS_H) $(CGRAPH_H) $(GIMPLE_H) value-prof.h \
@@ -3091,19 +3096,19 @@ var-tracking.o : var-tracking.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) \
 profile.o : profile.c $(CONFIG_H) $(SYSTEM_H) coretypes.h dumpfile.h $(TM_H) $(RTL_H) \
    $(TREE_H) $(FLAGS_H) $(REGS_H) $(EXPR_H) $(FUNCTION_H) $(BASIC_BLOCK_H) \
    $(DIAGNOSTIC_CORE_H) $(COVERAGE_H) $(TREE_FLOW_H) value-prof.h \
-   $(CFGLOOP_H) profile.h
+   $(CFGLOOP_H) profile.h $(PARAMS_H)
 mcf.o : mcf.c profile.h $(CONFIG_H) $(SYSTEM_H) $(TM_H) coretypes.h dumpfile.h \
-   $(BASIC_BLOCK_H) langhooks.h $(GCOV_IO_H) $(TREE_H) 
+   $(BASIC_BLOCK_H) langhooks.h $(GCOV_IO_H) $(TREE_H) $(PARAMS_H)
 tree-profile.o : tree-profile.c $(CONFIG_H) $(SYSTEM_H) coretypes.h \
    $(TM_H) $(TARGET_H) $(TREE_H) $(FLAGS_H) $(FUNCTION_H) \
    $(BASIC_BLOCK_H) $(DIAGNOSTIC_CORE_H) $(COVERAGE_H) $(TREE_H) value-prof.h \
-   $(TREE_PASS_H) $(TREE_FLOW_H) gt-tree-profile.h $(CGRAPH_H)
+   $(TREE_PASS_H) $(TREE_FLOW_H) gt-tree-profile.h $(CGRAPH_H) $(PARAMS_H)
 value-prof.o : value-prof.c $(CONFIG_H) $(SYSTEM_H) coretypes.h dumpfile.h $(TM_H) \
    $(BASIC_BLOCK_H) hard-reg-set.h profile.h value-prof.h $(EXPR_H) $(FLAGS_H) \
    $(RECOG_H) insn-config.h $(OPTABS_H) $(REGS_H) $(GGC_H) $(DIAGNOSTIC_H) \
    $(TREE_H) $(COVERAGE_H) $(RTL_H) $(GCOV_IO_H) $(TREE_FLOW_H) \
    tree-flow-inline.h $(TIMEVAR_H) $(DIAGNOSTIC_CORE_H) pointer-set.h \
-   $(GIMPLE_PRETTY_PRINT_H) l-ipo.h
+   $(GIMPLE_PRETTY_PRINT_H) l-ipo.h $(PARAMS_H)
 loop-doloop.o : loop-doloop.c $(CONFIG_H) $(SYSTEM_H) coretypes.h dumpfile.h $(TM_H) \
    $(RTL_H) $(FLAGS_H) $(EXPR_H) hard-reg-set.h $(BASIC_BLOCK_H) $(TM_P_H) \
    $(DIAGNOSTIC_CORE_H) $(CFGLOOP_H) $(PARAMS_H) $(TARGET_H)
@@ -3129,7 +3134,7 @@ cfgrtl.o : cfgrtl.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) $(RTL_ERROR_H) \
    $(FUNCTION_H) $(EXCEPT_H) $(TM_P_H) $(INSN_ATTR_H) \
    insn-config.h $(EXPR_H) \
    $(CFGLOOP_H) $(OBSTACK_H) $(TARGET_H) $(TREE_H) \
-   $(TREE_PASS_H) $(DF_H) $(GGC_H) $(COMMON_TARGET_H) gt-cfgrtl.h
+   $(TREE_PASS_H) $(DF_H) $(GGC_H) $(COMMON_TARGET_H) gt-cfgrtl.h bb-reorder.h
 cfganal.o : cfganal.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(BASIC_BLOCK_H) \
    $(TIMEVAR_H) sbitmap.h $(BITMAP_H)
 cfgbuild.o : cfgbuild.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) $(RTL_H) \
@@ -3422,7 +3427,7 @@ ifcvt.o : ifcvt.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) $(RTL_H) \
    $(TREE_PASS_H) $(DF_H) $(DBGCNT_H)
 l-ipo.o : l-ipo.c l-ipo.h $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TREE_H) \
     toplev.h $(LANGHOOKS_DEF_H) $(DIAGNOSTIC_H) debug.h $(GIMPLE_H) \
-    $(CGRAPH_H) $(GGC_H)
+    $(CGRAPH_H) $(GGC_H) $(PARAMS_H)
 params.o : params.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(COMMON_TARGET_H) \
    $(PARAMS_H) $(DIAGNOSTIC_CORE_H)
 pointer-set.o: pointer-set.c pointer-set.h $(CONFIG_H) $(SYSTEM_H)
@@ -4073,6 +4078,31 @@ GCOV_DUMP_OBJS = gcov-dump.o vec.o ggc-none.o
 gcov-dump$(exeext): $(GCOV_DUMP_OBJS) $(LIBDEPS)
 	+$(LINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) $(GCOV_DUMP_OBJS) \
 		$(LIBS) -o $@
+
+libgcov-util.o: $(srcdir)/../libgcc/libgcov-util.c gcov-io.c $(GCOV_IO_H) \
+  $(srcdir)/../libgcc/libgcov-driver.c $(srcdir)/../libgcc/libgcov-driver-system.c \
+  $(srcdir)/../libgcc/libgcov-merge.c $(srcdir)/../libgcc/libgcov.h \
+  $(SYSTEM_H) coretypes.h $(TM_H) $(CONFIG_H) version.h intl.h $(DIAGNOSTIC_H)
+	+$(COMPILER) -c $(ALL_COMPILERFLAGS) $(ALL_CPPFLAGS) $(INCLUDES) -o $@ $<
+dyn-ipa.o: $(srcdir)/../libgcc/dyn-ipa.c gcov-io.c $(srcdir)/../libgcc/libgcov.h \
+   $(GCOV_IO_H) $(SYSTEM_H) coretypes.h \
+   $(TM_H) $(CONFIG_H) version.h intl.h $(DIAGNOSTIC_H)
+	+$(COMPILER) -DIN_GCOV_TOOL -c $(ALL_COMPILERFLAGS) $(ALL_CPPFLAGS) \
+	  $(INCLUDES) -o $@ $<
+
+GCOV_TOOL_OBJS = gcov-tool.o libgcov-util.o dyn-ipa.o gcov-params.o
+gcov-tool.o: gcov-tool.c $(GCOV_IO_H) intl.h $(SYSTEM_H) coretypes.h $(TM_H) \
+   $(CONFIG_H) version.h $(DIAGNOSTIC_H)
+	+$(COMPILER) -c $(ALL_CPPFLAGS) \
+	  $(filter-out -fprofile-generate -fprofile-use,$(ALL_COMPILERFLAGS)) \
+	  $(INCLUDES) -o $@ $<
+gcov-params.o: params.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(COMMON_TARGET_H) \
+   $(PARAMS_H) $(DIAGNOSTIC_CORE_H)
+	+$(COMPILER) -DIN_GCOV_TOOL -c $(ALL_COMPILERFLAGS) $(ALL_CPPFLAGS) \
+	  $(INCLUDES) -o $@ $<
+gcov-tool$(exeext): $(GCOV_TOOL_OBJS) $(LIBDEPS)
+	+$(LINKER) $(ALL_LINKERFLAGS) $(LDFLAGS) $(GCOV_TOOL_OBJS) \
+	  $(LIBS) -o $@
 #
 # Build the include directories.  The stamp files are stmp-* rather than
 # s-* so that mostlyclean does not force the include directory to
@@ -4699,6 +4729,13 @@ install-common: native lang.install-common installdirs
 	    rm -f $(DESTDIR)$(bindir)/$(PROFILE_TOOL_INSTALL_NAME)$(exeext); \
 	    $(INSTALL_PROGRAM) $(srcdir)/../contrib/profile_tool \
 	    $(DESTDIR)$(bindir)/$(PROFILE_TOOL_INSTALL_NAME)$(exeext); \
+	fi
+# Install gcov-tool if it was compiled.
+	-if [ -f gcov-tool$(exeext) ]; \
+	then \
+	    rm -f $(DESTDIR)$(bindir)/$(GCOV_TOOL_INSTALL_NAME)$(exeext); \
+	    $(INSTALL_PROGRAM) \
+	    gcov-tool$(exeext) $(DESTDIR)$(bindir)/$(GCOV_TOOL_INSTALL_NAME)$(exeext); \
 	fi
 
 # Install the driver program as $(target_noncanonical)-gcc,

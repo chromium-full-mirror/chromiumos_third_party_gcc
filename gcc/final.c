@@ -1615,11 +1615,25 @@ reemit_insn_block_notes (void)
   rtx insn, note;
 
   insn = get_insns ();
-  if (!active_insn_p (insn))
-    insn = next_active_insn (insn);
-  for (; insn; insn = next_active_insn (insn))
+  for (; insn; insn = NEXT_INSN (insn))
     {
       tree this_block;
+
+      /* Prevent lexical blocks from straddling section boundaries.  */
+      if (NOTE_P (insn) && NOTE_KIND (insn) == NOTE_INSN_SWITCH_TEXT_SECTIONS)
+        {
+          for (tree s = cur_block; s != DECL_INITIAL (cfun->decl);
+               s = BLOCK_SUPERCONTEXT (s))
+            {
+              rtx note = emit_note_before (NOTE_INSN_BLOCK_END, insn);
+              NOTE_BLOCK (note) = s;
+              note = emit_note_after (NOTE_INSN_BLOCK_BEG, insn);
+              NOTE_BLOCK (note) = s;
+            }
+        }
+
+      if (!active_insn_p (insn))
+        continue;
 
       /* Avoid putting scope notes between jump table and its label.  */
       if (JUMP_TABLE_DATA_P (insn))
@@ -2116,6 +2130,15 @@ final_scan_insn (rtx insn, FILE *file, int optimize_p ATTRIBUTE_UNUSED,
 	  targetm.asm_out.function_switched_text_sections (asm_out_file,
 							   current_function_decl,
 							   in_cold_section_p);
+	  /* Emit a label for the split cold section.  Form label name by
+	     suffixing "cold" to the original function's name.  */
+	  if (in_cold_section_p)
+	    {
+	      tree cold_function_name
+		= clone_function_name (current_function_decl, "cold");
+	      ASM_OUTPUT_LABEL (asm_out_file,
+				IDENTIFIER_POINTER (cold_function_name));
+	    }
 	  has_cold_section_p = true;
 	  break;
 
@@ -4457,7 +4480,7 @@ rest_of_handle_final (void)
   /* With -fcallgraph-profiles-sections and -freorder-functions=,
      add ".gnu.callgraph.text" section for storing profiling information. */
   if ((flag_reorder_functions > 1)
-      && flag_profile_use
+      && (flag_profile_use || flag_auto_profile)
       && cgraph_get_node (current_function_decl) != NULL
       && ((cgraph_get_node (current_function_decl))->callees != NULL
 	  || (cgraph_get_node (current_function_decl))->count > 0))

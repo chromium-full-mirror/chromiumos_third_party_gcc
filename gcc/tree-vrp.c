@@ -5246,10 +5246,14 @@ register_edge_assert_for_1 (tree op, enum tree_code code,
 	       && gimple_assign_rhs_code (op_def) == BIT_IOR_EXPR))
     {
       /* Recurse on each operand.  */
-      retval |= register_edge_assert_for_1 (gimple_assign_rhs1 (op_def),
-					    code, e, bsi);
-      retval |= register_edge_assert_for_1 (gimple_assign_rhs2 (op_def),
-					    code, e, bsi);
+      tree op0 = gimple_assign_rhs1 (op_def);
+      tree op1 = gimple_assign_rhs2 (op_def);
+      if (TREE_CODE (op0) == SSA_NAME
+	  && has_single_use (op0))
+	retval |= register_edge_assert_for_1 (op0, code, e, bsi);
+      if (TREE_CODE (op1) == SSA_NAME
+	  && has_single_use (op1))
+	retval |= register_edge_assert_for_1 (op1, code, e, bsi);
     }
   else if (gimple_assign_rhs_code (op_def) == BIT_NOT_EXPR
 	   && TYPE_PRECISION (TREE_TYPE (gimple_assign_lhs (op_def))) == 1)
@@ -6022,7 +6026,7 @@ check_array_ref (location_t location, tree ref, bool ignore_off_by_one)
           TREE_NO_WARNING (ref) = 1;
         }
     }
-  else if (TREE_CODE (up_sub) == INTEGER_CST
+  else if (0 && TREE_CODE (up_sub) == INTEGER_CST
 	   && (ignore_off_by_one
 	       ? (tree_int_cst_lt (up_bound, up_sub)
 		  && !tree_int_cst_equal (up_bound_p1, up_sub))

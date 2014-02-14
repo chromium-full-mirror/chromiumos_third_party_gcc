@@ -36,6 +36,58 @@ static const gcov_unsigned_t *gcov_read_words (unsigned);
 static void gcov_allocate (unsigned);
 #endif
 
+/* Optimum number of gcov_unsigned_t's read from or written to disk.  */
+#define GCOV_BLOCK_SIZE (1 << 10)
+
+GCOV_LINKAGE struct gcov_var
+{
+  FILE *file;
+  gcov_position_t start;        /* Position of first byte of block */
+  unsigned offset;              /* Read/write position within the block.  */
+  unsigned length;              /* Read limit in the block.  */
+  unsigned overread;            /* Number of words overread.  */
+  int error;                    /* < 0 overflow, > 0 disk error.  */
+  int mode;                     /* < 0 writing, > 0 reading */
+#if IN_LIBGCOV
+  /* Holds one block plus 4 bytes, thus all coverage reads & writes
+     fit within this buffer and we always can transfer GCOV_BLOCK_SIZE
+     to and from the disk. libgcov never backtracks and only writes 4
+     or 8 byte objects.  */
+  gcov_unsigned_t buffer[GCOV_BLOCK_SIZE + 1];
+#else
+  int endian;                   /* Swap endianness.  */
+  /* Holds a variable length block, as the compiler can write
+     strings and needs to backtrack.  */
+  size_t alloc;
+  gcov_unsigned_t *buffer;
+#endif
+} gcov_var;
+
+/* Save the current position in the gcov file.  */
+static inline gcov_position_t
+gcov_position (void)
+{
+  return gcov_var.start + gcov_var.offset;
+}
+
+/* Return nonzero if the error flag is set.  */
+static inline int
+gcov_is_error (void)
+{
+  return gcov_var.file ? gcov_var.error : 1;
+}
+
+/* Move to beginning of file and initialize for writing.  */
+static inline void
+gcov_rewrite (void)
+{
+  gcc_assert (gcov_var.mode > 0);
+  gcov_var.mode = -1;
+  gcov_var.start = 0;
+  gcov_var.offset = 0;
+  fseek (gcov_var.file, 0L, SEEK_SET);
+}
+
 static inline gcov_unsigned_t from_file (gcov_unsigned_t value)
 {
 #if !IN_LIBGCOV
@@ -503,7 +555,7 @@ gcov_read_counter (void)
    buffer, or NULL on empty string. You must copy the string before
    calling another gcov function.  */
 
-#if !IN_LIBGCOV
+#if !IN_LIBGCOV || IN_GCOV_TOOL
 GCOV_LINKAGE const char *
 gcov_read_string (void)
 {
@@ -580,7 +632,7 @@ gcov_read_summary (struct gcov_summary *summary)
     }
 }
 
-#if !IN_LIBGCOV && IN_GCOV != 1
+#if IN_GCOV_TOOL || !IN_LIBGCOV && IN_GCOV != 1
 /* Read LEN words (unsigned type) and construct MOD_INFO.  */
 
 GCOV_LINKAGE void
@@ -591,14 +643,15 @@ gcov_read_module_info (struct gcov_module_info *mod_info,
   mod_info->ident = gcov_read_unsigned ();
   mod_info->is_primary = gcov_read_unsigned ();
   mod_info->flags = gcov_read_unsigned ();
-  mod_info->lang  = gcov_read_unsigned ();
+  mod_info->lang = gcov_read_unsigned ();
+  mod_info->ggc_memory = gcov_read_unsigned ();
   mod_info->num_quote_paths = gcov_read_unsigned ();
   mod_info->num_bracket_paths = gcov_read_unsigned ();
   mod_info->num_system_paths = gcov_read_unsigned ();
   mod_info->num_cpp_defines = gcov_read_unsigned ();
   mod_info->num_cpp_includes = gcov_read_unsigned ();
   mod_info->num_cl_args = gcov_read_unsigned ();
-  len -= 10;
+  len -= 11;
 
   filename_len = gcov_read_unsigned ();
   mod_info->da_filename = (char *) xmalloc (filename_len *
@@ -632,7 +685,7 @@ gcov_read_module_info (struct gcov_module_info *mod_info,
 }
 #endif
 
-#if !IN_LIBGCOV
+#if !IN_LIBGCOV || IN_GCOV_TOOL
 /* Reset to a known position.  BASE should have been obtained from
    gcov_position, LENGTH should be a record length.  */
 

@@ -1366,8 +1366,8 @@ init_optimization_passes (void)
       NEXT_PASS (pass_rebuild_cgraph_edges);
       NEXT_PASS (pass_inline_parameters);
     }
-  NEXT_PASS (pass_ipa_free_inline_summary);
   NEXT_PASS (pass_ipa_auto_profile);
+  NEXT_PASS (pass_ipa_free_inline_summary);
   NEXT_PASS (pass_ipa_tree_profile);
     {
       struct opt_pass **p = &pass_ipa_tree_profile.pass.sub;
@@ -1564,6 +1564,9 @@ init_optimization_passes (void)
       /* ???  We do want some kind of loop invariant motion, but we possibly
          need to adjust LIM to be more friendly towards preserving accurate
 	 debug information here.  */
+      /* Split critical edges before late uninit warning to reduce the
+         number of false positives from it.  */
+      NEXT_PASS (pass_split_crit_edges);
       NEXT_PASS (pass_late_warn_uninitialized);
       NEXT_PASS (pass_uncprop);
       NEXT_PASS (pass_local_pure_const);
@@ -1661,6 +1664,7 @@ init_optimization_passes (void)
 	  NEXT_PASS (pass_regrename);
 	  NEXT_PASS (pass_cprop_hardreg);
 	  NEXT_PASS (pass_fast_rtl_dce);
+	  NEXT_PASS (pass_duplicate_computed_gotos);
 	  NEXT_PASS (pass_reorder_blocks);
 	  NEXT_PASS (pass_branch_target_load_optimize2);
 	  NEXT_PASS (pass_leaf_regs);
@@ -1673,7 +1677,6 @@ init_optimization_passes (void)
 	      NEXT_PASS (pass_stack_regs_run);
 	    }
 	  NEXT_PASS (pass_compute_alignments);
-	  NEXT_PASS (pass_duplicate_computed_gotos);
 	  NEXT_PASS (pass_variable_tracking);
 	  NEXT_PASS (pass_free_cfg);
 	  NEXT_PASS (pass_machine_reorg);

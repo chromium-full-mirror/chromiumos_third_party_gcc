@@ -456,7 +456,7 @@ try_forward_edges (int mode, basic_block b)
 
       if (first != EXIT_BLOCK_PTR
 	  && find_reg_note (BB_END (first), REG_CROSSING_JUMP, NULL_RTX))
-	return false;
+	return changed;
 
       while (counter < n_basic_blocks)
 	{
@@ -925,6 +925,24 @@ merge_memattrs (rtx x, rtx y)
 
 	  set_mem_align (x, MIN (MEM_ALIGN (x), MEM_ALIGN (y)));
 	  set_mem_align (y, MEM_ALIGN (x));
+	}
+    }
+  if (code == MEM)
+    {
+      if (MEM_READONLY_P (x) != MEM_READONLY_P (y))
+	{
+	  MEM_READONLY_P (x) = 0;
+	  MEM_READONLY_P (y) = 0;
+	}
+      if (MEM_NOTRAP_P (x) != MEM_NOTRAP_P (y))
+	{
+	  MEM_NOTRAP_P (x) = 0;
+	  MEM_NOTRAP_P (y) = 0;
+	}
+      if (MEM_VOLATILE_P (x) != MEM_VOLATILE_P (y))
+	{
+	  MEM_VOLATILE_P (x) = 1;
+	  MEM_VOLATILE_P (y) = 1;
 	}
     }
 
@@ -1722,12 +1740,20 @@ outgoing_edges_match (int mode, basic_block bb1, basic_block bb2)
 	}
     }
 
+  /* Find the last non-debug non-note instruction in each bb, except
+     stop when we see the NOTE_INSN_BASIC_BLOCK, as old_insns_match_p
+     handles that case specially. old_insns_match_p does not handle
+     other types of instruction notes.  */
   rtx last1 = BB_END (bb1);
   rtx last2 = BB_END (bb2);
-  if (DEBUG_INSN_P (last1))
-    last1 = prev_nondebug_insn (last1);
-  if (DEBUG_INSN_P (last2))
-    last2 = prev_nondebug_insn (last2);
+  while (!NOTE_INSN_BASIC_BLOCK_P (last1) &&
+         (DEBUG_INSN_P (last1) || NOTE_P (last1)))
+    last1 = PREV_INSN (last1);
+  while (!NOTE_INSN_BASIC_BLOCK_P (last2) &&
+         (DEBUG_INSN_P (last2) || NOTE_P (last2)))
+    last2 = PREV_INSN (last2);
+  gcc_assert (last1 && last2);
+
   /* First ensure that the instructions match.  There may be many outgoing
      edges so this test is generally cheaper.  */
   if (old_insns_match_p (mode, last1, last2) != dir_both)
@@ -1866,7 +1892,7 @@ try_crossjump_to_edge (int mode, edge e1, edge e2,
      partition boundaries).  See the comments at the top of
      bb-reorder.c:partition_hot_cold_basic_blocks for complete details.  */
 
-  if (flag_reorder_blocks_and_partition && reload_completed)
+  if (crtl->has_bb_partition && reload_completed)
     return false;
 
   /* Search backward through forwarder blocks.  We don't need to worry
@@ -2809,10 +2835,21 @@ try_optimize_cfg (int mode)
 	      df_analyze ();
 	    }
 
-#ifdef ENABLE_CHECKING
 	  if (changed)
-	    verify_flow_info ();
+            {
+              /* Edge forwarding in particular can cause hot blocks previously
+                 reached by both hot and cold blocks to become dominated only
+                 by cold blocks. This will cause the verification below to fail,
+                 and lead to now cold code in the hot section. This is not easy
+                 to detect and fix during edge forwarding, and in some cases
+                 is only visible after newly unreachable blocks are deleted,
+                 which will be done in fixup_partitions.  */
+              fixup_partitions ();
+
+#ifdef ENABLE_CHECKING
+              verify_flow_info ();
 #endif
+            }
 
 	  changed_overall |= changed;
 	  first_pass = false;
