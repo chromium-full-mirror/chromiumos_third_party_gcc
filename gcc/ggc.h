@@ -1,6 +1,6 @@
 /* Garbage collection for the GNU compiler.
 
-   Copyright (C) 1998-2013 Free Software Foundation, Inc.
+   Copyright (C) 1998-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -146,6 +146,7 @@ extern size_t ggc_round_alloc_size (size_t requested_size);
 /* Allocates cleared memory.  */
 extern void *ggc_internal_cleared_alloc_stat (size_t MEM_STAT_DECL)
   ATTRIBUTE_MALLOC;
+#define ggc_internal_cleared_alloc(s) ggc_internal_cleared_alloc_stat (s MEM_STAT_INFO)
 
 /* Resize a block.  */
 extern void *ggc_realloc_stat (void *, size_t MEM_STAT_DECL);

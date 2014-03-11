@@ -1,6 +1,6 @@
 /* Handle the hair of processing (but not expanding) inline functions.
    Also manage function and variable name overloading.
-   Copyright (C) 1987-2013 Free Software Foundation, Inc.
+   Copyright (C) 1987-2014 Free Software Foundation, Inc.
    Contributed by Michael Tiemann (tiemann@cygnus.com)
 
 This file is part of GCC.
@@ -477,7 +477,8 @@ trivial_fn_p (tree fn)
     return false;
 
   /* If fn is a clone, get the primary variant.  */
-  fn = DECL_ORIGIN (fn);
+  if (tree prim = DECL_CLONED_FUNCTION (fn))
+    fn = prim;
   return type_has_trivial_fn (DECL_CONTEXT (fn), special_function_p (fn));
 }
 
@@ -1365,7 +1366,7 @@ synthesized_method_walk (tree ctype, special_function_kind sfk, bool const_p,
     }
 
   vbases = CLASSTYPE_VBASECLASSES (ctype);
-  if (vbases == NULL)
+  if (vec_safe_is_empty (vbases))
     /* No virtual bases to worry about.  */;
   else if (!assign_p)
     {
@@ -1655,10 +1656,12 @@ implicitly_declare_fn (special_function_kind kind, tree type,
   /* Don't bother marking a deleted constructor as constexpr.  */
   if (deleted_p)
     constexpr_p = false;
-  /* A trivial copy/move constructor is also a constexpr constructor.  */
+  /* A trivial copy/move constructor is also a constexpr constructor,
+     unless the class has virtual bases (7.1.5p4).  */
   else if (trivial_p && cxx_dialect >= cxx11
 	   && (kind == sfk_copy_constructor
-	       || kind == sfk_move_constructor))
+	       || kind == sfk_move_constructor)
+	   && !CLASSTYPE_VBASECLASSES (type))
     gcc_assert (constexpr_p);
 
   if (!trivial_p && type_has_trivial_fn (type, kind))

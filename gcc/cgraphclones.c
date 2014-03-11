@@ -1,5 +1,5 @@
 /* Callgraph clones
-   Copyright (C) 2003-2013 Free Software Foundation, Inc.
+   Copyright (C) 2003-2014 Free Software Foundation, Inc.
    Contributed by Jan Hubicka
 
 This file is part of GCC.
@@ -397,6 +397,9 @@ build_function_decl_skip_args (tree orig_decl, bitmap args_to_skip,
       DECL_BUILT_IN_CLASS (new_decl) = NOT_BUILT_IN;
       DECL_FUNCTION_CODE (new_decl) = (enum built_in_function) 0;
     }
+  /* The FE might have information and assumptions about the other
+     arguments.  */
+  DECL_LANG_SPECIFIC (new_decl) = NULL;
   return new_decl;
 }
 

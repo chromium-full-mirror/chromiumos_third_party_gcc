@@ -1,5 +1,5 @@
 /* Array translation routines
-   Copyright (C) 2002-2013 Free Software Foundation, Inc.
+   Copyright (C) 2002-2014 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
    and Steven Bosscher <s.bosscher@student.tudelft.nl>
 
@@ -2491,6 +2491,11 @@ gfc_add_loop_ss_code (gfc_loopinfo * loop, gfc_ss * ss, bool subscript,
 		 a reference to the value.  */
 	      gfc_conv_expr (&se, expr);
 	    }
+
+	  /* Ensure that a pointer to the string is stored.  */
+	  if (expr->ts.type == BT_CHARACTER)
+	    gfc_conv_string_parameter (&se);
+
 	  gfc_add_block_to_block (&outer_loop->pre, &se.pre);
 	  gfc_add_block_to_block (&outer_loop->post, &se.post);
 	  if (gfc_is_class_scalar_expr (expr))

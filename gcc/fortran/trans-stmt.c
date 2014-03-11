@@ -1,5 +1,5 @@
 /* Statement translation -- generate GCC trees from gfc_code.
-   Copyright (C) 2002-2013 Free Software Foundation, Inc.
+   Copyright (C) 2002-2014 Free Software Foundation, Inc.
    Contributed by Paul Brook <paul@nowt.org>
    and Steven Bosscher <s.bosscher@student.tudelft.nl>
 
@@ -1190,6 +1190,17 @@ trans_associate_var (gfc_symbol *sym, gfc_wrapped_block *block)
 	  for (dim = 0; dim < e->rank; ++dim)
 	    gfc_conv_shift_descriptor_lbound (&se.pre, desc,
 					      dim, gfc_index_one_node);
+	}
+
+      /* If this is a subreference array pointer associate name use the
+	 associate variable element size for the value of 'span'.  */
+      if (sym->attr.subref_array_pointer)
+	{
+	  gcc_assert (e->expr_type == EXPR_VARIABLE);
+	  tmp = e->symtree->n.sym->backend_decl;
+	  tmp = gfc_get_element_type (TREE_TYPE (tmp));
+	  tmp = fold_convert (gfc_array_index_type, size_in_bytes (tmp));
+	  gfc_add_modify (&se.pre, GFC_DECL_SPAN(desc), tmp);
 	}
 
       /* Done, register stuff as init / cleanup code.  */
@@ -5102,9 +5113,48 @@ gfc_trans_allocate (gfc_code * code)
 	{
 	  gfc_expr *lhs, *rhs;
 	  gfc_se lse;
+	  gfc_ref *ref, *class_ref, *tail;
+
+	  /* Find the last class reference.  */
+	  class_ref = NULL;
+	  for (ref = e->ref; ref; ref = ref->next)
+	    {
+	      if (ref->type == REF_COMPONENT
+		  && ref->u.c.component->ts.type == BT_CLASS)
+		class_ref = ref;
+
+	      if (ref->next == NULL)
+		break;
+	    }
+
+	  /* Remove and store all subsequent references after the
+	     CLASS reference.  */
+	  if (class_ref)
+	    {
+	      tail = class_ref->next;
+	      class_ref->next = NULL;
+	    }
+	  else
+	    {
+	      tail = e->ref;
+	      e->ref = NULL;
+	    }
 
 	  lhs = gfc_expr_to_initialize (e);
 	  gfc_add_vptr_component (lhs);
+
+	  /* Remove the _vptr component and restore the original tail
+	     references.  */
+	  if (class_ref)
+	    {
+	      gfc_free_ref_list (class_ref->next);
+	      class_ref->next = tail;
+	    }
+	  else
+	    {
+	      gfc_free_ref_list (e->ref);
+	      e->ref = tail;
+	    }
 
 	  if (class_expr != NULL_TREE)
 	    {

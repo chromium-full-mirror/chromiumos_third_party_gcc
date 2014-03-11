@@ -1,5 +1,5 @@
 /* Primary expression subroutines
-   Copyright (C) 2000-2013 Free Software Foundation, Inc.
+   Copyright (C) 2000-2014 Free Software Foundation, Inc.
    Contributed by Andy Vaught
 
 This file is part of GCC.
@@ -2544,7 +2544,8 @@ gfc_convert_to_structure_constructor (gfc_expr *e, gfc_symbol *sym, gfc_expr **c
       if (parent && !comp)
 	break;
 
-      actual = actual->next;
+      if (actual)
+	actual = actual->next;
     }
 
   if (!build_actual_constructor (&comp_head, &ctor_head, sym))

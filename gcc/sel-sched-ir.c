@@ -1,5 +1,5 @@
 /* Instruction scheduling pass.  Selective scheduler and pipeliner.
-   Copyright (C) 2006-2013 Free Software Foundation, Inc.
+   Copyright (C) 2006-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -1398,6 +1398,11 @@ sel_gen_insn_from_expr_after (expr_t expr, vinsn_t vinsn, int seqno,
   emit_expr = set_insn_init (expr, vinsn ? vinsn : EXPR_VINSN (expr),
                              seqno);
   insn = EXPR_INSN_RTX (emit_expr);
+
+  /* The insn may come from the transformation cache, which may hold already
+     deleted insns, so mark it as not deleted.  */
+  INSN_DELETED_P (insn) = 0;
+
   add_insn_after (insn, after, BLOCK_FOR_INSN (insn));
 
   flags = INSN_INIT_TODO_SSID;

@@ -1,5 +1,5 @@
 /* Calculate branch probabilities, and basic block execution counts.
-   Copyright (C) 1990-2013 Free Software Foundation, Inc.
+   Copyright (C) 1990-2014 Free Software Foundation, Inc.
    Contributed by James E. Wilson, UC Berkeley/Cygnus Support;
    based on some ideas from Dain Samples of UC Berkeley.
    Further mangling by Bob Manson, Cygnus Support.
@@ -841,6 +841,8 @@ gimple_gen_edge_profiler (int edgeno, edge e)
                                  3, ref, one,
                                  build_int_cst (integer_type_node,
                                    MEMMODEL_RELAXED));
+      /* Suppress "'stmt1' may be used uninitialized" warning.  */
+      stmt1 = stmt2 = 0;
     }
   else
     {

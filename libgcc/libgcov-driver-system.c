@@ -1,6 +1,6 @@
 /* Routines required for instrumenting a program.  */
 /* Compile this one with gcc.  */
-/* Copyright (C) 1989-2013 Free Software Foundation, Inc.
+/* Copyright (C) 1989-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -124,7 +124,7 @@ allocate_filename_struct (struct gcov_filename_aux *gf)
       prefix_length = 1;
     }
   /* Allocate and initialize the filename scratch space plus one.  */
-  gi_filename = (char *) malloc (prefix_length + gcov_max_filename + 2);
+  gi_filename = (char *) xmalloc (prefix_length + gcov_max_filename + 2);
   if (prefix_length)
     memcpy (gi_filename, gcov_prefix, prefix_length);
   gi_filename_up = gi_filename + prefix_length;
@@ -163,7 +163,7 @@ gcov_open_by_filename (char *gi_filename)
 
 static void
 gcov_strip_leading_dirs (int prefix_length, int gcov_prefix_strip,
-      			             const char *filename, char *gi_filename_up)
+      			 const char *filename, char *gi_filename_up)
 {
   /* Avoid to add multiple drive letters into combined path.  */
   if (prefix_length != 0 && HAS_DRIVE_SPEC(filename))

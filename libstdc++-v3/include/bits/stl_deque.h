@@ -1,6 +1,6 @@
 // Deque implementation -*- C++ -*-
 
-// Copyright (C) 2001-2013 Free Software Foundation, Inc.
+// Copyright (C) 2001-2014 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -487,13 +487,13 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       ~_Deque_base() _GLIBCXX_NOEXCEPT;
 
     protected:
-      //This struct encapsulates the implementation of the std::deque
-      //standard container and at the same time makes use of the EBO
-      //for empty allocators.
       typedef typename _Alloc::template rebind<_Tp*>::other _Map_alloc_type;
 
       typedef typename _Alloc::template rebind<_Tp>::other  _Tp_alloc_type;
 
+      //This struct encapsulates the implementation of the std::deque
+      //standard container and at the same time makes use of the EBO
+      //for empty allocators.
       struct _Deque_impl
       : public _Tp_alloc_type
       {
@@ -781,12 +781,18 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
     public:
       // [23.2.1.1] construct/copy/destroy
       // (assign() and get_allocator() are also listed in this section)
+
+      /**
+       *  @brief  Creates a %deque with no elements.
+       */
+      deque() : _Base() { }
+
       /**
        *  @brief  Creates a %deque with no elements.
        *  @param  __a  An allocator object.
        */
       explicit
-      deque(const allocator_type& __a = allocator_type())
+      deque(const allocator_type& __a)
       : _Base(__a) { }
 
 #if __cplusplus >= 201103L
@@ -1566,6 +1572,10 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
       iterator
       insert(const_iterator __position, size_type __n, const value_type& __x)
       {
+#if __google_stl_debug_deque
+	if (__position < this->begin() || __position > this->end())
+	  __throw_logic_error("insert() at invalid position");
+#endif
 	difference_type __offset = __position - cbegin();
 	_M_fill_insert(__position._M_const_cast(), __n, __x);
 	return begin() + __offset;
@@ -1582,7 +1592,13 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
        */
       void
       insert(iterator __position, size_type __n, const value_type& __x)
-      { _M_fill_insert(__position, __n, __x); }
+      {
+#if __google_stl_debug_deque
+	if (__position < this->begin() || __position > this->end())
+	  __throw_logic_error("insert() at invalid position");
+#endif
+	_M_fill_insert(__position, __n, __x);
+      }
 #endif
 
 #if __cplusplus >= 201103L
@@ -1603,6 +1619,10 @@ _GLIBCXX_BEGIN_NAMESPACE_CONTAINER
         insert(const_iterator __position, _InputIterator __first,
 	       _InputIterator __last)
         {
+#if __google_stl_debug_vector
+	  if (__position < this->begin() || __position > this->end())
+	    __throw_out_of_range(__N("insert() at invalid position"));
+#endif
 	  difference_type __offset = __position - cbegin();
 	  _M_insert_dispatch(__position._M_const_cast(),
 			     __first, __last, __false_type());

@@ -1,5 +1,5 @@
 /* Basic IPA optimizations and utilities.
-   Copyright (C) 2003-2013 Free Software Foundation, Inc.
+   Copyright (C) 2003-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -375,14 +375,17 @@ symtab_remove_unreachable_nodes (bool before_inlining_p, FILE *file)
 	      enqueue_node (origin_node, &first, reachable);
 	    }
 	  /* If any symbol in a comdat group is reachable, force
-	     all other in the same comdat group to be also reachable.  */
+	     all externally visible symbols in the same comdat
+	     group to be reachable as well.  Comdat-local symbols
+	     can be discarded if all uses were inlined.  */
 	  if (node->same_comdat_group)
 	    {
 	      symtab_node *next;
 	      for (next = node->same_comdat_group;
 		   next != node;
 		   next = next->same_comdat_group)
-		if (!pointer_set_insert (reachable, next))
+		if (!symtab_comdat_local_p (next)
+		    && !pointer_set_insert (reachable, next))
 		  enqueue_node (next, &first, reachable);
 	    }
 	  /* Mark references as reachable.  */
@@ -1005,14 +1008,14 @@ function_and_variable_visibility (bool whole_program)
 	  node->unique_name = ((node->resolution == LDPR_PREVAILING_DEF_IRONLY
 				      || node->resolution == LDPR_PREVAILING_DEF_IRONLY_EXP)
 				      && TREE_PUBLIC (node->decl));
-	  symtab_make_decl_local (node->decl);
 	  node->resolution = LDPR_PREVAILING_DEF_IRONLY;
-	  if (node->same_comdat_group)
+	  if (node->same_comdat_group && TREE_PUBLIC (node->decl))
 	    /* cgraph_externally_visible_p has already checked all other nodes
 	       in the group and they will all be made local.  We need to
 	       dissolve the group at once so that the predicate does not
 	       segfault though. */
 	    symtab_dissolve_same_comdat_group_list (node);
+	  symtab_make_decl_local (node->decl);
 	}
 
       if (node->thunk.thunk_p
@@ -1034,6 +1037,39 @@ function_and_variable_visibility (bool whole_program)
 	    }
 	  if (DECL_EXTERNAL (decl_node->decl))
 	    DECL_EXTERNAL (node->decl) = 1;
+	}
+
+      /* If whole comdat group is used only within LTO code, we can dissolve it,
+	 we handle the unification ourselves.
+	 We keep COMDAT and weak so visibility out of DSO does not change.
+	 Later we may bring the symbols static if they are not exported.  */
+      if (DECL_ONE_ONLY (node->decl)
+	  && (node->resolution == LDPR_PREVAILING_DEF_IRONLY
+	      || node->resolution == LDPR_PREVAILING_DEF_IRONLY_EXP))
+	{
+	  symtab_node *next = node;
+
+	  if (node->same_comdat_group)
+	    for (next = node->same_comdat_group;
+		 next != node;
+		 next = next->same_comdat_group)
+	      if (next->externally_visible
+		  && (next->resolution != LDPR_PREVAILING_DEF_IRONLY
+		      && next->resolution != LDPR_PREVAILING_DEF_IRONLY_EXP))
+		break;
+	  if (node == next)
+	    {
+	      if (node->same_comdat_group)
+	        for (next = node->same_comdat_group;
+		     next != node;
+		     next = next->same_comdat_group)
+		{
+		  DECL_COMDAT_GROUP (next->decl) = NULL;
+		  DECL_WEAK (next->decl) = false;
+		}
+	      DECL_COMDAT_GROUP (node->decl) = NULL;
+	      symtab_dissolve_same_comdat_group_list (node);
+	    }
 	}
     }
   FOR_EACH_DEFINED_FUNCTION (node)

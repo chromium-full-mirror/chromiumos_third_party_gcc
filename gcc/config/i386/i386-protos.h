@@ -1,5 +1,5 @@
 /* Definitions of target machine for GCC for IA-32.
-   Copyright (C) 1988-2013 Free Software Foundation, Inc.
+   Copyright (C) 1988-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -94,7 +94,6 @@ extern void ix86_expand_clear (rtx);
 extern void ix86_expand_move (enum machine_mode, rtx[]);
 extern void ix86_expand_vector_move (enum machine_mode, rtx[]);
 extern void ix86_expand_vector_move_misalign (enum machine_mode, rtx[]);
-extern void ix86_expand_push (enum machine_mode, rtx);
 extern rtx ix86_fixup_binary_operands (enum rtx_code,
 				       enum machine_mode, rtx[]);
 extern void ix86_fixup_binary_operands_no_copy (enum rtx_code,

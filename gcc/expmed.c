@@ -1,6 +1,6 @@
 /* Medium-level subroutines: convert bit-field store and extract
    and shifts, multiplies and divides to rtl instructions.
-   Copyright (C) 1987-2013 Free Software Foundation, Inc.
+   Copyright (C) 1987-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -3134,6 +3134,14 @@ expand_mult (enum machine_mode mode, rtx op0, rtx op1, rtx target,
 			    op0, target, 0);
 
       if (do_trapv)
+	goto skip_synth;
+
+      /* If mode is integer vector mode, check if the backend supports
+	 vector lshift (by scalar or vector) at all.  If not, we can't use
+	 synthetized multiply.  */
+      if (GET_MODE_CLASS (mode) == MODE_VECTOR_INT
+	  && optab_handler (vashl_optab, mode) == CODE_FOR_nothing
+	  && optab_handler (ashl_optab, mode) == CODE_FOR_nothing)
 	goto skip_synth;
 
       /* These are the operations that are potentially turned into

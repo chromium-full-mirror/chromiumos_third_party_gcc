@@ -320,6 +320,10 @@ package body Ada.Containers.Formal_Ordered_Sets is
       Target : Set (Count_Type'Max (Source.Capacity, Capacity));
 
    begin
+      if 0 < Capacity and then Capacity < Source.Capacity then
+         raise Capacity_Error;
+      end if;
+
       if Length (Source) > 0 then
          Target.Length := Source.Length;
          Target.Root   := Source.Root;
@@ -1450,8 +1454,7 @@ package body Ada.Containers.Formal_Ordered_Sets is
             return True;
          end if;
 
-         if Left.Nodes (LNode).Element /=
-           Right.Nodes (RNode).Element then
+         if Left.Nodes (LNode).Element /= Right.Nodes (RNode).Element then
             exit;
          end if;
 

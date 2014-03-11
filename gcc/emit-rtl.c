@@ -1,5 +1,5 @@
 /* Emit RTL for the GCC expander.
-   Copyright (C) 1987-2013 Free Software Foundation, Inc.
+   Copyright (C) 1987-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -895,6 +895,9 @@ gen_reg_rtx (enum machine_mode mode)
       imagpart = gen_reg_rtx (partmode);
       return gen_rtx_CONCAT (mode, realpart, imagpart);
     }
+
+  /* Do not call gen_reg_rtx with uninitialized crtl.  */
+  gcc_assert (crtl->emit.regno_pointer_align_length);
 
   /* Make sure regno_pointer_align, and regno_reg_rtx are large
      enough to have an element for this pseudo reg number.  */

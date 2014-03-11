@@ -1,6 +1,6 @@
 /* Call-backs for C++ error reporting.
    This code is non-reentrant.
-   Copyright (C) 1993-2013 Free Software Foundation, Inc.
+   Copyright (C) 1993-2014 Free Software Foundation, Inc.
    This file is part of GCC.
 
 GCC is free software; you can redistribute it and/or modify
@@ -512,7 +512,7 @@ dump_type (cxx_pretty_printer *pp, tree t, int flags)
 	  pp_cxx_colon_colon (pp);
 	}
       pp_cxx_ws_string (pp, "template");
-      dump_type (pp, DECL_NAME (TYPE_NAME (t)), flags);
+      dump_type (pp, TYPE_IDENTIFIER (t), flags);
       break;
 
     case TYPEOF_TYPE:

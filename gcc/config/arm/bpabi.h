@@ -1,5 +1,5 @@
 /* Configuration file for ARM BPABI targets.
-   Copyright (C) 2004-2013 Free Software Foundation, Inc.
+   Copyright (C) 2004-2014 Free Software Foundation, Inc.
    Contributed by CodeSourcery, LLC   
 
    This file is part of GCC.
@@ -66,6 +66,7 @@
    |mcpu=cortex-a57					\
    |mcpu=cortex-a57.cortex-a53				\
    |mcpu=generic-armv7-a                                \
+   |march=armv7ve	                                \
    |march=armv7-m|mcpu=cortex-m3                        \
    |march=armv7e-m|mcpu=cortex-m4                       \
    |march=armv6-m|mcpu=cortex-m0                        \
@@ -83,6 +84,7 @@
    |mcpu=cortex-a57.cortex-a53				\
    |mcpu=marvell-pj4					\
    |mcpu=generic-armv7-a                                \
+   |march=armv7ve	                                \
    |march=armv7-m|mcpu=cortex-m3                        \
    |march=armv7e-m|mcpu=cortex-m4                       \
    |march=armv6-m|mcpu=cortex-m0                        \

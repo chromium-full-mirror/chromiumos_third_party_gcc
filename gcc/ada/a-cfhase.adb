@@ -233,6 +233,10 @@ package body Ada.Containers.Formal_Hashed_Sets is
       Cu     : Cursor;
 
    begin
+      if 0 < Capacity and then Capacity < Source.Capacity then
+         raise Capacity_Error;
+      end if;
+
       Target.Length := Source.Length;
       Target.Free := Source.Free;
 
@@ -470,8 +474,9 @@ package body Ada.Containers.Formal_Hashed_Sets is
                return False;
             end if;
 
-            if Equivalent_Elements (L_Node.Element,
-                                    RN (R_Node).Element) then
+            if Equivalent_Elements
+                 (L_Node.Element, RN (R_Node).Element)
+            then
                return True;
             end if;
 

@@ -3,7 +3,7 @@
    building RTL.  These routines are used both during actual parsing
    and during the instantiation of template functions.
 
-   Copyright (C) 1998-2013 Free Software Foundation, Inc.
+   Copyright (C) 1998-2014 Free Software Foundation, Inc.
 
    This file is part of GCC.
 
@@ -250,6 +250,10 @@ is_normal_capture_proxy (tree decl)
     /* It's not a capture proxy.  */
     return false;
 
+  if (variably_modified_type_p (TREE_TYPE (decl), NULL_TREE))
+    /* VLA capture.  */
+    return true;
+
   /* It is a capture proxy, is it a normal capture?  */
   tree val = DECL_VALUE_EXPR (decl);
   if (val == error_mark_node)
@@ -377,8 +381,8 @@ build_capture_proxy (tree member)
       tree ptr = build_simple_component_ref (object, field);
       field = next_initializable_field (DECL_CHAIN (field));
       tree max = build_simple_component_ref (object, field);
-      type = build_array_type (TREE_TYPE (TREE_TYPE (ptr)),
-			       build_index_type (max));
+      type = build_cplus_array_type (TREE_TYPE (TREE_TYPE (ptr)),
+				     build_index_type (max));
       type = build_reference_type (type);
       REFERENCE_VLA_OK (type) = true;
       object = convert (type, ptr);
@@ -745,7 +749,10 @@ maybe_resolve_dummy (tree object)
   if (type != current_class_type
       && current_class_type
       && LAMBDA_TYPE_P (current_class_type)
-      && DERIVED_FROM_P (type, current_nonlambda_class_type ()))
+      && DERIVED_FROM_P (type, current_nonlambda_class_type ())
+      /* If we get here while parsing the parameter list of a lambda, it
+	 will fail, so don't even try (c++/60252).  */
+      && current_binding_level->kind != sk_function_parms)
     {
       /* In a lambda, need to go through 'this' capture.  */
       tree lam = CLASSTYPE_LAMBDA_EXPR (current_class_type);
@@ -970,7 +977,7 @@ maybe_add_lambda_conv_op (tree type)
      the conversion op is used.  */
   if (varargs_function_p (callop))
     {
-      DECL_DELETED_FN (fn) = 1;
+      DECL_DELETED_FN (STRIP_TEMPLATE (fn)) = 1;
       return;
     }
 

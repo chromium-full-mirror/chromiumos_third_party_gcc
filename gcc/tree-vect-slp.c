@@ -1,5 +1,5 @@
 /* SLP - Basic Block Vectorization
-   Copyright (C) 2007-2013 Free Software Foundation, Inc.
+   Copyright (C) 2007-2014 Free Software Foundation, Inc.
    Contributed by Dorit Naishlos <dorit@il.ibm.com>
    and Ira Rosen <irar@il.ibm.com>
 
@@ -1103,8 +1103,8 @@ vect_supported_load_permutation_p (slp_instance slp_instn)
 	  FOR_EACH_VEC_ELT (node->load_permutation, j, next)
 	    dump_printf (MSG_NOTE, "%d ", next);
 	else
-	  for (i = 0; i < group_size; ++i)
-	    dump_printf (MSG_NOTE, "%d ", i);
+	  for (k = 0; k < group_size; ++k)
+	    dump_printf (MSG_NOTE, "%d ", k);
       dump_printf (MSG_NOTE, "\n");
     }
 
@@ -1967,9 +1967,10 @@ vect_bb_slp_scalar_cost (basic_block bb,
 	  imm_use_iterator use_iter;
 	  gimple use_stmt;
 	  FOR_EACH_IMM_USE_STMT (use_stmt, use_iter, DEF_FROM_PTR (def_p))
-	    if (gimple_code (use_stmt) == GIMPLE_PHI
-		|| gimple_bb (use_stmt) != bb
-		|| !STMT_VINFO_VECTORIZABLE (vinfo_for_stmt (use_stmt)))
+	    if (!is_gimple_debug (use_stmt)
+		&& (gimple_code (use_stmt) == GIMPLE_PHI
+		    || gimple_bb (use_stmt) != bb
+		    || !STMT_VINFO_VECTORIZABLE (vinfo_for_stmt (use_stmt))))
 	      {
 		(*life)[i] = true;
 		BREAK_FROM_IMM_USE_STMT (use_iter);
@@ -2110,17 +2111,6 @@ vect_slp_analyze_bb_1 (basic_block bb)
 
   vect_pattern_recog (NULL, bb_vinfo);
 
-  if (!vect_slp_analyze_data_ref_dependences (bb_vinfo))
-     {
-       if (dump_enabled_p ())
-	 dump_printf_loc (MSG_MISSED_OPTIMIZATION, vect_location,
-			  "not vectorized: unhandled data dependence "
-			  "in basic block.\n");
-
-       destroy_bb_vec_info (bb_vinfo);
-       return NULL;
-     }
-
   if (!vect_analyze_data_refs_alignment (NULL, bb_vinfo))
     {
       if (dump_enabled_p ())
@@ -2154,6 +2144,29 @@ vect_slp_analyze_bb_1 (basic_block bb)
       vect_mark_slp_stmts (SLP_INSTANCE_TREE (instance), pure_slp, -1);
       vect_mark_slp_stmts_relevant (SLP_INSTANCE_TREE (instance));
     }
+
+  /* Mark all the statements that we do not want to vectorize.  */
+  for (gimple_stmt_iterator gsi = gsi_start_bb (BB_VINFO_BB (bb_vinfo));
+       !gsi_end_p (gsi); gsi_next (&gsi))
+    {
+      stmt_vec_info vinfo = vinfo_for_stmt (gsi_stmt (gsi));
+      if (STMT_SLP_TYPE (vinfo) != pure_slp)
+	STMT_VINFO_VECTORIZABLE (vinfo) = false;
+    }
+
+  /* Analyze dependences.  At this point all stmts not participating in
+     vectorization have to be marked.  Dependence analysis assumes
+     that we either vectorize all SLP instances or none at all.  */
+  if (!vect_slp_analyze_data_ref_dependences (bb_vinfo))
+     {
+       if (dump_enabled_p ())
+	 dump_printf_loc (MSG_MISSED_OPTIMIZATION, vect_location,
+			  "not vectorized: unhandled data dependence "
+			  "in basic block.\n");
+
+       destroy_bb_vec_info (bb_vinfo);
+       return NULL;
+     }
 
   if (!vect_verify_datarefs_alignment (NULL, bb_vinfo))
     {

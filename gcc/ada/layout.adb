@@ -751,7 +751,7 @@ package body Layout is
          then
             S := Expr_Value (Hi) - Expr_Value (Lo) + 1;
 
-            --  If known flat bound, entire size of array is zero!
+            --  If known flat bound, entire size of array is zero
 
             if S <= 0 then
                return Make_Integer_Literal (Loc, 0);
@@ -1088,7 +1088,7 @@ package body Layout is
          then
             S := Expr_Value (Hi) - Expr_Value (Lo) + 1;
 
-            --  If known flat bound, entire size of array is zero!
+            --  If known flat bound, entire size of array is zero
 
             if S <= 0 then
                Set_Esize (E, Uint_0);
@@ -1688,7 +1688,7 @@ package body Layout is
 
          --  Set size of component from type. We use the Esize except in a
          --  packed record, where we use the RM_Size (since that is what the
-         --  RM_Size value, as distinct from the Object_Size is useful for!)
+         --  RM_Size value, as distinct from the Object_Size is useful for).
 
          if Is_Packed (E) then
             Set_Esize (Comp, RM_Size (Ctyp));
@@ -1771,7 +1771,7 @@ package body Layout is
          End_NPMax : SO_Ref;
 
       begin
-         --  Only lay out components if there are some to lay out!
+         --  Only lay out components if there are some to lay out
 
          if Present (From) then
 
@@ -2276,9 +2276,7 @@ package body Layout is
       --  original, nothing else needs to be done in this case, since the
       --  components themselves are all shared.
 
-      if (Ekind (E) = E_Record_Subtype
-            or else
-          Ekind (E) = E_Class_Wide_Subtype)
+      if Ekind_In (E, E_Record_Subtype, E_Class_Wide_Subtype)
         and then Present (Cloned_Subtype (E))
       then
          Set_Esize     (E, Esize     (Cloned_Subtype (E)));
@@ -2508,7 +2506,7 @@ package body Layout is
          --  since this is part of the earlier processing and the front end is
          --  always required to lay out the sizes of such types (since they are
          --  available as static attributes). All we do is to check that this
-         --  rule is indeed obeyed!
+         --  rule is indeed obeyed.
 
          if Is_Discrete_Type (E) then
 

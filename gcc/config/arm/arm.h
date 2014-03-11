@@ -1,5 +1,5 @@
 /* Definitions of target machine for GNU compiler, for ARM.
-   Copyright (C) 1991-2013 Free Software Foundation, Inc.
+   Copyright (C) 1991-2014 Free Software Foundation, Inc.
    Contributed by Pieter `Tiggr' Schoenmakers (rcpieter@win.tue.nl)
    and Martin Simmons (@harleqn.co.uk).
    More major hacks by Richard Earnshaw (rearnsha@arm.com)
@@ -189,7 +189,7 @@ extern arm_cc arm_current_cc;
 
 #define ARM_INVERSE_CONDITION_CODE(X)  ((arm_cc) (((int)X) ^ 1))
 
-/* The maximaum number of instructions that is beneficial to
+/* The maximum number of instructions that is beneficial to
    conditionally execute. */
 #undef MAX_CONDITIONAL_EXECUTE
 #define MAX_CONDITIONAL_EXECUTE arm_max_conditional_execute ()
@@ -1272,8 +1272,13 @@ enum reg_class
    when addressing quantities in QI or HI mode; if we don't know the
    mode, then we must be conservative.  */
 #define MODE_BASE_REG_CLASS(MODE)					\
-    (TARGET_ARM || (TARGET_THUMB2 && !optimize_size) ? CORE_REGS :      \
-     (((MODE) == SImode) ? BASE_REGS : LO_REGS))
+  (arm_lra_flag								\
+   ? (TARGET_32BIT ? CORE_REGS						\
+      : GET_MODE_SIZE (MODE) >= 4 ? BASE_REGS				\
+      : LO_REGS)							\
+   : ((TARGET_ARM || (TARGET_THUMB2 && !optimize_size)) ? CORE_REGS	\
+      : ((MODE) == SImode) ? BASE_REGS					\
+      : LO_REGS))
 
 /* For Thumb we can not support SP+reg addressing, so we return LO_REGS
    instead of BASE_REGS.  */
@@ -2356,7 +2361,7 @@ extern int making_const_table;
 #define MAX_LDM_STM_OPS 4
 
 #define BIG_LITTLE_SPEC \
-   " %{mcpu=*:%<mcpu=* -mcpu=%:rewrite_mcpu(%{mcpu=*:%*})}" \
+   " %{mcpu=*:-mcpu=%:rewrite_mcpu(%{mcpu=*:%*})}"
 
 extern const char *arm_rewrite_mcpu (int argc, const char **argv);
 #define BIG_LITTLE_CPU_SPEC_FUNCTIONS \

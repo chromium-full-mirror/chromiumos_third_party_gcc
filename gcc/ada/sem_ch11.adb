@@ -37,6 +37,7 @@ with Restrict; use Restrict;
 with Rident;   use Rident;
 with Rtsfind;  use Rtsfind;
 with Sem;      use Sem;
+with Sem_Aux;  use Sem_Aux;
 with Sem_Ch5;  use Sem_Ch5;
 with Sem_Ch8;  use Sem_Ch8;
 with Sem_Ch13; use Sem_Ch13;
@@ -474,9 +475,11 @@ package body Sem_Ch11 is
 
       Kill_Current_Values (Last_Assignment_Only => True);
 
-      --  Set type as Any_Type since we have no information at all on the type
+      --  Raise_Type is compatible with all other types so that the raise
+      --  expression is legal in any expression context. It will be eventually
+      --  replaced by the concrete type imposed by the context.
 
-      Set_Etype (N, Any_Type);
+      Set_Etype (N, Raise_Type);
    end Analyze_Raise_Expression;
 
    -----------------------------
@@ -533,6 +536,13 @@ package body Sem_Ch11 is
                if Is_Scalar_Type (Etype (L))
                  and then Is_Entity_Name (L)
                  and then Is_Formal (Entity (L))
+
+                 --  Do this only for parameters to the current subprogram.
+                 --  This avoids some false positives for the nested case.
+
+                 and then Nearest_Dynamic_Scope (Current_Scope) =
+                            Scope (Entity (L))
+
                then
                   --  Don't give warning if we are covered by an exception
                   --  handler, since this may result in false positives, since
@@ -728,14 +738,5 @@ package body Sem_Ch11 is
          Rewrite (N, Make_Null_Statement (Sloc (N)));
       end if;
    end Analyze_Raise_xxx_Error;
-
-   -----------------------------
-   -- Analyze_Subprogram_Info --
-   -----------------------------
-
-   procedure Analyze_Subprogram_Info (N : Node_Id) is
-   begin
-      Set_Etype (N, RTE (RE_Code_Loc));
-   end Analyze_Subprogram_Info;
 
 end Sem_Ch11;

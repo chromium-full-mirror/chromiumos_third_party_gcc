@@ -1,4 +1,4 @@
-/* Copyright (C) 2006-2013 Free Software Foundation, Inc.
+/* Copyright (C) 2006-2014 Free Software Foundation, Inc.
 
    This file is free software; you can redistribute it and/or modify it under
    the terms of the GNU General Public License as published by the Free
@@ -181,7 +181,7 @@ spu_resolve_overloaded_builtin (location_t loc, tree fndecl, void *passed_args)
       return error_mark_node;
     }
 
-  return build_function_call_vec (loc, match, fnargs, NULL);
+  return build_function_call_vec (loc, vNULL, match, fnargs, NULL);
 #undef SCALAR_TYPE_P
 }
 

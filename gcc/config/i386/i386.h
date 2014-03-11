@@ -1,5 +1,5 @@
 /* Definitions of target machine for GCC for IA-32.
-   Copyright (C) 1988-2013 Free Software Foundation, Inc.
+   Copyright (C) 1988-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -102,6 +102,8 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #define TARGET_CRC32_P(x)	TARGET_ISA_CRC32_P(x)
 #define TARGET_AES	TARGET_ISA_AES
 #define TARGET_AES_P(x)	TARGET_ISA_AES_P(x)
+#define TARGET_SHA	TARGET_ISA_SHA
+#define TARGET_SHA_P(x)	TARGET_ISA_SHA_P(x)
 #define TARGET_PCLMUL	TARGET_ISA_PCLMUL
 #define TARGET_PCLMUL_P(x)	TARGET_ISA_PCLMUL_P(x)
 #define TARGET_CMPXCHG16B	TARGET_ISA_CX16
@@ -133,6 +135,8 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #define TARGET_LP64_P(x)	TARGET_ABI_64_P(x)
 #define TARGET_X32	TARGET_ABI_X32
 #define TARGET_X32_P(x)	TARGET_ABI_X32_P(x)
+#define TARGET_16BIT	TARGET_CODE16
+#define TARGET_16BIT_P(x)	TARGET_CODE16_P(x)
 
 /* SSE4.1 defines round instructions */
 #define	OPTION_MASK_ISA_ROUND	OPTION_MASK_ISA_SSE4_1
@@ -247,10 +251,10 @@ extern const struct processor_costs ix86_size_cost;
 
 /* Macros used in the machine description to test the flags.  */
 
-/* configure can arrange to make this 2, to force a 486.  */
+/* configure can arrange to change it.  */
 
 #ifndef TARGET_CPU_DEFAULT
-#define TARGET_CPU_DEFAULT TARGET_CPU_DEFAULT_generic
+#define TARGET_CPU_DEFAULT PROCESSOR_GENERIC
 #endif
 
 #ifndef TARGET_FPMATH_DEFAULT
@@ -301,9 +305,12 @@ extern const struct processor_costs ix86_size_cost;
 #define TARGET_ATHLON_K8 (TARGET_K8 || TARGET_ATHLON)
 #define TARGET_NOCONA (ix86_tune == PROCESSOR_NOCONA)
 #define TARGET_CORE2 (ix86_tune == PROCESSOR_CORE2)
-#define TARGET_COREI7 (ix86_tune == PROCESSOR_COREI7)
-#define TARGET_COREI7_AVX (ix86_tune == PROCESSOR_COREI7_AVX)
+#define TARGET_NEHALEM (ix86_tune == PROCESSOR_NEHALEM)
+#define TARGET_SANDYBRIDGE (ix86_tune == PROCESSOR_SANDYBRIDGE)
 #define TARGET_HASWELL (ix86_tune == PROCESSOR_HASWELL)
+#define TARGET_BONNELL (ix86_tune == PROCESSOR_BONNELL)
+#define TARGET_SILVERMONT (ix86_tune == PROCESSOR_SILVERMONT)
+#define TARGET_INTEL (ix86_tune == PROCESSOR_INTEL)
 #define TARGET_GENERIC (ix86_tune == PROCESSOR_GENERIC)
 #define TARGET_AMDFAM10 (ix86_tune == PROCESSOR_AMDFAM10)
 #define TARGET_BDVER1 (ix86_tune == PROCESSOR_BDVER1)
@@ -312,8 +319,6 @@ extern const struct processor_costs ix86_size_cost;
 #define TARGET_BDVER4 (ix86_tune == PROCESSOR_BDVER4)
 #define TARGET_BTVER1 (ix86_tune == PROCESSOR_BTVER1)
 #define TARGET_BTVER2 (ix86_tune == PROCESSOR_BTVER2)
-#define TARGET_ATOM (ix86_tune == PROCESSOR_ATOM)
-#define TARGET_SLM (ix86_tune == PROCESSOR_SLM)
 
 /* Feature tests against the various tunings.  */
 enum ix86_tune_indices {
@@ -427,6 +432,8 @@ extern unsigned char ix86_tune_features[X86_TUNE_LAST];
 #define TARGET_FUSE_ALU_AND_BRANCH \
 	ix86_tune_features[X86_TUNE_FUSE_ALU_AND_BRANCH]
 #define TARGET_OPT_AGU ix86_tune_features[X86_TUNE_OPT_AGU]
+#define TARGET_AVOID_LEA_FOR_ADDR \
+	ix86_tune_features[X86_TUNE_AVOID_LEA_FOR_ADDR]
 #define TARGET_VECTORIZE_DOUBLE \
 	ix86_tune_features[X86_TUNE_VECTORIZE_DOUBLE]
 #define TARGET_SOFTWARE_PREFETCHING_BENEFICIAL \
@@ -607,47 +614,6 @@ extern const char *host_detect_local_cpu (int argc, const char **argv);
 /* Target Pragmas.  */
 #define REGISTER_TARGET_PRAGMAS() ix86_register_pragmas ()
 
-enum target_cpu_default
-{
-  TARGET_CPU_DEFAULT_generic = 0,
-
-  TARGET_CPU_DEFAULT_i386,
-  TARGET_CPU_DEFAULT_i486,
-  TARGET_CPU_DEFAULT_pentium,
-  TARGET_CPU_DEFAULT_pentium_mmx,
-  TARGET_CPU_DEFAULT_pentiumpro,
-  TARGET_CPU_DEFAULT_pentium2,
-  TARGET_CPU_DEFAULT_pentium3,
-  TARGET_CPU_DEFAULT_pentium4,
-  TARGET_CPU_DEFAULT_pentium_m,
-  TARGET_CPU_DEFAULT_prescott,
-  TARGET_CPU_DEFAULT_nocona,
-  TARGET_CPU_DEFAULT_core2,
-  TARGET_CPU_DEFAULT_corei7,
-  TARGET_CPU_DEFAULT_corei7_avx,
-  TARGET_CPU_DEFAULT_haswell,
-  TARGET_CPU_DEFAULT_atom,
-  TARGET_CPU_DEFAULT_slm,
-  TARGET_CPU_DEFAULT_intel,
-
-  TARGET_CPU_DEFAULT_geode,
-  TARGET_CPU_DEFAULT_k6,
-  TARGET_CPU_DEFAULT_k6_2,
-  TARGET_CPU_DEFAULT_k6_3,
-  TARGET_CPU_DEFAULT_athlon,
-  TARGET_CPU_DEFAULT_athlon_sse,
-  TARGET_CPU_DEFAULT_k8,
-  TARGET_CPU_DEFAULT_amdfam10,
-  TARGET_CPU_DEFAULT_bdver1,
-  TARGET_CPU_DEFAULT_bdver2,
-  TARGET_CPU_DEFAULT_bdver3,
-  TARGET_CPU_DEFAULT_bdver4,
-  TARGET_CPU_DEFAULT_btver1,
-  TARGET_CPU_DEFAULT_btver2,
-
-  TARGET_CPU_DEFAULT_max
-};
-
 #ifndef CC1_SPEC
 #define CC1_SPEC "%(cc1_cpu) "
 #endif
@@ -702,12 +668,15 @@ enum target_cpu_default
 #define LONG_LONG_TYPE_SIZE 64
 #define FLOAT_TYPE_SIZE 32
 #define DOUBLE_TYPE_SIZE 64
-#define LONG_DOUBLE_TYPE_SIZE (TARGET_LONG_DOUBLE_64 ? 64 : 80)
+#define LONG_DOUBLE_TYPE_SIZE \
+  (TARGET_LONG_DOUBLE_64 ? 64 : (TARGET_LONG_DOUBLE_128 ? 128 : 80))
 
 /* Define this to set long double type size to use in libgcc2.c, which can
    not depend on target_flags.  */
 #ifdef __LONG_DOUBLE_64__
 #define LIBGCC2_LONG_DOUBLE_TYPE_SIZE 64
+#elif defined (__LONG_DOUBLE_128__)
+#define LIBGCC2_LONG_DOUBLE_TYPE_SIZE 128
 #else
 #define LIBGCC2_LONG_DOUBLE_TYPE_SIZE 80
 #endif
@@ -1086,7 +1055,7 @@ enum target_cpu_default
    || (MODE) == V4DImode || (MODE) == V2TImode || (MODE) == V8SFmode	\
    || (MODE) == V4DFmode)
 
-#define VALID_AVX256_REG_OR_OI_MODE(MODE)					\
+#define VALID_AVX256_REG_OR_OI_MODE(MODE)		\
   (VALID_AVX256_REG_MODE (MODE) || (MODE) == OImode)
 
 #define VALID_AVX512F_SCALAR_MODE(MODE)					\
@@ -1568,12 +1537,12 @@ enum reg_class
    mode the difference is less drastic but visible.  
 
    FIXME: Unlike earlier implementations, the size of unwind info seems to
-   actually grouw with accumulation.  Is that because accumulated args
+   actually grow with accumulation.  Is that because accumulated args
    unwind info became unnecesarily bloated?
-   
-   64-bit MS ABI seem to require 16 byte alignment everywhere except for
-   function prologue and epilogue.  This is not possible without
-   ACCUMULATE_OUTGOING_ARGS.  
+
+   With the 64-bit MS ABI, we can generate correct code with or without
+   accumulated args, but because of OUTGOING_REG_PARM_STACK_SPACE the code
+   generated without accumulated args is terrible.
 
    If stack probes are required, the space used for large function
    arguments on the stack must also be probed, so enable
@@ -1637,6 +1606,8 @@ typedef struct ix86_args {
 				   is used */
   int sse_words;		/* # sse words passed so far */
   int sse_nregs;		/* # sse registers available for passing */
+  int warn_avx512f;		/* True when we want to warn
+				   about AVX512F ABI.  */
   int warn_avx;			/* True when we want to warn about AVX ABI.  */
   int warn_sse;			/* True when we want to warn about SSE ABI.  */
   int warn_mmx;			/* True when we want to warn about MMX ABI.  */
@@ -2205,25 +2176,29 @@ do {									\
    with x86-64 medium memory model */
 #define DEFAULT_LARGE_SECTION_THRESHOLD 65536
 
-/* Which processor to tune code generation for.  */
+/* Which processor to tune code generation for.  These must be in sync
+   with processor_target_table in i386.c.  */ 
 
 enum processor_type
 {
-  PROCESSOR_I386 = 0,			/* 80386 */
+  PROCESSOR_GENERIC = 0,
+  PROCESSOR_I386,			/* 80386 */
   PROCESSOR_I486,			/* 80486DX, 80486SX, 80486DX[24] */
   PROCESSOR_PENTIUM,
   PROCESSOR_PENTIUMPRO,
+  PROCESSOR_PENTIUM4,
+  PROCESSOR_NOCONA,
+  PROCESSOR_CORE2,
+  PROCESSOR_NEHALEM,
+  PROCESSOR_SANDYBRIDGE,
+  PROCESSOR_HASWELL,
+  PROCESSOR_BONNELL,
+  PROCESSOR_SILVERMONT,
+  PROCESSOR_INTEL,
   PROCESSOR_GEODE,
   PROCESSOR_K6,
   PROCESSOR_ATHLON,
-  PROCESSOR_PENTIUM4,
   PROCESSOR_K8,
-  PROCESSOR_NOCONA,
-  PROCESSOR_CORE2,
-  PROCESSOR_COREI7,
-  PROCESSOR_COREI7_AVX,
-  PROCESSOR_HASWELL,
-  PROCESSOR_GENERIC,
   PROCESSOR_AMDFAM10,
   PROCESSOR_BDVER1,
   PROCESSOR_BDVER2,
@@ -2231,8 +2206,6 @@ enum processor_type
   PROCESSOR_BDVER4,
   PROCESSOR_BTVER1,
   PROCESSOR_BTVER2,
-  PROCESSOR_ATOM,
-  PROCESSOR_SLM,
   PROCESSOR_max
 };
 
@@ -2457,6 +2430,9 @@ struct GTY(()) machine_function {
      stack below the return address.  */
   BOOL_BITFIELD static_chain_on_stack : 1;
 
+  /* If true, it is safe to not save/restore DRAP register.  */
+  BOOL_BITFIELD no_drap_save_restore : 1;
+
   /* During prologue/epilogue generation, the current frame state.
      Otherwise, the frame state at the end of the prologue.  */
   struct machine_frame_state fs;
@@ -2544,6 +2520,9 @@ extern void debug_dispatch_window (int);
 
 #define IX86_HLE_ACQUIRE (1 << 16)
 #define IX86_HLE_RELEASE (1 << 17)
+
+/* For switching between functions with different target attributes.  */
+#define SWITCHABLE_TARGET 1
 
 /*
 Local variables:

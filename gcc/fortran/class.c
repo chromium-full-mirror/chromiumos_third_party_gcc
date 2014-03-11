@@ -1,5 +1,5 @@
 /* Implementation of Fortran 2003 Polymorphism.
-   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+   Copyright (C) 2009-2014 Free Software Foundation, Inc.
    Contributed by Paul Richard Thomas <pault@gcc.gnu.org>
    and Janus Weil <janus@gcc.gnu.org>
 
@@ -217,6 +217,14 @@ gfc_add_component_ref (gfc_expr *e, const char *name)
       if ((*tail)->type == REF_ARRAY && (*tail)->next == NULL)
 	break;
       tail = &((*tail)->next);
+    }
+  if (derived->components->next->ts.type == BT_DERIVED &&
+      derived->components->next->ts.u.derived == NULL)
+    {
+      /* Fix up missing vtype.  */
+      gfc_symbol *vtab = gfc_find_derived_vtab (derived->components->ts.u.derived);
+      gcc_assert (vtab);
+      derived->components->next->ts.u.derived = vtab->ts.u.derived;
     }
   if (*tail != NULL && strcmp (name, "_data") == 0)
     next = *tail;
@@ -543,7 +551,7 @@ gfc_intrinsic_hash_value (gfc_typespec *ts)
 
 bool
 gfc_build_class_symbol (gfc_typespec *ts, symbol_attribute *attr,
-			gfc_array_spec **as, bool delayed_vtab)
+			gfc_array_spec **as)
 {
   char name[GFC_MAX_SYMBOL_LEN+1], tname[GFC_MAX_SYMBOL_LEN+1];
   gfc_symbol *fclass;
@@ -637,16 +645,17 @@ gfc_build_class_symbol (gfc_typespec *ts, symbol_attribute *attr,
       if (!gfc_add_component (fclass, "_vptr", &c))
 	return false;
       c->ts.type = BT_DERIVED;
-      if (delayed_vtab
-	  || (ts->u.derived->f2k_derived
-	      && ts->u.derived->f2k_derived->finalizers))
-	c->ts.u.derived = NULL;
-      else
+
+      if (ts->u.derived->attr.unlimited_polymorphic)
 	{
 	  vtab = gfc_find_derived_vtab (ts->u.derived);
 	  gcc_assert (vtab);
 	  c->ts.u.derived = vtab->ts.u.derived;
 	}
+      else
+	/* Build vtab later.  */
+	c->ts.u.derived = NULL;
+
       c->attr.access = ACCESS_PRIVATE;
       c->attr.pointer = 1;
     }
@@ -714,9 +723,11 @@ add_proc_comp (gfc_symbol *vtype, const char *name, gfc_typebound_proc *tb)
 
   if (tb->u.specific)
     {
-      c->ts.interface = tb->u.specific->n.sym;
+      gfc_symbol *ifc = tb->u.specific->n.sym;
+      c->ts.interface = ifc;
       if (!tb->deferred)
 	c->initializer = gfc_get_variable_expr (tb->u.specific);
+      c->attr.pure = ifc->attr.pure;
     }
 }
 
@@ -785,6 +796,27 @@ has_finalizer_component (gfc_symbol *derived)
 }
 
 
+static bool
+comp_is_finalizable (gfc_component *comp)
+{
+  if (comp->attr.proc_pointer)
+    return false;
+  else if (comp->attr.allocatable && comp->ts.type != BT_CLASS)
+    return true;
+  else if (comp->ts.type == BT_DERIVED && !comp->attr.pointer
+	   && (comp->ts.u.derived->attr.alloc_comp
+	       || has_finalizer_component (comp->ts.u.derived)
+	       || (comp->ts.u.derived->f2k_derived
+		   && comp->ts.u.derived->f2k_derived->finalizers)))
+    return true;
+  else if (comp->ts.type == BT_CLASS && CLASS_DATA (comp)
+	    && CLASS_DATA (comp)->attr.allocatable)
+    return true;
+  else
+    return false;
+}
+
+
 /* Call DEALLOCATE for the passed component if it is allocatable, if it is
    neither allocatable nor a pointer but has a finalizer, call it. If it
    is a nonpointer component with allocatable components or has finalizers, walk
@@ -801,19 +833,7 @@ finalize_component (gfc_expr *expr, gfc_symbol *derived, gfc_component *comp,
   gfc_expr *e;
   gfc_ref *ref;
 
-  if (comp->ts.type != BT_DERIVED && comp->ts.type != BT_CLASS
-      && !comp->attr.allocatable)
-    return;
-
-  if ((comp->ts.type == BT_DERIVED && comp->attr.pointer)
-      || (comp->ts.type == BT_CLASS && CLASS_DATA (comp)
-	  && CLASS_DATA (comp)->attr.pointer))
-    return;
-
-  if (comp->ts.type == BT_DERIVED && !comp->attr.allocatable
-      && (comp->ts.u.derived->f2k_derived == NULL
-	  || comp->ts.u.derived->f2k_derived->finalizers == NULL)
-      && !has_finalizer_component (comp->ts.u.derived))
+  if (!comp_is_finalizable (comp))
     return;
 
   e = gfc_copy_expr (expr);
@@ -1460,17 +1480,7 @@ generate_finalization_wrapper (gfc_symbol *derived, gfc_namespace *ns,
 	    && ancestor_wrapper && ancestor_wrapper->expr_type != EXPR_NULL)
 	continue;
 
-	if (comp->ts.type != BT_CLASS && !comp->attr.pointer
-	    && (comp->attr.allocatable
-		|| (comp->ts.type == BT_DERIVED
-		    && (comp->ts.u.derived->attr.alloc_comp
-			|| has_finalizer_component (comp->ts.u.derived)
-			|| (comp->ts.u.derived->f2k_derived
-			    && comp->ts.u.derived->f2k_derived->finalizers)))))
-	  finalizable_comp = true;
-	else if (comp->ts.type == BT_CLASS && CLASS_DATA (comp)
-		 && CLASS_DATA (comp)->attr.allocatable)
-	  finalizable_comp = true;
+	finalizable_comp |= comp_is_finalizable (comp);
       }
 
   /* If there is no new finalizer and no new allocatable, return with
@@ -1881,8 +1891,7 @@ generate_finalization_wrapper (gfc_symbol *derived, gfc_namespace *ns,
 
       for (fini = derived->f2k_derived->finalizers; fini; fini = fini->next)
 	{
-	  if (!fini->proc_tree)
-	    fini->proc_tree = gfc_find_sym_in_symtree (fini->proc_sym);
+	  gcc_assert (fini->proc_tree);   /* Should have been set in gfc_resolve_finalizers.  */
 	  if (fini->proc_tree->n.sym->attr.elemental)
 	    {
 	      fini_elem = fini;

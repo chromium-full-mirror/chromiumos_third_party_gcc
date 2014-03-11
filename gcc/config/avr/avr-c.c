@@ -1,4 +1,4 @@
-/* Copyright (C) 2009-2013 Free Software Foundation, Inc.
+/* Copyright (C) 2009-2014 Free Software Foundation, Inc.
    Contributed by Anatoly Sokolov (aesok@post.ru)
 
    This file is part of GCC.
@@ -115,7 +115,7 @@ avr_resolve_overloaded_builtin (unsigned int iloc, tree fndecl, void *vargs)
       fold = targetm.builtin_decl (id, true);
 
       if (fold != error_mark_node)
-        fold = build_function_call_vec (loc, fold, &args, NULL);
+        fold = build_function_call_vec (loc, vNULL, fold, &args, NULL);
 
       break; // absfx
 
@@ -181,7 +181,7 @@ avr_resolve_overloaded_builtin (unsigned int iloc, tree fndecl, void *vargs)
       fold = targetm.builtin_decl (id, true);
 
       if (fold != error_mark_node)
-        fold = build_function_call_vec (loc, fold, &args, NULL);
+        fold = build_function_call_vec (loc, vNULL, fold, &args, NULL);
 
       break; // roundfx
 
@@ -238,7 +238,7 @@ avr_resolve_overloaded_builtin (unsigned int iloc, tree fndecl, void *vargs)
       fold = targetm.builtin_decl (id, true);
 
       if (fold != error_mark_node)
-        fold = build_function_call_vec (loc, fold, &args, NULL);
+        fold = build_function_call_vec (loc, vNULL, fold, &args, NULL);
 
       break; // countlsfx
     }

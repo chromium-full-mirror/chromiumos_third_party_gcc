@@ -1,5 +1,5 @@
 /* Wrapper to call lto.  Used by collect2 and the linker plugin.
-   Copyright (C) 2009-2013 Free Software Foundation, Inc.
+   Copyright (C) 2009-2014 Free Software Foundation, Inc.
 
    Factored out of collect2 by Rafael Espindola <espindola@google.com>
 
@@ -745,7 +745,16 @@ run_gcc (unsigned argc, char *argv[])
       tmp += list_option_len;
       strcpy (tmp, ltrans_output_file);
 
-      obstack_ptr_grow (&argv_obstack, "-fwpa");
+      if (jobserver)
+	obstack_ptr_grow (&argv_obstack, xstrdup ("-fwpa=jobserver"));
+      else if (parallel > 1)
+	{
+	  char buf[256];
+	  sprintf (buf, "-fwpa=%i", parallel);
+	  obstack_ptr_grow (&argv_obstack, xstrdup (buf));
+	}
+      else
+        obstack_ptr_grow (&argv_obstack, "-fwpa");
     }
 
   /* Append the input objects and possible preceding arguments.  */

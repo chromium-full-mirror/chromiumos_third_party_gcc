@@ -1,5 +1,5 @@
 /* Compiler driver program that can handle many languages.
-   Copyright (C) 1987-2013 Free Software Foundation, Inc.
+   Copyright (C) 1987-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -888,12 +888,12 @@ static const char *asm_options =
 
 static const char *invoke_as =
 #ifdef AS_NEEDS_DASH_FOR_PIPED_INPUT
-"%{!fwpa:\
+"%{!fwpa*:\
    %{fcompare-debug=*|fdump-final-insns=*:%:compare-debug-dump-opt()}\
    %{!S:-o %|.s |\n as %(asm_options) %|.s %A }\
   }";
 #else
-"%{!fwpa:\
+"%{!fwpa*:\
    %{fcompare-debug=*|fdump-final-insns=*:%:compare-debug-dump-opt()}\
    %{!S:-o %|.s |\n as %(asm_options) %m.s %A }\
   }";
@@ -3651,6 +3651,10 @@ driver_handle_option (struct gcc_options *opts,
 	 first two, gfortranspec.c understands -static-libgfortran and
 	 g++spec.c understands -static-libstdc++ */
       validated = true;
+      break;
+
+    case OPT_fwpa:
+      flag_wpa = "";
       break;
 
     default:
@@ -6847,7 +6851,7 @@ main (int argc, char **argv)
     {
       printf (_("%s %s%s\n"), progname, pkgversion_string,
 	      version_string);
-      printf ("Copyright %s 2013 Free Software Foundation, Inc.\n",
+      printf ("Copyright %s 2014 Free Software Foundation, Inc.\n",
 	      _("(C)"));
       fputs (_("This is free software; see the source for copying conditions.  There is NO\n\
 warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n"),

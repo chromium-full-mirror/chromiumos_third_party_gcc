@@ -1,5 +1,5 @@
 /* Expand the basic unary and binary arithmetic operations, for GNU compiler.
-   Copyright (C) 1987-2013 Free Software Foundation, Inc.
+   Copyright (C) 1987-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -6245,7 +6245,7 @@ init_tree_optimization_optabs (tree optnode)
 
   /* If the optabs changed, record it.  */
   if (memcmp (tmp_optabs, this_target_optabs, sizeof (struct target_optabs)))
-    TREE_OPTIMIZATION_OPTABS (optnode) = (unsigned char *) tmp_optabs;
+    TREE_OPTIMIZATION_OPTABS (optnode) = tmp_optabs;
   else
     {
       TREE_OPTIMIZATION_OPTABS (optnode) = NULL;
@@ -7383,12 +7383,13 @@ expand_atomic_compare_and_swap (rtx *ptarget_bool, rtx *ptarget_oval,
       create_integer_operand (&ops[5], is_weak);
       create_integer_operand (&ops[6], succ_model);
       create_integer_operand (&ops[7], fail_model);
-      expand_insn (icode, 8, ops);
-
-      /* Return success/failure.  */
-      target_bool = ops[0].value;
-      target_oval = ops[1].value;
-      goto success;
+      if (maybe_expand_insn (icode, 8, ops))
+	{
+	  /* Return success/failure.  */
+	  target_bool = ops[0].value;
+	  target_oval = ops[1].value;
+	  goto success;
+	}
     }
 
   /* Otherwise fall back to the original __sync_val_compare_and_swap

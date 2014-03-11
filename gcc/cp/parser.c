@@ -1,5 +1,5 @@
 /* C++ Parser.
-   Copyright (C) 2000-2013 Free Software Foundation, Inc.
+   Copyright (C) 2000-2014 Free Software Foundation, Inc.
    Written by Mark Mitchell <mark@codesourcery.com>.
 
    This file is part of GCC.
@@ -241,6 +241,8 @@ static void cp_parser_cilk_simd
   (cp_parser *, cp_token *);
 static bool cp_parser_omp_declare_reduction_exprs
   (tree, cp_parser *);
+static tree cp_parser_cilk_simd_vectorlength 
+  (cp_parser *, tree, bool);
 
 /* Manifest constants.  */
 #define CP_LEXER_BUFFER_SIZE ((256 * 1024) / sizeof (cp_token))
@@ -2115,6 +2117,9 @@ static bool cp_parser_ctor_initializer_opt_and_function_body
 static tree cp_parser_late_parsing_omp_declare_simd
   (cp_parser *, tree);
 
+static tree cp_parser_late_parsing_cilk_simd_fn_info
+  (cp_parser *, tree);
+
 static tree synthesize_implicit_template_parm
   (cp_parser *);
 static tree finish_fully_implicit_template
@@ -3803,7 +3808,8 @@ make_string_pack (tree value)
 {
   tree charvec;
   tree argpack = make_node (NONTYPE_ARGUMENT_PACK);
-  const char *str = TREE_STRING_POINTER (value);
+  const unsigned char *str
+    = (const unsigned char *) TREE_STRING_POINTER (value);
   int sz = TREE_INT_CST_LOW (TYPE_SIZE_UNIT (TREE_TYPE (TREE_TYPE (value))));
   int len = TREE_STRING_LENGTH (value) / sz - 1;
   tree argvec = make_tree_vec (2);
@@ -3816,23 +3822,10 @@ make_string_pack (tree value)
 
   /* Fill in CHARVEC with all of the parameters.  */
   charvec = make_tree_vec (len);
-  if (sz == 1)
-    {
-      for (int i = 0; i < len; ++i)
-	TREE_VEC_ELT (charvec, i) = build_int_cst (str_char_type_node, str[i]);
-    }
-  else if (sz == 2)
-    {
-      const uint16_t *num = (const uint16_t *)str;
-      for (int i = 0; i < len; ++i)
-	TREE_VEC_ELT (charvec, i) = build_int_cst (str_char_type_node, num[i]);
-    }
-  else if (sz == 4)
-    {
-      const uint32_t *num = (const uint32_t *)str;
-      for (int i = 0; i < len; ++i)
-	TREE_VEC_ELT (charvec, i) = build_int_cst (str_char_type_node, num[i]);
-    }
+  for (int i = 0; i < len; ++i)
+    TREE_VEC_ELT (charvec, i)
+      = double_int_to_tree (str_char_type_node,
+			    double_int::from_buffer (str + i * sz, sz));
 
   /* Build the argument packs.  */
   SET_ARGUMENT_PACK_ARGS (argpack, charvec);
@@ -3925,6 +3918,9 @@ cp_parser_userdef_numeric_literal (cp_parser *parser)
   release_tree_vector (args);
 
   error ("unable to find numeric literal operator %qD", name);
+  if (!cpp_get_options (parse_in)->ext_numeric_literals)
+    inform (token->location, "use -std=gnu++11 or -fext-numeric-literals "
+	    "to enable more built-in suffixes");
   return error_mark_node;
 }
 
@@ -5800,7 +5796,13 @@ cp_parser_postfix_expression (cp_parser *parser, bool address_p, bool cast_p,
 	postfix_expression = 
 	  cp_parser_postfix_expression (parser, false, false, 
 					false, false, &idk);
-	if (saved_in_statement & IN_CILK_SPAWN)
+	if (!flag_cilkplus)
+	  {
+	    error_at (token->location, "-fcilkplus must be enabled to use"
+		      " %<_Cilk_spawn%>");
+	    cfun->calls_cilk_spawn = 0;
+	  }
+	else if (saved_in_statement & IN_CILK_SPAWN)
 	  {
 	    error_at (token->location, "consecutive %<_Cilk_spawn%> keywords "
 		      "are not permitted");
@@ -5819,7 +5821,7 @@ cp_parser_postfix_expression (cp_parser *parser, bool address_p, bool cast_p,
       }
       
     case RID_CILK_SYNC:
-      if (flag_enable_cilkplus)
+      if (flag_cilkplus)
 	{ 
 	  tree sync_expr = build_cilk_sync ();
 	  SET_EXPR_LOCATION (sync_expr, 
@@ -5827,8 +5829,8 @@ cp_parser_postfix_expression (cp_parser *parser, bool address_p, bool cast_p,
 	  finish_expr_stmt (sync_expr);
 	}
       else
-	error_at (input_location, "_Cilk_sync cannot be used without enabling "
-		  "Cilk Plus");
+	error_at (token->location, "-fcilkplus must be enabled to use" 
+		  " %<_Cilk_sync%>");
       cp_lexer_consume_token (parser->lexer);
       break;
 
@@ -6073,7 +6075,6 @@ cp_parser_postfix_expression (cp_parser *parser, bool address_p, bool cast_p,
 			if (!any_type_dependent_arguments_p (args))
 			  postfix_expression
 			    = perform_koenig_lookup (postfix_expression, args,
-						     /*include_std=*/false,
 						     complain);
 		      }
 		    else
@@ -6099,7 +6100,6 @@ cp_parser_postfix_expression (cp_parser *parser, bool address_p, bool cast_p,
 			if (!any_type_dependent_arguments_p (args))
 			  postfix_expression
 			    = perform_koenig_lookup (postfix_expression, args,
-						     /*include_std=*/false,
 						     complain);
 		      }
 		  }
@@ -6361,7 +6361,7 @@ cp_parser_postfix_open_square_expression (cp_parser *parser,
 	  bool expr_nonconst_p;
 	  maybe_warn_cpp0x (CPP0X_INITIALIZER_LISTS);
 	  index = cp_parser_braced_list (parser, &expr_nonconst_p);
-	  if (flag_enable_cilkplus
+	  if (flag_cilkplus
 	      && cp_lexer_peek_token (parser->lexer)->type == CPP_COLON)
 	    {
 	      error_at (cp_lexer_peek_token (parser->lexer)->location,
@@ -6371,7 +6371,7 @@ cp_parser_postfix_open_square_expression (cp_parser *parser,
 	      return error_mark_node;
 	    }
 	}
-      else if (flag_enable_cilkplus)
+      else if (flag_cilkplus)
 	{
 	  /* Here are have these two options:
 	     ARRAY[EXP : EXP]        - Array notation expr with default
@@ -8757,6 +8757,8 @@ cp_parser_lambda_expression (cp_parser* parser)
         = parser->fully_implicit_function_template_p;
     tree implicit_template_parms = parser->implicit_template_parms;
     cp_binding_level* implicit_template_scope = parser->implicit_template_scope;
+    bool auto_is_implicit_function_template_parm_p
+        = parser->auto_is_implicit_function_template_parm_p;
 
     parser->num_template_parameter_lists = 0;
     parser->in_statement = 0;
@@ -8764,6 +8766,7 @@ cp_parser_lambda_expression (cp_parser* parser)
     parser->fully_implicit_function_template_p = false;
     parser->implicit_template_parms = 0;
     parser->implicit_template_scope = 0;
+    parser->auto_is_implicit_function_template_parm_p = false;
 
     /* By virtue of defining a local class, a lambda expression has access to
        the private variables of enclosing classes.  */
@@ -8791,6 +8794,8 @@ cp_parser_lambda_expression (cp_parser* parser)
 	= fully_implicit_function_template_p;
     parser->implicit_template_parms = implicit_template_parms;
     parser->implicit_template_scope = implicit_template_scope;
+    parser->auto_is_implicit_function_template_parm_p
+	= auto_is_implicit_function_template_parm_p;
   }
 
   pop_deferring_access_checks ();
@@ -8918,6 +8923,11 @@ cp_parser_lambda_introducer (cp_parser* parser, tree lambda_expr)
 	  capture_init_expr = cp_parser_initializer (parser, &direct,
 						     &non_constant);
 	  explicit_init_p = true;
+	  if (capture_init_expr == NULL_TREE)
+	    {
+	      error ("empty initializer for lambda init-capture");
+	      capture_init_expr = error_mark_node;
+	    }
 	}
       else
 	{
@@ -9137,15 +9147,15 @@ cp_parser_lambda_declarator_opt (cp_parser* parser, tree lambda_expr)
 	DECL_ARTIFICIAL (fco) = 1;
 	/* Give the object parameter a different name.  */
 	DECL_NAME (DECL_ARGUMENTS (fco)) = get_identifier ("__closure");
-	if (template_param_list)
-	  {
-	    fco = finish_member_template_decl (fco);
-	    finish_template_decl (template_param_list);
-	    --parser->num_template_parameter_lists;
-	  }
-	else if (parser->fully_implicit_function_template_p)
-	  fco = finish_fully_implicit_template (parser, fco);
       }
+    if (template_param_list)
+      {
+	fco = finish_member_template_decl (fco);
+	finish_template_decl (template_param_list);
+	--parser->num_template_parameter_lists;
+      }
+    else if (parser->fully_implicit_function_template_p)
+      fco = finish_fully_implicit_template (parser, fco);
 
     finish_member_declaration (fco);
 
@@ -10368,12 +10378,10 @@ cp_parser_perform_range_for_lookup (tree range, tree *begin, tree *end)
 	  vec_safe_push (vec, range);
 
 	  member_begin = perform_koenig_lookup (id_begin, vec,
-						/*include_std=*/true,
 						tf_warning_or_error);
 	  *begin = finish_call_expr (member_begin, &vec, false, true,
 				     tf_warning_or_error);
 	  member_end = perform_koenig_lookup (id_end, vec,
-					      /*include_std=*/true,
 					      tf_warning_or_error);
 	  *end = finish_call_expr (member_end, &vec, false, true,
 				   tf_warning_or_error);
@@ -10641,6 +10649,8 @@ cp_parser_jump_statement (cp_parser* parser)
 	  gcc_assert ((in_statement & IN_SWITCH_STMT)
 		      || in_statement == IN_ITERATION_STMT);
 	  statement = finish_break_stmt ();
+	  if (in_statement == IN_ITERATION_STMT)
+	    break_maybe_infinite_loop ();
 	  break;
 	case IN_OMP_BLOCK:
 	  error_at (token->location, "invalid exit from OpenMP structured block");
@@ -12849,6 +12859,9 @@ cp_parser_operator (cp_parser* parser)
 static void
 cp_parser_template_declaration (cp_parser* parser, bool member_p)
 {
+  /* A hack to disable -Wself-assign warning in template parsing.  */
+  int old_warn_self_assign = warn_self_assign;
+  warn_self_assign = 0;
   /* Check for `export'.  */
   if (cp_lexer_next_token_is_keyword (parser->lexer, RID_EXPORT))
     {
@@ -12859,6 +12872,7 @@ cp_parser_template_declaration (cp_parser* parser, bool member_p)
     }
 
   cp_parser_template_declaration_after_export (parser, member_p);
+  warn_self_assign = old_warn_self_assign;
 }
 
 /* Parse a template-parameter-list.
@@ -12993,20 +13007,21 @@ cp_parser_template_parameter (cp_parser* parser, bool *is_non_type,
      = cp_parser_parameter_declaration (parser, /*template_parm_p=*/true,
 					/*parenthesized_p=*/NULL);
 
+  if (!parameter_declarator)
+    return error_mark_node;
+
   /* If the parameter declaration is marked as a parameter pack, set
      *IS_PARAMETER_PACK to notify the caller. Also, unmark the
      declarator's PACK_EXPANSION_P, otherwise we'll get errors from
      grokdeclarator. */
-  if (parameter_declarator
-      && parameter_declarator->declarator
+  if (parameter_declarator->declarator
       && parameter_declarator->declarator->parameter_pack_p)
     {
       *is_parameter_pack = true;
       parameter_declarator->declarator->parameter_pack_p = false;
     }
 
-  if (parameter_declarator
-      && parameter_declarator->default_argument)
+  if (parameter_declarator->default_argument)
     {
       /* Can happen in some cases of erroneous input (c++/34892).  */
       if (cp_lexer_next_token_is (parser->lexer, CPP_ELLIPSIS))
@@ -13030,8 +13045,7 @@ cp_parser_template_parameter (cp_parser* parser, bool *is_non_type,
   /* We might end up with a pack expansion as the type of the non-type
      template parameter, in which case this is a non-type template
      parameter pack.  */
-  else if (parameter_declarator
-	   && parameter_declarator->decl_specifiers.type
+  else if (parameter_declarator->decl_specifiers.type
 	   && PACK_EXPANSION_P (parameter_declarator->decl_specifiers.type))
     {
       *is_parameter_pack = true;
@@ -13947,6 +13961,7 @@ cp_parser_template_argument (cp_parser* parser)
 
 	  if (INDIRECT_REF_P (argument))
 	    {
+	      /* Strip the dereference temporarily.  */
 	      gcc_assert (REFERENCE_REF_P (argument));
 	      argument = TREE_OPERAND (argument, 0);
 	    }
@@ -13985,6 +14000,8 @@ cp_parser_template_argument (cp_parser* parser)
 	      if (address_p)
 		argument = build_x_unary_op (loc, ADDR_EXPR, argument,
 					     tf_warning_or_error);
+	      else
+		argument = convert_from_reference (argument);
 	      return argument;
 	    }
 	}
@@ -14822,25 +14839,7 @@ cp_parser_nonclass_name (cp_parser* parser)
   /* Look up the type-name.  */
   type_decl = cp_parser_lookup_name_simple (parser, identifier, token->location);
 
-  if (TREE_CODE (type_decl) == USING_DECL)
-    {
-      if (!DECL_DEPENDENT_P (type_decl))
-	type_decl = strip_using_decl (type_decl);
-      else if (USING_DECL_TYPENAME_P (type_decl))
-	{
-	  /* We have found a type introduced by a using
-	     declaration at class scope that refers to a dependent
-	     type.
-	     
-	     using typename :: [opt] nested-name-specifier unqualified-id ;
-	  */
-	  type_decl = make_typename_type (TREE_TYPE (type_decl),
-					  DECL_NAME (type_decl),
-					  typename_type, tf_error);
-	  if (type_decl != error_mark_node)
-	    type_decl = TYPE_NAME (type_decl);
-	}
-    }
+  type_decl = strip_using_decl (type_decl);
   
   if (TREE_CODE (type_decl) != TYPE_DECL
       && (objc_is_id (identifier) || objc_is_class_name (identifier)))
@@ -15474,9 +15473,18 @@ cp_parser_enum_specifier (cp_parser* parser)
 	    error_at (type_start_token->location, "cannot add an enumerator "
 		      "list to a template instantiation");
 
+	  if (TREE_CODE (nested_name_specifier) == TYPENAME_TYPE)
+	    {
+	      error_at (type_start_token->location,
+			"%<%T::%E%> has not been declared",
+			TYPE_CONTEXT (nested_name_specifier),
+			nested_name_specifier);
+	      type = error_mark_node;
+	    }
 	  /* If that scope does not contain the scope in which the
 	     class was originally declared, the program is invalid.  */
-	  if (prev_scope && !is_ancestor (prev_scope, nested_name_specifier))
+	  else if (prev_scope && !is_ancestor (prev_scope,
+					       nested_name_specifier))
 	    {
 	      if (at_namespace_scope_p ())
 		error_at (type_start_token->location,
@@ -15485,7 +15493,8 @@ cp_parser_enum_specifier (cp_parser* parser)
 			  type, prev_scope, nested_name_specifier);
 	      else
 		error_at (type_start_token->location,
-			  "declaration of %qD in %qD which does not enclose %qD",
+			  "declaration of %qD in %qD which does not "
+			  "enclose %qD",
 			  type, prev_scope, nested_name_specifier);
 	      type = error_mark_node;
 	    }
@@ -16790,6 +16799,15 @@ cp_parser_init_declarator (cp_parser* parser,
       warning (OPT_Wattributes,
 	       "attributes after parenthesized initializer ignored");
 
+  /* A non-template declaration involving a function parameter list containing
+     an implicit template parameter will have been made into a template.  If it
+     turns out that the resulting declaration is not an actual function then
+     finish the template declaration here.  An error message will already have
+     been issued.  */
+  if (parser->fully_implicit_function_template_p)
+    if (!function_declarator_p (declarator))
+      finish_fully_implicit_template (parser, /*member_decl_opt=*/0);
+
   /* For an in-class declaration, use `grokfield' to create the
      declaration.  */
   if (member_p)
@@ -17120,6 +17138,24 @@ cp_parser_direct_declarator (cp_parser* parser,
 
 		  attrs = cp_parser_std_attribute_spec_seq (parser);
 
+		  /* In here, we handle cases where attribute is used after
+		     the function declaration.  For example:
+		     void func (int x) __attribute__((vector(..)));  */
+		  if (flag_cilkplus
+		      && cp_next_tokens_can_be_gnu_attribute_p (parser))
+		    {
+		      cp_parser_parse_tentatively (parser);
+		      tree attr = cp_parser_gnu_attributes_opt (parser);
+		      if (cp_lexer_next_token_is_not (parser->lexer,
+						      CPP_SEMICOLON)
+			  && cp_lexer_next_token_is_not (parser->lexer,
+							 CPP_OPEN_BRACE))
+			cp_parser_abort_tentative_parse (parser);
+		      else if (!cp_parser_parse_definitely (parser))
+			;
+		      else
+			attrs = chainon (attr, attrs);
+		    }
 		  late_return = (cp_parser_late_return_type_opt
 				 (parser, declarator,
 				  memfn ? cv_quals : -1));
@@ -17224,7 +17260,8 @@ cp_parser_direct_declarator (cp_parser* parser,
 				   "array bound is not an integer constant");
 		  bounds = error_mark_node;
 		}
-	      else if (processing_template_decl)
+	      else if (processing_template_decl
+		       && !type_dependent_expression_p (bounds))
 		{
 		  /* Remember this wasn't a constant-expression.  */
 		  bounds = build_nop (TREE_TYPE (bounds), bounds);
@@ -17828,7 +17865,7 @@ parsing_nsdmi (void)
    Returns the type indicated by the type-id.
 
    In addition to this this parses any queued up omp declare simd
-   clauses.
+   clauses and Cilk Plus SIMD-enabled function's vector attributes.
 
    QUALS is either a bitmask of cv_qualifiers or -1 for a non-member
    function.  */
@@ -17843,10 +17880,13 @@ cp_parser_late_return_type_opt (cp_parser* parser, cp_declarator *declarator,
 			 && declarator
 			 && declarator->kind == cdk_id);
 
+  bool cilk_simd_fn_vector_p = (parser->cilk_simd_fn_info 
+				&& declarator && declarator->kind == cdk_id);
+  
   /* Peek at the next token.  */
   token = cp_lexer_peek_token (parser->lexer);
   /* A late-specified return type is indicated by an initial '->'. */
-  if (token->type != CPP_DEREF && !declare_simd_p)
+  if (token->type != CPP_DEREF && !(declare_simd_p || cilk_simd_fn_vector_p))
     return NULL_TREE;
 
   tree save_ccp = current_class_ptr;
@@ -17865,6 +17905,10 @@ cp_parser_late_return_type_opt (cp_parser* parser, cp_declarator *declarator,
       type = cp_parser_trailing_type_id (parser);
     }
 
+  if (cilk_simd_fn_vector_p)
+    declarator->std_attributes
+      = cp_parser_late_parsing_cilk_simd_fn_info (parser,
+						  declarator->std_attributes);
   if (declare_simd_p)
     declarator->std_attributes
       = cp_parser_late_parsing_omp_declare_simd (parser,
@@ -18359,11 +18403,21 @@ cp_parser_parameter_declaration_list (cp_parser* parser, bool *is_error)
   parser->in_unbraced_linkage_specification_p
     = saved_in_unbraced_linkage_specification_p;
 
+  /* Reset implicit_template_scope if we are about to leave the function
+     parameter list that introduced it.  Note that for out-of-line member
+     definitions, there will be one or more class scopes before we get to
+     the template parameter scope.  */
+
   if (cp_binding_level *its = parser->implicit_template_scope)
-    if (current_binding_level->level_chain == its)
+    if (cp_binding_level *maybe_its = current_binding_level->level_chain)
       {
-	parser->implicit_template_parms = 0;
-	parser->implicit_template_scope = 0;
+	while (maybe_its->kind == sk_class)
+	  maybe_its = maybe_its->level_chain;
+	if (maybe_its == its)
+	  {
+	    parser->implicit_template_parms = 0;
+	    parser->implicit_template_scope = 0;
+	  }
       }
 
   return parameters;
@@ -19844,7 +19898,17 @@ cp_parser_class_head (cp_parser* parser,
 
   /* Get the list of base-classes, if there is one.  */
   if (cp_lexer_next_token_is (parser->lexer, CPP_COLON))
-    bases = cp_parser_base_clause (parser);
+    {
+      /* PR59482: enter the class scope so that base-specifiers are looked
+	 up correctly.  */
+      if (type)
+	pushclass (type);
+      bases = cp_parser_base_clause (parser);
+      /* PR59482: get out of the previously pushed class scope so that the
+	 subsequent pops pop the right thing.  */
+      if (type)
+	popclass ();
+    }
   else
     bases = NULL_TREE;
 
@@ -20383,13 +20447,11 @@ cp_parser_member_declaration (cp_parser* parser)
 							      &decl_specifiers,
 							      declarator,
 							      attributes);
+		  if (parser->fully_implicit_function_template_p)
+		    decl = finish_fully_implicit_template (parser, decl);
 		  /* If the member was not a friend, declare it here.  */
 		  if (!friend_p)
-		    {
-		      if (parser->fully_implicit_function_template_p)
-			decl = finish_fully_implicit_template (parser, decl);
-		      finish_member_declaration (decl);
-		    }
+		    finish_member_declaration (decl);
 		  /* Peek at the next token.  */
 		  token = cp_lexer_peek_token (parser->lexer);
 		  /* If the next token is a semicolon, consume it.  */
@@ -21398,6 +21460,56 @@ cp_parser_attributes_opt (cp_parser *parser)
   return cp_parser_std_attribute_spec_seq (parser);
 }
 
+#define CILK_SIMD_FN_CLAUSE_MASK				  \
+	((OMP_CLAUSE_MASK_1 << PRAGMA_CILK_CLAUSE_VECTORLENGTH)	  \
+	 | (OMP_CLAUSE_MASK_1 << PRAGMA_CILK_CLAUSE_LINEAR)	  \
+	 | (OMP_CLAUSE_MASK_1 << PRAGMA_CILK_CLAUSE_UNIFORM)	  \
+	 | (OMP_CLAUSE_MASK_1 << PRAGMA_CILK_CLAUSE_MASK)	  \
+	 | (OMP_CLAUSE_MASK_1 << PRAGMA_CILK_CLAUSE_NOMASK))
+
+/* Parses the Cilk Plus SIMD-enabled function's attribute.  Syntax:
+   vector [(<clauses>)]  */
+
+static void
+cp_parser_cilk_simd_fn_vector_attrs (cp_parser *parser, cp_token *v_token)
+{  
+  bool first_p = parser->cilk_simd_fn_info == NULL;
+  cp_token *token = v_token;
+  if (first_p)
+    {
+      parser->cilk_simd_fn_info = XNEW (cp_omp_declare_simd_data);
+      parser->cilk_simd_fn_info->error_seen = false;
+      parser->cilk_simd_fn_info->fndecl_seen = false;
+      parser->cilk_simd_fn_info->tokens = vNULL;
+    }
+  int paren_scope = 0;
+  if (cp_lexer_next_token_is (parser->lexer, CPP_OPEN_PAREN))
+    {
+      cp_lexer_consume_token (parser->lexer);
+      v_token = cp_lexer_peek_token (parser->lexer);
+      paren_scope++;
+    }
+  while (paren_scope > 0)
+    {
+      token = cp_lexer_peek_token (parser->lexer);
+      if (token->type == CPP_OPEN_PAREN)
+	paren_scope++;
+      else if (token->type == CPP_CLOSE_PAREN)
+	paren_scope--;
+      /* Do not push the last ')'  */
+      if (!(token->type == CPP_CLOSE_PAREN && paren_scope == 0))
+	cp_lexer_consume_token (parser->lexer);
+    }
+
+  token->type = CPP_PRAGMA_EOL;
+  parser->lexer->next_token = token;
+  cp_lexer_consume_token (parser->lexer);
+
+  struct cp_token_cache *cp
+    = cp_token_cache_new (v_token, cp_lexer_peek_token (parser->lexer));
+  parser->cilk_simd_fn_info->tokens.safe_push (cp);
+}
+
 /* Parse an (optional) series of attributes.
 
    attributes:
@@ -21456,6 +21568,17 @@ cp_parser_gnu_attributes_opt (cp_parser* parser)
   return attributes;
 }
 
+/* Returns true of NAME is an IDENTIFIER_NODE with identiifer "vector,"
+   "__vector" or "__vector__."  */
+
+static inline bool
+is_cilkplus_vector_p (tree name)
+{ 
+  if (flag_cilkplus && is_attribute_p ("vector", name)) 
+    return true;
+  return false;
+}
+
 /* Parse a GNU attribute-list.
 
    attribute-list:
@@ -21494,8 +21617,9 @@ cp_parser_gnu_attribute_list (cp_parser* parser)
 	{
 	  tree arguments = NULL_TREE;
 
-	  /* Consume the token.  */
-	  token = cp_lexer_consume_token (parser->lexer);
+	  /* Consume the token, but save it since we need it for the
+	     SIMD enabled function parsing.  */
+	  cp_token *id_token = cp_lexer_consume_token (parser->lexer);
 
 	  /* Save away the identifier that indicates which attribute
 	     this is.  */
@@ -21503,7 +21627,7 @@ cp_parser_gnu_attribute_list (cp_parser* parser)
 	    /* For keywords, use the canonical spelling, not the
 	       parsed identifier.  */
 	    ? ridpointers[(int) token->keyword]
-	    : token->u.value;
+	    : id_token->u.value;
 	  
 	  attribute = build_tree_list (identifier, NULL_TREE);
 
@@ -21515,10 +21639,16 @@ cp_parser_gnu_attribute_list (cp_parser* parser)
 	      vec<tree, va_gc> *vec;
 	      int attr_flag = (attribute_takes_identifier_p (identifier)
 			       ? id_attr : normal_attr);
-	      vec = cp_parser_parenthesized_expression_list
-		    (parser, attr_flag, /*cast_p=*/false,
-		     /*allow_expansion_p=*/false,
-		     /*non_constant_p=*/NULL);
+	      if (is_cilkplus_vector_p (identifier))
+		{
+		  cp_parser_cilk_simd_fn_vector_attrs (parser, id_token);
+		  continue;
+		}
+	      else
+		vec = cp_parser_parenthesized_expression_list 
+		  (parser, attr_flag, /*cast_p=*/false, 
+		   /*allow_expansion_p=*/false, 
+		   /*non_constant_p=*/NULL);
 	      if (vec == NULL)
 		arguments = error_mark_node;
 	      else
@@ -21528,6 +21658,11 @@ cp_parser_gnu_attribute_list (cp_parser* parser)
 		}
 	      /* Save the arguments away.  */
 	      TREE_VALUE (attribute) = arguments;
+	    }
+	  else if (is_cilkplus_vector_p (identifier))
+	    {
+	      cp_parser_cilk_simd_fn_vector_attrs (parser, id_token);
+	      continue;
 	    }
 
 	  if (arguments != error_mark_node)
@@ -23070,6 +23205,9 @@ cp_parser_functional_cast (cp_parser* parser, tree type)
   tree expression_list;
   tree cast;
   bool nonconst_p;
+
+  if (!type)
+    type = error_mark_node;
 
   if (cp_lexer_next_token_is (parser->lexer, CPP_OPEN_BRACE))
     {
@@ -26808,12 +26946,16 @@ cp_parser_omp_clause_name (cp_parser *parser)
 	    result = PRAGMA_OMP_CLAUSE_MAP;
 	  else if (!strcmp ("mergeable", p))
 	    result = PRAGMA_OMP_CLAUSE_MERGEABLE;
+	  else if (flag_cilkplus && !strcmp ("mask", p))
+	    result = PRAGMA_CILK_CLAUSE_MASK;
 	  break;
 	case 'n':
 	  if (!strcmp ("notinbranch", p))
 	    result = PRAGMA_OMP_CLAUSE_NOTINBRANCH;
 	  else if (!strcmp ("nowait", p))
 	    result = PRAGMA_OMP_CLAUSE_NOWAIT;
+	  else if (flag_cilkplus && !strcmp ("nomask", p))
+	    result = PRAGMA_CILK_CLAUSE_NOMASK;
 	  else if (!strcmp ("num_teams", p))
 	    result = PRAGMA_OMP_CLAUSE_NUM_TEAMS;
 	  else if (!strcmp ("num_threads", p))
@@ -26858,6 +27000,10 @@ cp_parser_omp_clause_name (cp_parser *parser)
 	    result = PRAGMA_OMP_CLAUSE_UNIFORM;
 	  else if (!strcmp ("untied", p))
 	    result = PRAGMA_OMP_CLAUSE_UNTIED;
+	  break;
+	case 'v':
+	  if (flag_cilkplus && !strcmp ("vectorlength", p))
+	    result = PRAGMA_CILK_CLAUSE_VECTORLENGTH;
 	  break;
 	}
     }
@@ -27611,7 +27757,8 @@ cp_parser_omp_clause_aligned (cp_parser *parser, tree list)
    linear ( variable-list : expression )  */
 
 static tree
-cp_parser_omp_clause_linear (cp_parser *parser, tree list)
+cp_parser_omp_clause_linear (cp_parser *parser, tree list, 
+			     bool is_cilk_simd_fn)
 {
   tree nlist, c, step = integer_one_node;
   bool colon;
@@ -27626,6 +27773,11 @@ cp_parser_omp_clause_linear (cp_parser *parser, tree list)
     {
       step = cp_parser_expression (parser, false, NULL);
 
+      if (is_cilk_simd_fn && TREE_CODE (step) == PARM_DECL)
+	{
+	  sorry ("using parameters for %<linear%> step is not supported yet");
+	  step = integer_one_node;
+	}
       if (!cp_parser_require (parser, CPP_CLOSE_PAREN, RT_CLOSE_PAREN))
 	cp_parser_skip_to_closing_parenthesis (parser, /*recovering=*/true,
 					       /*or_comma=*/false,
@@ -27947,6 +28099,7 @@ cp_parser_omp_all_clauses (cp_parser *parser, omp_clause_mask mask,
   tree clauses = NULL;
   bool first = true;
   cp_token *token = NULL;
+  bool cilk_simd_fn = false;
 
   while (cp_lexer_next_token_is_not (parser->lexer, CPP_PRAGMA_EOL))
     {
@@ -28043,11 +28196,13 @@ cp_parser_omp_all_clauses (cp_parser *parser, omp_clause_mask mask,
 	  c_name = "untied";
 	  break;
 	case PRAGMA_OMP_CLAUSE_INBRANCH:
+	case PRAGMA_CILK_CLAUSE_MASK:
 	  clauses = cp_parser_omp_clause_branch (parser, OMP_CLAUSE_INBRANCH,
 						 clauses, token->location);
 	  c_name = "inbranch";
 	  break;
 	case PRAGMA_OMP_CLAUSE_NOTINBRANCH:
+	case PRAGMA_CILK_CLAUSE_NOMASK:
 	  clauses = cp_parser_omp_clause_branch (parser,
 						 OMP_CLAUSE_NOTINBRANCH,
 						 clauses, token->location);
@@ -28116,7 +28271,9 @@ cp_parser_omp_all_clauses (cp_parser *parser, omp_clause_mask mask,
 	  c_name = "aligned";
 	  break;
 	case PRAGMA_OMP_CLAUSE_LINEAR:
-	  clauses = cp_parser_omp_clause_linear (parser, clauses);
+	  if (((mask >> PRAGMA_CILK_CLAUSE_VECTORLENGTH) & 1) != 0)
+	    cilk_simd_fn = true;
+	  clauses = cp_parser_omp_clause_linear (parser, clauses, cilk_simd_fn);
 	  c_name = "linear";
 	  break;
 	case PRAGMA_OMP_CLAUSE_DEPEND:
@@ -28152,6 +28309,10 @@ cp_parser_omp_all_clauses (cp_parser *parser, omp_clause_mask mask,
 						  token->location);
 	  c_name = "simdlen";
 	  break;
+	case PRAGMA_CILK_CLAUSE_VECTORLENGTH:
+	  clauses = cp_parser_cilk_simd_vectorlength (parser, clauses, true);
+	  c_name = "simdlen";
+	  break;
 	default:
 	  cp_parser_error (parser, "expected %<#pragma omp%> clause");
 	  goto saw_error;
@@ -28168,7 +28329,10 @@ cp_parser_omp_all_clauses (cp_parser *parser, omp_clause_mask mask,
 	}
     }
  saw_error:
-  cp_parser_skip_to_pragma_eol (parser, pragma_tok);
+  /* In Cilk Plus SIMD enabled functions there is no pragma_token, so
+     no reason to skip to the end.  */
+  if (!(flag_cilkplus && pragma_tok == NULL))
+    cp_parser_skip_to_pragma_eol (parser, pragma_tok);
   if (finish_p)
     return finish_omp_clauses (clauses);
   return clauses;
@@ -30170,6 +30334,63 @@ cp_parser_omp_declare_simd (cp_parser *parser, cp_token *pragma_tok,
     }
 }
 
+/* Handles the delayed parsing of the Cilk Plus SIMD-enabled function.  
+   This function is modelled similar to the late parsing of omp declare 
+   simd.  */
+
+static tree
+cp_parser_late_parsing_cilk_simd_fn_info (cp_parser *parser, tree attrs)
+{
+  struct cp_token_cache *ce;
+  cp_omp_declare_simd_data *info = parser->cilk_simd_fn_info;
+  int ii = 0;
+
+  if (parser->omp_declare_simd != NULL)
+    {
+      error ("%<#pragma omp declare simd%> cannot be used in the same function"
+	     " marked as a Cilk Plus SIMD-enabled function");
+      XDELETE (parser->cilk_simd_fn_info);
+      parser->cilk_simd_fn_info = NULL;
+      return attrs;
+    }
+  if (!info->error_seen && info->fndecl_seen)
+    {
+      error ("vector attribute not immediately followed by a single function"
+	     " declaration or definition");
+      info->error_seen = true;
+    }
+  if (info->error_seen)
+    return attrs;
+
+  FOR_EACH_VEC_ELT (info->tokens, ii, ce)
+    {
+      tree c, cl;
+
+      cp_parser_push_lexer_for_tokens (parser, ce);
+      parser->lexer->in_pragma = true;
+      cl = cp_parser_omp_all_clauses (parser, CILK_SIMD_FN_CLAUSE_MASK,
+				      "SIMD-enabled functions attribute", 
+				      NULL);
+      cp_parser_pop_lexer (parser);
+      if (cl)
+	cl = tree_cons (NULL_TREE, cl, NULL_TREE);
+
+      c = build_tree_list (get_identifier ("cilk simd function"), NULL_TREE);
+      TREE_CHAIN (c) = attrs;
+      attrs = c;
+
+      c = build_tree_list (get_identifier ("omp declare simd"), cl);
+      TREE_CHAIN (c) = attrs;
+      if (processing_template_decl)
+	ATTR_IS_DEPENDENT (c) = 1;
+      attrs = c;
+    }
+  info->fndecl_seen = true;
+  XDELETE (parser->cilk_simd_fn_info);
+  parser->cilk_simd_fn_info = NULL;
+  return attrs;
+}
+
 /* Finalize #pragma omp declare simd clauses after direct declarator has
    been parsed, and put that into "omp declare simd" attribute.  */
 
@@ -30444,6 +30665,10 @@ cp_parser_omp_declare_reduction (cp_parser *parser, cp_token *pragma_tok,
   cp_token *first_token;
   cp_token_cache *cp;
   int errs;
+  void *p;
+    
+  /* Get the high-water mark for the DECLARATOR_OBSTACK.  */
+  p = obstack_alloc (&declarator_obstack, 0);
 
   if (!cp_parser_require (parser, CPP_OPEN_PAREN, RT_OPEN_PAREN))
     goto fail;
@@ -30552,7 +30777,7 @@ cp_parser_omp_declare_reduction (cp_parser *parser, cp_token *pragma_tok,
     {
      fail:
       cp_parser_skip_to_pragma_eol (parser, pragma_tok);
-      return;
+      goto done;
     }
 
   first_token = cp_lexer_peek_token (parser->lexer);
@@ -30656,6 +30881,10 @@ cp_parser_omp_declare_reduction (cp_parser *parser, cp_token *pragma_tok,
     }
 
   cp_parser_require_pragma_eol (parser, pragma_tok);
+
+ done:
+  /* Free any declarators allocated.  */
+  obstack_free (&declarator_obstack, p);
 }
 
 /* OpenMP 4.0
@@ -31342,35 +31571,63 @@ c_parse_file (void)
   the_parser = NULL;
 }
 
-/* Parses the Cilk Plus #pragma simd vectorlength clause:
+/* Parses the Cilk Plus #pragma simd and SIMD-enabled function attribute's 
+   vectorlength clause:
    Syntax:
    vectorlength ( constant-expression )  */
 
 static tree
-cp_parser_cilk_simd_vectorlength (cp_parser *parser, tree clauses)
+cp_parser_cilk_simd_vectorlength (cp_parser *parser, tree clauses,
+				  bool is_simd_fn)
 {
   location_t loc = cp_lexer_peek_token (parser->lexer)->location;
   tree expr;
-  /* The vectorlength clause behaves exactly like OpenMP's safelen
-     clause.  Thus, vectorlength is represented as OMP 4.0
-     safelen.  */
-  check_no_duplicate_clause (clauses, OMP_CLAUSE_SAFELEN, "vectorlength", loc);
-  
+  /* The vectorlength clause in #pragma simd behaves exactly like OpenMP's
+     safelen clause.  Thus, vectorlength is represented as OMP 4.0
+     safelen.  For SIMD-enabled function it is represented by OMP 4.0
+     simdlen.  */
+  if (!is_simd_fn)
+    check_no_duplicate_clause (clauses, OMP_CLAUSE_SAFELEN, "vectorlength", 
+			       loc);
+  else
+    check_no_duplicate_clause (clauses, OMP_CLAUSE_SIMDLEN, "vectorlength",
+			       loc);
+
   if (!cp_parser_require (parser, CPP_OPEN_PAREN, RT_OPEN_PAREN))
     return error_mark_node;
   
   expr = cp_parser_constant_expression (parser, false, NULL);
   expr = maybe_constant_value (expr);
-
-  if (TREE_CONSTANT (expr)
+  
+  /* If expr == error_mark_node, then don't emit any errors nor
+     create a clause.  if any of the above functions returns
+     error mark node then they would have emitted an error message.  */
+  if (expr == error_mark_node)
+    ;
+  else if (!TREE_TYPE (expr)
+	   || !TREE_CONSTANT (expr)
+	   || !INTEGRAL_TYPE_P (TREE_TYPE (expr)))
+    error_at (loc, "vectorlength must be an integer constant");
+  else if (TREE_CONSTANT (expr)
 	   && exact_log2 (TREE_INT_CST_LOW (expr)) == -1)
     error_at (loc, "vectorlength must be a power of 2");
-  else if (expr != error_mark_node)
+  else 
     {
-      tree c = build_omp_clause (loc, OMP_CLAUSE_SAFELEN);
-      OMP_CLAUSE_SAFELEN_EXPR (c) = expr;
-      OMP_CLAUSE_CHAIN (c) = clauses;
-      clauses = c;
+      tree c;
+      if (!is_simd_fn)
+	{ 
+	  c = build_omp_clause (loc, OMP_CLAUSE_SAFELEN); 
+	  OMP_CLAUSE_SAFELEN_EXPR (c) = expr; 
+	  OMP_CLAUSE_CHAIN (c) = clauses; 
+	  clauses = c;
+	}
+      else
+	{
+	  c = build_omp_clause (loc, OMP_CLAUSE_SIMDLEN);
+	  OMP_CLAUSE_SIMDLEN_EXPR (c) = expr;
+	  OMP_CLAUSE_CHAIN (c) = clauses;
+	  clauses = c;
+	}
     }
 
   if (!cp_parser_require (parser, CPP_CLOSE_PAREN, RT_CLOSE_PAREN))
@@ -31533,7 +31790,7 @@ cp_parser_cilk_simd_all_clauses (cp_parser *parser, cp_token *pragma_token)
       pragma_omp_clause c_kind;
       c_kind = cp_parser_cilk_simd_clause_name (parser);
       if (c_kind == PRAGMA_CILK_CLAUSE_VECTORLENGTH)
-	clauses = cp_parser_cilk_simd_vectorlength (parser, clauses);
+	clauses = cp_parser_cilk_simd_vectorlength (parser, clauses, false);
       else if (c_kind == PRAGMA_CILK_CLAUSE_LINEAR)
 	clauses = cp_parser_cilk_simd_linear (parser, clauses);
       else if (c_kind == PRAGMA_CILK_CLAUSE_PRIVATE)
@@ -31734,7 +31991,7 @@ synthesize_implicit_template_parm  (cp_parser *parser)
     {
       tree& new_parms = INNERMOST_TEMPLATE_PARMS (current_template_parms);
       int new_parm_idx = TREE_VEC_LENGTH (new_parms);
-      new_parms = grow_tree_vec_stat (new_parms, new_parm_idx + 1);
+      new_parms = grow_tree_vec (new_parms, new_parm_idx + 1);
       TREE_VEC_ELT (new_parms, new_parm_idx) = parser->implicit_template_parms;
     }
 

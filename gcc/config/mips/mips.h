@@ -1,5 +1,5 @@
 /* Definitions of target machine for GNU compiler.  MIPS version.
-   Copyright (C) 1989-2013 Free Software Foundation, Inc.
+   Copyright (C) 1989-2014 Free Software Foundation, Inc.
    Contributed by A. Lichnewsky (lich@inria.inria.fr).
    Changed by Michael Meissner	(meissner@osf.org).
    64-bit r4000 support by Ian Lance Taylor (ian@cygnus.com) and
@@ -586,10 +586,6 @@ struct mips_cpu_info {
 
 #ifndef TARGET_ENDIAN_DEFAULT
 #define TARGET_ENDIAN_DEFAULT MASK_BIG_ENDIAN
-#endif
-
-#ifndef TARGET_FP_EXCEPTIONS_DEFAULT
-#define TARGET_FP_EXCEPTIONS_DEFAULT MASK_FP_EXCEPTIONS
 #endif
 
 #ifdef IN_LIBGCC2
@@ -1179,6 +1175,7 @@ struct mips_cpu_info {
 %{mdspr2} %{mno-dspr2} \
 %{mmcu} %{mno-mcu} \
 %{meva} %{mno-eva} \
+%{mvirt} %{mno-virt} \
 %{msmartmips} %{mno-smartmips} \
 %{mmt} %{mno-mt} \
 %{mfix-rm7000} %{mno-fix-rm7000} \
@@ -2529,7 +2526,9 @@ typedef struct mips_args {
       : TARGET_MICROMIPS && !TARGET_INTERLINK_COMPRESSED	\
       ? "%*" INSN "r%!\t%" #TARGET_OPNO "%/"			\
       : "%*" INSN "r\t%" #TARGET_OPNO "%/")			\
-   : MIPS_ABSOLUTE_JUMP ("%*" INSN "\t%" #TARGET_OPNO "%/"))
+   : TARGET_MICROMIPS && !TARGET_INTERLINK_COMPRESSED		\
+     ? MIPS_ABSOLUTE_JUMP ("%*" INSN "%!\t%" #TARGET_OPNO "%/")	\
+     : MIPS_ABSOLUTE_JUMP ("%*" INSN "\t%" #TARGET_OPNO "%/"))	\
 
 /* Similar to MIPS_CALL, but this is for MICROMIPS "j" to generate
    "jrc" when nop is in the delay slot of "jr".  */

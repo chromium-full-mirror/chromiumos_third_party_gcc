@@ -1,5 +1,5 @@
 /* Data references and dependences detectors.
-   Copyright (C) 2003-2013 Free Software Foundation, Inc.
+   Copyright (C) 2003-2014 Free Software Foundation, Inc.
    Contributed by Sebastian Pop <pop@cri.ensmp.fr>
 
 This file is part of GCC.
@@ -4401,6 +4401,8 @@ get_references_in_stmt (gimple stmt, vec<data_ref_loc, va_heap> *references)
 	switch (gimple_call_internal_fn (stmt))
 	  {
 	  case IFN_MASK_LOAD:
+	    if (gimple_call_lhs (stmt) == NULL_TREE)
+	      break;
 	    ref.is_read = true;
 	  case IFN_MASK_STORE:
 	    ref.ref = fold_build2 (MEM_REF,

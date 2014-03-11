@@ -1,5 +1,5 @@
 /* Driver of optimization process
-   Copyright (C) 2003-2013 Free Software Foundation, Inc.
+   Copyright (C) 2003-2014 Free Software Foundation, Inc.
    Contributed by Jan Hubicka
 
 This file is part of GCC.
@@ -1389,7 +1389,8 @@ mark_functions_to_output (void)
 		   next != node;
 		   next = cgraph (next->same_comdat_group))
 		if (!next->thunk.thunk_p && !next->alias
-                    && cgraph_add_output_node (next) == next)
+                    && cgraph_add_output_node (next) == next
+		    && !symtab_comdat_local_p (next))
 		  next->process = 1;
 	    }
           }
@@ -1740,7 +1741,17 @@ expand_thunk (struct cgraph_node *node, bool output_asm_thunks)
 
       if (nargs)
         for (i = 1, arg = DECL_CHAIN (a); i < nargs; i++, arg = DECL_CHAIN (arg))
-	  vargs.quick_push (arg);
+	  {
+	    tree tmp = arg;
+	    if (!is_gimple_val (arg))
+	      {
+		tmp = create_tmp_reg (TYPE_MAIN_VARIANT
+				      (TREE_TYPE (arg)), "arg");
+		gimple stmt = gimple_build_assign (tmp, arg);
+		gsi_insert_after (&bsi, stmt, GSI_NEW_STMT);
+	      }
+	    vargs.quick_push (tmp);
+	  }
       call = gimple_build_call_vec (build_fold_addr_expr_loc (0, alias), vargs);
       node->callees->call_stmt = call;
       gimple_call_set_from_thunk (call, true);
