@@ -244,9 +244,6 @@ add_fake_indirect_call_edges (struct cgraph_node *node)
   if (!L_IPO_COMP_MODE)
     return;
 
-  if (cgraph_pre_profiling_inlining_done)
-    return;
-
   ic_counts
       = get_coverage_counts_no_warn (DECL_STRUCT_FUNCTION (node->symbol.decl),
                                      GCOV_COUNTER_ICALL_TOPNV, &n_counts);
@@ -378,7 +375,7 @@ record_reference_to_real_target_from_alias (struct cgraph_node *alias)
 /* Mark address taken in STMT.  */
 
 static bool
-mark_address (gimple stmt, tree addr, void *data)
+mark_address (gimple stmt, tree addr, tree, void *data)
 {
   addr = get_base_address (addr);
   if (TREE_CODE (addr) == FUNCTION_DECL)
@@ -417,7 +414,7 @@ mark_address (gimple stmt, tree addr, void *data)
 /* Mark load of T.  */
 
 static bool
-mark_load (gimple stmt, tree t, void *data)
+mark_load (gimple stmt, tree t, tree, void *data)
 {
   t = get_base_address (t);
   if (t && TREE_CODE (t) == FUNCTION_DECL)
@@ -454,7 +451,7 @@ mark_load (gimple stmt, tree t, void *data)
 /* Mark store of T.  */
 
 static bool
-mark_store (gimple stmt, tree t, void *data)
+mark_store (gimple stmt, tree t, tree, void *data)
 {
   t = get_base_address (t);
   if (t && TREE_CODE (t) == VAR_DECL
@@ -599,7 +596,7 @@ record_references_in_initializer (tree decl, bool only_vars)
    needs to be set to the resolved node so that ipa-inline
    sees the definitions.  */
 #include "gimple-pretty-print.h"
-void
+static void
 lipo_fixup_cgraph_edge_call_target (gimple stmt)
 {
   tree decl;
@@ -624,6 +621,58 @@ lipo_fixup_cgraph_edge_call_target (gimple stmt)
         }
     }
 }
+
+/* Link the cgraph nodes, varpool nodes and fixup the call target to
+   the correct decl. Remove dead functions.  */
+
+
+void
+lipo_link_and_fixup ()
+{
+  struct cgraph_node *node;
+
+  cgraph_pre_profiling_inlining_done = true;
+  cgraph_process_module_scope_statics ();
+  /* Now perform link to allow cross module inlining.  */
+  cgraph_do_link ();
+  varpool_do_link ();
+  cgraph_unify_type_alias_sets ();
+  cgraph_init_gid_map ();
+ 
+  FOR_EACH_DEFINED_FUNCTION (node)
+    {
+      if (!gimple_has_body_p (node->symbol.decl))
+	continue;
+
+      /* Don't profile functions produced for builtin stuff.  */
+      if (DECL_SOURCE_LOCATION (node->symbol.decl) == BUILTINS_LOCATION)
+	continue;
+
+      push_cfun (DECL_STRUCT_FUNCTION (node->symbol.decl));
+
+      if (L_IPO_COMP_MODE)
+	{
+	  basic_block bb;
+	  FOR_EACH_BB (bb)
+	    {
+	      gimple_stmt_iterator gsi;
+	      for (gsi = gsi_start_bb (bb); !gsi_end_p (gsi); gsi_next (&gsi))
+		{
+		  gimple stmt = gsi_stmt (gsi);
+		  if (is_gimple_call (stmt))
+		    lipo_fixup_cgraph_edge_call_target (stmt);
+		}
+	    }
+	  update_ssa (TODO_update_ssa);
+	}
+      rebuild_cgraph_edges ();
+      pop_cfun ();
+    }
+
+  cgraph_add_fake_indirect_call_edges ();
+  symtab_remove_unreachable_nodes (true, dump_file);
+}
+
 
 /* Rebuild cgraph edges for current function node.  This needs to be run after
    passes that don't update the cgraph.  */
@@ -677,7 +726,8 @@ rebuild_cgraph_edges (void)
 				       mark_load, mark_store, mark_address);
     }
 
-  add_fake_indirect_call_edges (node);
+  if (!cgraph_pre_profiling_inlining_done)
+    add_fake_indirect_call_edges (node);
   record_eh_tables (node, cfun);
   gcc_assert (!node->global.inlined_to);
 

@@ -1837,7 +1837,7 @@ s-mlib: $(srcdir)/genmultilib Makefile
 	    "$(MULTILIB_EXCLUSIONS)" \
 	    "$(MULTILIB_OSDIRNAMES)" \
 	    "$(MULTILIB_REQUIRED)" \
-	    "$(MULTIARCH_DIRNAME)" \
+	    "$(if $(MULTILIB_OSDIRNAMES),,$(MULTIARCH_DIRNAME))" \
 	    "$(MULTILIB_REUSE)" \
 	    "@enable_multilib@" \
 	    > tmp-mlib.h; \
@@ -2269,7 +2269,7 @@ tree-ssa-uninit.o : tree-ssa-uninit.c $(TREE_FLOW_H) $(CONFIG_H) $(SYSTEM_H) \
    $(FUNCTION_H) $(TM_H) coretypes.h \
    $(TREE_PASS_H) $(BASIC_BLOCK_H) $(BITMAP_H) \
    $(FLAGS_H) $(HASHTAB_H) pointer-set.h \
-   $(GIMPLE_H) $(TREE_INLINE_H) $(GIMPLE_PRETTY_PRINT_H)
+   $(GIMPLE_H) $(TREE_INLINE_H) $(GIMPLE_PRETTY_PRINT_H) $(PARAMS_H)
 tree-ssa.o : tree-ssa.c $(TREE_FLOW_H) $(CONFIG_H) $(SYSTEM_H) \
    $(TREE_H) $(TM_P_H) $(EXPR_H) $(DIAGNOSTIC_H) \
    toplev.h $(FUNCTION_H) $(TM_H) coretypes.h \
@@ -2968,7 +2968,8 @@ coverage.o : coverage.c $(GCOV_IO_H) $(CONFIG_H) $(SYSTEM_H) coretypes.h dumpfil
 auto-profile.o : auto-profile.c $(CONFIG_H) $(SYSTEM_H) $(FLAGS_H) \
    $(BASIC_BLOCK_H) $(DIAGNOSTIC_CORE_H) $(GCOV_IO_H) $(INPUT_H) profile.h \
    $(LANGHOOKS_H) $(OPTS_H) $(TREE_PASS_H) $(CGRAPH_H) $(GIMPLE_H) value-prof.h \
-   $(COVERAGE_H) coretypes.h $(TREE_H) $(PARAMS_H) l-ipo.h $(AUTO_PROFILE_H)
+   $(COVERAGE_H) coretypes.h $(TREE_H) $(PARAMS_H) l-ipo.h output.h $(DWARF2OUT_H) \
+   $(AUTO_PROFILE_H)
 cselib.o : cselib.c $(CONFIG_H) $(SYSTEM_H) coretypes.h dumpfile.h $(TM_H) $(RTL_H) \
    $(REGS_H) hard-reg-set.h $(FLAGS_H) insn-config.h $(RECOG_H) \
    $(EMIT_RTL_H) $(DIAGNOSTIC_CORE_H) $(FUNCTION_H) \
@@ -3057,7 +3058,7 @@ tree-switch-conversion.o : tree-switch-conversion.c $(CONFIG_H) $(SYSTEM_H) \
     $(TM_H) coretypes.h $(GIMPLE_H) \
     $(TREE_PASS_H) $(FLAGS_H) $(EXPR_H) $(BASIC_BLOCK_H) \
     $(GGC_H) $(OBSTACK_H) $(PARAMS_H) $(CPPLIB_H) $(PARAMS_H) \
-    $(GIMPLE_PRETTY_PRINT_H) langhooks.h
+    $(GIMPLE_PRETTY_PRINT_H) langhooks.h $(OPTABS_H)
 tree-complex.o : tree-complex.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TREE_H) \
     $(TM_H) $(FLAGS_H) $(TREE_FLOW_H) $(GIMPLE_H) \
     tree-iterator.h $(TREE_PASS_H) tree-ssa-propagate.h
@@ -3296,12 +3297,12 @@ lra-constraints.o : lra-constraints.c $(CONFIG_H) $(SYSTEM_H) coretypes.h \
    $(TM_H) $(RTL_H) $(REGS_H) insn-config.h insn-codes.h $(DF_H) \
    $(RECOG_H) output.h addresses.h $(REGS_H) hard-reg-set.h $(FLAGS_H) \
    $(FUNCTION_H) $(EXPR_H) $(BASIC_BLOCK_H) $(TM_P_H) $(EXCEPT_H) \
-   ira.h rtl-error.h $(LRA_INT_H)
+   ira.h rtl-error.h $(LRA_INT_H) $(OPTABS_H)
 lra-eliminations.o : lra-eliminations.c $(CONFIG_H) $(SYSTEM_H) coretypes.h \
    $(TM_H) $(RTL_H) $(REGS_H) insn-config.h $(DF_H) \
    $(RECOG_H) output.h $(REGS_H) hard-reg-set.h $(FLAGS_H) $(FUNCTION_H) \
    $(EXPR_H) $(BASIC_BLOCK_H) $(TM_P_H) $(EXCEPT_H) ira.h \
-   rtl-error.h $(LRA_INT_H)
+   rtl-error.h $(LRA_INT_H) $(OPTABS_H)
 lra-lives.o : lra-lives.c $(CONFIG_H) $(SYSTEM_H) coretypes.h $(TM_H) \
    $(RTL_H) $(REGS_H) insn-config.h $(DF_H) \
    $(RECOG_H) output.h $(REGS_H) hard-reg-set.h $(FLAGS_H) $(FUNCTION_H) \
