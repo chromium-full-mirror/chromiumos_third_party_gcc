@@ -2355,7 +2355,13 @@ execute_late_warn_uninitialized (void)
 static bool
 gate_warn_uninitialized (void)
 {
-  return (warn_uninitialized != 0 && warn_maybe_uninitialized != 0);
+  /*
+    We have a different version from trunk, which is
+      return warn_uninitialized || warn_maybe_uninitialized;
+
+    We'll temporarily disable warn_maybe_uninitialized.
+  */
+  return warn_uninitialized;
 }
 
 namespace {
