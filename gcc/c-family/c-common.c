@@ -11560,8 +11560,8 @@ maybe_record_typedef_use (tree t)
 void
 maybe_warn_unused_local_typedefs (void)
 {
-  int i;
-  tree decl;
+  /* int i; */
+  /* tree decl; */
   /* The number of times we have emitted -Wunused-local-typedefs
      warnings.  If this is different from errorcount, that means some
      unrelated errors have been issued.  In which case, we'll avoid
