@@ -2361,6 +2361,7 @@ gate_warn_uninitialized (void)
 
     We'll temporarily disable warn_maybe_uninitialized.
   */
+  warn_maybe_uninitialized = 0;
   return warn_uninitialized;
 }
 
