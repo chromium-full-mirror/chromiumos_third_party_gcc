@@ -346,7 +346,6 @@ inline_call (struct cgraph_edge *e, bool update_original,
   struct cgraph_node *to = NULL;
   struct cgraph_edge *curr = e;
   struct cgraph_node *callee = cgraph_function_or_thunk_node (e->callee, NULL);
-  struct cgraph_node *resolved_target = callee;
   bool new_edges_found = false;
 
   /* Skip fake edge.  */
@@ -379,9 +378,7 @@ inline_call (struct cgraph_edge *e, bool update_original,
     {
       struct cgraph_node *alias = e->callee, *next_alias;
 
-      if (L_IPO_COMP_MODE && cgraph_pre_profiling_inlining_done)
-        resolved_target = cgraph_lipo_get_resolved_node (callee->symbol.decl);
-      cgraph_redirect_edge_callee (e, resolved_target);
+      cgraph_redirect_edge_callee (e, callee);
       while (alias && alias != callee)
 	{
 	  if (!alias->callers
@@ -415,7 +412,6 @@ inline_call (struct cgraph_edge *e, bool update_original,
      error due to INLINE_SIZE_SCALE roudoff errors.  */
   gcc_assert (!update_overall_summary || !overall_size
 	      || abs (estimated_growth - (new_size - old_size)) <= 1
-              || resolved_target != callee
 	      /* FIXME: a hack.  Edges with false predicate are accounted
 		 wrong, we should remove them from callgraph.  */
 	      || predicated);
