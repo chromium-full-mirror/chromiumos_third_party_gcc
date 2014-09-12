@@ -1,5 +1,5 @@
 /* Prototypes for pa.c functions used in the md file & elsewhere.
-   Copyright (C) 2000-2013 Free Software Foundation, Inc.
+   Copyright (C) 2000-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -49,6 +49,8 @@ extern const char *pa_output_mul_insn (int, rtx);
 extern const char *pa_output_div_insn (rtx *, int, rtx);
 extern const char *pa_output_mod_insn (int, rtx);
 extern const char *pa_singlemove_string (rtx *);
+extern void pa_output_addr_vec (rtx, rtx);
+extern void pa_output_addr_diff_vec (rtx, rtx);
 extern void pa_output_arg_descriptor (rtx);
 extern void pa_output_global_address (FILE *, rtx, int);
 extern void pa_print_operand (FILE *, rtx, int);

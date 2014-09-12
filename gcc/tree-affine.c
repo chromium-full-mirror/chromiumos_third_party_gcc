@@ -1,5 +1,5 @@
 /* Operations with affine combinations of trees.
-   Copyright (C) 2005-2013 Free Software Foundation, Inc.
+   Copyright (C) 2005-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -21,12 +21,20 @@ along with GCC; see the file COPYING3.  If not see
 #include "system.h"
 #include "coretypes.h"
 #include "tree.h"
+#include "expr.h"
 #include "tree-pretty-print.h"
 #include "pointer-set.h"
 #include "tree-affine.h"
+#include "basic-block.h"
+#include "tree-ssa-alias.h"
+#include "internal-fn.h"
+#include "gimple-expr.h"
+#include "is-a.h"
 #include "gimple.h"
+#include "gimplify.h"
 #include "flags.h"
 #include "dumpfile.h"
+#include "cfgexpand.h"
 
 /* Extends CST as appropriate for the affine combinations COMB.  */
 
@@ -381,36 +389,43 @@ add_elt_to_tree (tree expr, tree type, tree elt, double_int scale,
   if (scale.is_minus_one ()
       && POINTER_TYPE_P (TREE_TYPE (elt)))
     {
-      elt = fold_build1 (NEGATE_EXPR, sizetype, convert_to_ptrofftype (elt));
+      elt = convert_to_ptrofftype (elt);
+      elt = fold_build1 (NEGATE_EXPR, TREE_TYPE (elt), elt);
       scale = double_int_one;
     }
 
   if (scale.is_one ())
     {
       if (!expr)
-	return elt;
+	{
+	  if (POINTER_TYPE_P (TREE_TYPE (elt)))
+	    return elt;
+	  else
+	    return fold_convert (type1, elt);
+	}
 
       if (POINTER_TYPE_P (TREE_TYPE (expr)))
-	return fold_build_pointer_plus (expr, convert_to_ptrofftype (elt));
+	return fold_build_pointer_plus (expr, elt);
       if (POINTER_TYPE_P (TREE_TYPE (elt)))
-	return fold_build_pointer_plus (elt, convert_to_ptrofftype (expr));
+	return fold_build_pointer_plus (elt, expr);
       return fold_build2 (PLUS_EXPR, type1,
-			  fold_convert (type1, expr),
-			  fold_convert (type1, elt));
+			  expr, fold_convert (type1, elt));
     }
 
   if (scale.is_minus_one ())
     {
       if (!expr)
-	return fold_build1 (NEGATE_EXPR, TREE_TYPE (elt), elt);
+	return fold_build1 (NEGATE_EXPR, type1,
+			    fold_convert (type1, elt));
 
       if (POINTER_TYPE_P (TREE_TYPE (expr)))
-	return fold_build_pointer_plus
-	    (expr, convert_to_ptrofftype
-	     (fold_build1 (NEGATE_EXPR, TREE_TYPE (elt), elt)));
+	{
+	  elt = convert_to_ptrofftype (elt);
+	  elt = fold_build1 (NEGATE_EXPR, TREE_TYPE (elt), elt);
+	  return fold_build_pointer_plus (expr, elt);
+	}
       return fold_build2 (MINUS_EXPR, type1,
-			  fold_convert (type1, expr),
-			  fold_convert (type1, elt));
+			  expr, fold_convert (type1, elt));
     }
 
   elt = fold_convert (type1, elt);
@@ -434,8 +449,7 @@ add_elt_to_tree (tree expr, tree type, tree elt, double_int scale,
         elt = fold_build1 (NEGATE_EXPR, type1, elt);
       return fold_build_pointer_plus (expr, elt);
     }
-  return fold_build2 (code, type1,
-		      fold_convert (type1, expr), elt);
+  return fold_build2 (code, type1, expr, elt);
 }
 
 /* Makes tree from the affine combination COMB.  */

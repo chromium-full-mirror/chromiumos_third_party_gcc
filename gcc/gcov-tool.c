@@ -1,5 +1,4 @@
 /* Gcc offline profile processing tool support. */
-/* Compile this one with gcc.  */
 /* Copyright (C) 2014 Free Software Foundation, Inc.
    Contributed by Rong Xu <xur@google.com>.
 
@@ -35,8 +34,11 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #include "gcov-io.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <sys/stat.h>
 #include <unistd.h>
+#if !defined(_WIN32)
 #include <ftw.h>
+#endif
 #include <getopt.h>
 #include "params.h"
 #include <string.h>
@@ -58,21 +60,31 @@ extern void lipo_set_substitute_string (const char *);
    -- otherwise we get duplicated defintions.
    Make the defines weak to link with other objects/libraries
    that potentially compiled with -fprofile-generate.  */
+#if !defined(_WIN32)
+#define WEAK_ATTR __attribute__ ((weak))
+#else
+#define WEAK_ATTR
+#endif
 
-__attribute__ ((weak)) gcov_unsigned_t __gcov_lipo_grouping_algorithm;
-__attribute__ ((weak)) gcov_unsigned_t __gcov_lipo_merge_modu_edges;
-__attribute__ ((weak)) gcov_unsigned_t __gcov_lipo_weak_inclusion;
-__attribute__ ((weak)) gcov_unsigned_t __gcov_lipo_max_mem;
-__attribute__ ((weak)) gcov_unsigned_t __gcov_lipo_random_group_size;
-__attribute__ ((weak)) gcov_unsigned_t __gcov_lipo_cutoff;
-__attribute__ ((weak)) gcov_unsigned_t __gcov_lipo_random_seed;
-__attribute__ ((weak)) gcov_unsigned_t __gcov_lipo_dump_cgraph;
-__attribute__ ((weak)) gcov_unsigned_t __gcov_lipo_propagate_scale;
+WEAK_ATTR gcov_unsigned_t __gcov_lipo_grouping_algorithm;
+WEAK_ATTR gcov_unsigned_t __gcov_lipo_merge_modu_edges;
+WEAK_ATTR gcov_unsigned_t __gcov_lipo_weak_inclusion;
+WEAK_ATTR gcov_unsigned_t __gcov_lipo_max_mem;
+WEAK_ATTR gcov_unsigned_t __gcov_lipo_comdat_algorithm;
+WEAK_ATTR gcov_unsigned_t __gcov_lipo_random_group_size;
+WEAK_ATTR gcov_unsigned_t __gcov_lipo_cutoff;
+WEAK_ATTR gcov_unsigned_t __gcov_lipo_random_seed;
+WEAK_ATTR gcov_unsigned_t __gcov_lipo_dump_cgraph;
+WEAK_ATTR gcov_unsigned_t __gcov_lipo_propagate_scale;
 
-static int verbose;
+#undef WEAK_ATTR
+
+/* Set to verbose output mode.  */
+static bool verbose;
 
 /* Remove file NAME if it has a gcda suffix. */
 
+#if !defined(_WIN32)
 static int
 unlink_gcda_file (const char *name,
                   const struct stat *status ATTRIBUTE_UNUSED,
@@ -84,23 +96,63 @@ unlink_gcda_file (const char *name,
   int len1 = strlen (GCOV_DATA_SUFFIX);
 
   if (len > len1 && !strncmp (len -len1 + name, GCOV_DATA_SUFFIX, len1))
-    remove (name);
+    ret = remove (name);
 
   if (ret)
-    {
-      fnotice (stderr, "error in removing %s\n", name);
-      exit (FATAL_EXIT_CODE);
-    }
+    fatal_error ("error in removing %s\n", name);
 
   return ret;
 }
+#endif
 
 /* Remove the gcda files in PATH recursively.  */
 
 static int
 unlink_profile_dir (const char *path)
 {
+#if !defined(_WIN32)
     return nftw(path, unlink_gcda_file, 64, FTW_DEPTH | FTW_PHYS);
+#else
+    return 0;
+#endif
+}
+
+
+/* Output GCOV_INFO lists PROFILE to directory OUT. Note that
+   we will remove all the gcda files in OUT.  */
+
+static void
+gcov_output_files (const char *out, struct gcov_info *profile)
+{
+  char *pwd;
+  int ret;
+
+  /* Try to make directory if it doesn't already exist.  */
+  if (access (out, F_OK) == -1)
+    {
+      if (mkdir (out, S_IRWXU | S_IRWXG | S_IRWXO) == -1 && errno != EEXIST)
+        fatal_error ("Cannot make directory %s", out);
+    } else
+      unlink_profile_dir (out);
+
+  /* Output new profile.  */
+  pwd = getcwd (NULL, 0);
+
+  if (pwd == NULL)
+    fatal_error ("Cannot get current directory name");
+
+  ret = chdir (out);
+  if (ret)
+    fatal_error ("Cannot change directory to %s", out);
+
+  set_gcov_list (profile);
+  gcov_exit ();
+
+  ret = chdir (pwd);
+  if (ret)
+    fatal_error ("Cannot change directory to %s", pwd);
+
+  free (pwd);
 }
 
 /* Merging profile D1 and D2 with weight as W1 and W2, respectively.
@@ -110,11 +162,9 @@ unlink_profile_dir (const char *path)
 static int
 profile_merge (const char *d1, const char *d2, const char *out, int w1, int w2)
 {
-  char *pwd;
+  struct gcov_info *d1_profile;
+  struct gcov_info *d2_profile;
   int ret;
-  struct gcov_info * d1_profile;
-  struct gcov_info * d2_profile;
-
 
   d1_profile = gcov_read_profile_dir (d1, 0);
   if (!d1_profile)
@@ -133,19 +183,8 @@ profile_merge (const char *d1, const char *d2, const char *out, int w1, int w2)
         return ret;
     }
 
-  /* Output new profile.  */
-  unlink_profile_dir (out);
-  mkdir (out, 0755);
-  pwd = getcwd (NULL, 0);
-  gcc_assert (pwd);
-  ret = chdir (out);
-  gcc_assert (ret == 0);
+  gcov_output_files (out, d1_profile);
 
-  set_gcov_list (d1_profile);
-  gcov_exit ();
-
-  ret = chdir (pwd);
-  free (pwd);
   return 0;
 }
 
@@ -196,7 +235,7 @@ do_merge (int argc, char **argv)
       switch (opt)
         {
         case 'v':
-          verbose = 1;
+          verbose = true;
           gcov_set_verbose ();
           break;
         case 'o':
@@ -205,10 +244,7 @@ do_merge (int argc, char **argv)
         case 'w':
           sscanf (optarg, "%d,%d", &w1, &w2);
           if (w1 < 0 || w2 < 0)
-            {
-              fnotice (stderr, "weights need to be non-negative\n");
-              exit (FATAL_EXIT_CODE);
-            }
+            fatal_error ("weights need to be non-negative\n");
           break;
         default:
           merge_usage ();
@@ -234,33 +270,18 @@ static int
 profile_rewrite (const char *d1, const char *out, long long n_val,
                  float scale, int n, int d)
 {
-  char *pwd;
-  int ret;
   struct gcov_info * d1_profile;
-
 
   d1_profile = gcov_read_profile_dir (d1, 0);
   if (!d1_profile)
     return 1;
-
-  /* Output new profile.  */
-  unlink_profile_dir (out);
-  mkdir (out, 0755);
-  pwd = getcwd (NULL, 0);
-  gcc_assert (pwd);
-  ret = chdir (out);
-  gcc_assert (ret == 0);
 
   if (n_val)
     gcov_profile_normalize (d1_profile, (gcov_type) n_val);
   else
     gcov_profile_scale (d1_profile, scale, n, d);
 
-  set_gcov_list (d1_profile);
-  gcov_exit ();
-
-  ret = chdir (pwd);
-  free (pwd);
+  gcov_output_files (out, d1_profile);
   return 0;
 }
 
@@ -320,6 +341,12 @@ module_name_hash_lookup (const char *string, unsigned *id_p, int create)
   return 1;
 }
 
+#if !defined(_WIN32)
+#define STRCASESTR strcasestr
+#else
+#define STRCASESTR strstr
+#endif
+
 /* Return 1 if NAME is of a source type that LIPO targets.
    Return 0 otherwise.  */
 
@@ -328,15 +355,15 @@ is_lipo_source_type (char *name)
 {
   char *p;
 
-  if (strcasestr (name, ".c") ||
-      strcasestr (name, ".cc") ||
-      strcasestr (name, ".cpp") ||
-      strcasestr (name, ".c++"))
+  if (STRCASESTR (name, ".c") ||
+      STRCASESTR (name, ".cc") ||
+      STRCASESTR (name, ".cpp") ||
+      STRCASESTR (name, ".c++"))
     return 1;
 
   /* Replace ".proto" with ".pb.cc". Since the two strings have the same
      length, we simplfy do a strcpy.  */
-  if ((p = strcasestr (name, ".proto")) != NULL)
+  if ((p = STRCASESTR (name, ".proto")) != NULL)
     {
       strcpy (p, ".pb.cc");
       return 1;
@@ -379,8 +406,8 @@ static int
 lipo_process_modu_list (const char *input_file)
 {
   FILE *fd;
-  char *line = NULL;
-  size_t linecap = 0;
+  const int max_line_size = (1 << 12);
+  char line[max_line_size];
   char *name;
 
   set_use_modu_list ();
@@ -392,15 +419,12 @@ lipo_process_modu_list (const char *input_file)
     }
 
   /* Read all the modules */
-  while (getline (&line, &linecap, fd) != -1)
+  while (fgets (line, max_line_size, fd) != NULL)
     {
       name = strtok (line, " \t\n");
       name = lipo_process_name_string (name);
       if (name)
         module_name_hash_lookup (name, 0, 1);
-
-      free (line);
-      line = NULL;
     }
 
   return 0;
@@ -495,20 +519,22 @@ do_rewrite (int argc, char **argv)
   int ret;
   const char *output_dir = 0;
   long long normalize_val = 0;
-  float scale = 1.0;
-  int numerator = -1;
-  int denominator = -1;
+  float scale = 0.0;
+  int numerator = 1;
+  int denominator = 1;
+  int do_scaling = 0;
 
   mod_name_id_hash_table = htab_create (500, mod_name_id_htab_hash,
                                         mod_name_id_hash_eq, NULL);
 
   optind = 0;
-  while ((opt = getopt_long (argc, argv, "vo:l:r:s:un:", rewrite_options, NULL)) != -1)
+  while ((opt = getopt_long (argc, argv, "vo:l:r:s:un:", rewrite_options,
+                             NULL)) != -1)
     {
       switch (opt)
         {
         case 'v':
-          verbose = 1;
+          verbose = true;
           gcov_set_verbose ();
           break;
         case 'o':
@@ -524,36 +550,40 @@ do_rewrite (int argc, char **argv)
           set_use_existing_grouping ();
           break;
         case 'n':
-          if (scale != 1.0)
-            {
-              fnotice (stderr, "scaling cannot co-exist with normalization\n");
-              scale = 1.0;
-            }
-          normalize_val = atoll (optarg);
+          if (!do_scaling)
+            normalize_val = atoll (optarg);
+          else
+            fnotice (stderr, "scaling cannot co-exist with normalization,"
+                " skipping\n");
           break;
         case 's':
           ret = 0;
+          do_scaling = 1;
           if (strstr (optarg, "/"))
             {
               ret = sscanf (optarg, "%d/%d", &numerator, &denominator);
               if (ret == 2)
                 {
-                  gcc_assert (numerator >= 0);
-                  gcc_assert (denominator > 0);
-                  scale = 0.0;
+                  if (numerator < 0 || denominator <= 0)
+                    {
+                      fnotice (stderr, "incorrect format in scaling, using 1/1\n");
+                      denominator = 1;
+                      numerator = 1;
+                    }
                 }
             }
           if (ret != 2)
             {
               ret = sscanf (optarg, "%f", &scale);
-              gcc_assert (ret == 1);
+              if (ret != 1)
+                fnotice (stderr, "incorrect format in scaling, using 1/1\n");
+              else
+                denominator = 0;
             }
 
           if (scale < 0.0)
-            {
-              fnotice (stderr, "scale needs to be non-negative\n");
-              exit (FATAL_EXIT_CODE);
-            }
+            fatal_error ("scale needs to be non-negative\n");
+
           if (normalize_val != 0)
             {
               fnotice (stderr, "normalization cannot co-exist with scaling\n");
@@ -591,7 +621,7 @@ print_usage (int error_p)
   int status = error_p ? FATAL_EXIT_CODE : SUCCESS_EXIT_CODE;
 
   fnotice (file, "Usage: %s [OPTION]... SUB_COMMAND [OPTION]...\n\n", progname);
-  fnotice (file, "Offline tool to handle gcda counts.\n\n");
+  fnotice (file, "Offline tool to handle gcda counts\n\n");
   fnotice (file, "  -h, --help                            Print this help, then exit\n");
   fnotice (file, "  -v, --version                         Print version number, then exit\n");
   fnotice (file, "  -A, --lipo_algorithm <0|1>            Choose LIPO module grouping algorithm\n");
@@ -599,6 +629,7 @@ print_usage (int error_p)
   fnotice (file, "  -W, --lipo_weak_inclusion             Don't force strict inclusion in grouping\n");
   fnotice (file, "  -C, --lipo_cutoff <0..100>            Set LIPO module grouping cutoff\n");
   fnotice (file, "  -M, --lipo_max_memory <int>           Set the max memory in LIPO module grouping\n");
+  fnotice (file, "  -F, --lipo_comdat_algorithm <0|1|2|3> Set the COMDAT fixup algorithm\n");
   fnotice (file, "  -R, --lipo_random_group_size <int>    Set LIPO random grouping size\n");
   fnotice (file, "  -S, --lipo_random_group_seed <int>    Set LIPO random grouping seed\n");
   fnotice (file, "  -D, --lipo_dump_cgraph                Dump dynamic call graph\n");
@@ -635,6 +666,7 @@ static const struct option options[] =
   { "lipo_weak_inclusion",    no_argument,       NULL, 'W' },
   { "lipo_cutoff",            required_argument, NULL, 'C' },
   { "lipo_max_memory",        required_argument, NULL, 'M' },
+  { "lipo_comdat_algorithm",  required_argument, NULL, 'F' },
   { "lipo_random_group_size", required_argument, NULL, 'R' },
   { "lipo_random_group_seed", required_argument, NULL, 'S' },
   { "lipo_dump_cgraph",       no_argument,       NULL, 'D' },
@@ -703,6 +735,16 @@ process_args (int argc, char **argv)
             }
           __gcov_lipo_max_mem = ret;
           break;
+        case 'F':
+          sscanf (optarg, "%d", &ret);
+          if (ret < 0)
+            {
+              fnotice (stderr,
+                       "LIPO COMDAT fixup algorithm needs to be positive\n");
+              exit (-1);
+            }
+          __gcov_lipo_comdat_algorithm = ret;
+          break;
         case 'C':
           sscanf (optarg, "%d", &ret);
           if (ret < 0 || ret > 100)
@@ -731,6 +773,7 @@ set_lipo_default_params (void)
   __gcov_lipo_merge_modu_edges   = GET_DEFAULT_PARAM_VALUE (PARAM_LIPO_MERGE_MODU_EDGES);
   __gcov_lipo_weak_inclusion     = GET_DEFAULT_PARAM_VALUE (PARAM_LIPO_WEAK_INCLUSION);
   __gcov_lipo_max_mem            = GET_DEFAULT_PARAM_VALUE (PARAM_MAX_LIPO_MEMORY);
+  __gcov_lipo_comdat_algorithm   = 0 /* GET_DEFAULT_PARAM_VALUE (PARAM_LIPO_COMDAT_ALGORITHM)*/;
   __gcov_lipo_random_group_size  = GET_DEFAULT_PARAM_VALUE (PARAM_LIPO_RANDOM_GROUP_SIZE);
   __gcov_lipo_cutoff             = GET_DEFAULT_PARAM_VALUE (PARAM_LIPO_CUTOFF);
   __gcov_lipo_random_seed        = GET_DEFAULT_PARAM_VALUE (PARAM_LIPO_RANDOM_SEED);

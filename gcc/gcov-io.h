@@ -1,5 +1,5 @@
 /* File format for coverage information
-   Copyright (C) 1996-2013 Free Software Foundation, Inc.
+   Copyright (C) 1996-2014 Free Software Foundation, Inc.
    Contributed by Bob Manson <manson@cygnus.com>.
    Completely remangled by Nathan Sidwell <nathan@codesourcery.com>.
 
@@ -209,7 +209,7 @@ typedef unsigned HOST_WIDEST_INT gcov_type_unsigned;
 
 #define ATTRIBUTE_HIDDEN
 
-#endif /* !IN_LIBGCOV */
+#endif /* !IN_LIBGOCV */
 
 #ifndef GCOV_LINKAGE
 #define GCOV_LINKAGE extern
@@ -264,54 +264,30 @@ typedef unsigned HOST_WIDEST_INT gcov_type_unsigned;
 #define GCOV_TAG_AFDO_WORKING_SET ((gcov_unsigned_t)0xaf000000)
 
 /* Counters that are collected.  */
-#define GCOV_COUNTER_ARCS 	0  /* Arc transitions.  */
-#define GCOV_COUNTERS_SUMMABLE	1  /* Counters which can be
-				      summaried.  */
-#define GCOV_FIRST_VALUE_COUNTER 1 /* The first of counters used for value
-				      profiling.  They must form a consecutive
-				      interval and their order must match
-				      the order of HIST_TYPEs in
-				      value-prof.h.  */
-#define GCOV_COUNTER_V_INTERVAL	1  /* Histogram of value inside an interval.  */
-#define GCOV_COUNTER_V_POW2	2  /* Histogram of exact power2 logarithm
-				      of a value.  */
-#define GCOV_COUNTER_V_SINGLE	3  /* The most common value of expression.  */
-#define GCOV_COUNTER_V_DELTA	4  /* The most common difference between
-				      consecutive values of expression.  */
+#define DEF_GCOV_COUNTER(COUNTER, NAME, MERGE_FN) COUNTER,
+enum {
+#include "gcov-counter.def"
+GCOV_COUNTERS
+};
+#undef DEF_GCOV_COUNTER
 
-#define GCOV_COUNTER_V_INDIR	5  /* The most common indirect address */
-#define GCOV_COUNTER_AVERAGE	6  /* Compute average value passed to the
-				      counter.  */
-#define GCOV_COUNTER_IOR	7  /* IOR of the all values passed to
-				      counter.  */
-#define GCOV_COUNTER_ICALL_TOPNV 8 /* Top N value tracking for indirect calls */
-#define GCOV_LAST_VALUE_COUNTER 8  /* The last of counters used for value
-				      profiling.  */
-#define GCOV_COUNTER_DIRECT_CALL 9 /* Direct call counts.  */
-#define GCOV_COUNTERS		10
+/* Counters which can be summaried.  */
+#define GCOV_COUNTERS_SUMMABLE (GCOV_COUNTER_ARCS + 1)
+
+/* The first of counters used for value profiling.  They must form a
+   consecutive interval and their order must match the order of
+   HIST_TYPEs in value-prof.h.  */
+#define GCOV_FIRST_VALUE_COUNTER GCOV_COUNTERS_SUMMABLE
+
+/* The last of counters used for value profiling.  */
+#define GCOV_LAST_VALUE_COUNTER (GCOV_COUNTERS - 2)
 
 /* Number of counters used for value profiling.  */
 #define GCOV_N_VALUE_COUNTERS \
   (GCOV_LAST_VALUE_COUNTER - GCOV_FIRST_VALUE_COUNTER + 1)
 
-  /* A list of human readable names of the counters */
-#define GCOV_COUNTER_NAMES	{"arcs", "interval", "pow2", "single", \
-				 "delta","indirect_call", "average", "ior", \
-				 "indirect_call_topn", "direct_call"}
-
 #define GCOV_ICALL_TOPN_VAL  2   /* Track two hottest callees */
 #define GCOV_ICALL_TOPN_NCOUNTS  9 /* The number of counter entries per icall callsite */
-  /* Names of merge functions for counters.  */
-#define GCOV_MERGE_FUNCTIONS	{"__gcov_merge_add",	\
-				 "__gcov_merge_add",	\
-				 "__gcov_merge_add",	\
-				 "__gcov_merge_single",	\
-				 "__gcov_merge_delta",  \
-				 "__gcov_merge_single", \
-				 "__gcov_merge_add",	\
-				 "__gcov_merge_ior",	\
-				 "__gcov_merge_icall_topn",\
-                                 "__gcov_merge_dc" }
 
 /* Convert a counter index to a tag.  */
 #define GCOV_TAG_FOR_COUNTER(COUNT)				\
@@ -331,7 +307,7 @@ typedef unsigned HOST_WIDEST_INT gcov_type_unsigned;
 /* Return nonzero if SUB is an immediate subtag of TAG.  */
 #define GCOV_TAG_IS_SUBTAG(TAG,SUB)				\
 	(GCOV_TAG_MASK (TAG) >> 8 == GCOV_TAG_MASK (SUB) 	\
-	 && !(((SUB) ^ (TAG)) & ~GCOV_TAG_MASK(TAG)))
+	 && !(((SUB) ^ (TAG)) & ~GCOV_TAG_MASK (TAG)))
 
 /* Return nonzero if SUB is at a sublevel to TAG.  */
 #define GCOV_TAG_IS_SUBLEVEL(TAG,SUB)				\
@@ -404,15 +380,15 @@ struct gcov_module_info
 {
   gcov_unsigned_t ident;
   gcov_unsigned_t is_primary; /* this is overloaded to mean two things:
-				 (1) means FDO/LIPO in instrumented binary.
-				 (2) means IS_PRIMARY in persistent file or
-				     memory copy used in profile-use.  */
+                                 (1) means FDO/LIPO in instrumented binary.
+                                 (2) means IS_PRIMARY in persistent file or
+                                     memory copy used in profile-use.  */
   gcov_unsigned_t flags;      /* bit 0: is_exported,
-                                 bit 1: need to include all the auxiliary
+                                 bit 1: need to include all the auxiliary 
                                  modules in use compilation.  */
   gcov_unsigned_t lang; /* lower 16 bits encode the language, and the upper
-			   16 bits enocde other attributes, such as whether
-			   any assembler is present in the source, etc.  */
+                           16 bits enocde other attributes, such as whether
+                           any assembler is present in the source, etc.  */
   gcov_unsigned_t ggc_memory; /* memory needed for parsing in kb  */
   char *da_filename;
   char *source_filename;
@@ -432,9 +408,9 @@ extern unsigned primary_module_id;
 #define SET_MODULE_EXPORTED(modu) ((modu->flags |= 0x1))
 #define MODULE_EXPORTED_FLAG(modu) ((modu->flags & 0x1))
 #define PRIMARY_MODULE_EXPORTED                                         \
-  (MODULE_EXPORTED_FLAG (module_infos[0])				\
-   && !((module_infos[0]->lang & GCOV_MODULE_ASM_STMTS)			\
-	&& flag_ripa_disallow_asm_modules))
+  (MODULE_EXPORTED_FLAG (module_infos[0])                               \
+   && !((module_infos[0]->lang & GCOV_MODULE_ASM_STMTS)                 \
+        && flag_ripa_disallow_asm_modules))
 
 #if !defined(inhibit_libc)
 
@@ -447,6 +423,7 @@ extern unsigned primary_module_id;
    you use the functions for reading, then gcov_rewrite then the
    functions for writing.  Your file may become corrupted if you break
    these invariants.  */
+
 #if !IN_LIBGCOV
 GCOV_LINKAGE int gcov_open (const char */*name*/, int /*direction*/);
 GCOV_LINKAGE int gcov_magic (gcov_unsigned_t, gcov_unsigned_t);
@@ -460,6 +437,7 @@ GCOV_LINKAGE void gcov_read_summary (struct gcov_summary *) ATTRIBUTE_HIDDEN;
 GCOV_LINKAGE const char *gcov_read_string (void);
 GCOV_LINKAGE void gcov_sync (gcov_position_t /*base*/,
 			     gcov_unsigned_t /*length */);
+
 
 #if !IN_LIBGCOV && IN_GCOV != 1
 GCOV_LINKAGE void gcov_read_module_info (struct gcov_module_info *mod_info,

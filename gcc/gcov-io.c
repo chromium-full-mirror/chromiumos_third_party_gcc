@@ -1,5 +1,5 @@
 /* File format for coverage information
-   Copyright (C) 1996-2013 Free Software Foundation, Inc.
+   Copyright (C) 1996-2014 Free Software Foundation, Inc.
    Contributed by Bob Manson <manson@cygnus.com>.
    Completely remangled by Nathan Sidwell <nathan@codesourcery.com>.
 
@@ -42,12 +42,12 @@ static void gcov_allocate (unsigned);
 GCOV_LINKAGE struct gcov_var
 {
   FILE *file;
-  gcov_position_t start;        /* Position of first byte of block */
-  unsigned offset;              /* Read/write position within the block.  */
-  unsigned length;              /* Read limit in the block.  */
-  unsigned overread;            /* Number of words overread.  */
-  int error;                    /* < 0 overflow, > 0 disk error.  */
-  int mode;                     /* < 0 writing, > 0 reading */
+  gcov_position_t start;	/* Position of first byte of block */
+  unsigned offset;		/* Read/write position within the block.  */
+  unsigned length;		/* Read limit in the block.  */
+  unsigned overread;		/* Number of words overread.  */
+  int error;			/* < 0 overflow, > 0 disk error.  */
+  int mode;	                /* < 0 writing, > 0 reading */
 #if IN_LIBGCOV
   /* Holds one block plus 4 bytes, thus all coverage reads & writes
      fit within this buffer and we always can transfer GCOV_BLOCK_SIZE
@@ -55,7 +55,7 @@ GCOV_LINKAGE struct gcov_var
      or 8 byte objects.  */
   gcov_unsigned_t buffer[GCOV_BLOCK_SIZE + 1];
 #else
-  int endian;                   /* Swap endianness.  */
+  int endian;			/* Swap endianness.  */
   /* Holds a variable length block, as the compiler can write
      strings and needs to backtrack.  */
   size_t alloc;
@@ -64,29 +64,39 @@ GCOV_LINKAGE struct gcov_var
 } gcov_var;
 
 /* Save the current position in the gcov file.  */
-static inline gcov_position_t
+/* We need to expose this function when compiling for gcov-tool.  */
+#ifndef IN_GCOV_TOOL
+static inline
+#endif
+gcov_position_t
 gcov_position (void)
 {
   return gcov_var.start + gcov_var.offset;
 }
 
 /* Return nonzero if the error flag is set.  */
-static inline int
+/* We need to expose this function when compiling for gcov-tool.  */
+#ifndef IN_GCOV_TOOL
+static inline
+#endif
+int
 gcov_is_error (void)
 {
   return gcov_var.file ? gcov_var.error : 1;
 }
 
+#if IN_LIBGCOV
 /* Move to beginning of file and initialize for writing.  */
-static inline void
+GCOV_LINKAGE inline void
 gcov_rewrite (void)
 {
-  gcc_assert (gcov_var.mode > 0);
-  gcov_var.mode = -1;
+  gcc_assert (gcov_var.mode > 0); 
+  gcov_var.mode = -1; 
   gcov_var.start = 0;
   gcov_var.offset = 0;
   fseek (gcov_var.file, 0L, SEEK_SET);
 }
+#endif
 
 static inline gcov_unsigned_t from_file (gcov_unsigned_t value)
 {
@@ -146,9 +156,15 @@ gcov_open (const char *name, int mode)
       /* pass mode (ignored) for compatibility */
       fd = open (name, O_RDONLY, S_IRUSR | S_IWUSR);
     }
-  else
+  else if (mode < 0)
+     {
+       /* Write mode - acquire a write-lock.  */
+       s_flock.l_type = F_WRLCK;
+      fd = open (name, O_RDWR | O_CREAT | O_TRUNC, 0666);
+    }
+  else /* mode == 0 */
     {
-      /* Write mode - acquire a write-lock.  */
+      /* Read-Write mode - acquire a write-lock.  */
       s_flock.l_type = F_WRLCK;
       fd = open (name, O_RDWR | O_CREAT, 0666);
     }
@@ -438,7 +454,7 @@ gcov_write_summary (gcov_unsigned_t tag, const struct gcov_summary *summary)
           h_cnt++;
         }
     }
-  gcov_write_tag_length (tag, GCOV_TAG_SUMMARY_LENGTH(h_cnt));
+  gcov_write_tag_length (tag, GCOV_TAG_SUMMARY_LENGTH (h_cnt));
   gcov_write_unsigned (summary->checksum);
   for (csum = summary->ctrs, ix = GCOV_COUNTERS_SUMMABLE; ix--; csum++)
     {
@@ -551,11 +567,13 @@ gcov_read_counter (void)
   return value;
 }
 
+/* We need to expose the below function when compiling for gcov-tool.  */
+
+#if !IN_LIBGCOV || defined (IN_GCOV_TOOL)
 /* Read string from coverage file. Returns a pointer to a static
    buffer, or NULL on empty string. You must copy the string before
    calling another gcov function.  */
 
-#if !IN_LIBGCOV || IN_GCOV_TOOL
 GCOV_LINKAGE const char *
 gcov_read_string (void)
 {
@@ -611,7 +629,7 @@ gcov_read_summary (struct gcov_summary *summary)
           while (!cur_bitvector)
             {
               h_ix = bv_ix * 32;
-              gcc_assert(bv_ix < GCOV_HISTOGRAM_BITVECTOR_SIZE);
+              gcc_assert (bv_ix < GCOV_HISTOGRAM_BITVECTOR_SIZE);
               cur_bitvector = histo_bitvector[bv_ix++];
             }
           while (!(cur_bitvector & 0x1))
@@ -619,7 +637,7 @@ gcov_read_summary (struct gcov_summary *summary)
               h_ix++;
               cur_bitvector >>= 1;
             }
-          gcc_assert(h_ix < GCOV_HISTOGRAM_SIZE);
+          gcc_assert (h_ix < GCOV_HISTOGRAM_SIZE);
 
           csum->histogram[h_ix].num_counters = gcov_read_unsigned ();
           csum->histogram[h_ix].min_value = gcov_read_counter ();
@@ -632,7 +650,7 @@ gcov_read_summary (struct gcov_summary *summary)
     }
 }
 
-#if IN_GCOV_TOOL || !IN_LIBGCOV && IN_GCOV != 1
+#if (!IN_LIBGCOV && IN_GCOV != 1) || defined (IN_GCOV_TOOL)
 /* Read LEN words (unsigned type) and construct MOD_INFO.  */
 
 GCOV_LINKAGE void
@@ -685,7 +703,9 @@ gcov_read_module_info (struct gcov_module_info *mod_info,
 }
 #endif
 
-#if !IN_LIBGCOV || IN_GCOV_TOOL
+/* We need to expose the below function when compiling for gcov-tool.  */
+
+#if !IN_LIBGCOV || defined (IN_GCOV_TOOL)
 /* Reset to a known position.  BASE should have been obtained from
    gcov_position, LENGTH should be a record length.  */
 
@@ -830,7 +850,7 @@ static void gcov_histogram_merge (gcov_bucket_type *tgt_histo,
   gcov_bucket_type tmp_histo[GCOV_HISTOGRAM_SIZE];
   int src_done = 0;
 
-  memset(tmp_histo, 0, sizeof (gcov_bucket_type) * GCOV_HISTOGRAM_SIZE);
+  memset (tmp_histo, 0, sizeof (gcov_bucket_type) * GCOV_HISTOGRAM_SIZE);
 
   /* Assume that the counters are in the same relative order in both
      histograms. Walk the histograms from largest to smallest entry,
@@ -918,7 +938,7 @@ static void gcov_histogram_merge (gcov_bucket_type *tgt_histo,
 
           /* The merged counters get placed in the new merged histogram
              at the entry for the merged min_value.  */
-          tmp_i = gcov_histo_index(merge_min);
+          tmp_i = gcov_histo_index (merge_min);
           gcc_assert (tmp_i < GCOV_HISTOGRAM_SIZE);
           tmp_histo[tmp_i].num_counters += merge_num;
           tmp_histo[tmp_i].cum_value += merge_cum;
@@ -950,12 +970,13 @@ static void gcov_histogram_merge (gcov_bucket_type *tgt_histo,
     }
   /* At this point, tmp_i should be the smallest non-zero entry in the
      tmp_histo.  */
-  gcc_assert(tmp_i >= 0 && tmp_i < GCOV_HISTOGRAM_SIZE
-             && tmp_histo[tmp_i].num_counters > 0);
+  gcc_assert (tmp_i >= 0 && tmp_i < GCOV_HISTOGRAM_SIZE
+	      && tmp_histo[tmp_i].num_counters > 0);
   tmp_histo[tmp_i].cum_value += src_cum;
 
   /* Finally, copy the merged histogram into tgt_histo.  */
-  memcpy(tgt_histo, tmp_histo, sizeof (gcov_bucket_type) * GCOV_HISTOGRAM_SIZE);
+  memcpy (tgt_histo, tmp_histo,
+	  sizeof (gcov_bucket_type) * GCOV_HISTOGRAM_SIZE);
 }
 #endif /* !IN_GCOV */
 

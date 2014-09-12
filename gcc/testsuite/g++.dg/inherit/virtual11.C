@@ -1,4 +1,4 @@
-// PR c++/59031 
+// PR c++/59031
 // { dg-do compile }
 // { dg-options "-fdump-tree-gimple " }
 class B {

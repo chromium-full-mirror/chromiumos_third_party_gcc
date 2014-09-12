@@ -1,5 +1,5 @@
 /* Definitions for option handling for IA-32.
-   Copyright (C) 1988-2013 Free Software Foundation, Inc.
+   Copyright (C) 1988-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -32,14 +32,13 @@ enum stringop_alg
 #define DEF_ENUM
 
 #undef DEF_ALG
-#define DEF_ALG(alg, name) alg,
+#define DEF_ALG(alg, name) alg, 
 
 #include "stringop.def"
 last_alg
 
 #undef DEF_ENUM
 #undef DEF_ALG
-
 };
 
 /* Available call abi.  */
@@ -87,6 +86,11 @@ enum ix86_veclibabi {
   ix86_veclibabi_type_none,
   ix86_veclibabi_type_svml,
   ix86_veclibabi_type_acml
+};
+
+enum stack_protector_guard {
+  SSP_TLS,      /* per-thread canary in TLS block */
+  SSP_GLOBAL    /* global canary */
 };
 
 #endif

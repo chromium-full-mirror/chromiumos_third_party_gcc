@@ -176,22 +176,41 @@ rest_of_handle_simplify_got (void)
   return 0;
 }
 
-struct rtl_opt_pass pass_simplify_got =
+namespace
 {
- {
-  RTL_PASS,
+
+const pass_data pass_data_simplify_got =
+{
+  RTL_PASS,                             /* type */
   "simplify_got",                       /* name */
   OPTGROUP_NONE,                        /* optinfo_flags */
-  gate_handle_simplify_got,             /* gate */
-  rest_of_handle_simplify_got,          /* execute */
-  NULL,                                 /* sub */
-  NULL,                                 /* next */
-  0,                                    /* static_pass_number */
+  true,                                 /* has_gate */
+  true,                                 /* has_execute */
   TV_SIMPLIFY_GOT,                      /* tv_id */
   0,                                    /* properties_required */
   0,                                    /* properties_provided */
   0,                                    /* properties_destroyed */
   0,                                    /* todo_flags_start */
   0                                     /* todo_flags_finish */
- }
 };
+
+class pass_simplify_got : public rtl_opt_pass
+{
+public:
+  pass_simplify_got (gcc::context *ctxt)
+    : rtl_opt_pass (pass_data_simplify_got, ctxt)
+  {}
+
+  /* opt_pass methods: */
+  bool gate () { return gate_handle_simplify_got (); }
+  unsigned int execute () { return rest_of_handle_simplify_got (); }
+
+}; // class pass_simplify_got
+
+} // anon namespace
+
+rtl_opt_pass *
+make_pass_simplify_got (gcc::context *ctxt)
+{
+  return new pass_simplify_got (ctxt);
+}

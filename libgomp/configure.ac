@@ -184,6 +184,13 @@ AC_LINK_IFELSE(
    void *g(void *d) { return NULL; }],
   [pthread_t t; pthread_create(&t,NULL,g,NULL);])],
  [XPCFLAGS=" -Wc,-pthread"],
+ [CFLAGS="$save_CFLAGS" LIBS="$LIBS"
+  AC_LINK_IFELSE(
+   [AC_LANG_PROGRAM(
+    [#include <pthread.h>
+     void *g(void *d) { return NULL; }],
+    [pthread_t t; pthread_create(&t,NULL,g,NULL);])],
+   [],
  [CFLAGS="$save_CFLAGS" LIBS="-lpthread $LIBS"
   AC_LINK_IFELSE(
    [AC_LANG_PROGRAM(
@@ -191,7 +198,7 @@ AC_LINK_IFELSE(
      void *g(void *d) { return NULL; }],
     [pthread_t t; pthread_create(&t,NULL,g,NULL);])],
    [],
-   [AC_MSG_ERROR([Pthreads are required to build libgomp])])])
+   [AC_MSG_ERROR([Pthreads are required to build libgomp])])])])
 
 # Check for functions needed.
 AC_CHECK_FUNCS(getloadavg clock_gettime strtoull)
@@ -238,7 +245,7 @@ fi
 # See if we support thread-local storage.
 GCC_CHECK_TLS
 
-# See what sort of export controls are availible.
+# See what sort of export controls are available.
 LIBGOMP_CHECK_ATTRIBUTE_VISIBILITY
 LIBGOMP_CHECK_ATTRIBUTE_DLLEXPORT
 LIBGOMP_CHECK_ATTRIBUTE_ALIAS
@@ -274,7 +281,7 @@ else
 fi
 
 # Set up the set of libraries that we need to link against for libgomp.
-# Note that the GOMP_SELF_SPEC in gcc.c will force -pthread for -fopenmp,
+# Note that the GOMP_SELF_SPEC in gcc.c may force -pthread,
 # which will force linkage against -lpthread (or equivalent for the system).
 # That's not 100% ideal, but about the best we can do easily.
 if test $enable_shared = yes; then

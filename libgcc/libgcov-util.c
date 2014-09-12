@@ -26,14 +26,6 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 
 #define IN_GCOV_TOOL 1
-#define L_gcov 1
-#define L_gcov_merge_add 1
-#define L_gcov_merge_single 1
-#define L_gcov_merge_delta 1
-#define L_gcov_merge_icall_topn 1
-#define L_gcov_merge_dc 1
-#define L_gcov_merge_ior 1
-#define L_gcov_merge_reusedist 1
 
 #include "libgcov.h"
 #include "intl.h"
@@ -41,12 +33,12 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 #include "version.h"
 #include "demangle.h"
 
-extern gcov_type gcov_read_counter_mem();
-extern unsigned gcov_get_merge_weight();
+/* Borrowed from basic-block.h.  */
+#define RDIV(X,Y) (((X) + (Y) / 2) / (Y))
 
-/* We need the dumping and merge part of code in libgcov.  */
-#include "libgcov-driver.c"
-#include "libgcov-merge.c"
+extern gcov_position_t gcov_position();
+extern int gcov_is_error();
+extern size_t gcov_max_filename;
 
 /* Verbose mode for debug.  */
 static int verbose;
@@ -61,7 +53,11 @@ void gcov_set_verbose (void)
 
 #include "obstack.h"
 #include <unistd.h>
+#if !defined (_WIN32)
 #include <ftw.h>
+#else
+#include <windows.h>
+#endif
 
 static void tag_function (unsigned, unsigned);
 static void tag_blocks (unsigned, unsigned);
@@ -92,21 +88,16 @@ static int k_ctrs_types;
 /* The longest length of all the filenames.  */
 static int max_filename_len;
 
-/* Merge functions for counters.  */
+/* Merge functions for counters.  Similar to __gcov_dyn_ipa_merge_*
+   functions in dyn-ipa.c, which were derived from these, except
+   the versions in dyn-ipa are used when merging from another array.  */
+#define DEF_GCOV_COUNTER(COUNTER, NAME, FN_TYPE) __gcov_merge ## FN_TYPE,
 static gcov_merge_fn ctr_merge_functions[GCOV_COUNTERS] = {
-    __gcov_merge_add,
-    __gcov_merge_add,
-    __gcov_merge_add,
-    __gcov_merge_single,
-    __gcov_merge_delta,
-    __gcov_merge_single,
-    __gcov_merge_add,
-    __gcov_merge_ior,
-    __gcov_merge_icall_topn,
-    __gcov_merge_dc,
+#include "gcov-counter.def"
 };
+#undef DEF_GCOV_COUNTER
 
-/* Set the ctrs field in gcvo_fn_info object FN_INFO.  */
+/* Set the ctrs field in gcov_fn_info object FN_INFO.  */
 
 static void
 set_fn_ctrs (struct gcov_fn_info *fn_info)
@@ -127,12 +118,18 @@ set_fn_ctrs (struct gcov_fn_info *fn_info)
     gcc_assert (j == k_ctrs_types);
 }
 
+/* For each tag in gcda file, we have an entry here.
+   TAG is the tag value; NAME is the tag name; and
+   PROC is the handler function.  */
+
 typedef struct tag_format
 {
     unsigned tag;
     char const *name;
     void (*proc) (unsigned, unsigned);
 } tag_format_t;
+
+/* Handler table for various Tags.  */
 
 static const tag_format_t tag_table[] =
 {
@@ -179,7 +176,7 @@ tag_function (unsigned tag ATTRIBUTE_UNUSED, unsigned length ATTRIBUTE_UNUSED)
   num_fn_info++;
 
   if (verbose)
-    fprintf (stdout, "tag one function id=%d\n", curr_fn_info->ident);
+    fnotice (stdout, "tag one function id=%d\n", curr_fn_info->ident);
 }
 
 /* Handler for reading block tag.  */
@@ -187,7 +184,8 @@ tag_function (unsigned tag ATTRIBUTE_UNUSED, unsigned length ATTRIBUTE_UNUSED)
 static void
 tag_blocks (unsigned tag ATTRIBUTE_UNUSED, unsigned length ATTRIBUTE_UNUSED)
 {
-  gcc_assert (0);
+  /* TBD: gcov-tool currently does not handle gcno files. Assert here.  */
+  gcc_unreachable ();
 }
 
 /* Handler for reading flow arc tag.  */
@@ -195,7 +193,8 @@ tag_blocks (unsigned tag ATTRIBUTE_UNUSED, unsigned length ATTRIBUTE_UNUSED)
 static void
 tag_arcs (unsigned tag ATTRIBUTE_UNUSED, unsigned length ATTRIBUTE_UNUSED)
 {
-  gcc_assert (0);
+  /* TBD: gcov-tool currently does not handle gcno files. Assert here.  */
+  gcc_unreachable ();
 }
 
 /* Handler for reading line tag.  */
@@ -203,7 +202,8 @@ tag_arcs (unsigned tag ATTRIBUTE_UNUSED, unsigned length ATTRIBUTE_UNUSED)
 static void
 tag_lines (unsigned tag ATTRIBUTE_UNUSED, unsigned length ATTRIBUTE_UNUSED)
 {
-  gcc_assert (0);
+  /* TBD: gcov-tool currently does not handle gcno files. Assert here.  */
+  gcc_unreachable ();
 }
 
 /* Handler for reading counters array tag with value as TAG and length of LENGTH.  */
@@ -416,7 +416,7 @@ read_gcda_file (const char *filename)
 
   if (!gcov_open (filename))
     {
-      fprintf (stderr, "%s:cannot open\n", filename);
+      fnotice (stderr, "%s:cannot open\n", filename);
       return NULL;
     }
 
@@ -424,7 +424,7 @@ read_gcda_file (const char *filename)
   magic = gcov_read_unsigned ();
   if (magic != GCOV_DATA_MAGIC)
     {
-      fprintf (stderr, "%s:not a gcov data file\n", filename);
+      fnotice (stderr, "%s:not a gcov data file\n", filename);
       gcov_close ();
       return NULL;
     }
@@ -432,11 +432,7 @@ read_gcda_file (const char *filename)
   /* Read version.  */
   version = gcov_read_unsigned ();
   if (version != GCOV_VERSION)
-    {
-      fprintf (stderr, "%s:incorrect gcov version %d vs %d \n", filename, version, GCOV_VERSION);
-      gcov_close ();
-      return NULL;
-    }
+    warning (0, "%s:incorrect gcov version %d vs %d \n", filename, version, GCOV_VERSION);
 
   /* Instantiate a gcov_info object.  */
   curr_gcov_info = obj_info = (struct gcov_info *) xcalloc (sizeof (struct gcov_info) +
@@ -476,7 +472,7 @@ read_gcda_file (const char *filename)
 	{
 	  if (((mask & 0xff) != 0xff))
 	    {
-	      fprintf (stderr, "warning: %s:tag `%08x' is invalid\n", filename, tag);
+	      warning (0, "%s:tag `%x' is invalid\n", filename, tag);
 	      break;
 	    }
 	  tag_depth--;
@@ -491,7 +487,7 @@ read_gcda_file (const char *filename)
 	  if (depth && depth < tag_depth)
 	    {
 	      if (!GCOV_TAG_IS_SUBTAG (tags[depth - 1], tag))
-		fprintf (stderr, "warning: %s:tag `%08x' is incorrectly nested\n",
+		warning (0, "%s:tag `%x' is incorrectly nested\n",
 			filename, tag);
 	    }
 	  depth = tag_depth;
@@ -506,18 +502,18 @@ read_gcda_file (const char *filename)
 
 	  actual_length = gcov_position () - base;
 	  if (actual_length > length)
-	    fprintf (stderr,"warning: %s:record size mismatch %lu bytes overread\n",
+	    warning (0, "%s:record size mismatch %lu bytes overread\n",
 		    filename, actual_length - length);
 	  else if (length > actual_length)
-	    fprintf (stderr,"warning: %s:record size mismatch %lu bytes unread\n",
+	    warning (0, "%s:record size mismatch %lu bytes unread\n",
 		    filename, length - actual_length);
 	}
 
       gcov_sync (base, length);
       if ((error = gcov_is_error ()))
 	{
-	  fprintf (stderr,error < 0 ? "warning:%s:counter overflow at %lu\n" :
-		  "Warning:%s:read error at %lu\n", filename,
+	  warning (0, error < 0 ? "%s:counter overflow at %lu\n" :
+		                  "%s:read error at %lu\n", filename,
 		  (long unsigned) gcov_position ());
 	  break;
 	}
@@ -543,22 +539,14 @@ set_use_modu_list (void)
   flag_use_modu_list = 1;
 }
 
-
-/* This will be called by ftw(). It opens and read a gcda file FILENAME.
-   Return a non-zero value to stop the tree walk.  */
+/* Handler to open and read a gcda file FILENAME. */
 
 static int
-ftw_read_file (const char *filename,
-               const struct stat *status ATTRIBUTE_UNUSED,
-               int type)
+read_file_handler (const char *filename)
 {
   int filename_len;
   int suffix_len;
   struct gcov_info *obj_info;
-
-  /* Only read regular files.  */
-  if (type != FTW_F)
-    return 0;
 
   filename_len = strlen (filename);
   suffix_len = strlen (GCOV_DATA_SUFFIX);
@@ -569,10 +557,12 @@ ftw_read_file (const char *filename,
   if (strcmp(filename + filename_len - suffix_len, GCOV_DATA_SUFFIX))
     return 0;
 
-   if (verbose)
-    fprintf (stderr, "reading file: %s\n", filename);
+  if (verbose)
+    fnotice (stderr, "reading file: %s\n", filename);
 
   obj_info = read_gcda_file (filename);
+  if (!obj_info)
+    return 0;
 
   if (obj_info->mod_info)
     {
@@ -594,6 +584,69 @@ ftw_read_file (const char *filename,
 
   return 0;
 }
+
+
+#if !defined(_WIN32)
+/* This will be called by ftw(). It opens and reads a gcda file FILENAME.
+   Return a non-zero value to stop the tree walk.  */
+
+static int
+ftw_read_file (const char *filename,
+               const struct stat *status ATTRIBUTE_UNUSED,
+               int type)
+{
+  /* Only read regular files.  */
+  if (type != FTW_F)
+    return 0;
+
+  return read_file_handler (filename);
+}
+
+#else /* _WIN32 */
+
+/* Funtion to find all the gcda files recursively in DIR.  */
+static void
+myftw (char *dir, char* pattern, int (*handler)(const char *))
+{
+  char buffer[MAX_PATH];
+  WIN32_FIND_DATA filedata;
+  HANDLE ret;
+
+  /* Process the subdirectories.  */
+  sprintf (buffer, "%s\\*", dir);
+  ret = FindFirstFile (buffer, &filedata);
+  if(ret != INVALID_HANDLE_VALUE)
+  {
+    do
+    {
+      if(filedata.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+      {
+        if (filedata.cFileName[0] == '.')
+          continue;
+        sprintf (buffer, "%s\\%s", dir, filedata.cFileName);
+        myftw (buffer, pattern, handler);
+      }
+    } while(FindNextFile (ret, &filedata));
+    FindClose(ret);
+  }
+
+  /* Find the matching files.  */
+  sprintf (buffer, "%s\\%s", dir, pattern);
+  ret = FindFirstFile (buffer, &filedata);
+  if(ret != INVALID_HANDLE_VALUE)
+    {
+      do
+        {
+          if(!(filedata.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY))
+            {
+              /* Apply action.  */
+              (*handler) (buffer);
+            }
+        } while(FindNextFile (ret, &filedata));
+      FindClose (ret);
+    }
+}
+#endif
 
 /* Source profile directory name.  */
 
@@ -630,7 +683,7 @@ gcov_read_profile_dir (const char* dir_name, int recompute_summary ATTRIBUTE_UNU
 
   if (access (dir_name, R_OK) != 0)
     {
-      fprintf (stderr, "cannot access directory %s\n", dir_name);
+      fnotice (stderr, "cannot access directory %s\n", dir_name);
       return NULL;
     }
   pwd = getcwd (NULL, 0);
@@ -638,12 +691,16 @@ gcov_read_profile_dir (const char* dir_name, int recompute_summary ATTRIBUTE_UNU
   ret = chdir (dir_name);
   if (ret !=0)
     {
-      fprintf (stderr, "%s is not a directory\n", dir_name);
+      fnotice (stderr, "%s is not a directory\n", dir_name);
       return NULL;
     }
   source_profile_dir = getcwd (NULL, 0);
 
+#if !defined(_WIN32)
   ftw (".", ftw_read_file, 50);
+#else
+  myftw (".", "*.gcda",read_file_handler);
+#endif
   ret = chdir (pwd);
   free (pwd);
 
@@ -656,11 +713,20 @@ gcov_read_profile_dir (const char* dir_name, int recompute_summary ATTRIBUTE_UNU
   return gcov_info_head;;
 }
 
-/* This part of the code is to merge profile counters.  */
+/* This part of the code is to merge profile counters. These
+   variables are set in merge_wrapper and to be used by
+   global function gcov_read_counter_mem() and gcov_get_merge_weight.  */
 
+/* We save the counter value address to this variable.  */
 static gcov_type *gcov_value_buf;
+
+/* The number of counter values to be read by current merging.  */
 static gcov_unsigned_t gcov_value_buf_size;
+
+/* The index of counter values being read.  */
 static gcov_unsigned_t gcov_value_buf_pos;
+
+/* The weight of current merging.  */
 static unsigned gcov_merge_weight;
 
 /* Read a counter value from gcov_value_buf array.  */
@@ -735,7 +801,7 @@ gcov_merge (struct gcov_info *info1, struct gcov_info *info2, int w)
 
       if (gfi_ptr1->cfg_checksum != gfi_ptr2->cfg_checksum)
         {
-          fprintf (stderr, "in %s, cfg_checksum mismatch, skipping\n",
+          fnotice (stderr, "in %s, cfg_checksum mismatch, skipping\n",
                   info1->filename);
           has_mismatch = 1;
           continue;
@@ -798,7 +864,7 @@ find_match_gcov_info (struct gcov_info **array, int size, struct gcov_info *info
 
   if (ret && ret->n_functions != info->n_functions)
     {
-      fprintf (stderr, "mismatched profiles in %s (%d functions"
+      fnotice (stderr, "mismatched profiles in %s (%d functions"
                        " vs %d functions)\n",
                        ret->filename,
                        ret->n_functions,
@@ -808,7 +874,7 @@ find_match_gcov_info (struct gcov_info **array, int size, struct gcov_info *info
   return ret;
 }
 
-/* Merge the list of gcov_info list from SRC_PROFILE to TGT_PROFILE.
+/* Merge the list of gcov_info objects from SRC_PROFILE to TGT_PROFILE.
    Return 0 on success: without mismatch.
    Reutrn 1 on error.  */
 
@@ -900,6 +966,18 @@ __gcov_ior_counter_op (gcov_type *counters ATTRIBUTE_UNUSED,
   /* Do nothing.  */
 }
 
+/* Performing FN upon time-profile counters.  */
+
+static void
+__gcov_time_profile_counter_op (gcov_type *counters ATTRIBUTE_UNUSED,
+                                unsigned n_counters ATTRIBUTE_UNUSED,
+                                counter_op_fn fn ATTRIBUTE_UNUSED,
+                                void *data1 ATTRIBUTE_UNUSED,
+                                void *data2 ATTRIBUTE_UNUSED)
+{
+  /* Do nothing.  */
+}
+
 /* Performaing FN upon delta counters.  */
 
 static void
@@ -937,8 +1015,8 @@ __gcov_single_counter_op (gcov_type *counters, unsigned n_counters,
 /* Performing FN upon indirect-call profile counters.  */
 
 static void
-__gcov_icall_topn_op (gcov_type *counters, unsigned n_counters,
-                      counter_op_fn fn, void *data1, void *data2)
+__gcov_icall_topn_counter_op (gcov_type *counters, unsigned n_counters,
+                              counter_op_fn fn, void *data1, void *data2)
 {
   unsigned i;
 
@@ -956,8 +1034,8 @@ __gcov_icall_topn_op (gcov_type *counters, unsigned n_counters,
 /* Performing FN upon direct-call profile counters.  */
 
 static void
-__gcov_dc_op (gcov_type *counters, unsigned n_counters,
-              counter_op_fn fn, void *data1, void *data2)
+__gcov_dc_counter_op (gcov_type *counters, unsigned n_counters,
+                      counter_op_fn fn, void *data1, void *data2)
 {
   unsigned i;
 
@@ -983,26 +1061,20 @@ int_scale (gcov_type v, void *data1, void *data2)
 {
   int n = *(int *) data1;
   int d = *(int *) data2;
-  return (gcov_type) ((v / d) * n);
+  return (gcov_type) ( RDIV (v,d) * n);
 }
 
 /* Type of function used to process counters.  */
 typedef void (*gcov_counter_fn) (gcov_type *, gcov_unsigned_t,
-                          counter_op_fn, void *, void *); 
+                          counter_op_fn, void *, void *);
 
 /* Function array to process profile counters.  */
-static gcov_counter_fn ctr_functions[GCOV_COUNTERS] = { 
-    __gcov_add_counter_op,
-    __gcov_add_counter_op,
-    __gcov_add_counter_op,
-    __gcov_single_counter_op,
-    __gcov_delta_counter_op,
-    __gcov_single_counter_op,
-    __gcov_add_counter_op,
-    __gcov_ior_counter_op,
-    __gcov_icall_topn_op,
-    __gcov_dc_op,
+#define DEF_GCOV_COUNTER(COUNTER, NAME, FN_TYPE) \
+  __gcov ## FN_TYPE ## _counter_op,
+static gcov_counter_fn ctr_functions[GCOV_COUNTERS] = {
+#include "gcov-counter.def"
 };
+#undef DEF_GCOV_COUNTER
 
 /* Driver for scaling profile counters.  */
 
@@ -1013,7 +1085,7 @@ gcov_profile_scale (struct gcov_info *profile, float scale_factor, int n, int d)
   unsigned f_ix;
 
   if (verbose)
-    fprintf (stdout, "scale_factor is %f\n", scale_factor);
+    fnotice (stdout, "scale_factor is %f or %d/%d\n", scale_factor, n, d);
 
   /* Scaling the counters.  */
   for (gi_ptr = profile; gi_ptr; gi_ptr = gi_ptr->next)
@@ -1079,8 +1151,10 @@ gcov_profile_normalize (struct gcov_info *profile, gcov_type max_val)
       }
 
   scale_factor = (float)max_val / curr_max_val;
+#if !defined (_WIN32)
   if (verbose)
-    fprintf (stdout, "max_val is %lld\n", (long long) curr_max_val);
+    fnotice (stdout, "max_val is %lld\n", (long long) curr_max_val);
+#endif
 
   return gcov_profile_scale (profile, scale_factor, 0, 0);
 }

@@ -160,6 +160,12 @@ cat > sysinfo.c <<EOF
 #if defined(HAVE_SYS_INOTIFY_H)
 #include <sys/inotify.h>
 #endif
+#if defined(HAVE_NETINET_ICMP6_H)
+#include <netinet/icmp6.h>
+#endif
+#if defined(HAVE_SCHED_H)
+#include <sched.h>
+#endif
 
 /* Constants that may only be defined as expressions on some systems,
    expressions too complex for -fdump-go-spec to handle.  These are
@@ -173,6 +179,18 @@ enum {
 #endif
 #ifdef TIOCSCTTY
   TIOCSCTTY_val = TIOCSCTTY,
+#endif
+#ifdef TIOCGPTN
+  TIOCGPTN_val = TIOCGPTN,
+#endif
+#ifdef TIOCSPTLCK
+  TIOCSPTLCK_val = TIOCSPTLCK,
+#endif
+#ifdef TIOCGDEV
+  TIOCGDEV_val = TIOCGDEV,
+#endif
+#ifdef TIOCSIG
+  TIOCSIG_val = TIOCSIG,
 #endif
 };
 EOF
@@ -215,6 +233,11 @@ if ! grep '^const O_ASYNC' ${OUT} >/dev/null 2>&1; then
 fi
 if ! grep '^const O_CLOEXEC' ${OUT} >/dev/null 2>&1; then
   echo "const O_CLOEXEC = 0" >> ${OUT}
+fi
+
+# The os package requires F_DUPFD_CLOEXEC to be defined.
+if ! grep '^const F_DUPFD_CLOEXEC' ${OUT} >/dev/null 2>&1; then
+  echo "const F_DUPFD_CLOEXEC = 0" >> ${OUT}
 fi
 
 # These flags can be lost on i386 GNU/Linux when using
@@ -709,6 +732,18 @@ if ! grep 'type IPMreqn ' ${OUT} >/dev/null 2>&1; then
   echo 'type IPMreqn struct { Multiaddr [4]byte; Interface [4]byte; Ifindex int32 }' >> ${OUT}
 fi
 
+# The icmp6_filter struct.
+grep '^type _icmp6_filter ' gen-sysinfo.go | \
+    sed -e 's/_icmp6_filter/ICMPv6Filter/' \
+      -e 's/data/Data/' \
+      -e 's/filt/Filt/' \
+    >> ${OUT}
+
+# We need ICMPv6Filter to compile the syscall package.
+if ! grep 'type ICMPv6Filter ' ${OUT} > /dev/null 2>&1; then
+  echo 'type ICMPv6Filter struct { Data [8]uint32 }' >> ${OUT}
+fi
+
 # Try to guess the type to use for fd_set.
 fd_set=`grep '^type _fd_set ' gen-sysinfo.go || true`
 fds_bits_type="_C_long"
@@ -753,6 +788,26 @@ fi
 if ! grep '^const TIOCSCTTY' ${OUT} >/dev/null 2>&1; then
   if grep '^const _TIOCSCTTY_val' ${OUT} >/dev/null 2>&1; then
     echo 'const TIOCSCTTY = _TIOCSCTTY_val' >> ${OUT}
+  fi
+fi
+if ! grep '^const TIOCGPTN' ${OUT} >/dev/null 2>&1; then
+  if grep '^const _TIOCGPTN_val' ${OUT} >/dev/null 2>&1; then
+    echo 'const TIOCGPTN = _TIOCGPTN_val' >> ${OUT}
+  fi
+fi
+if ! grep '^const TIOCSPTLCK' ${OUT} >/dev/null 2>&1; then
+  if grep '^const _TIOCSPTLCK_val' ${OUT} >/dev/null 2>&1; then
+    echo 'const TIOCSPTLCK = _TIOCSPTLCK_val' >> ${OUT}
+  fi
+fi
+if ! grep '^const TIOCGDEV' ${OUT} >/dev/null 2>&1; then
+  if grep '^const _TIOCGDEV_val' ${OUT} >/dev/null 2>&1; then
+    echo 'const TIOCGDEV = _TIOCGDEV_val' >> ${OUT}
+  fi
+fi
+if ! grep '^const TIOCSIG' ${OUT} >/dev/null 2>&1; then
+  if grep '^const _TIOCSIG_val' ${OUT} >/dev/null 2>&1; then
+    echo 'const TIOCSIG = _TIOCSIG_val' >> ${OUT}
   fi
 fi
 
@@ -1110,6 +1165,10 @@ grep '^type _inotify_event ' gen-sysinfo.go | \
       -e 's/\[0\]byte/[0]int8/' \
     >> ${OUT}
 
+# The GNU/Linux CLONE flags.
+grep '^const _CLONE_' gen-sysinfo.go | \
+  sed -e 's/^\(const \)_\(CLONE_[^= ]*\)\(.*\)$/\1\2 = _\2/' >> ${OUT}
+
 # The Solaris 11 Update 1 _zone_net_addr_t struct.
 grep '^type _zone_net_addr_t ' gen-sysinfo.go | \
     sed -e 's/_in6_addr/[16]byte/' \
@@ -1121,7 +1180,8 @@ set cmsghdr Cmsghdr ip_mreq IPMreq ip_mreqn IPMreqn ipv6_mreq IPv6Mreq \
     in6_pktinfo Inet6Pktinfo inotify_event InotifyEvent linger Linger \
     msghdr Msghdr nlattr NlAttr nlmsgerr NlMsgerr nlmsghdr NlMsghdr \
     rtattr RtAttr rtgenmsg RtGenmsg rtmsg RtMsg rtnexthop RtNexthop \
-    sock_filter SockFilter sock_fprog SockFprog ucred Ucred
+    sock_filter SockFilter sock_fprog SockFprog ucred Ucred \
+    icmp6_filter ICMPv6Filter
 while test $# != 0; do
     nc=$1
     ngo=$2
@@ -1142,6 +1202,9 @@ if ! grep 'const SizeofIPv6Mreq ' ${OUT} >/dev/null 2>&1; then
 fi
 if ! grep 'const SizeofIPMreqn ' ${OUT} >/dev/null 2>&1; then
     echo 'const SizeofIPMreqn = 12' >> ${OUT}
+fi
+if ! grep 'const SizeofICMPv6Filter ' ${OUT} >/dev/null 2>&1; then
+    echo 'const SizeofICMPv6Filter = 32' >> ${OUT}
 fi
 
 exit $?

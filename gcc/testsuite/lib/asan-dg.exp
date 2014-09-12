@@ -1,4 +1,4 @@
-# Copyright (C) 2012-2013 Free Software Foundation, Inc.
+# Copyright (C) 2012-2014 Free Software Foundation, Inc.
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -41,6 +41,7 @@ proc asan_link_flags { paths } {
     if { $gccpath != "" } {
       if { [file exists "${gccpath}/libsanitizer/asan/.libs/libasan.a"]
 	   || [file exists "${gccpath}/libsanitizer/asan/.libs/libasan.${shlib_ext}"] } {
+	  append flags " -B${gccpath}/libsanitizer/ "
 	  append flags " -B${gccpath}/libsanitizer/asan/ "
 	  append flags " -L${gccpath}/libsanitizer/asan/.libs "
 	  append ld_library_path ":${gccpath}/libsanitizer/asan/.libs"
@@ -84,12 +85,12 @@ proc asan_init { args } {
     }
     if [info exists ALWAYS_CXXFLAGS] {
 	set ALWAYS_CXXFLAGS [concat "{ldflags=$link_flags}" $ALWAYS_CXXFLAGS]
-	set ALWAYS_CXXFLAGS [concat "{additional_flags=-fsanitize=address -g}" $ALWAYS_CXXFLAGS]
+	set ALWAYS_CXXFLAGS [concat "{additional_flags=-fsanitize=address -static-libasan -g}" $ALWAYS_CXXFLAGS]
     } else {
 	if [info exists TEST_ALWAYS_FLAGS] {
-	    set TEST_ALWAYS_FLAGS "$link_flags -fsanitize=address -g $TEST_ALWAYS_FLAGS"
+	    set TEST_ALWAYS_FLAGS "$link_flags -fsanitize=address  -static-libasan -g $TEST_ALWAYS_FLAGS"
 	} else {
-	    set TEST_ALWAYS_FLAGS "$link_flags -fsanitize=address -g"
+	    set TEST_ALWAYS_FLAGS "$link_flags -fsanitize=address -static-libasan -g"
 	}
     }
     if { $link_flags != "" } {
@@ -287,9 +288,10 @@ proc asan-gtest { args } {
 		    if { "$status" == "fail" } {
 			pass "$testname execution test"
 			if { ![regexp $regexpr ${output}] } {
-			    fail "$testname output pattern test, should match $regexpr"
+			    fail "$testname output pattern test"
+			    send_log "Output should match: $regexpr\n"
 			} else {
-			    pass "$testname output pattern test, $regexpr"
+			    pass "$testname output pattern test"
 			}
 		    } elseif { "$status" == "pass" } {
 			fail "$testname execution test"

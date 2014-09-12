@@ -1,6 +1,6 @@
 /* Command line option handling.  Code involving global state that
    should not be shared with the driver.
-   Copyright (C) 2002-2013 Free Software Foundation, Inc.
+   Copyright (C) 2002-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -24,8 +24,13 @@ along with GCC; see the file COPYING3.  If not see
 #include "diagnostic.h"
 #include "opts.h"
 #include "flags.h"
-#include "ggc.h"
 #include "tree.h" /* Required by langhooks.h.  */
+#include "basic-block.h"
+#include "tree-ssa-alias.h"
+#include "internal-fn.h"
+#include "gimple-expr.h"
+#include "is-a.h"
+#include "gimple.h"
 #include "langhooks.h"
 #include "tm.h" /* Required by rtl.h.  */
 #include "rtl.h"
@@ -38,7 +43,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "tree-pass.h"
 #include "params.h"
 #include "l-ipo.h"
-#include "xregex.h"
+#include "context.h"
 
 typedef const char *const_char_p; /* For DEF_VEC_P.  */
 
@@ -47,13 +52,6 @@ static vec<const_char_p> ignored_options;
 /* Input file names.  */
 const char **in_fnames;
 unsigned num_in_fnames;
-
-static struct reg_func_attr_patterns
-{
-  regex_t r;
-  const char *attribute;
-  struct reg_func_attr_patterns *next;
-} *reg_func_attr_patterns;
 
 /* Return a malloced slash-separated list of languages in MASK.  */
 
@@ -82,62 +80,6 @@ write_langs (unsigned int mask)
   result[len] = 0;
 
   return result;
-}
-
-/* Add strings like attribute_str:pattern... to attribute pattern list.  */
-
-static void
-add_attribute_pattern (const char *arg)
-{
-  char *tmp;
-  char *pattern_str;
-  struct reg_func_attr_patterns *one_pat;
-  int ec;
-  
-  /* We never free this string.  */
-  tmp = xstrdup (arg);
-
-  pattern_str = strchr (tmp, ':');
-  if (!pattern_str)
-    error ("invalid pattern in -ffunction-attribute-list option: %qs", tmp);
-
-  *pattern_str = '\0';
-  pattern_str ++;
-
-  one_pat = XCNEW (struct reg_func_attr_patterns);
-  one_pat->next = reg_func_attr_patterns;
-  one_pat->attribute = tmp;
-  reg_func_attr_patterns = one_pat;
-  if ((ec= regcomp (&one_pat->r, pattern_str, REG_EXTENDED|REG_NOSUB) != 0))
-    {
-      char err[100];
-      regerror (ec, &one_pat->r, err, 99);
-      error ("invalid pattern in -ffunction-attribute-list option: %qs: %qs",
-	     pattern_str, err);
-    }
-}
-
-/* Match FNDECL's name with user specified patterns, and add attributes
-   to FNDECL.  */
-
-void
-pattern_match_function_attributes (tree fndecl)
-{
-  const char *name;
-  struct reg_func_attr_patterns *one_pat;
-
-  if (!fndecl)
-    return;
-
-  if (!reg_func_attr_patterns)
-    return;
-
-  name = IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (fndecl));
-
-  for (one_pat = reg_func_attr_patterns; one_pat; one_pat = one_pat->next)
-    if (regexec (&one_pat->r, name, 0, NULL, 0) == 0)
-      decl_attributes (&fndecl, tree_cons (
-	  get_identifier (one_pat->attribute), NULL, NULL), 0);
 }
 
 /* Complain that switch DECODED does not apply to this front end (mask
@@ -337,40 +279,6 @@ read_cmdline_options (struct gcc_options *opts, struct gcc_options *opts_set,
     }
 }
 
-/* Handle -ftree-vectorizer-verbose=ARG by remapping it to -fopt-info.
-   It remaps the old verbosity values as following:
-
-   REPORT_NONE ==> No dump is output
-   REPORT_VECTORIZED_LOCATIONS ==> "-optimized"
-   REPORT_UNVECTORIZED_LOCATIONS ==> "-missed"
-
-   Any higher verbosity levels get mapped to "-all" flags.  */
-
-static void
-dump_remap_tree_vectorizer_verbose (const char *arg)
-{
-  int value = atoi (arg);
-  const char *remapped_opt_info = NULL;
-
-  switch (value)
-    {
-    case 0:
-      break;
-    case 1:
-      remapped_opt_info = "optimized";
-      break;
-    case 2:
-      remapped_opt_info = "missed";
-      break;
-    default:
-      remapped_opt_info = "all";
-      break;
-    }
-
-  if (remapped_opt_info)
-    opt_info_switch_p (remapped_opt_info);
-}
-
 /* Language mask determined at initialization.  */
 static unsigned int initial_lang_mask;
 
@@ -492,7 +400,7 @@ handle_common_deferred_options (void)
 	  break;
 
 	case OPT_fdump_:
-	  if (!dump_switch_p (opt->arg))
+	  if (!g->get_dumps ()->dump_switch_p (opt->arg))
 	    error ("unrecognized command line option %<-fdump-%s%>", opt->arg);
 	  break;
 
@@ -541,10 +449,6 @@ handle_common_deferred_options (void)
 	  set_random_seed (opt->arg);
 	  break;
 
-	case OPT_ffunction_attribute_list_:
-	  add_attribute_pattern (opt->arg);
-	  break;
-
 	case OPT_fstack_limit:
 	  /* The real switch is -fno-stack-limit.  */
 	  if (!opt->value)
@@ -564,10 +468,6 @@ handle_common_deferred_options (void)
 	case OPT_fstack_limit_symbol_:
 	  stack_limit_rtx = gen_rtx_SYMBOL_REF (Pmode, ggc_strdup (opt->arg));
 	  break;
-
-        case OPT_ftree_vectorizer_verbose_:
-	  dump_remap_tree_vectorizer_verbose (opt->arg);
-          break;
 
 	default:
 	  gcc_unreachable ();

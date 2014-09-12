@@ -37,9 +37,9 @@ int main ()
 /* { dg-final-use { scan-assembler "\.string \"1000\"" } } */
 /* { dg-final-use { scan-assembler "\.string \"Weight 1000 1000\"" } }  */
 /* { dg-final-use { scan-assembler "\.string \"Weight 1001 1001\"" } }  */
-/* { dg-final-use { scan-file linker.dump "Callgraph group : _Z3foov _Z3barv main\n" } }  */
-/* { dg-final-use { scan-file linker.dump ".text\.*\._Z9notcalledv entry count = 0 computed = 0 max count = 0" } }  */
-/* { dg-final-use { scan-file linker.dump "\.text\.*\._Z3foov.*\n\.text\.*\._Z3barv.*\n\.text\.*\.main.*\n" } }  */
-/* { dg-final-use { scan-file linker.dump "Moving . section\\(s\\) to new segment" } }  */
+/* Check if main is next to foo or bar  */
+/* { dg-final-use { scan-file linker.dump "Callgraph group : *\(_Z3foov main|main _Z3foov|_Z3barv main|main _Z3barv\).*\n" } }  */
+/* { dg-final-use { scan-file linker.dump ".text\..*\._Z9notcalledv entry count = 0 computed = 0 max count = 0" } }  */
+/* { dg-final-use { scan-file linker.dump "Moving .* section\\(s\\) to new segment" } }  */
 /* { dg-final-use { cleanup-saved-temps } }  */
 /* { dg-final-use { remove-build-file "linker.dump" } }  */

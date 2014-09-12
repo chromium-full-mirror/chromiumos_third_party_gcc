@@ -10,6 +10,20 @@
 #  XCFLAGS		Add extra compile flags to use.
 #  XLDFLAGS		Add extra link flags to use.
 
+# Optimize TLS usage by avoiding the overhead of dynamic allocation.
+if test $gcc_cv_have_tls = yes ; then
+  case "${target}" in
+
+    *-*-k*bsd*-gnu*)
+	;;
+
+    *-*-linux* | *-*-gnu*)
+	# Google ref b/15780253; b/6368405
+	# XCFLAGS="${XCFLAGS} -ftls-model=initial-exec"
+	;;
+  esac
+fi
+
 # Since we require POSIX threads, assume a POSIX system by default.
 config_path="posix"
 

@@ -1,5 +1,5 @@
 /* Definitions for Intel 386 running Linux-based GNU systems with ELF format.
-   Copyright (C) 2012-2013 Free Software Foundation, Inc.
+   Copyright (C) 2012-2014 Free Software Foundation, Inc.
    Contributed by Ilya Enkovich.
 
 This file is part of GCC.
@@ -27,10 +27,21 @@ along with GCC; see the file COPYING3.  If not see
     }                                          \
   while (0)
 
+#undef ANDROID_TARGET_CC1_SPEC
+#define ANDROID_TARGET_CC1_SPEC \
+  "%{m32:-mstackrealign -mssse3 -fno-short-enums}" \
+  "%{!m32:-msse4.2 -mpopcnt}"
+
 #undef CC1_SPEC
 #define CC1_SPEC \
   LINUX_OR_ANDROID_CC (GNU_USER_TARGET_CC1_SPEC, \
-		       GNU_USER_TARGET_CC1_SPEC " " ANDROID_CC1_SPEC)
+                       GNU_USER_TARGET_CC1_SPEC \
+                       ANDROID_TARGET_CC1_SPEC \
+                       " " \
+                       ANDROID_CC1_SPEC("-fPIC"))
+
+#define CC1PLUS_SPEC \
+  LINUX_OR_ANDROID_CC ("", ANDROID_CC1PLUS_SPEC)
 
 #undef	LINK_SPEC
 #define LINK_SPEC \
@@ -40,7 +51,7 @@ along with GCC; see the file COPYING3.  If not see
 #undef  LIB_SPEC
 #define LIB_SPEC \
   LINUX_OR_ANDROID_LD (GNU_USER_TARGET_LIB_SPEC, \
-		       GNU_USER_TARGET_LIB_SPEC " " ANDROID_LIB_SPEC)
+		    GNU_USER_TARGET_NO_PTHREADS_LIB_SPEC " " ANDROID_LIB_SPEC)
 
 #undef  STARTFILE_SPEC
 #define STARTFILE_SPEC \

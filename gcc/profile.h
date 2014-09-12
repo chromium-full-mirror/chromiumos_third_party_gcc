@@ -1,6 +1,6 @@
 /* Header file for minimum-cost maximal flow routines used to smooth basic
    block and edge frequency counts.
-   Copyright (C) 2008-2013 Free Software Foundation, Inc.
+   Copyright (C) 2008-2014 Free Software Foundation, Inc.
    Contributed by Paul Yuan (yingbo.com@gmail.com)
        and Vinodha Ramasamy (vinodha@google.com).
 
@@ -43,7 +43,7 @@ extern void mcf_smooth_cfg (void);
 
 extern gcov_type sum_edge_counts (vec<edge, va_gc> *edges);
 
-extern void init_node_map (void);
+extern void init_node_map (bool);
 extern void del_node_map (void);
 
 /* Implement sampling to avoid writing to edge counters very often.
@@ -52,8 +52,12 @@ extern void del_node_map (void);
    on 8 CPUs.  With sampling, the slowdown reduced to 2x.  */
 extern void add_sampling_to_edge_counters (void);
 
+extern void compute_working_sets (void);
 extern void get_working_sets (void);
-
 extern void add_working_set (gcov_working_set_t *);
+
+/* In predict.c.  */
+extern gcov_type get_hot_bb_threshold (void);
+extern void set_hot_bb_threshold (gcov_type);
 
 #endif /* PROFILE_H */

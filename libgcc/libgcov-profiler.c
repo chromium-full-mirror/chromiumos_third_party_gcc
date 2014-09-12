@@ -1,6 +1,6 @@
 /* Routines required for instrumenting a program.  */
 /* Compile this one with gcc.  */
-/* Copyright (C) 1989-2013 Free Software Foundation, Inc.
+/* Copyright (C) 1989-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -34,7 +34,7 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 void
 __gcov_interval_profiler (gcov_type *counters, gcov_type value,
-			  int start, unsigned steps)
+                          int start, unsigned steps)
 {
   gcov_type delta = value - start;
   if (delta < 0)
@@ -101,6 +101,7 @@ __gcov_one_value_profiler_body_atomic (gcov_type *counters, gcov_type value)
   GCOV_TYPE_ATOMIC_FETCH_ADD_FN (&counters[2], 1, MEMMODEL_RELAXED);
 }
 
+
 #ifdef L_gcov_one_value_profiler
 void
 __gcov_one_value_profiler (gcov_type *counters, gcov_type value)
@@ -114,9 +115,12 @@ __gcov_one_value_profiler_atomic (gcov_type *counters, gcov_type value)
   __gcov_one_value_profiler_body_atomic (counters, value);
 }
 
+
 #endif
 
 #ifdef L_gcov_indirect_call_profiler
+/* This function exist only for workaround of binutils bug 14342.
+   Once this compatibility hack is obsolette, it can be removed.  */
 
 /* By default, the C++ compiler will use function addresses in the
    vtable entries.  Setting TARGET_VTABLE_USES_DESCRIPTORS to nonzero
@@ -138,16 +142,17 @@ __gcov_one_value_profiler_atomic (gcov_type *counters, gcov_type value)
 /* Tries to determine the most common value among its inputs. */
 void
 __gcov_indirect_call_profiler (gcov_type* counter, gcov_type value,
-			       void* cur_func, void* callee_func)
+                               void* cur_func, void* callee_func)
 {
   /* If the C++ virtual tables contain function descriptors then one
      function may have multiple descriptors and we need to dereference
      the descriptors to see if they point to the same function.  */
   if (cur_func == callee_func
       || (VTABLE_USES_DESCRIPTORS && callee_func
-	  && *(void **) cur_func == *(void **) callee_func))
+          && *(void **) cur_func == *(void **) callee_func))
     __gcov_one_value_profiler_body (counter, value);
 }
+
 
 /* Atomic update version of __gcov_indirect_call_profiler().  */
 void
@@ -159,6 +164,67 @@ __gcov_indirect_call_profiler_atomic (gcov_type* counter, gcov_type value,
           && *(void **) cur_func == *(void **) callee_func))
     __gcov_one_value_profiler_body_atomic (counter, value);
 }
+
+
+#endif
+#ifdef L_gcov_indirect_call_profiler_v2
+
+/* These two variables are used to actually track caller and callee.  Keep
+   them in TLS memory so races are not common (they are written to often).
+   The variables are set directly by GCC instrumented code, so declaration
+   here must match one in tree-profile.c  */
+
+#if defined(HAVE_CC_TLS) && !defined (USE_EMUTLS)
+__thread
+#endif
+void * __gcov_indirect_call_callee;
+#if defined(HAVE_CC_TLS) && !defined (USE_EMUTLS)
+__thread
+#endif
+gcov_type * __gcov_indirect_call_counters;
+
+/* By default, the C++ compiler will use function addresses in the
+   vtable entries.  Setting TARGET_VTABLE_USES_DESCRIPTORS to nonzero
+   tells the compiler to use function descriptors instead.  The value
+   of this macro says how many words wide the descriptor is (normally 2),
+   but it may be dependent on target flags.  Since we do not have access
+   to the target flags here we just check to see if it is set and use
+   that to set VTABLE_USES_DESCRIPTORS to 0 or 1.
+
+   It is assumed that the address of a function descriptor may be treated
+   as a pointer to a function.  */
+
+#ifdef TARGET_VTABLE_USES_DESCRIPTORS
+#define VTABLE_USES_DESCRIPTORS 1
+#else
+#define VTABLE_USES_DESCRIPTORS 0
+#endif
+
+/* Tries to determine the most common value among its inputs. */
+void
+__gcov_indirect_call_profiler_v2 (gcov_type value, void* cur_func)
+{
+  /* If the C++ virtual tables contain function descriptors then one
+     function may have multiple descriptors and we need to dereference
+     the descriptors to see if they point to the same function.  */
+  if (cur_func == __gcov_indirect_call_callee
+      || (VTABLE_USES_DESCRIPTORS && __gcov_indirect_call_callee
+          && *(void **) cur_func == *(void **) __gcov_indirect_call_callee))
+    __gcov_one_value_profiler_body (__gcov_indirect_call_counters, value);
+}
+
+void
+__gcov_indirect_call_profiler_atomic_v2 (gcov_type value, void* cur_func)
+{
+  /* If the C++ virtual tables contain function descriptors then one
+     function may have multiple descriptors and we need to dereference
+     the descriptors to see if they point to the same function.  */
+  if (cur_func == __gcov_indirect_call_callee
+      || (VTABLE_USES_DESCRIPTORS && __gcov_indirect_call_callee
+	  && *(void **) cur_func == *(void **) __gcov_indirect_call_callee))
+    __gcov_one_value_profiler_body_atomic (__gcov_indirect_call_counters, value);
+}
+
 #endif
 
 #ifdef L_gcov_indirect_call_topn_profiler
@@ -214,14 +280,14 @@ __gcov_topn_value_profiler_body (gcov_type *counters, gcov_type value,
 
 #define GCOV_ICALL_COUNTER_CLEAR_THRESHOLD 3000
 
-   /* Too many evictions -- time to clear bottom entries to
+   /* Too many evictions -- time to clear bottom entries to 
       avoid hot values bumping each other out.  */
-   if ( !have_zero_count
+   if ( !have_zero_count 
         && ++*num_eviction >= GCOV_ICALL_COUNTER_CLEAR_THRESHOLD)
      {
        unsigned i, j;
        gcov_type *p, minv;
-       gcov_type* tmp_cnts
+       gcov_type* tmp_cnts 
            = (gcov_type *)alloca (topn_val * sizeof(gcov_type));
 
        *num_eviction = 0;
@@ -232,12 +298,12 @@ __gcov_topn_value_profiler_body (gcov_type *counters, gcov_type value,
        /* Find the largest topn_val values from the group of
           2*topn_val values and put them into tmp_cnts. */
 
-       for ( i = 0; i < 2 * topn_val; i += 2 )
+       for ( i = 0; i < 2 * topn_val; i += 2 ) 
          {
            p = 0;
-           for ( j = 0; j < topn_val; j++ )
+           for ( j = 0; j < topn_val; j++ ) 
              {
-               if ( !p || tmp_cnts[j] < *p )
+               if ( !p || tmp_cnts[j] < *p ) 
                   p = &tmp_cnts[j];
              }
             if ( value_array[i + 1] > *p )
@@ -253,7 +319,7 @@ __gcov_topn_value_profiler_body (gcov_type *counters, gcov_type value,
        /* Zero out low value entries  */
        for ( i = 0; i < 2 * topn_val; i += 2 )
          {
-           if (value_array[i + 1] < minv)
+           if (value_array[i + 1] < minv) 
              {
                value_array[i] = 0;
                value_array[i + 1] = 0;
@@ -262,19 +328,21 @@ __gcov_topn_value_profiler_body (gcov_type *counters, gcov_type value,
      }
 }
 
-/* Pointer to the indirect-call counters (per call-site counters).
-   Initialized by the caller.  */
-THREAD_PREFIX gcov_type *__gcov_indirect_call_topn_counters ATTRIBUTE_HIDDEN;
+#if defined(HAVE_CC_TLS) && !defined (USE_EMUTLS)
+__thread 
+#endif
+gcov_type *__gcov_indirect_call_topn_counters ATTRIBUTE_HIDDEN;
 
-/* Indirect call callee address.  */
-THREAD_PREFIX void *__gcov_indirect_call_topn_callee ATTRIBUTE_HIDDEN;
+#if defined(HAVE_CC_TLS) && !defined (USE_EMUTLS)
+__thread
+#endif
+void *__gcov_indirect_call_topn_callee ATTRIBUTE_HIDDEN;
 
 #ifdef TARGET_VTABLE_USES_DESCRIPTORS
 #define VTABLE_USES_DESCRIPTORS 1
 #else
 #define VTABLE_USES_DESCRIPTORS 0
 #endif
-
 void
 __gcov_indirect_call_topn_profiler (void *cur_func,
                                     void *cur_module_gcov_info,
@@ -289,7 +357,7 @@ __gcov_indirect_call_topn_profiler (void *cur_func,
       || (VTABLE_USES_DESCRIPTORS && callee_func
 	  && *(void **) cur_func == *(void **) callee_func))
     {
-      gcov_type global_id
+      gcov_type global_id 
           = ((struct gcov_info *) cur_module_gcov_info)->mod_info->ident;
       global_id = GEN_FUNC_GLOBAL_ID (global_id, cur_func_id);
       __gcov_topn_value_profiler_body (counter, global_id, GCOV_ICALL_TOPN_VAL);
@@ -300,18 +368,19 @@ __gcov_indirect_call_topn_profiler (void *cur_func,
 #endif
 
 #ifdef L_gcov_direct_call_profiler
-/* Pointer to the direct-call counters (per call-site counters).
-   Initialized by the caller.  */
-THREAD_PREFIX gcov_type *__gcov_direct_call_counters ATTRIBUTE_HIDDEN;
-
-/* Direct call callee address.  */
-THREAD_PREFIX void *__gcov_direct_call_callee ATTRIBUTE_HIDDEN;
-
+#if defined(HAVE_CC_TLS) && !defined (USE_EMUTLS)
+__thread
+#endif
+gcov_type *__gcov_direct_call_counters ATTRIBUTE_HIDDEN;
+#if defined(HAVE_CC_TLS) && !defined (USE_EMUTLS)
+__thread
+#endif
+void *__gcov_direct_call_callee ATTRIBUTE_HIDDEN;
 /* Direct call profiler. */
 void
 __gcov_direct_call_profiler (void *cur_func,
-			     void *cur_module_gcov_info,
-			     gcov_unsigned_t cur_func_id)
+           void *cur_module_gcov_info,
+           gcov_unsigned_t cur_func_id)
 {
   if (cur_func == __gcov_direct_call_callee)
     {
@@ -325,6 +394,21 @@ __gcov_direct_call_profiler (void *cur_func,
 }
 #endif
 
+
+#ifdef L_gcov_time_profiler
+
+/* Counter for first visit of each function.  */
+static gcov_type function_counter;
+
+/* Sets corresponding COUNTERS if there is no value.  */
+
+void
+__gcov_time_profiler (gcov_type* counters)
+{
+  if (!counters[0])
+    counters[0] = ++function_counter;
+}
+#endif
 
 #ifdef L_gcov_average_profiler
 /* Increase corresponding COUNTER by VALUE.  FIXME: Perhaps we want

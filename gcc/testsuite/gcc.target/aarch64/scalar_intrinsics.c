@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O2" } */
+/* { dg-options "-O2 -dp" } */
 
 #include <arm_neon.h>
 
@@ -30,6 +30,18 @@ test_vaddd_s64_2 (int64x1_t a, int64x1_t b, int64x1_t c, int64x1_t d)
 {
   return vqaddd_s64 (vaddd_s64 (vqaddd_s64 (a, b), vqaddd_s64 (c, d)),
 		     vqaddd_s64 (a, d));
+}
+
+/* { dg-final { scan-assembler-times "\\tabs\\td\[0-9\]+, d\[0-9\]+" 1 } } */
+
+int64x1_t
+test_vabs_s64 (int64x1_t a)
+{
+  uint64x1_t res;
+  force_simd (a);
+  res = vabs_s64 (a);
+  force_simd (res);
+  return res;
 }
 
 /* { dg-final { scan-assembler-times "\\tcmeq\\td\[0-9\]+, d\[0-9\]+, d\[0-9\]+" 1 } } */
@@ -181,60 +193,92 @@ test_vcltzd_s64 (int64x1_t a)
   return res;
 }
 
-/* { dg-final { scan-assembler-times "\\tdup\\tb\[0-9\]+, v\[0-9\]+\.b" 2 } } */
+/* { dg-final { scan-assembler-times "aarch64_get_lanev16qi" 2 } } */
 
 int8x1_t
 test_vdupb_lane_s8 (int8x16_t a)
 {
-  return vdupb_lane_s8 (a, 2);
+  int8x1_t res;
+  force_simd (a);
+  res = vdupb_laneq_s8 (a, 2);
+  force_simd (res);
+  return res;
 }
 
 uint8x1_t
 test_vdupb_lane_u8 (uint8x16_t a)
 {
-  return vdupb_lane_u8 (a, 2);
+  uint8x1_t res;
+  force_simd (a);
+  res = vdupb_laneq_u8 (a, 2);
+  force_simd (res);
+  return res;
 }
 
-/* { dg-final { scan-assembler-times "\\tdup\\th\[0-9\]+, v\[0-9\]+\.h" 2 } } */
+/* { dg-final { scan-assembler-times "aarch64_get_lanev8hi" 2 } } */
 
 int16x1_t
 test_vduph_lane_s16 (int16x8_t a)
 {
-  return vduph_lane_s16 (a, 2);
+  int16x1_t res;
+  force_simd (a);
+  res = vduph_laneq_s16 (a, 2);
+  force_simd (res);
+  return res;
 }
 
 uint16x1_t
 test_vduph_lane_u16 (uint16x8_t a)
 {
-  return vduph_lane_u16 (a, 2);
+  uint16x1_t res;
+  force_simd (a);
+  res = vduph_laneq_u16 (a, 2);
+  force_simd (res);
+  return res;
 }
 
-/* { dg-final { scan-assembler-times "\\tdup\\ts\[0-9\]+, v\[0-9\]+\.s" 2 } } */
+/* { dg-final { scan-assembler-times "aarch64_get_lanev4si" 2 } } */
 
 int32x1_t
 test_vdups_lane_s32 (int32x4_t a)
 {
-  return vdups_lane_s32 (a, 2);
+  int32x1_t res;
+  force_simd (a);
+  res = vdups_laneq_s32 (a, 2);
+  force_simd (res);
+  return res;
 }
 
 uint32x1_t
 test_vdups_lane_u32 (uint32x4_t a)
 {
-  return vdups_lane_u32 (a, 2);
+  uint32x1_t res;
+  force_simd (a);
+  res = vdups_laneq_u32 (a, 2);
+  force_simd (res);
+  return res;
 }
 
-/* { dg-final { scan-assembler-times "\\tdup\\td\[0-9\]+, v\[0-9\]+\.d" 2 } } */
+/* { dg-final { scan-assembler-times "aarch64_get_lanev2di" 2 } } */
 
 int64x1_t
 test_vdupd_lane_s64 (int64x2_t a)
 {
-  return vdupd_lane_s64 (a, 2);
+  int64x1_t res;
+  force_simd (a);
+  res = vdupd_laneq_s64 (a, 1);
+  force_simd (res);
+  return res;
 }
 
 uint64x1_t
 test_vdupd_lane_u64 (uint64x2_t a)
 {
-  return vdupd_lane_u64 (a, 2);
+  uint64x1_t res;
+  force_simd (a);
+  res = vdupd_laneq_u64 (a, 1);
+  force_simd (res);
+  return res;
 }
 
 /* { dg-final { scan-assembler-times "\\tcmtst\\td\[0-9\]+, d\[0-9\]+, d\[0-9\]+" 2 } } */
@@ -343,7 +387,7 @@ test_vqdmlalh_s16 (int32x1_t a, int16x1_t b, int16x1_t c)
 /* { dg-final { scan-assembler-times "\\tsqdmlal\\ts\[0-9\]+, h\[0-9\]+, v" 1 } } */
 
 int32x1_t
-test_vqdmlalh_lane_s16 (int32x1_t a, int16x1_t b, int16x8_t c)
+test_vqdmlalh_lane_s16 (int32x1_t a, int16x1_t b, int16x4_t c)
 {
   return vqdmlalh_lane_s16 (a, b, c, 3);
 }
@@ -359,7 +403,7 @@ test_vqdmlals_s32 (int64x1_t a, int32x1_t b, int32x1_t c)
 /* { dg-final { scan-assembler-times "\\tsqdmlal\\td\[0-9\]+, s\[0-9\]+, v" 1 } } */
 
 int64x1_t
-test_vqdmlals_lane_s32 (int64x1_t a, int32x1_t b, int32x4_t c)
+test_vqdmlals_lane_s32 (int64x1_t a, int32x1_t b, int32x2_t c)
 {
   return vqdmlals_lane_s32 (a, b, c, 1);
 }
@@ -375,7 +419,7 @@ test_vqdmlslh_s16 (int32x1_t a, int16x1_t b, int16x1_t c)
 /* { dg-final { scan-assembler-times "\\tsqdmlsl\\ts\[0-9\]+, h\[0-9\]+, v" 1 } } */
 
 int32x1_t
-test_vqdmlslh_lane_s16 (int32x1_t a, int16x1_t b, int16x8_t c)
+test_vqdmlslh_lane_s16 (int32x1_t a, int16x1_t b, int16x4_t c)
 {
   return vqdmlslh_lane_s16 (a, b, c, 3);
 }
@@ -391,7 +435,7 @@ test_vqdmlsls_s32 (int64x1_t a, int32x1_t b, int32x1_t c)
 /* { dg-final { scan-assembler-times "\\tsqdmlsl\\td\[0-9\]+, s\[0-9\]+, v" 1 } } */
 
 int64x1_t
-test_vqdmlsls_lane_s32 (int64x1_t a, int32x1_t b, int32x4_t c)
+test_vqdmlsls_lane_s32 (int64x1_t a, int32x1_t b, int32x2_t c)
 {
   return vqdmlsls_lane_s32 (a, b, c, 1);
 }
@@ -407,7 +451,7 @@ test_vqdmulhh_s16 (int16x1_t a, int16x1_t b)
 /* { dg-final { scan-assembler-times "\\tsqdmulh\\th\[0-9\]+, h\[0-9\]+, v" 1 } } */
 
 int16x1_t
-test_vqdmulhh_lane_s16 (int16x1_t a, int16x8_t b)
+test_vqdmulhh_lane_s16 (int16x1_t a, int16x4_t b)
 {
   return vqdmulhh_lane_s16 (a, b, 3);
 }
@@ -423,9 +467,9 @@ test_vqdmulhs_s32 (int32x1_t a, int32x1_t b)
 /* { dg-final { scan-assembler-times "\\tsqdmulh\\ts\[0-9\]+, s\[0-9\]+, v" 1 } } */
 
 int32x1_t
-test_vqdmulhs_lane_s32 (int32x1_t a, int32x4_t b)
+test_vqdmulhs_lane_s32 (int32x1_t a, int32x2_t b)
 {
-  return vqdmulhs_lane_s32 (a, b, 3);
+  return vqdmulhs_lane_s32 (a, b, 1);
 }
 
 /* { dg-final { scan-assembler-times "\\tsqdmull\\ts\[0-9\]+, h\[0-9\]+, h\[0-9\]+" 1 } } */
@@ -439,7 +483,7 @@ test_vqdmullh_s16 (int16x1_t a, int16x1_t b)
 /* { dg-final { scan-assembler-times "\\tsqdmull\\ts\[0-9\]+, h\[0-9\]+, v" 1 } } */
 
 int32x1_t
-test_vqdmullh_lane_s16 (int16x1_t a, int16x8_t b)
+test_vqdmullh_lane_s16 (int16x1_t a, int16x4_t b)
 {
   return vqdmullh_lane_s16 (a, b, 3);
 }
@@ -455,7 +499,7 @@ test_vqdmulls_s32 (int32x1_t a, int32x1_t b)
 /* { dg-final { scan-assembler-times "\\tsqdmull\\td\[0-9\]+, s\[0-9\]+, v" 1 } } */
 
 int64x1_t
-test_vqdmulls_lane_s32 (int32x1_t a, int32x4_t b)
+test_vqdmulls_lane_s32 (int32x1_t a, int32x2_t b)
 {
   return vqdmulls_lane_s32 (a, b, 1);
 }
@@ -471,9 +515,9 @@ test_vqrdmulhh_s16 (int16x1_t a, int16x1_t b)
 /* { dg-final { scan-assembler-times "\\tsqrdmulh\\th\[0-9\]+, h\[0-9\]+, v" 1 } } */
 
 int16x1_t
-test_vqrdmulhh_lane_s16 (int16x1_t a, int16x8_t b)
+test_vqrdmulhh_lane_s16 (int16x1_t a, int16x4_t b)
 {
-  return vqrdmulhh_lane_s16 (a, b, 6);
+  return vqrdmulhh_lane_s16 (a, b, 3);
 }
 
 /* { dg-final { scan-assembler-times "\\tsqrdmulh\\ts\[0-9\]+, s\[0-9\]+, s\[0-9\]+" 1 } } */
@@ -487,9 +531,9 @@ test_vqrdmulhs_s32 (int32x1_t a, int32x1_t b)
 /* { dg-final { scan-assembler-times "\\tsqrdmulh\\ts\[0-9\]+, s\[0-9\]+, v" 1 } } */
 
 int32x1_t
-test_vqrdmulhs_lane_s32 (int32x1_t a, int32x4_t b)
+test_vqrdmulhs_lane_s32 (int32x1_t a, int32x2_t b)
 {
-  return vqrdmulhs_lane_s32 (a, b, 2);
+  return vqrdmulhs_lane_s32 (a, b, 1);
 }
 
 /* { dg-final { scan-assembler-times "\\tsuqadd\\tb\[0-9\]+" 1 } } */

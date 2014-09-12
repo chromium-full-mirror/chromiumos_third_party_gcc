@@ -1,6 +1,6 @@
 /* Routines required for instrumenting a program.  */
 /* Compile this one with gcc.  */
-/* Copyright (C) 1989-2013 Free Software Foundation, Inc.
+/* Copyright (C) 1989-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -30,40 +30,20 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
 
 #ifdef L_gcov_merge_add
 void __gcov_merge_add (gcov_type *counters  __attribute__ ((unused)),
-		       unsigned n_counters __attribute__ ((unused))) {}
+                       unsigned n_counters __attribute__ ((unused))) {}
 #endif
 
 #ifdef L_gcov_merge_single
 void __gcov_merge_single (gcov_type *counters  __attribute__ ((unused)),
-			  unsigned n_counters __attribute__ ((unused))) {}
+                          unsigned n_counters __attribute__ ((unused))) {}
 #endif
 
 #ifdef L_gcov_merge_delta
 void __gcov_merge_delta (gcov_type *counters  __attribute__ ((unused)),
-			 unsigned n_counters __attribute__ ((unused))) {}
+                         unsigned n_counters __attribute__ ((unused))) {}
 #endif
 
 #else
-
-static inline gcov_type
-gcov_get_counter (void)
-{
-#ifndef IN_GCOV_TOOL
-  return gcov_read_counter ();
-#else
-  return gcov_read_counter_mem () * gcov_get_merge_weight ();
-#endif
-}
-
-static inline gcov_type
-gcov_get_counter_target (void)
-{
-#ifndef IN_GCOV_TOOL
-  return gcov_read_counter ();
-#else
-  return gcov_read_counter_mem ();
-#endif
-}
 
 #ifdef L_gcov_merge_add
 /* The profile merging function that just adds the counters.  It is given
@@ -85,9 +65,10 @@ void
 __gcov_merge_ior (gcov_type *counters, unsigned n_counters)
 {
   for (; n_counters; counters++, n_counters--)
-    *counters |= gcov_get_counter ();
+    *counters |= gcov_get_counter_target ();
 }
 #endif
+
 
 #ifdef L_gcov_merge_dc
 
@@ -127,7 +108,10 @@ __gcov_merge_dc (gcov_type *counters, unsigned n_counters)
           else if (__gcov_is_gid_insane (global_id))
             global_id = counters[i];
 
-          gcc_assert (counters[i] == global_id);
+          /* In the case of inconsistency, use the src's target.  */
+          if (counters[i] != global_id)
+            fprintf (stderr, "Warning: Inconsistent call targets in"
+                     " direct-call profile.\n");
         }
       else if (global_id)
 	counters[i] = global_id;
@@ -148,6 +132,7 @@ __gcov_merge_dc (gcov_type *counters, unsigned n_counters)
 }
 #endif
 
+
 #ifdef L_gcov_merge_icall_topn
 /* The profile merging function used for merging indirect call counts
    This function is given array COUNTERS of N_COUNTERS old counters and it
@@ -163,7 +148,7 @@ __gcov_merge_icall_topn (gcov_type *counters, unsigned n_counters)
     {
       gcov_type *value_array = &counters[i + 1];
       unsigned tmp_size = 2 * (GCOV_ICALL_TOPN_NCOUNTS - 1);
-      gcov_type *tmp_array
+      gcov_type *tmp_array 
           = (gcov_type *) alloca (tmp_size * sizeof (gcov_type));
 
       for (j = 0; j < tmp_size; j++)
@@ -212,6 +197,26 @@ __gcov_merge_icall_topn (gcov_type *counters, unsigned n_counters)
 #endif
 
 
+#ifdef L_gcov_merge_time_profile
+/* Time profiles are merged so that minimum from all valid (greater than zero)
+   is stored. There could be a fork that creates new counters. To have
+   the profile stable, we chosen to pick the smallest function visit time.  */
+void
+__gcov_merge_time_profile (gcov_type *counters, unsigned n_counters)
+{
+  unsigned int i;
+  gcov_type value;
+
+  for (i = 0; i < n_counters; i++)
+    {
+      value = gcov_get_counter_target ();
+
+      if (value && (!counters[i] || value < counters[i]))
+        counters[i] = value;
+    }
+}
+#endif /* L_gcov_merge_time_profile */
+
 #ifdef L_gcov_merge_single
 /* The profile merging function for choosing the most common value.
    It is given an array COUNTERS of N_COUNTERS old counters and it
@@ -237,14 +242,14 @@ __gcov_merge_single (gcov_type *counters, unsigned n_counters)
       all = gcov_get_counter ();
 
       if (counters[0] == value)
-	counters[1] += counter;
+        counters[1] += counter;
       else if (counter > counters[1])
-	{
-	  counters[0] = value;
-	  counters[1] = counter - counters[1];
-	}
+        {
+          counters[0] = value;
+          counters[1] = counter - counters[1];
+        }
       else
-	counters[1] -= counter;
+        counters[1] -= counter;
       counters[2] += all;
     }
 }
@@ -272,19 +277,19 @@ __gcov_merge_delta (gcov_type *counters, unsigned n_counters)
   for (i = 0; i < n_measures; i++, counters += 4)
     {
       /* last = */ gcov_get_counter ();
-      value = gcov_get_counter_target  ();
+      value = gcov_get_counter_target ();
       counter = gcov_get_counter ();
       all = gcov_get_counter ();
 
       if (counters[1] == value)
-	counters[2] += counter;
+        counters[2] += counter;
       else if (counter > counters[2])
-	{
-	  counters[1] = value;
-	  counters[2] = counter - counters[2];
-	}
+        {
+          counters[1] = value;
+          counters[2] = counter - counters[2];
+        }
       else
-	counters[2] -= counter;
+        counters[2] -= counter;
       counters[3] += all;
     }
 }

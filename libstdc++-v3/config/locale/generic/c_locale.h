@@ -1,6 +1,6 @@
 // Wrapper for underlying C-language localization -*- C++ -*-
 
-// Copyright (C) 2001-2013 Free Software Foundation, Inc.
+// Copyright (C) 2001-2014 Free Software Foundation, Inc.
 //
 // This file is part of the GNU ISO C++ Library.  This library is free
 // software; you can redistribute it and/or modify it under the
@@ -59,13 +59,20 @@ _GLIBCXX_BEGIN_NAMESPACE_VERSION
   {
     char* __old = std::setlocale(LC_NUMERIC, 0);
     char* __sav = 0;
-    if (__builtin_strcmp(__old, "C"))
-      {
-	const size_t __len = __builtin_strlen(__old) + 1;
-	__sav = new char[__len];
-	__builtin_memcpy(__sav, __old, __len);
-	std::setlocale(LC_NUMERIC, "C");
+#if defined (__ANDROID__)
+    if (__old)
+      { 
+#endif
+        if (__builtin_strcmp(__old, "C"))
+          {
+            const size_t __len = __builtin_strlen(__old) + 1;
+            __sav = new char[__len];
+            __builtin_memcpy(__sav, __old, __len);
+            std::setlocale(LC_NUMERIC, "C");
+          }
+#if defined (__ANDROID__)
       }
+#endif
 
     __builtin_va_list __args;
     __builtin_va_start(__args, __fmt);

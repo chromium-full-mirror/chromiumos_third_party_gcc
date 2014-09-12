@@ -8,7 +8,8 @@
 //
 // { dg-final { scan-assembler "DIE \\(\[^\n\]*\\) DW_TAG_type_unit" } }
 //
-// Check that func is declared exactly once in the debug info.
+// Check that func is declared exactly once in the debug info (in the
+// compile unit).
 //
 // { dg-final { scan-assembler-times "\\.ascii \"func\\\\0\"\[^\n\]*DW_AT_name" 1 } }
 //

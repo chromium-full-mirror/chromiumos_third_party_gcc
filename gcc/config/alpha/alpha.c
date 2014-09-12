@@ -1,5 +1,5 @@
 /* Subroutines used for code generation on the DEC Alpha.
-   Copyright (C) 1992-2013 Free Software Foundation, Inc.
+   Copyright (C) 1992-2014 Free Software Foundation, Inc.
    Contributed by Richard Kenner (kenner@vlsi1.ultra.nyu.edu)
 
 This file is part of GCC.
@@ -25,6 +25,9 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm.h"
 #include "rtl.h"
 #include "tree.h"
+#include "stor-layout.h"
+#include "calls.h"
+#include "varasm.h"
 #include "regs.h"
 #include "hard-reg-set.h"
 #include "insn-config.h"
@@ -48,8 +51,22 @@ along with GCC; see the file COPYING3.  If not see
 #include "debug.h"
 #include "langhooks.h"
 #include "splay-tree.h"
+#include "pointer-set.h"
+#include "hash-table.h"
+#include "vec.h"
+#include "basic-block.h"
+#include "tree-ssa-alias.h"
+#include "internal-fn.h"
+#include "gimple-fold.h"
+#include "tree-eh.h"
+#include "gimple-expr.h"
+#include "is-a.h"
 #include "gimple.h"
-#include "tree-flow.h"
+#include "gimple-iterator.h"
+#include "gimplify.h"
+#include "gimple-ssa.h"
+#include "stringpool.h"
+#include "tree-ssanames.h"
 #include "tree-stdarg.h"
 #include "tm-constrs.h"
 #include "df.h"
@@ -4227,12 +4244,12 @@ alpha_expand_builtin_vector_binop (rtx (*gen) (rtx, rtx, rtx),
 static void
 emit_unlikely_jump (rtx cond, rtx label)
 {
-  rtx very_unlikely = GEN_INT (REG_BR_PROB_BASE / 100 - 1);
+  int very_unlikely = REG_BR_PROB_BASE / 100 - 1;
   rtx x;
 
   x = gen_rtx_IF_THEN_ELSE (VOIDmode, cond, label, pc_rtx);
   x = emit_jump_insn (gen_rtx_SET (VOIDmode, pc_rtx, x));
-  add_reg_note (x, REG_BR_PROB, very_unlikely);
+  add_int_reg_note (x, REG_BR_PROB, very_unlikely);
 }
 
 /* A subroutine of the atomic operation splitters.  Emit a load-locked
@@ -4829,7 +4846,8 @@ alpha_gp_save_rtx (void)
 	 label.  Emit the sequence properly on the edge.  We are only
 	 invoked from dw2_build_landing_pads and finish_eh_generation
 	 will call commit_edge_insertions thanks to a kludge.  */
-      insert_insn_on_edge (seq, single_succ_edge (ENTRY_BLOCK_PTR));
+      insert_insn_on_edge (seq,
+			   single_succ_edge (ENTRY_BLOCK_PTR_FOR_FN (cfun)));
 
       cfun->machine->gp_save_rtx = m;
     }
@@ -5858,7 +5876,7 @@ va_list_skip_additions (tree lhs)
       if (!CONVERT_EXPR_CODE_P (code)
 	  && ((code != PLUS_EXPR && code != POINTER_PLUS_EXPR)
 	      || TREE_CODE (gimple_assign_rhs2 (stmt)) != INTEGER_CST
-	      || !host_integerp (gimple_assign_rhs2 (stmt), 1)))
+	      || !tree_fits_uhwi_p (gimple_assign_rhs2 (stmt))))
 	return stmt;
 
       lhs = gimple_assign_rhs1 (stmt);
@@ -5984,10 +6002,10 @@ alpha_stdarg_optimize_hook (struct stdarg_info *si, const_gimple stmt)
 	  else
 	    goto escapes;
 
-	  if (!host_integerp (gimple_assign_rhs2 (arg2_stmt), 0))
+	  if (!tree_fits_shwi_p (gimple_assign_rhs2 (arg2_stmt)))
 	    goto escapes;
 
-	  sub = tree_low_cst (gimple_assign_rhs2 (arg2_stmt), 0);
+	  sub = tree_to_shwi (gimple_assign_rhs2 (arg2_stmt));
 	  if (code2 == MINUS_EXPR)
 	    sub = -sub;
 	  if (sub < -48 || sub > -32)
@@ -7025,9 +7043,6 @@ alpha_fold_builtin (tree fndecl, int n_args, tree *op,
     case ALPHA_BUILTIN_MSKQH:
       return alpha_fold_builtin_mskxx (op, opint, op_const, 0xff, true);
 
-    case ALPHA_BUILTIN_UMULH:
-      return fold_build2 (MULT_HIGHPART_EXPR, alpha_dimode_u, op[0], op[1]);
-
     case ALPHA_BUILTIN_ZAP:
       opint[1] ^= 0xff;
       /* FALLTHRU */
@@ -7076,6 +7091,49 @@ alpha_fold_builtin (tree fndecl, int n_args, tree *op,
     default:
       return NULL;
     }
+}
+
+bool
+alpha_gimple_fold_builtin (gimple_stmt_iterator *gsi)
+{
+  bool changed = false;
+  gimple stmt = gsi_stmt (*gsi);
+  tree call = gimple_call_fn (stmt);
+  gimple new_stmt = NULL;
+
+  if (call)
+    {
+      tree fndecl = gimple_call_fndecl (stmt);
+
+      if (fndecl)
+	{
+	  tree arg0, arg1;
+
+	  switch (DECL_FUNCTION_CODE (fndecl))
+	    {
+	    case ALPHA_BUILTIN_UMULH:
+	      arg0 = gimple_call_arg (stmt, 0);
+	      arg1 = gimple_call_arg (stmt, 1);
+
+	      new_stmt
+		= gimple_build_assign_with_ops (MULT_HIGHPART_EXPR,
+						gimple_call_lhs (stmt),
+						arg0,
+						arg1);
+	      break;
+	    default:
+	      break;
+	    }
+	}
+    }
+
+  if (new_stmt)
+    {
+      gsi_replace (gsi, new_stmt, true);
+      changed = true;
+    }
+
+  return changed;
 }
 
 /* This page contains routines that are used to determine what the function
@@ -7452,7 +7510,6 @@ alpha_does_function_need_gp (void)
 
   for (; insn; insn = NEXT_INSN (insn))
     if (NONDEBUG_INSN_P (insn)
-	&& ! JUMP_TABLE_DATA_P (insn)
 	&& GET_CODE (PATTERN (insn)) != USE
 	&& GET_CODE (PATTERN (insn)) != CLOBBER
 	&& get_attr_usegp (insn))
@@ -8658,6 +8715,11 @@ alpha_handle_trap_shadows (void)
 			}
 		      break;
 
+		    case BARRIER:
+		      /* __builtin_unreachable can expand to no code at all,
+			 leaving (barrier) RTXes in the instruction stream.  */
+		      goto close_shadow_notrapb;
+
 		    case JUMP_INSN:
 		    case CALL_INSN:
 		    case CODE_LABEL:
@@ -8673,6 +8735,7 @@ alpha_handle_trap_shadows (void)
 		  n = emit_insn_before (gen_trapb (), i);
 		  PUT_MODE (n, TImode);
 		  PUT_MODE (i, TImode);
+		close_shadow_notrapb:
 		  trap_pending = 0;
 		  shadow.used.i = 0;
 		  shadow.used.fp = 0;
@@ -9774,6 +9837,8 @@ alpha_canonicalize_comparison (int *code, rtx *op0, rtx *op1,
 #define TARGET_EXPAND_BUILTIN alpha_expand_builtin
 #undef  TARGET_FOLD_BUILTIN
 #define TARGET_FOLD_BUILTIN alpha_fold_builtin
+#undef  TARGET_GIMPLE_FOLD_BUILTIN
+#define TARGET_GIMPLE_FOLD_BUILTIN alpha_gimple_fold_builtin
 
 #undef TARGET_FUNCTION_OK_FOR_SIBCALL
 #define TARGET_FUNCTION_OK_FOR_SIBCALL alpha_function_ok_for_sibcall

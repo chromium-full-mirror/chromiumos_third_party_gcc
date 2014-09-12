@@ -1,5 +1,5 @@
 /* Convert RTL to assembler code and output it, for GNU compiler.
-   Copyright (C) 1987-2013 Free Software Foundation, Inc.
+   Copyright (C) 1987-2014 Free Software Foundation, Inc.
 
 This file is part of GCC.
 
@@ -48,6 +48,7 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm.h"
 
 #include "tree.h"
+#include "varasm.h"
 #include "rtl.h"
 #include "tm_p.h"
 #include "regs.h"
@@ -70,14 +71,15 @@ along with GCC; see the file COPYING3.  If not see
 #include "debug.h"
 #include "expr.h"
 #include "tree-pass.h"
-#include "tree-flow.h"
 #include "cgraph.h"
+#include "tree-ssa.h"
 #include "coverage.h"
 #include "df.h"
 #include "ggc.h"
 #include "cfgloop.h"
 #include "params.h"
 #include "tree-pretty-print.h" /* for dump_function_header */
+#include "asan.h"
 
 #ifdef XCOFF_DEBUGGING_INFO
 #include "xcoffout.h"		/* Needed for external data
@@ -110,9 +112,8 @@ along with GCC; see the file COPYING3.  If not see
 #endif
 
 /* Bitflags used by final_scan_insn.  */
-#define SEEN_BB		1
-#define SEEN_NOTE	2
-#define SEEN_EMITTED	4
+#define SEEN_NOTE	1
+#define SEEN_EMITTED	2
 
 /* Last insn processed by final_scan_insn.  */
 static rtx debug_insn;
@@ -392,18 +393,8 @@ get_attr_length_1 (rtx insn, int (*fallback_fn) (rtx))
 	return 0;
 
       case CALL_INSN:
-	length = fallback_fn (insn);
-	break;
-
       case JUMP_INSN:
-	body = PATTERN (insn);
-	if (GET_CODE (body) == ADDR_VEC || GET_CODE (body) == ADDR_DIFF_VEC)
-	  {
-	    /* Alignment is machine-dependent and should be handled by
-	       ADDR_VEC_ALIGN.  */
-	  }
-	else
-	  length = fallback_fn (insn);
+	length = fallback_fn (insn);
 	break;
 
       case INSN:
@@ -709,14 +700,14 @@ compute_alignments (void)
       flow_loops_dump (dump_file, NULL, 1);
     }
   loop_optimizer_init (AVOID_CFG_MODIFICATIONS);
-  FOR_EACH_BB (bb)
+  FOR_EACH_BB_FN (bb, cfun)
     if (bb->frequency > freq_max)
       freq_max = bb->frequency;
   freq_threshold = freq_max / PARAM_VALUE (PARAM_ALIGN_THRESHOLD);
 
   if (dump_file)
-    fprintf(dump_file, "freq_max: %i\n",freq_max);
-  FOR_EACH_BB (bb)
+    fprintf (dump_file, "freq_max: %i\n",freq_max);
+  FOR_EACH_BB_FN (bb, cfun)
     {
       rtx label = BB_HEAD (bb);
       int fallthru_frequency = 0, branch_frequency = 0, has_fallthru = 0;
@@ -727,9 +718,10 @@ compute_alignments (void)
 	  || optimize_bb_for_size_p (bb))
 	{
 	  if (dump_file)
-	    fprintf(dump_file, "BB %4i freq %4i loop %2i loop_depth %2i skipped.\n",
-		    bb->index, bb->frequency, bb->loop_father->num,
-		    bb_loop_depth (bb));
+	    fprintf (dump_file,
+		     "BB %4i freq %4i loop %2i loop_depth %2i skipped.\n",
+		     bb->index, bb->frequency, bb->loop_father->num,
+		     bb_loop_depth (bb));
 	  continue;
 	}
       max_log = LABEL_ALIGN (label);
@@ -744,10 +736,11 @@ compute_alignments (void)
 	}
       if (dump_file)
 	{
-	  fprintf(dump_file, "BB %4i freq %4i loop %2i loop_depth %2i fall %4i branch %4i",
-		  bb->index, bb->frequency, bb->loop_father->num,
-		  bb_loop_depth (bb),
-		  fallthru_frequency, branch_frequency);
+	  fprintf (dump_file, "BB %4i freq %4i loop %2i loop_depth"
+		   " %2i fall %4i branch %4i",
+		   bb->index, bb->frequency, bb->loop_father->num,
+		   bb_loop_depth (bb),
+		   fallthru_frequency, branch_frequency);
 	  if (!bb->loop_father->inner && bb->loop_father->num)
 	    fprintf (dump_file, " inner_loop");
 	  if (bb->loop_father->header == bb)
@@ -769,11 +762,11 @@ compute_alignments (void)
 	  && (branch_frequency > freq_threshold
 	      || (bb->frequency > bb->prev_bb->frequency * 10
 		  && (bb->prev_bb->frequency
-		      <= ENTRY_BLOCK_PTR->frequency / 2))))
+		      <= ENTRY_BLOCK_PTR_FOR_FN (cfun)->frequency / 2))))
 	{
 	  log = JUMP_ALIGN (label);
 	  if (dump_file)
-	    fprintf(dump_file, "  jump alignment added.\n");
+	    fprintf (dump_file, "  jump alignment added.\n");
 	  if (max_log < log)
 	    {
 	      max_log = log;
@@ -790,7 +783,7 @@ compute_alignments (void)
 	{
 	  log = LOOP_ALIGN (label);
 	  if (dump_file)
-	    fprintf(dump_file, "  internal loop alignment added.\n");
+	    fprintf (dump_file, "  internal loop alignment added.\n");
 	  if (max_log < log)
 	    {
 	      max_log = log;
@@ -806,26 +799,89 @@ compute_alignments (void)
   return 0;
 }
 
-struct rtl_opt_pass pass_compute_alignments =
+/* Grow the LABEL_ALIGN array after new labels are created.  */
+
+static void 
+grow_label_align (void)
 {
- {
-  RTL_PASS,
-  "alignments",                         /* name */
-  OPTGROUP_NONE,                        /* optinfo_flags */
-  NULL,                                 /* gate */
-  compute_alignments,                   /* execute */
-  NULL,                                 /* sub */
-  NULL,                                 /* next */
-  0,                                    /* static_pass_number */
-  TV_NONE,                              /* tv_id */
-  0,                                    /* properties_required */
-  0,                                    /* properties_provided */
-  0,                                    /* properties_destroyed */
-  0,                                    /* todo_flags_start */
-  TODO_verify_rtl_sharing
-  | TODO_ggc_collect                    /* todo_flags_finish */
- }
+  int old = max_labelno;
+  int n_labels;
+  int n_old_labels;
+
+  max_labelno = max_label_num ();
+
+  n_labels = max_labelno - min_labelno + 1;
+  n_old_labels = old - min_labelno + 1;
+
+  label_align = XRESIZEVEC (struct label_alignment, label_align, n_labels);
+
+  /* Range of labels grows monotonically in the function.  Failing here
+     means that the initialization of array got lost.  */
+  gcc_assert (n_old_labels <= n_labels);
+
+  memset (label_align + n_old_labels, 0,
+          (n_labels - n_old_labels) * sizeof (struct label_alignment));
+}
+
+/* Update the already computed alignment information.  LABEL_PAIRS is a vector
+   made up of pairs of labels for which the alignment information of the first
+   element will be copied from that of the second element.  */
+
+void
+update_alignments (vec<rtx> &label_pairs)
+{
+  unsigned int i = 0;
+  rtx iter, label = NULL_RTX;
+
+  if (max_labelno != max_label_num ())
+    grow_label_align ();
+
+  FOR_EACH_VEC_ELT (label_pairs, i, iter)
+    if (i & 1)
+      {
+	LABEL_TO_ALIGNMENT (label) = LABEL_TO_ALIGNMENT (iter);
+	LABEL_TO_MAX_SKIP (label) = LABEL_TO_MAX_SKIP (iter);
+      }
+    else
+      label = iter;
+}
+
+namespace {
+
+const pass_data pass_data_compute_alignments =
+{
+  RTL_PASS, /* type */
+  "alignments", /* name */
+  OPTGROUP_NONE, /* optinfo_flags */
+  false, /* has_gate */
+  true, /* has_execute */
+  TV_NONE, /* tv_id */
+  0, /* properties_required */
+  0, /* properties_provided */
+  0, /* properties_destroyed */
+  0, /* todo_flags_start */
+  TODO_verify_rtl_sharing, /* todo_flags_finish */
 };
+
+class pass_compute_alignments : public rtl_opt_pass
+{
+public:
+  pass_compute_alignments (gcc::context *ctxt)
+    : rtl_opt_pass (pass_data_compute_alignments, ctxt)
+  {}
+
+  /* opt_pass methods: */
+  unsigned int execute () { return compute_alignments (); }
+
+}; // class pass_compute_alignments
+
+} // anon namespace
+
+rtl_opt_pass *
+make_pass_compute_alignments (gcc::context *ctxt)
+{
+  return new pass_compute_alignments (ctxt);
+}
 
 
 /* Make a pass over all insns and compute their actual lengths by shortening
@@ -864,25 +920,7 @@ shorten_branches (rtx first)
   uid_shuid = XNEWVEC (int, max_uid);
 
   if (max_labelno != max_label_num ())
-    {
-      int old = max_labelno;
-      int n_labels;
-      int n_old_labels;
-
-      max_labelno = max_label_num ();
-
-      n_labels = max_labelno - min_labelno + 1;
-      n_old_labels = old - min_labelno + 1;
-
-      label_align = XRESIZEVEC (struct label_alignment, label_align, n_labels);
-
-      /* Range of labels grows monotonically in the function.  Failing here
-         means that the initialization of array got lost.  */
-      gcc_assert (n_old_labels <= n_labels);
-
-      memset (label_align + n_old_labels, 0,
-	      (n_labels - n_old_labels) * sizeof (struct label_alignment));
-    }
+    grow_label_align ();
 
   /* Initialize label_align and set up uid_shuid to be strictly
      monotonically rising with insn order.  */
@@ -1021,7 +1059,7 @@ shorten_branches (rtx first)
 	  int min_align;
 	  addr_diff_vec_flags flags;
 
-	  if (!JUMP_P (insn)
+	  if (! JUMP_TABLE_DATA_P (insn)
 	      || GET_CODE (PATTERN (insn)) != ADDR_DIFF_VEC)
 	    continue;
 	  pat = PATTERN (insn);
@@ -1089,13 +1127,13 @@ shorten_branches (rtx first)
       INSN_ADDRESSES (uid) = insn_current_address + insn_lengths[uid];
 
       if (NOTE_P (insn) || BARRIER_P (insn)
-	  || LABEL_P (insn) || DEBUG_INSN_P(insn))
+	  || LABEL_P (insn) || DEBUG_INSN_P (insn))
 	continue;
       if (INSN_DELETED_P (insn))
 	continue;
 
       body = PATTERN (insn);
-      if (GET_CODE (body) == ADDR_VEC || GET_CODE (body) == ADDR_DIFF_VEC)
+      if (JUMP_TABLE_DATA_P (insn))
 	{
 	  /* This only takes room if read-only data goes into the text
 	     section.  */
@@ -1231,7 +1269,8 @@ shorten_branches (rtx first)
 	  INSN_ADDRESSES (uid) = insn_current_address;
 
 #ifdef CASE_VECTOR_SHORTEN_MODE
-	  if (optimize && JUMP_P (insn)
+	  if (optimize
+	      && JUMP_TABLE_DATA_P (insn)
 	      && GET_CODE (PATTERN (insn)) == ADDR_DIFF_VEC)
 	    {
 	      rtx body = PATTERN (insn);
@@ -1482,7 +1521,7 @@ typedef struct debug_prefix_map
 } debug_prefix_map;
 
 /* Linked list of such structures.  */
-debug_prefix_map *debug_prefix_maps;
+static debug_prefix_map *debug_prefix_maps;
 
 
 /* Record a debug file prefix mapping.  ARG is the argument to
@@ -1700,6 +1739,9 @@ final_start_function (rtx first, FILE *file,
   last_discriminator = 0;
 
   high_block_linenum = high_function_linenum = last_linenum;
+
+  if (flag_sanitize & SANITIZE_ADDRESS)
+    asan_function_start ();
 
   if (!DECL_IGNORED_P (current_function_decl))
     debug_hooks->begin_prologue (last_linenum, last_filename);
@@ -1958,7 +2000,7 @@ final (rtx first, FILE *file, int optimize_p)
 
       /* There is no cfg for a thunk.  */
       if (!cfun->is_thunk)
-	FOR_EACH_BB_REVERSE (bb)
+	FOR_EACH_BB_REVERSE_FN (bb, cfun)
 	  {
 	    start_to_bb[INSN_UID (BB_HEAD (bb))] = bb;
 	    end_to_bb[INSN_UID (BB_END (bb))] = bb;
@@ -2090,9 +2132,7 @@ call_from_call_insn (rtx insn)
 
    SEEN is used to track the end of the prologue, for emitting
    debug information.  We force the emission of a line note after
-   both NOTE_INSN_PROLOGUE_END and NOTE_INSN_FUNCTION_BEG, or
-   at the beginning of the second basic block, whichever comes
-   first.  */
+   both NOTE_INSN_PROLOGUE_END and NOTE_INSN_FUNCTION_BEG.  */
 
 rtx
 final_scan_insn (rtx insn, FILE *file, int optimize_p ATTRIBUTE_UNUSED,
@@ -2151,14 +2191,6 @@ final_scan_insn (rtx insn, FILE *file, int optimize_p ATTRIBUTE_UNUSED,
 
 	  if (targetm.asm_out.unwind_emit)
 	    targetm.asm_out.unwind_emit (asm_out_file, insn);
-
-	  if ((*seen & (SEEN_EMITTED | SEEN_BB)) == SEEN_BB)
-	    {
-	      *seen |= SEEN_EMITTED;
-	      force_source_line = true;
-	    }
-	  else
-	    *seen |= SEEN_BB;
 
 	  break;
 
@@ -2436,7 +2468,7 @@ final_scan_insn (rtx insn, FILE *file, int optimize_p ATTRIBUTE_UNUSED,
 	/* Detect insns that are really jump-tables
 	   and output them as such.  */
 
-	if (GET_CODE (body) == ADDR_VEC || GET_CODE (body) == ADDR_DIFF_VEC)
+        if (JUMP_TABLE_DATA_P (insn))
 	  {
 #if !(defined(ASM_OUTPUT_ADDR_VEC) || defined(ASM_OUTPUT_ADDR_DIFF_VEC))
 	    int vlen, idx;
@@ -3486,8 +3518,21 @@ do_assembler_dialects (const char *p, int *dialect)
            DIALECT_NUMBER of strings ending with '|'.  */
         for (i = 0; i < dialect_number; i++)
           {
-            while (*p && *p != '}' && *p++ != '|')
-	      ;
+            while (*p && *p != '}')
+	      {
+		if (*p == '|')
+		  {
+		    p++;
+		    break;
+		  }
+
+		/* Skip over any character after a percent sign.  */
+		if (*p == '%')
+		  p++;
+		if (*p)
+		  p++;
+	      }
+
             if (*p == '}')
 	      break;
           }
@@ -3508,8 +3553,19 @@ do_assembler_dialects (const char *p, int *dialect)
 		  output_operand_lossage ("unterminated assembly dialect alternative");
 		  break;
 		}
+
+	      /* Skip over any character after a percent sign.  */
+	      if (*p == '%' && p[1])
+		{
+		  p += 2;
+		  continue;
+		}
+
+	      if (*p++ == '}')
+		break;
             }
-          while (*p++ != '}');
+          while (1);
+
           *dialect = 0;
         }
       else
@@ -3602,11 +3658,17 @@ output_asm_insn (const char *templ, rtx *operands)
 #endif
 
       case '%':
-	/* %% outputs a single %.  */
-	if (*p == '%')
+	/* %% outputs a single %.  %{, %} and %| print {, } and | respectively
+	   if ASSEMBLER_DIALECT defined and these characters have a special
+	   meaning as dialect delimiters.*/
+	if (*p == '%'
+#ifdef ASSEMBLER_DIALECT
+	    || *p == '{' || *p == '}' || *p == '|'
+#endif
+	    )
 	  {
+	    putc (*p, asm_out_file);
 	    p++;
-	    putc (c, asm_out_file);
 	  }
 	/* %= outputs a number which is unique to each insn in the entire
 	   compilation.  This is useful for making local labels that are
@@ -4383,7 +4445,7 @@ dump_cgraph_profiles (void)
         continue;
       callee = e->callee;
       fprintf (asm_out_file, "\t.string \"%s\"\n",
-               IDENTIFIER_POINTER (decl_assembler_name (callee->symbol.decl)));
+               IDENTIFIER_POINTER (decl_assembler_name (callee->decl)));
       fprintf (asm_out_file, "\t.string \"" HOST_WIDEST_INT_PRINT_DEC "\"\n",
                e->count);
     }
@@ -4397,7 +4459,7 @@ get_max_count (tree decl, bool cold)
   basic_block bb;
   gcov_type max_count = cold ? 0 :(cgraph_get_node (decl))->count;
 
-  FOR_EACH_BB (bb)
+  FOR_EACH_BB_FN (bb, cfun)
     {
       if (cold && BB_PARTITION (bb) != BB_COLD_PARTITION)
         continue;
@@ -4438,8 +4500,6 @@ rest_of_handle_final (void)
   output_function_exception_table (fnname);
 
   assemble_end_function (current_function_decl, fnname);
-
-  user_defined_section_attribute = false;
 
   /* Free up reg info memory.  */
   free_reg_info ();
@@ -4509,25 +4569,42 @@ rest_of_handle_final (void)
   return 0;
 }
 
-struct rtl_opt_pass pass_final =
+namespace {
+
+const pass_data pass_data_final =
 {
- {
-  RTL_PASS,
-  "final",                              /* name */
-  OPTGROUP_NONE,                        /* optinfo_flags */
-  NULL,                                 /* gate */
-  rest_of_handle_final,                 /* execute */
-  NULL,                                 /* sub */
-  NULL,                                 /* next */
-  0,                                    /* static_pass_number */
-  TV_FINAL,                             /* tv_id */
-  0,                                    /* properties_required */
-  0,                                    /* properties_provided */
-  0,                                    /* properties_destroyed */
-  0,                                    /* todo_flags_start */
-  TODO_ggc_collect                      /* todo_flags_finish */
- }
+  RTL_PASS, /* type */
+  "final", /* name */
+  OPTGROUP_NONE, /* optinfo_flags */
+  false, /* has_gate */
+  true, /* has_execute */
+  TV_FINAL, /* tv_id */
+  0, /* properties_required */
+  0, /* properties_provided */
+  0, /* properties_destroyed */
+  0, /* todo_flags_start */
+  0, /* todo_flags_finish */
 };
+
+class pass_final : public rtl_opt_pass
+{
+public:
+  pass_final (gcc::context *ctxt)
+    : rtl_opt_pass (pass_data_final, ctxt)
+  {}
+
+  /* opt_pass methods: */
+  unsigned int execute () { return rest_of_handle_final (); }
+
+}; // class pass_final
+
+} // anon namespace
+
+rtl_opt_pass *
+make_pass_final (gcc::context *ctxt)
+{
+  return new pass_final (ctxt);
+}
 
 
 static unsigned int
@@ -4538,25 +4615,42 @@ rest_of_handle_shorten_branches (void)
   return 0;
 }
 
-struct rtl_opt_pass pass_shorten_branches =
+namespace {
+
+const pass_data pass_data_shorten_branches =
 {
- {
-  RTL_PASS,
-  "shorten",                            /* name */
-  OPTGROUP_NONE,                        /* optinfo_flags */
-  NULL,                                 /* gate */
-  rest_of_handle_shorten_branches,      /* execute */
-  NULL,                                 /* sub */
-  NULL,                                 /* next */
-  0,                                    /* static_pass_number */
-  TV_SHORTEN_BRANCH,                    /* tv_id */
-  0,                                    /* properties_required */
-  0,                                    /* properties_provided */
-  0,                                    /* properties_destroyed */
-  0,                                    /* todo_flags_start */
-  0                                     /* todo_flags_finish */
- }
+  RTL_PASS, /* type */
+  "shorten", /* name */
+  OPTGROUP_NONE, /* optinfo_flags */
+  false, /* has_gate */
+  true, /* has_execute */
+  TV_SHORTEN_BRANCH, /* tv_id */
+  0, /* properties_required */
+  0, /* properties_provided */
+  0, /* properties_destroyed */
+  0, /* todo_flags_start */
+  0, /* todo_flags_finish */
 };
+
+class pass_shorten_branches : public rtl_opt_pass
+{
+public:
+  pass_shorten_branches (gcc::context *ctxt)
+    : rtl_opt_pass (pass_data_shorten_branches, ctxt)
+  {}
+
+  /* opt_pass methods: */
+  unsigned int execute () { return rest_of_handle_shorten_branches (); }
+
+}; // class pass_shorten_branches
+
+} // anon namespace
+
+rtl_opt_pass *
+make_pass_shorten_branches (gcc::context *ctxt)
+{
+  return new pass_shorten_branches (ctxt);
+}
 
 
 static unsigned int
@@ -4685,22 +4779,39 @@ rest_of_clean_state (void)
   return 0;
 }
 
-struct rtl_opt_pass pass_clean_state =
+namespace {
+
+const pass_data pass_data_clean_state =
 {
- {
-  RTL_PASS,
-  "*clean_state",                       /* name */
-  OPTGROUP_NONE,                        /* optinfo_flags */
-  NULL,                                 /* gate */
-  rest_of_clean_state,                  /* execute */
-  NULL,                                 /* sub */
-  NULL,                                 /* next */
-  0,                                    /* static_pass_number */
-  TV_FINAL,                             /* tv_id */
-  0,                                    /* properties_required */
-  0,                                    /* properties_provided */
-  PROP_rtl,                             /* properties_destroyed */
-  0,                                    /* todo_flags_start */
-  0                                     /* todo_flags_finish */
- }
+  RTL_PASS, /* type */
+  "*clean_state", /* name */
+  OPTGROUP_NONE, /* optinfo_flags */
+  false, /* has_gate */
+  true, /* has_execute */
+  TV_FINAL, /* tv_id */
+  0, /* properties_required */
+  0, /* properties_provided */
+  PROP_rtl, /* properties_destroyed */
+  0, /* todo_flags_start */
+  0, /* todo_flags_finish */
 };
+
+class pass_clean_state : public rtl_opt_pass
+{
+public:
+  pass_clean_state (gcc::context *ctxt)
+    : rtl_opt_pass (pass_data_clean_state, ctxt)
+  {}
+
+  /* opt_pass methods: */
+  unsigned int execute () { return rest_of_clean_state (); }
+
+}; // class pass_clean_state
+
+} // anon namespace
+
+rtl_opt_pass *
+make_pass_clean_state (gcc::context *ctxt)
+{
+  return new pass_clean_state (ctxt);
+}

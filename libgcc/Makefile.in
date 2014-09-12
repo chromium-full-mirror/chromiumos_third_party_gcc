@@ -1,6 +1,6 @@
 # Makefile.in
 
-# Copyright (C) 2005-2013 Free Software Foundation, Inc.
+# Copyright (C) 2005-2014 Free Software Foundation, Inc.
 #
 # This file is part of GCC.
 #
@@ -39,15 +39,23 @@ enable_shared = @enable_shared@
 double_type_size = @double_type_size@
 long_double_type_size = @long_double_type_size@
 decimal_float = @decimal_float@
+enable_vtable_verify = @enable_vtable_verify@
 enable_decimal_float = @enable_decimal_float@
 fixed_point = @fixed_point@
 
 host_noncanonical = @host_noncanonical@
 target_noncanonical = @target_noncanonical@
 
+is_android = @is_android@
+
 # List of extra object files that should be compiled for this target machine.
 # The rules for compiling them should be in the t-* file for the machine.
+ifeq ($(enable_vtable_verify),yes)
 EXTRA_PARTS = @extra_parts@
+else
+EXTRA_PARTS = @extra_parts@ @vtv_extra_parts@
+endif 
+
 
 extra-parts = libgcc-extra-parts
 
@@ -121,8 +129,8 @@ installcheck:
 .PHONY: all clean
 
 clean:
-	-rm -f auto-target.h libgcc_tm.h libgcc.map
-	-rm -f libgcc_tm.stamp stamp-h stmp-ldirs
+	-rm -f libgcc_tm.h libgcc.map
+	-rm -f libgcc_tm.stamp stmp-ldirs
 	-rm -f *$(objext)
 	-rm -f *.dep
 	-rm -f *.a
@@ -131,6 +139,8 @@ clean:
 	@$(MULTICLEAN) multi-clean DO=clean
 distclean: clean
 	@$(MULTICLEAN) multi-clean DO=distclean
+	-rm -f auto-target.h
+	-rm -f stamp-h
 	-rm -f *~ Makefile config.cache config.status multilib.out
 	-rm -f config.log
 maintainer-clean realclean: distclean
@@ -227,6 +237,10 @@ LIBGCC2_CFLAGS = -O2 $(LIBGCC2_INCLUDES) $(GCC_CFLAGS) $(HOST_LIBGCC2_CFLAGS) \
 		 $(LIBGCC2_DEBUG_CFLAGS) -DIN_LIBGCC2 \
 		 -fbuilding-libgcc -fno-stack-protector \
 		 $(INHIBIT_LIBC_CFLAGS)
+
+ifeq ($(is_android),yes)
+LIBGCC2_CFLAGS += -funwind-tables
+endif
 
 # Additional options to use when compiling libgcc2.a.
 # Some targets override this to -isystem include
@@ -335,11 +349,23 @@ LIBUNWIND =
 SHLIBUNWIND_LINK =
 SHLIBUNWIND_INSTALL =
 
+ifeq ($(is_android),yes)
+ifneq ($(enable_shared),yes)
+# Some prebuilt libraries for Android link libc.so before libgcc.a, and they
+# rely on libgcc.a to provide those symbols with default visibility to resolve
+# them eventually. The linker order has been fixed in JB maintain releases but
+# may take a while to trickle down to partners to refresh their prebuilt
+# libraries. Therefore we need to maintain the same visibility as older GCC
+# for now.
+vis_hide =
+endif
+else
 # For -fvisibility=hidden.  We need both a -fvisibility=hidden on
 # the command line, and a #define to prevent libgcc2.h etc from
 # overriding that with #pragmas.  This is set before including $(tmake_file)
 # so it can be overridden on a host-specific basis.
 vis_hide = @vis_hide@
+endif
 
 tmake_file = @tmake_file@
 include $(srcdir)/empty.mk $(tmake_file)
@@ -851,10 +877,11 @@ include $(iterator)
 # Build libgcov components.
 
 LIBGCOV_MERGE = _gcov_merge_add _gcov_merge_single _gcov_merge_delta _gcov_merge_ior \
-                _gcov_merge_dc _gcov_merge_icall_topn _gcov_merge_reusedist
+     _gcov_merge_dc _gcov_merge_icall_topn _gcov_merge_time_profile
 LIBGCOV_PROFILER = _gcov_interval_profiler _gcov_pow2_profiler _gcov_one_value_profiler \
     _gcov_indirect_call_profiler _gcov_average_profiler _gcov_ior_profiler \
-    _gcov_indirect_call_topn_profiler _gcov_direct_call_profiler
+    _gcov_indirect_call_profiler_v2 _gcov_direct_call_profiler \
+    _gcov_indirect_call_topn_profiler _gcov_time_profiler
 LIBGCOV_INTERFACE = _gcov_flush _gcov_fork _gcov_execl _gcov_execlp _gcov_execle \
     _gcov_execv _gcov_execvp _gcov_execve _gcov_reset _gcov_dump _gcov_sampling \
     _gcov_prefix
@@ -867,8 +894,8 @@ libgcov-driver-objects = $(patsubst %,%$(objext),$(LIBGCOV_DRIVER))
 libgcov-objects = $(libgcov-merge-objects) $(libgcov-profiler-objects) \
                  $(libgcov-interface-objects) $(libgcov-driver-objects)
 
-dyn-ipa.o: %$(objext): $(srcdir)/dyn-ipa.c $(srcdir)/libgcov.h libgcc_tm.h
-	$(gcc_compile) -c $(srcdir)/dyn-ipa.c
+dyn-ipa.o: %$(objext): $(srcdir)/dyn-ipa.c libgcc_tm.h
+	$(gcc_compile)  -c $(srcdir)/dyn-ipa.c
 $(libgcov-merge-objects): %$(objext): $(srcdir)/libgcov-merge.c $(srcdir)/libgcov.h
 	$(gcc_compile) -DL$* -c $(srcdir)/libgcov-merge.c
 $(libgcov-profiler-objects): %$(objext): $(srcdir)/libgcov-profiler.c $(srcdir)/libgcov.h
@@ -985,6 +1012,22 @@ crtendS$(objext): $(srcdir)/crtstuff.c
 # This is a version of crtbegin for -static links.
 crtbeginT$(objext): $(srcdir)/crtstuff.c
 	$(crt_compile) $(CRTSTUFF_T_CFLAGS) -c $< -DCRT_BEGIN -DCRTSTUFFT_O
+
+ifeq ($(enable_vtable_verify),yes)
+# These are used in vtable verification; see comments in source files for
+# more details.
+vtv_start$(objext): $(srcdir)/vtv_start.c
+	$(crt_compile) $(CRTSTUFF_T_CFLAGS_S) -c $(srcdir)/vtv_start.c
+
+vtv_end$(objext): $(srcdir)/vtv_end.c
+	$(crt_compile) $(CRTSTUFF_T_CFLAGS_S) -c $(srcdir)/vtv_end.c
+
+vtv_start_preinit$(objext): $(srcdir)/vtv_start_preinit.c
+	$(crt_compile) $(CRTSTUFF_T_CFLAGS_S) -c $(srcdir)/vtv_start_preinit.c
+
+vtv_end_preinit$(objext): $(srcdir)/vtv_end_preinit.c
+	$(crt_compile) $(CRTSTUFF_T_CFLAGS_S) -c $(srcdir)/vtv_end_preinit.c
+endif
 endif
 
 ifeq ($(CUSTOM_CRTIN),)
@@ -1104,14 +1147,10 @@ install-leaf: $(install-shared) $(install-libunwind)
 	  cp ../../gcc/gcov-iov.h $$gcov_src_dest;		\
 	  cp $(srcdir)/../gcc/gcov-io.h $$gcov_src_dest;	\
 	  cp $(srcdir)/../gcc/gcov-io.c $$gcov_src_dest;	\
-	  cp $(srcdir)/libgcov-driver.c $$gcov_src_dest;	\
-	  cp $(srcdir)/libgcov-merge.c $$gcov_src_dest;		\
-	  cp $(srcdir)/libgcov.h $$gcov_src_dest;		\
+	  cp $(srcdir)/libgcov-driver.c $$gcov_src_dest;		\
 	  chmod 644 $$gcov_src_dest/gcov-iov.h			\
 	  $$gcov_src_dest/gcov-io.h $$gcov_src_dest/gcov-io.c	\
- 	  $$gcov_src_dest/libgcov.h				\
-	  $$gcov_src_dest/libgcov-merge.c			\
-	  $$gcov_src_dest/libgcov-driver.c;			\
+	  $$gcov_src_dest/libgcov-driver.c;				\
 	fi
 
 install: install-leaf install-unwind_h

@@ -1,5 +1,5 @@
 /* Read and write coverage files, and associated functionality.
-   Copyright (C) 1990-2013 Free Software Foundation, Inc.
+   Copyright (C) 1990-2014 Free Software Foundation, Inc.
    Contributed by James E. Wilson, UC Berkeley/Cygnus Support;
    based on some ideas from Dain Samples of UC Berkeley.
    Further mangling by Bob Manson, Cygnus Support.
@@ -30,6 +30,8 @@ along with GCC; see the file COPYING3.  If not see
 #include "tm.h"
 #include "rtl.h"
 #include "tree.h"
+#include "stringpool.h"
+#include "stor-layout.h"
 #include "flags.h"
 #include "output.h"
 #include "regs.h"
@@ -43,12 +45,21 @@ along with GCC; see the file COPYING3.  If not see
 #include "langhooks.h"
 #include "hash-table.h"
 #include "tree-iterator.h"
+#include "context.h"
+#include "pass_manager.h"
+#include "tree-pass.h"
 #include "cgraph.h"
 #include "dumpfile.h"
 #include "opts.h"
 #include "gcov-io.h"
-#include "tree-flow.h"
-#include "tree-pass.h"
+#include "tree-ssa-alias.h"
+#include "internal-fn.h"
+#include "gimple-expr.h"
+#include "gimple.h"
+#include "gimplify.h"
+#include "gimple-iterator.h"
+#include "gimplify-me.h"
+#include "gimple-ssa.h"
 #include "cpplib.h"
 #include "incpath.h"
 #include "diagnostic-core.h"
@@ -57,13 +68,14 @@ along with GCC; see the file COPYING3.  If not see
 #include "filenames.h"
 #include "dwarf2asm.h"
 #include "target.h"
-#include "auto-profile.h"
 
 #include "gcov-io.h"
 #include "gcov-io.c"
 #include "params.h"
 #include "dbgcnt.h"
 #include "input.h"
+#include "pointer-set.h"
+#include "auto-profile.h"
 
 struct GTY((chain_next ("%h.next"))) coverage_data
 {
@@ -138,8 +150,19 @@ static char *da_base_file_name;
 static char *main_input_file_name;
 
 /* The names of merge functions for counters.  */
-static const char *const ctr_merge_functions[GCOV_COUNTERS] = GCOV_MERGE_FUNCTIONS;
-static const char *const ctr_names[GCOV_COUNTERS] = GCOV_COUNTER_NAMES;
+#define STR(str) #str
+#define DEF_GCOV_COUNTER(COUNTER, NAME, FN_TYPE) STR(__gcov_merge ## FN_TYPE),
+static const char *const ctr_merge_functions[GCOV_COUNTERS] = {
+#include "gcov-counter.def"
+};
+#undef DEF_GCOV_COUNTER
+#undef STR
+
+#define DEF_GCOV_COUNTER(COUNTER, NAME, FN_TYPE) NAME,
+static const char *const ctr_names[GCOV_COUNTERS] = {
+#include "gcov-counter.def"
+};
+#undef DEF_GCOV_COUNTER
 
 /* True during the period that counts_hash is being rebuilt.  */
 static bool rebuilding_counts_hash = false;
@@ -326,6 +349,7 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
   char **non_warning_opts1 = XNEWVEC (char *, mod_info1->num_cl_args);
   char **non_warning_opts2 = XNEWVEC (char *, mod_info2->num_cl_args);
   char *std_opts1 = NULL, *std_opts2 = NULL;
+  unsigned arch_isa1 = 0, arch_isa2 = 0;
   unsigned int i, num_warning_opts1 = 0, num_warning_opts2 = 0;
   unsigned int num_non_warning_opts1 = 0, num_non_warning_opts2 = 0;
   bool warning_mismatch = false;
@@ -339,6 +363,7 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
     + mod_info2->num_cpp_defines + mod_info2->num_cpp_includes;
 
   bool *cg_opts1, *cg_opts2, has_any_incompatible_cg_opts, has_incompatible_std;
+  bool has_incompatible_arch_isa;
   unsigned int num_cg_opts = 0;
 
   for (i = 0; force_matching_cg_opts[i].opt_str; i++)
@@ -371,6 +396,9 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
 	if (strstr (option_string, "-std="))
 	  std_opts1 = option_string;
 
+        if (!strncmp (option_string, "-m",2))
+          arch_isa1 = crc32_string (arch_isa1, option_string);
+
         slot = option_tab1.find_slot (option_string, INSERT);
         if (!*slot)
           {
@@ -392,6 +420,9 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
 	if (strstr (option_string, "-std="))
 	  std_opts2 = option_string;
 
+        if (!strncmp (option_string, "-m",2))
+          arch_isa2 = crc32_string (arch_isa2, option_string);
+
         slot = option_tab2.find_slot (option_string, INSERT);
         if (!*slot)
           {
@@ -404,6 +435,7 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
       std_opts1 != std_opts2 && (std_opts1 == NULL || std_opts2 == NULL
 				 || strcmp (std_opts1, std_opts2));
 
+  has_incompatible_arch_isa = (arch_isa1 != arch_isa2);
   /* Compare warning options. If these mismatch, we emit a warning.  */
   if (num_warning_opts1 != num_warning_opts2)
     warning_mismatch = true;
@@ -451,7 +483,8 @@ incompatible_cl_args (struct gcov_module_info* mod_info1,
    option_tab1.dispose ();
    option_tab2.dispose ();
    return ((flag_ripa_disallow_opt_mismatch && non_warning_mismatch)
-           || has_any_incompatible_cg_opts || has_incompatible_std);
+           || has_any_incompatible_cg_opts || has_incompatible_std
+           || has_incompatible_arch_isa);
 }
 
 
@@ -562,9 +595,9 @@ static void
 reorder_module_groups (const char *imports_file, unsigned max_group)
 {
   FILE *f;
-  int n, order = 0;
-  size_t len;
-  char *line = NULL;
+  int order = 0;
+  const int max_line_size = (1 << 16);
+  char line[max_line_size];
 
   module_name_tab.create (20);
 
@@ -572,20 +605,23 @@ reorder_module_groups (const char *imports_file, unsigned max_group)
   if (!f)
     error ("Can't open file %s", imports_file);
 
-  while ((n = getline (&line, &len, f)) != -1)
+  while (fgets (line, max_line_size, f))
     {
+      size_t n = strlen (line);
+      gcc_assert (n < max_line_size - 1);
+      if (line[n - 1] == '\n')
+	line[n - 1] = '\0';
+
       module_name_entry **slot;
       module_name_entry *m_e = XCNEW (module_name_entry);
 
-      line[n - 1] = '\0';
-      m_e->source_name = line;
+      m_e->source_name = xstrdup (line);
       m_e->order = order;
 
       slot = module_name_tab.find_slot (m_e, INSERT);
       gcc_assert (!*slot);
       *slot = m_e;
 
-      line = NULL;
       order++;
     }
 
@@ -615,17 +651,37 @@ reorder_module_groups (const char *imports_file, unsigned max_group)
   module_name_tab.dispose ();
 }
 
+typedef struct {
+  unsigned int mod_id;
+  const char *mod_name;
+} mod_id_to_name_t;
+
+static vec<mod_id_to_name_t> *mod_names;
+
+void
+record_module_name (unsigned int mod_id, const char *name)
+{
+  mod_id_to_name_t t;
+
+  t.mod_id = mod_id;
+  t.mod_name = xstrdup (name);
+  if (!mod_names)
+    vec_alloc (mod_names, 10);
+  mod_names->safe_push (t);
+}
+
 /* Return the module name for module with MOD_ID.  */
 
 const char *
 get_module_name (unsigned int mod_id)
 {
   size_t i;
+  mod_id_to_name_t *elt;
 
-  for (i = 0; i < num_in_fnames; i++)
+  for (i = 0; mod_names->iterate (i, &elt); i++)
     {
-      if (module_infos[i]->ident == mod_id)
-        return lbasename (module_infos[i]->source_filename);
+      if (elt->mod_id == mod_id)
+        return elt->mod_name;
     }
 
   gcc_assert (0);
@@ -664,7 +720,18 @@ read_counts_file (const char *da_file_name, unsigned module_id)
             return;
         }
       else
-        return;
+        {
+          inform (input_location, "file %s not found, disabling profile use",
+                  da_file_name);
+          set_profile_use_options (&global_options, &global_options_set,
+                                   false, true);
+          /* RESET is invoked during covrerage_init when process_options is done.
+            Need to reset optimization_default_node and optimization_current_node.  */
+          /* Save the current optimization options.  */
+          optimization_default_node = build_optimization_node (&global_options);
+          optimization_current_node = optimization_default_node;
+          return;
+        }
     }
 
   if (!gcov_magic (gcov_read_unsigned (), GCOV_DATA_MAGIC))
@@ -907,6 +974,9 @@ read_counts_file (const char *da_file_name, unsigned module_id)
 		}
             }
 
+          record_module_name (mod_info->ident,
+                              lbasename (mod_info->source_filename));
+
           if (dump_enabled_p ())
             {
               dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
@@ -961,7 +1031,14 @@ get_coverage_counts_entry (struct function *func, unsigned counter)
 {
   counts_entry_t *entry, elt;
 
-  elt.ident = FUNC_DECL_GLOBAL_ID (func);
+  if (PARAM_VALUE (PARAM_PROFILE_FUNC_INTERNAL_ID))
+    elt.ident = FUNC_DECL_GLOBAL_ID (func);
+  else
+    {
+      gcc_assert (coverage_node_map_initialized_p ());
+      elt.ident = cgraph_get_node (func->decl)->profile_id;
+    }
+
   elt.ctr = counter;
   entry = counts_hash.find (&elt);
 
@@ -985,9 +1062,9 @@ get_coverage_counts (unsigned counter, unsigned expected,
       if (!warned++ && dump_enabled_p ())
 	dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
                          (flag_guess_branch_prob
-                          ? "file %s not found, execution counts estimated"
+                          ? "file %s not found, execution counts estimated\n"
                           : "file %s not found, execution counts assumed to "
-                            "be zero"),
+                            "be zero\n"),
                          da_file_name);
       return NULL;
     }
@@ -1020,20 +1097,20 @@ get_coverage_counts (unsigned counter, unsigned expected,
           dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
                            "use -Wno-error=coverage-mismatch to tolerate "
                            "the mismatch but performance may drop if the "
-                           "function is hot");
+                           "function is hot\n");
 	  
 	  if (!seen_error ()
 	      && !warned++)
 	    {
 	      dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
-                               "coverage mismatch ignored");
-	      dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
-                               flag_guess_branch_prob
-                               ? G_("execution counts estimated")
-                               : G_("execution counts assumed to be zero"));
+                               "coverage mismatch ignored\n");
+	      dump_printf (MSG_OPTIMIZED_LOCATIONS,
+                           flag_guess_branch_prob
+                           ? G_("execution counts estimated\n")
+                           : G_("execution counts assumed to be zero\n"));
 	      if (!flag_guess_branch_prob)
-		dump_printf_loc (MSG_OPTIMIZED_LOCATIONS, input_location,
-                                 "this can result in poorly optimized code");
+		dump_printf (MSG_OPTIMIZED_LOCATIONS,
+                             "this can result in poorly optimized code\n");
 	    }
 	}
 
@@ -1065,7 +1142,13 @@ get_coverage_counts_no_warn (struct function *f, unsigned counter, unsigned *n_c
   if (!counts_hash.is_created () || !f)
     return NULL;
 
-  elt.ident = FUNC_DECL_GLOBAL_ID (f);
+  if (PARAM_VALUE (PARAM_PROFILE_FUNC_INTERNAL_ID))
+    elt.ident = FUNC_DECL_GLOBAL_ID (f);
+  else
+    {
+      gcc_assert (coverage_node_map_initialized_p ());
+      elt.ident = cgraph_get_node (f->decl)->profile_id;
+    }
   elt.ctr = counter;
   entry = counts_hash.find (&elt);
   if (!entry)
@@ -1259,8 +1342,15 @@ coverage_compute_lineno_checksum (void)
   /* Note: it is a bad design that C++ FE associate the convertion function type
      with the name of the decl. This leads to cross contamination between different
      conversion operators in different modules (If conv_type_names map is cleared
-     at the end of parsing of each module).  */
-  if (flag_dyn_ipa && lang_hooks.user_conv_function_p (current_function_decl))
+     at the end of parsing of each module).
+
+     For LIPO always use the full mangled name to help disambiguate different
+     template instantiations.  This is important for LIPO because we use the
+     checksums to identify matching copies of the same COMDAT to handle
+     missing profiles in the copies not selected by the linker, and to update
+     indirect call profiles when the target COMDAT is a copy that is not
+     in the module group.  */
+  if (flag_dyn_ipa)
     name = DECL_ASSEMBLER_NAME (current_function_decl);
   else
     name = DECL_NAME (current_function_decl);
@@ -1269,6 +1359,29 @@ coverage_compute_lineno_checksum (void)
       (chksum, IDENTIFIER_POINTER (name));
 
   return chksum;
+}
+
+/* Compute profile ID.  This is better to be unique in whole program.  */
+
+unsigned
+coverage_compute_profile_id (struct cgraph_node *n)
+{
+  expanded_location xloc
+    = expand_location (DECL_SOURCE_LOCATION (n->decl));
+  bool use_name_only = (PARAM_VALUE (PARAM_PROFILE_FUNC_INTERNAL_ID) == 0);
+  unsigned chksum = (use_name_only ? 0 : xloc.line);
+
+  chksum = coverage_checksum_string (chksum, xloc.file);
+  chksum = coverage_checksum_string
+    (chksum, IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (n->decl)));
+  if (!use_name_only && first_global_object_name)
+    chksum = coverage_checksum_string
+      (chksum, first_global_object_name);
+  chksum = coverage_checksum_string
+    (chksum, aux_base_name);
+
+  /* Non-negative integers are hopefully small enough to fit in all targets.  */
+  return chksum & 0x7fffffff;
 }
 
 /* Compute cfg checksum for the current function.
@@ -1285,9 +1398,9 @@ unsigned
 coverage_compute_cfg_checksum (void)
 {
   basic_block bb;
-  unsigned chksum = n_basic_blocks;
+  unsigned chksum = n_basic_blocks_for_fn (cfun);
 
-  FOR_EACH_BB (bb)
+  FOR_EACH_BB_FN (bb, cfun)
     {
       edge e;
       edge_iterator ei;
@@ -1319,7 +1432,15 @@ coverage_begin_function (unsigned lineno_checksum, unsigned cfg_checksum)
 
   /* Announce function */
   offset = gcov_write_tag (GCOV_TAG_FUNCTION);
-  gcov_write_unsigned (FUNC_DECL_FUNC_ID (cfun));
+  if (PARAM_VALUE (PARAM_PROFILE_FUNC_INTERNAL_ID))
+    gcov_write_unsigned (FUNC_DECL_FUNC_ID (cfun));
+  else 
+   {
+      gcc_assert (coverage_node_map_initialized_p ());
+      gcov_write_unsigned (
+        cgraph_get_node (current_function_decl)->profile_id);
+    }
+
   gcov_write_unsigned (lineno_checksum);
   gcov_write_unsigned (cfg_checksum);
   gcov_write_string (IDENTIFIER_POINTER
@@ -1357,7 +1478,17 @@ coverage_end_function (unsigned lineno_checksum, unsigned cfg_checksum)
 	{
 	  item = ggc_alloc_coverage_data ();
 	  
-	  item->ident = FUNC_DECL_FUNC_ID (cfun);
+	  if (PARAM_VALUE (PARAM_PROFILE_FUNC_INTERNAL_ID))
+	    item->ident = FUNC_DECL_FUNC_ID (cfun);
+	  else
+	    {
+	      if (flag_dyn_ipa)
+		error ("param=profile-func-internal-id=0 is not"
+		       " supported in LIPO mode.  ");
+              gcc_assert (coverage_node_map_initialized_p ());
+              item->ident = cgraph_get_node (cfun->decl)->profile_id;
+
+	    }
 	  item->lineno_checksum = lineno_checksum;
 	  item->cfg_checksum = cfg_checksum;
 
@@ -1484,8 +1615,8 @@ build_var (tree fn_decl, tree type, int counter)
   DECL_NAME (var) = get_identifier (buf);
   TREE_STATIC (var) = 1;
   TREE_ADDRESSABLE (var) = 1;
+  DECL_NONALIASED (var) = 1;
   DECL_ALIGN (var) = TYPE_ALIGN (type);
-  DECL_ARTIFICIAL (var) = 1;
 
   return var;
 }
@@ -1596,7 +1727,7 @@ build_fn_info (const struct coverage_data *data, tree type, tree key)
 
 	if (var)
 	  count
-	    = tree_low_cst (TYPE_MAX_VALUE (TYPE_DOMAIN (TREE_TYPE (var))), 0)
+	    = tree_to_shwi (TYPE_MAX_VALUE (TYPE_DOMAIN (TREE_TYPE (var))))
 	    + 1;
 
 	CONSTRUCTOR_APPEND_ELT (ctr, TYPE_FIELDS (ctr_type),
@@ -1776,6 +1907,21 @@ build_cl_args_array_value (tree string_type, vec<constructor_elt, va_gc> **v)
 			       build1 (ADDR_EXPR, string_type, arg_string));
     }
   return;
+}
+
+/* Emit mapping between module name and function id to the function's
+   assembler name, for use in correlating function idents in the gcda file
+   with the function name.  */
+
+void
+emit_function_name (void)
+{
+  fprintf (stderr, "Module %s FuncId %u Name %s\n",
+           (L_IPO_COMP_MODE
+            ? get_module_name (FUNC_DECL_MODULE_ID (cfun))
+            : main_input_file_name),
+           FUNC_DECL_FUNC_ID (cfun),
+           IDENTIFIER_POINTER (DECL_ASSEMBLER_NAME (current_function_decl)));
 }
 
 /* Returns the type of the module info associated with the
@@ -2204,7 +2350,8 @@ build_init_ctor (tree gcov_info_type)
   cgraph_build_static_cdtor ('I', ctor, DEFAULT_INIT_PRIORITY);
 }
 
-/* Create the gcov_info types and object. Does not generate the initializer
+/* Create the gcov_info types and object.  Generate the constructor
+   function to call __gcov_init.  Does not generate the initializer
    for the object.  Returns TRUE if coverage data is being emitted.  */
 
 static bool
@@ -2587,7 +2734,9 @@ coverage_init (const char *filename, const char* source_name)
   /* Since coverage_init is invoked very early, before the pass
      manager, we need to set up the dumping explicitly. This is
      similar to the handling in finish_optimization_passes.  */
-  dump_start (pass_profile.pass.static_pass_number, NULL);
+  int profile_pass_num =
+    g->get_passes ()->get_pass_profile ()->static_pass_number;
+  g->get_dumps ()->dump_start (profile_pass_num, NULL);
 
   has_asm_statement = false;
   da_file_name = get_da_file_name (filename);
@@ -2655,7 +2804,7 @@ coverage_init (const char *filename, const char* source_name)
 	}
     }
 
-  dump_finish (pass_profile.pass.static_pass_number);
+  g->get_dumps ()->dump_finish (profile_pass_num);
 }
 
 /* Return True if any type of profiling is enabled which requires linking
@@ -2692,6 +2841,9 @@ coverage_finish (void)
 	fn_ctor = coverage_obj_fn (fn_ctor, fn->fn_decl, fn);
       coverage_obj_finish (fn_ctor);
     }
+
+  XDELETEVEC (da_file_name);
+  da_file_name = NULL;
 }
 
 /* Add S to the end of the string-list, the head and tail of which are
@@ -2763,7 +2915,6 @@ write_compilation_info_to_asm (void)
   dw2_asm_output_data_uleb128 (lang, NULL);
   dw2_asm_output_data_uleb128 (ggc_total_memory, NULL);
 }
-
 
 /* Write command line options to the .note section.  */
 

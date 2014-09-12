@@ -1,5 +1,5 @@
 ;; Unspec defintions.
-;; Copyright (C) 2012-2013 Free Software Foundation, Inc.
+;; Copyright (C) 2012-2014 Free Software Foundation, Inc.
 ;; Contributed by ARM Ltd.
 
 ;; This file is part of GCC.
@@ -24,12 +24,6 @@
 ;; Unspec enumerators for iwmmxt2 are defined in iwmmxt2.md
 
 (define_c_enum "unspec" [
-  UNSPEC_SIN            ; `sin' operation (MODE_FLOAT):
-                        ;   operand 0 is the result,
-                        ;   operand 1 the parameter.
-  UNPSEC_COS            ; `cos' operation (MODE_FLOAT):
-                        ;   operand 0 is the result,
-                        ;   operand 1 the parameter.
   UNSPEC_PUSH_MULT      ; `push multiple' operation:
                         ;   operand 0 is the first register,
                         ;   subsequent registers are in parallel (use ...)
@@ -57,8 +51,6 @@
   UNSPEC_WMACU          ; Used by the intrinsic form of the iWMMXt WMACU instruction.
   UNSPEC_WMACSZ         ; Used by the intrinsic form of the iWMMXt WMACSZ instruction.
   UNSPEC_WMACUZ         ; Used by the intrinsic form of the iWMMXt WMACUZ instruction.
-  UNSPEC_WMADDS         ; Used by the intrinsic form of the iWMMXt WMADDS instruction.
-  UNSPEC_WMADDU         ; Used by the intrinsic form of the iWMMXt WMADDU instruction.
   UNSPEC_CLRDI          ; Used by the intrinsic form of the iWMMXt CLRDI instruction.
   UNSPEC_WALIGNI        ; Used by the intrinsic form of the iWMMXt WALIGN instruction.
   UNSPEC_TLS            ; A symbol that has been treated properly for TLS usage.
@@ -66,7 +58,7 @@
                         ; instruction stream.
   UNSPEC_PIC_OFFSET     ; A symbolic 12-bit OFFSET that has been treated
                         ; correctly for PIC usage.
-  UNSPEC_GOT_PREL_SYM   ; Specify an R_ARM_GOT_PREL relocation of a symbol.			
+  UNSPEC_GOT_PREL_SYM   ; Specify an R_ARM_GOT_PREL relocation of a symbol.
   UNSPEC_GOTSYM_OFF     ; The offset of the start of the GOT from a
                         ; a given symbolic address.
   UNSPEC_THUMB1_CASESI  ; A Thumb1 compressed dispatch-table call.
@@ -101,6 +93,8 @@
 
 (define_c_enum "unspec" [
   UNSPEC_WADDC		; Used by the intrinsic form of the iWMMXt WADDC instruction.
+  UNSPEC_WMADDS         ; Used by the intrinsic form of the iWMMXt WMADDS instruction.
+  UNSPEC_WMADDU         ; Used by the intrinsic form of the iWMMXt WMADDU instruction.
   UNSPEC_WABS		; Used by the intrinsic form of the iWMMXt WABS instruction.
   UNSPEC_WQMULWMR	; Used by the intrinsic form of the iWMMXt WQMULWMR instruction.
   UNSPEC_WQMULMR	; Used by the intrinsic form of the iWMMXt WQMULMR instruction.
@@ -153,12 +147,37 @@
   VUNSPEC_ATOMIC_OP	; Represent an atomic operation.
   VUNSPEC_LL		; Represent a load-register-exclusive.
   VUNSPEC_SC		; Represent a store-register-exclusive.
+  VUNSPEC_LAX		; Represent a load-register-acquire-exclusive.
+  VUNSPEC_SLX		; Represent a store-register-release-exclusive.
+  VUNSPEC_LDA		; Represent a store-register-acquire.
+  VUNSPEC_STL		; Represent a store-register-release.
 ])
 
 ;; Enumerators for NEON unspecs.
 (define_c_enum "unspec" [
   UNSPEC_ASHIFT_SIGNED
   UNSPEC_ASHIFT_UNSIGNED
+  UNSPEC_CRC32B
+  UNSPEC_CRC32H
+  UNSPEC_CRC32W
+  UNSPEC_CRC32CB
+  UNSPEC_CRC32CH
+  UNSPEC_CRC32CW
+  UNSPEC_AESD
+  UNSPEC_AESE
+  UNSPEC_AESIMC
+  UNSPEC_AESMC
+  UNSPEC_SHA1C
+  UNSPEC_SHA1M
+  UNSPEC_SHA1P
+  UNSPEC_SHA1H
+  UNSPEC_SHA1SU0
+  UNSPEC_SHA1SU1
+  UNSPEC_SHA256H
+  UNSPEC_SHA256H2
+  UNSPEC_SHA256SU0
+  UNSPEC_SHA256SU1
+  UNSPEC_VMULLP64
   UNSPEC_LOAD_COUNT
   UNSPEC_VABD
   UNSPEC_VABDL

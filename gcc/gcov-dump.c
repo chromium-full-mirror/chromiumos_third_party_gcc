@@ -1,5 +1,5 @@
 /* Dump a gcov file, for debugging use.
-   Copyright (C) 2002-2013 Free Software Foundation, Inc.
+   Copyright (C) 2002-2014 Free Software Foundation, Inc.
    Contributed by Nathan Sidwell <nathan@codesourcery.com>
 
 Gcov is free software; you can redistribute it and/or modify
@@ -39,9 +39,9 @@ static void tag_arcs (const char *, unsigned, unsigned);
 static void tag_lines (const char *, unsigned, unsigned);
 static void tag_counters (const char *, unsigned, unsigned);
 static void tag_summary (const char *, unsigned, unsigned);
+static void tag_module_info (const char *, unsigned, unsigned);
 static void dump_working_sets (const char *filename ATTRIBUTE_UNUSED,
                                const struct gcov_ctr_summary *summary);
-static void tag_module_info (const char *, unsigned, unsigned);
 extern int main (int, char **);
 
 typedef struct tag_format
@@ -53,8 +53,8 @@ typedef struct tag_format
 
 static int flag_dump_contents = 0;
 static int flag_dump_positions = 0;
-static int flag_dump_working_sets = 0;
 static int flag_dump_aux_modules_only = 0;
+static int flag_dump_working_sets = 0;
 
 static const struct option options[] =
 {
@@ -101,7 +101,7 @@ main (int argc ATTRIBUTE_UNUSED, char **argv)
 
   diagnostic_initialize (global_dc, 0);
 
-  while ((opt = getopt_long (argc, argv, "hlpvwx", options, NULL)) != -1)
+  while ((opt = getopt_long (argc, argv, "hlpvxw", options, NULL)) != -1)
     {
       switch (opt)
 	{
@@ -149,15 +149,15 @@ print_usage (void)
   printf ("  -v, --version        Print version number\n");
   printf ("  -l, --long           Dump record contents too\n");
   printf ("  -p, --positions      Dump record positions\n");
-  printf ("  -w, --working-sets   Dump working set computed from summary\n");
   printf ("  -x                   Dump names of auxiliary modules only\n");
+  printf ("  -w, --working-sets   Dump working set computed from summary\n");
 }
 
 static void
 print_version (void)
 {
   printf ("gcov-dump %s%s\n", pkgversion_string, version_string);
-  printf ("Copyright (C) 2013 Free Software Foundation, Inc.\n");
+  printf ("Copyright (C) 2014 Free Software Foundation, Inc.\n");
   printf ("This is free software; see the source for copying conditions.\n"
   	  "There is NO warranty; not even for MERCHANTABILITY or \n"
 	  "FITNESS FOR A PARTICULAR PURPOSE.\n\n");
@@ -483,7 +483,11 @@ static void
 tag_counters (const char *filename ATTRIBUTE_UNUSED,
 	      unsigned tag ATTRIBUTE_UNUSED, unsigned length ATTRIBUTE_UNUSED)
 {
-  static const char *const counter_names[] = GCOV_COUNTER_NAMES;
+#define DEF_GCOV_COUNTER(COUNTER, NAME, MERGE_FN) NAME,
+  static const char *const counter_names[] = {
+#include "gcov-counter.def"
+};
+#undef DEF_GCOV_COUNTER
   unsigned n_counts = GCOV_TAG_COUNTER_NUM (length);
 
   printf (" %s %u counts",
