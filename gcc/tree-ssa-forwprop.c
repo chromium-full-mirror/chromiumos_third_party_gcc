@@ -1529,8 +1529,7 @@ simplify_builtin_call (gimple_stmt_iterator *gsi_p, tree callee2)
 	  use_operand_p use_p;
 
 	  if (!tree_fits_shwi_p (val2)
-	      || !tree_fits_uhwi_p (len2)
-	      || compare_tree_int (len2, 1024) == 1)
+	      || !tree_fits_uhwi_p (len2))
 	    break;
 	  if (is_gimple_call (stmt1))
 	    {
@@ -1596,8 +1595,7 @@ simplify_builtin_call (gimple_stmt_iterator *gsi_p, tree callee2)
 	     is not constant, or is bigger than memcpy length, bail out.  */
 	  if (diff == NULL
 	      || !tree_fits_uhwi_p (diff)
-	      || tree_int_cst_lt (len1, diff)
-	      || compare_tree_int (diff, 1024) == 1)
+	      || tree_int_cst_lt (len1, diff))
 	    break;
 
 	  /* Use maximum of difference plus memset length and memcpy length
@@ -3175,9 +3173,7 @@ simplify_vce (gimple_stmt_iterator *gsi)
 	  && (INTEGRAL_TYPE_P (TREE_TYPE (def_op))
 	      || POINTER_TYPE_P (TREE_TYPE (def_op)))
 	  && (TYPE_PRECISION (TREE_TYPE (op))
-	      == TYPE_PRECISION (TREE_TYPE (def_op)))
-	  && (TYPE_SIZE (TREE_TYPE (op))
-	      == TYPE_SIZE (TREE_TYPE (def_op))))
+	      == TYPE_PRECISION (TREE_TYPE (def_op))))
 	{
 	  TREE_OPERAND (gimple_assign_rhs1 (stmt), 0) = def_op;
 	  update_stmt (stmt);

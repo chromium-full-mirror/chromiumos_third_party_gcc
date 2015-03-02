@@ -107,9 +107,8 @@ struct checksum_alias
   struct checksum_alias *next_alias;
   gcov_type guid;
   const struct gcov_fn_info *fi_ptr;
-  /* Non-NULL pointer to flag if this function has all-zero arc counts, to be
-     set if we perform fixup.  */
-  char *zero_count_fixup;
+  /* Does this function have all-zero arc counts?  */
+  int zero_counts;
 };
 
 /* Module info is stored in dyn_caph->sup_modules
@@ -179,10 +178,10 @@ extern gcov_unsigned_t __gcov_lipo_merge_modu_edges;
 extern gcov_unsigned_t __gcov_lipo_weak_inclusion;
 
 #if defined(inhibit_libc)
-void __gcov_build_callgraph (char **zero_counts) {}
+void __gcov_build_callgraph (void) {}
 #else
 
-int __gcov_compute_module_groups (char **zero_counts) ATTRIBUTE_HIDDEN;
+int __gcov_compute_module_groups (void) ATTRIBUTE_HIDDEN;
 void __gcov_finalize_dyn_callgraph (void) ATTRIBUTE_HIDDEN;
 static void gcov_dump_callgraph (gcov_type);
 static void gcov_dump_cgraph_node_short (struct dyn_cgraph_node *node);
@@ -379,19 +378,18 @@ lineno_checksum_get_key (const void *p)
 }
 
 /* Create a new checksum_alias struct for function with GUID, FI_PTR,
-   and ZERO_COUNT_FIXUP flag pointer.  Prepends to list NEXT and returns
-   new struct.  */
+   and ZERO_COUNTS flag.  Prepends to list NEXT and returns new struct.  */
 
 static struct checksum_alias *
 new_checksum_alias (gcov_type guid, const struct gcov_fn_info *fi_ptr,
-                    char *zero_count_fixup,
+                    int zero_counts,
                     struct checksum_alias *next)
 {
   struct checksum_alias *alias = XNEW (struct checksum_alias);
   alias->next_alias = next;
   alias->fi_ptr = fi_ptr;
   alias->guid = guid;
-  alias->zero_count_fixup = zero_count_fixup;
+  alias->zero_counts = zero_counts;
   return alias;
 }
 
@@ -409,12 +407,11 @@ find_cfg_checksum (struct checksum_alias_info *list, unsigned cfg_checksum)
 }
 
 /* Insert a new checksum_alias struct into LIST for function with
-   CFG_CHECKSUM and associated GUID, FI_PTR, and ZERO_COUNT_FIXUP
-   flag pointer.  */
+   CFG_CHECKSUM and associated GUID, FI_PTR, and ZERO_COUNTS flag.  */
 
 static struct checksum_alias_info *
 cfg_checksum_insert (unsigned cfg_checksum, gcov_type guid,
-                     const struct gcov_fn_info *fi_ptr, char *zero_count_fixup,
+                     const struct gcov_fn_info *fi_ptr, int zero_counts,
                      struct checksum_alias_info *list)
 {
   struct checksum_alias_info *alias_info;
@@ -422,8 +419,7 @@ cfg_checksum_insert (unsigned cfg_checksum, gcov_type guid,
   if (alias_info)
     {
       gcc_assert (alias_info->alias_list);
-      alias_info->alias_list = new_checksum_alias (guid, fi_ptr,
-                                                   zero_count_fixup,
+      alias_info->alias_list = new_checksum_alias (guid, fi_ptr, zero_counts,
                                                    alias_info->alias_list);
       return list;
     }
@@ -432,8 +428,7 @@ cfg_checksum_insert (unsigned cfg_checksum, gcov_type guid,
       alias_info = XNEW (struct checksum_alias_info);
       alias_info->next_cfg_checksum = list;
       alias_info->cfg_checksum = cfg_checksum;
-      alias_info->alias_list = new_checksum_alias (guid, fi_ptr,
-                                                   zero_count_fixup,
+      alias_info->alias_list = new_checksum_alias (guid, fi_ptr, zero_counts,
                                                    NULL);
       return alias_info;
     }
@@ -441,12 +436,12 @@ cfg_checksum_insert (unsigned cfg_checksum, gcov_type guid,
 
 /* Insert a new checksum_alias struct into lineno_pointer_sets for function with
    LINENO_CHECKSUM and CFG_CHECKSUM with associated GUID, FI_PTR, and
-   ZERO_COUNT_FIXUP flag pointer.  */
+   ZERO_COUNTS flag.  */
 
 static void
 checksum_set_insert (unsigned lineno_checksum, unsigned cfg_checksum,
                      gcov_type guid, const struct gcov_fn_info *fi_ptr,
-                     char *zero_count_fixup)
+                     int zero_counts)
 {
   struct dyn_pointer_set *p = the_dyn_call_graph.lineno_pointer_sets;
   if (!p)
@@ -457,7 +452,7 @@ checksum_set_insert (unsigned lineno_checksum, unsigned cfg_checksum,
   if (*m)
     {
       (*m)->cfg_checksum_list = cfg_checksum_insert (cfg_checksum, guid,
-                                                     fi_ptr, zero_count_fixup,
+                                                     fi_ptr, zero_counts,
                                                      (*m)->cfg_checksum_list);
     }
   else
@@ -465,8 +460,7 @@ checksum_set_insert (unsigned lineno_checksum, unsigned cfg_checksum,
       *m = XNEW (struct lineno_checksum_alias);
       (*m)->lineno_checksum = lineno_checksum;
       (*m)->cfg_checksum_list = cfg_checksum_insert (cfg_checksum, guid,
-                                                     fi_ptr, zero_count_fixup,
-                                                     NULL);
+                                                     fi_ptr, zero_counts, NULL);
       p->n_elements++;
     }
 }
@@ -807,10 +801,10 @@ gcov_build_callgraph_ic_fn (struct dyn_cgraph_node *caller,
     }
 }
 
-/* Build the dynamic call graph and update ZERO_COUNTS flags.  */
+/* Build the dynamic call graph.  */
 
 static void
-gcov_build_callgraph (char **zero_counts)
+gcov_build_callgraph (void)
 {
   struct gcov_info *gi_ptr;
   unsigned m_ix;
@@ -858,19 +852,9 @@ gcov_build_callgraph (char **zero_counts)
                   if (total_arc_count != 0)
                     the_dyn_call_graph.num_nodes_executed++;
                   if (fixup_type)
-                    {
-                      char *zero_count_fixup = NULL;
-                      /* Passing in a non-NULL zero_count_fixup pointer
-                         indicates that the counts were all zero for this
-                         function, and the fixup routine will set the flag
-                         if the function's counters are updated to non-zero
-                         values.  */
-                      if (total_arc_count == 0)
-                        zero_count_fixup = &zero_counts[m_ix][f_ix];
-                      checksum_set_insert (fi_ptr->lineno_checksum,
-                                           fi_ptr->cfg_checksum, caller->guid,
-                                           fi_ptr, zero_count_fixup);
-                    }
+                    checksum_set_insert (fi_ptr->lineno_checksum,
+                                         fi_ptr->cfg_checksum, caller->guid,
+                                         fi_ptr, total_arc_count == 0);
                 }
               ci_ptr++;
             }
@@ -1267,14 +1251,7 @@ gcov_collect_imported_modules (const void *value,
   out_array = (struct gcov_import_mod_array *) data1;
 
   if (m->imp_mod != out_array->importing_module)
-  {
     out_array->imported_modules[out_array->len++] = m;
-    /* Sanity check that the importing (primary) module is not
-       actually the same as the new aux module. This could happen if
-       we accidentally read in the same gcda file twice.  */
-    gcc_assert (m->imp_mod->mod_info->ident !=
-                out_array->importing_module->mod_info->ident);
-  }
 
   return 1;
 }
@@ -2257,7 +2234,6 @@ gcov_compute_random_module_groups (unsigned max_group_size)
     }
 }
 
-#if 0
 /* Write out MOD_INFO into the gcda file. IS_PRIMARY is a flag
    indicating if the module is the primary module in the group.  */
 
@@ -2265,7 +2241,7 @@ static void
 gcov_write_module_info (const struct gcov_info *mod_info,
                         unsigned is_primary)
 {
-  gcov_unsigned_t len = 0, filename_len = 0, src_filename_len = 0, i;
+  gcov_unsigned_t len = 0, filename_len = 0, src_filename_len = 0, i, j;
   gcov_unsigned_t num_strings;
   gcov_unsigned_t *aligned_fname;
   struct gcov_module_info  *module_info = mod_info->mod_info;
@@ -2280,8 +2256,14 @@ gcov_write_module_info (const struct gcov_info *mod_info,
     + module_info->num_system_paths
     + module_info->num_cpp_defines + module_info->num_cpp_includes
     + module_info->num_cl_args;
-  len += gcov_compute_string_array_len (module_info->string_array,
-                                        num_strings);
+  for (i = 0; i < num_strings; i++)
+    {
+      gcov_unsigned_t string_len
+          = (strlen (module_info->string_array[i]) + sizeof (gcov_unsigned_t))
+          / sizeof (gcov_unsigned_t);
+      len += string_len;
+      len += 1; /* Each string is lead by a length.  */
+    }
 
   len += 11; /* 11 more fields */
 
@@ -2314,9 +2296,21 @@ gcov_write_module_info (const struct gcov_info *mod_info,
     gcov_write_unsigned (aligned_fname[i]);
 
   /* Now write the string array.  */
-  gcov_write_string_array (module_info->string_array, num_strings);
+  for (j = 0; j < num_strings; j++)
+    {
+      gcov_unsigned_t *aligned_string;
+      gcov_unsigned_t string_len =
+	(strlen (module_info->string_array[j]) + sizeof (gcov_unsigned_t)) /
+	sizeof (gcov_unsigned_t);
+      aligned_string = (gcov_unsigned_t *)
+	alloca ((string_len + 1) * sizeof (gcov_unsigned_t));
+      memset (aligned_string, 0, (string_len + 1) * sizeof (gcov_unsigned_t));
+      aligned_string[0] = string_len;
+      strcpy ((char*) (aligned_string + 1), module_info->string_array[j]);
+      for (i = 0; i < (string_len + 1); i++)
+        gcov_write_unsigned (aligned_string[i]);
+    }
 }
-#endif
 
 /* Write out MOD_INFO and its imported modules into gcda file.  */
 
@@ -2326,8 +2320,6 @@ gcov_write_module_infos (struct gcov_info *mod_info)
   unsigned imp_len = 0;
   const struct dyn_imp_mod **imp_mods;
 
-  if (flag_alg_mode == INCLUSION_BASED_PRIORITY_ALGORITHM)
-    SET_MODULE_INCLUDE_ALL_AUX (mod_info->mod_info);
   gcov_write_module_info (mod_info, 1);
 
   imp_mods = gcov_get_sorted_import_module_array (mod_info, &imp_len);
@@ -2984,7 +2976,7 @@ gcov_fixup_counters_checksum (const struct checksum_alias_info *info,
   for (alias = info->alias_list; alias;
        alias = alias->next_alias)
     {
-      if (alias->zero_count_fixup)
+      if (alias->zero_counts)
         {
           found = 1;
           break;
@@ -2999,7 +2991,7 @@ gcov_fixup_counters_checksum (const struct checksum_alias_info *info,
   for (alias = info->alias_list; alias;
        alias = alias->next_alias)
     {
-      if (alias->zero_count_fixup)
+      if (alias->zero_counts)
         continue;
       merge_ctrs (merged_ctrs, alias->fi_ptr->ctrs, alias->guid);
       found = 1;
@@ -3017,10 +3009,9 @@ gcov_fixup_counters_checksum (const struct checksum_alias_info *info,
   for (alias = info->alias_list; alias;
        alias = alias->next_alias)
     {
-      if (!alias->zero_count_fixup)
+      if (!alias->zero_counts)
         continue;
       copy_ctrs (alias->fi_ptr->ctrs, alias->guid, merged_ctrs);
-      *alias->zero_count_fixup = 1;
     }
 
   return 1;
@@ -3068,13 +3059,11 @@ gcov_fixup_zero_counters (void)
   return changed;
 }
 
-/* Compute module groups needed for L-IPO compilation.  The ZERO_COUNTS
-   flags are set for functions with zero count fixups applied. Returns 1
-   if any counter fixups were applied, requiring a profile rewrite,
-   0 otherwise.  */
+/* Compute module groups needed for L-IPO compilation.  Returns 1 if any
+   counter fixups were applied, requiring a profile rewrite, 0 otherwise.  */
 
 int
-__gcov_compute_module_groups (char **zero_counts)
+__gcov_compute_module_groups (void)
 {
   gcov_type cut_off_count;
   char *seed = getenv ("LIPO_RANDOM_GROUPING");
@@ -3121,7 +3110,7 @@ __gcov_compute_module_groups (char **zero_counts)
     fixup_type = atoi (do_fixup);
 
   /* First compute dynamic call graph.  */
-  gcov_build_callgraph (zero_counts);
+  gcov_build_callgraph ();
 
   cut_off_count = gcov_compute_cutoff_count ();
 

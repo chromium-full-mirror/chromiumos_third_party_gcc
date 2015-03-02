@@ -632,7 +632,8 @@ poplevel (int keep, int reverse, int functionbody)
 	   push_local_binding where the list of decls returned by
 	   getdecls is built.  */
 	decl = TREE_CODE (d) == TREE_LIST ? TREE_VALUE (d) : d;
-	tree type = TREE_TYPE (decl);
+	// See through references for improved -Wunused-variable (PR 38958).
+	tree type = non_reference (TREE_TYPE (decl));
 	if (VAR_P (decl)
 	    && (! TREE_USED (decl) || !DECL_READ_P (decl))
 	    && ! DECL_IN_SYSTEM_HEADER (decl)
@@ -4821,25 +4822,10 @@ grok_reference_init (tree decl, tree type, tree init, int flags)
     init = build_x_compound_expr_from_list (init, ELK_INIT,
 					    tf_warning_or_error);
 
-  tree ttype = TREE_TYPE (type);
-  if (TREE_CODE (ttype) != ARRAY_TYPE
+  if (TREE_CODE (TREE_TYPE (type)) != ARRAY_TYPE
       && TREE_CODE (TREE_TYPE (init)) == ARRAY_TYPE)
     /* Note: default conversion is only called in very special cases.  */
     init = decay_conversion (init, tf_warning_or_error);
-
-  /* check_initializer handles this for non-reference variables, but for
-     references we need to do it here or the initializer will get the
-     incomplete array type and confuse later calls to
-     cp_complete_array_type.  */
-  if (TREE_CODE (ttype) == ARRAY_TYPE
-      && TYPE_DOMAIN (ttype) == NULL_TREE
-      && (BRACE_ENCLOSED_INITIALIZER_P (init)
-	  || TREE_CODE (init) == STRING_CST))
-    {
-      cp_complete_array_type (&ttype, init, false);
-      if (ttype != TREE_TYPE (type))
-	type = cp_build_reference_type (ttype, TYPE_REF_IS_RVALUE (type));
-    }
 
   /* Convert INIT to the reference type TYPE.  This may involve the
      creation of a temporary, whose lifetime must be the same as that
@@ -13699,16 +13685,13 @@ begin_destructor_body (void)
       initialize_vtbl_ptrs (current_class_ptr);
       finish_compound_stmt (compound_stmt);
 
-      if (flag_lifetime_dse)
-        {
-          /* Insert a cleanup to let the back end know that the object is dead
-             when we exit the destructor, either normally or via exception.  */
-          tree clobber = build_constructor (current_class_type, NULL);
-          TREE_THIS_VOLATILE (clobber) = true;
-          tree exprstmt = build2 (MODIFY_EXPR, current_class_type,
-                                  current_class_ref, clobber);
-          finish_decl_cleanup (NULL_TREE, exprstmt);
-        }
+      /* Insert a cleanup to let the back end know that the object is dead
+	 when we exit the destructor, either normally or via exception.  */
+      tree clobber = build_constructor (current_class_type, NULL);
+      TREE_THIS_VOLATILE (clobber) = true;
+      tree exprstmt = build2 (MODIFY_EXPR, current_class_type,
+			      current_class_ref, clobber);
+      finish_decl_cleanup (NULL_TREE, exprstmt);
 
       /* And insert cleanups for our bases and members so that they
 	 will be properly destroyed if we throw.  */

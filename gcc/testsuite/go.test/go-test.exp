@@ -241,11 +241,7 @@ proc go-set-goarch { } {
 	    if [check_effective_target_ilp32] {
 		set goarch "ppc"
 	    } else {
-		if [istarget "powerpc64le-*-*"] {
-		    set goarch "ppc64le"
-		} else {
-		    set goarch "ppc64"
-		}
+		set goarch "ppc64"
 	    }
 	}
 	"sparc*-*-*" {

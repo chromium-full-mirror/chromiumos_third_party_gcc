@@ -100,10 +100,6 @@ namespace __gnu_test
 
   class DerivedType : public ClassType { };
 
-#if __cplusplus >= 201103L
-  class FinalType final : public DerivedType { };
-#endif
-
   enum EnumType { e0 };
 
   struct ConvType

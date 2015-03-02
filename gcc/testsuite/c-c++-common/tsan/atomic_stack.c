@@ -1,26 +1,22 @@
 /* { dg-shouldfail "tsan" } */
-/* { dg-additional-options "-ldl" } */
 
 #include <pthread.h>
-#include "tsan_barrier.h"
+#include <unistd.h>
 
-static pthread_barrier_t barrier;
 int Global;
 
 void *Thread1(void *x) {
-  barrier_wait(&barrier);
+  sleep(1);
   __atomic_fetch_add(&Global, 1, __ATOMIC_RELAXED);
   return NULL;
 }
 
 void *Thread2(void *x) {
   Global++;
-  barrier_wait(&barrier);
   return NULL;
 }
 
 int main() {
-  barrier_init(&barrier, 2);
   pthread_t t[2];
   pthread_create(&t[0], NULL, Thread1, NULL);
   pthread_create(&t[1], NULL, Thread2, NULL);

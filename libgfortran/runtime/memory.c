@@ -56,9 +56,7 @@ xmallocarray (size_t nmemb, size_t size)
 
   if (!nmemb || !size)
     size = nmemb = 1;
-#define HALF_SIZE_T (((size_t) 1) << (__CHAR_BIT__ * sizeof (size_t) / 2))
-  else if (__builtin_expect ((nmemb | size) >= HALF_SIZE_T, 0)
-	   && nmemb > SIZE_MAX / size)
+  else if (nmemb > SIZE_MAX / size)
     {
       errno = ENOMEM;
       os_error ("Integer overflow in xmallocarray");

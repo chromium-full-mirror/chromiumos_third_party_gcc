@@ -1,5 +1,5 @@
 // { dg-do compile }
-// { dg-options "-O2 -fdump-ipa-cp -fdump-tree-optimized -fdevirtualize" }
+// { dg-options "-O2 -fdump-ipa-cp -fdump-tree-optimized" }
 
 struct S { S(); virtual void xyzzy(); void otherstuff(); };
 struct R { int a; S s; R(); };

@@ -102,7 +102,6 @@ octfapg_alloc (const var_t n)
   return m;
 }
 
-__attribute__((noinline))
 oct_t*
 octfapg_universe (const var_t n)
 {

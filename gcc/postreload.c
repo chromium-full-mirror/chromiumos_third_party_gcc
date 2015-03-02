@@ -493,13 +493,7 @@ reload_cse_simplify_operands (rtx insn, rtx testreg)
 	continue;
 
       for (l = v->locs; l; l = l->next)
-	if (REG_P (l->loc)
-	    /* If postreload cse replace an expr in call insn with
-	       frame pointer reg, we will end up getting call (...bp...),
-	       this is wrong for frame pointer shrinkwrapping.  */
-	    && !(frame_pointer_partially_needed
-		 && CALL_P (insn)
-		 && REGNO (l->loc) == HARD_FRAME_POINTER_REGNUM))
+	if (REG_P (l->loc))
 	  SET_HARD_REG_BIT (equiv_regs[i], REGNO (l->loc));
     }
 

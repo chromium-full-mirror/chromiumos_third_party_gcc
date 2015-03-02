@@ -576,19 +576,13 @@ proper position among the other output files.  */
 #ifndef LIBLSAN_SPEC
 #define STATIC_LIBLSAN_LIBS \
   " %{static-liblsan:%:include(libsanitizer.spec)%(link_liblsan)}"
-#ifdef LIBLSAN_EARLY_SPEC
-#define LIBLSAN_SPEC STATIC_LIBLSAN_LIBS
-#elif defined(HAVE_LD_STATIC_DYNAMIC)
-#define LIBLSAN_SPEC "%{static-liblsan:" LD_STATIC_OPTION \
+#ifdef HAVE_LD_STATIC_DYNAMIC
+#define LIBLSAN_SPEC "%{!shared:%{static-liblsan:" LD_STATIC_OPTION \
 		     "} -llsan %{static-liblsan:" LD_DYNAMIC_OPTION "}" \
-		     STATIC_LIBLSAN_LIBS
+		     STATIC_LIBLSAN_LIBS "}"
 #else
-#define LIBLSAN_SPEC "-llsan" STATIC_LIBLSAN_LIBS
+#define LIBLSAN_SPEC "%{!shared:-llsan" STATIC_LIBLSAN_LIBS "}"
 #endif
-#endif
-
-#ifndef LIBLSAN_EARLY_SPEC
-#define LIBLSAN_EARLY_SPEC ""
 #endif
 
 #ifndef LIBUBSAN_SPEC
@@ -678,9 +672,9 @@ proper position among the other output files.  */
 
 #ifndef LINK_PIE_SPEC
 #ifdef HAVE_LD_PIE
-#define LINK_PIE_SPEC "%{pie:-pie} %{no-pie:}"
+#define LINK_PIE_SPEC "%{pie:-pie} "
 #else
-#define LINK_PIE_SPEC "%{pie:} %{no-pie:}"
+#define LINK_PIE_SPEC "%{pie:} "
 #endif
 #endif
 
@@ -726,15 +720,15 @@ proper position among the other output files.  */
 #ifndef SANITIZER_EARLY_SPEC
 #define SANITIZER_EARLY_SPEC "\
 %{!nostdlib:%{!nodefaultlibs:%{%:sanitize(address):" LIBASAN_EARLY_SPEC "} \
-    %{%:sanitize(thread):" LIBTSAN_EARLY_SPEC "} \
-    %{%:sanitize(leak):" LIBLSAN_EARLY_SPEC "}}}"
+    %{%:sanitize(thread):" LIBTSAN_EARLY_SPEC "}}}"
 #endif
 
 /* Linker command line options for -fsanitize= late on the command line.  */
 #ifndef SANITIZER_SPEC
 #define SANITIZER_SPEC "\
 %{!nostdlib:%{!nodefaultlibs:%{%:sanitize(address):" LIBASAN_SPEC "\
-    %{static:%ecannot specify -static with -fsanitize=address}}\
+    %{static:%ecannot specify -static with -fsanitize=address}\
+    %{%:sanitize(thread):%e-fsanitize=address is incompatible with -fsanitize=thread}}\
     %{%:sanitize(thread):" LIBTSAN_SPEC "\
     %{!pie:%{!shared:%e-fsanitize=thread linking must be done with -pie or -shared}}}\
     %{%:sanitize(undefined):" LIBUBSAN_SPEC "}\
@@ -769,7 +763,7 @@ proper position among the other output files.  */
     -plugin %(func_reorder_linker_plugin_file) \
     -plugin-opt=%(func_reorder_linker_plugin_opt)}" \
    "%{flto|flto=*:%<fcompare-debug*} \
-    %{flto} %{fno-lto} %{flto=*} %l " LINK_PIE_SPEC \
+    %{flto} %{flto=*} %l " LINK_PIE_SPEC \
    "%{fuse-ld=*:-fuse-ld=%*}\
     %X %{o*} %{e*} %{N} %{n} %{r}\
     %{s} %{t} %{u*} %{z} %{Z} %{!nostdlib:%{!nostartfiles:%S}} " VTABLE_VERIFICATION_SPEC " \
@@ -3142,7 +3136,6 @@ display_help (void)
   fputs (_("  -c                       Compile and assemble, but do not link\n"), stdout);
   fputs (_("  -o <file>                Place the output into <file>\n"), stdout);
   fputs (_("  -pie                     Create a position independent executable\n"), stdout);
-  fputs (_("  -no-pie                  Create a position dependent executable\n"), stdout);
   fputs (_("  -shared                  Create a shared library\n"), stdout);
   fputs (_("\
   -x <language>            Specify the language of the following input files\n\
@@ -8243,9 +8236,7 @@ sanitize_spec_function (int argc, const char **argv)
     return NULL;
 
   if (strcmp (argv[0], "address") == 0)
-    return (flag_sanitize & SANITIZE_USER_ADDRESS) ? "" : NULL;
-  if (strcmp (argv[0], "kernel-address") == 0)
-    return (flag_sanitize & SANITIZE_KERNEL_ADDRESS) ? "" : NULL;
+    return (flag_sanitize & SANITIZE_ADDRESS) ? "" : NULL;
   if (strcmp (argv[0], "thread") == 0)
     return (flag_sanitize & SANITIZE_THREAD) ? "" : NULL;
   if (strcmp (argv[0], "undefined") == 0)

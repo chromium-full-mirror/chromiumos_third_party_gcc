@@ -52,8 +52,7 @@
 %{mcpu=750:  %{!Dppc*: %{!Dmpc*: -Dmpc750}  } } \
 %{mcpu=821:  %{!Dppc*: %{!Dmpc*: -Dmpc821}  } } \
 %{mcpu=860:  %{!Dppc*: %{!Dmpc*: -Dmpc860}  } } \
-%{mcpu=8540: %{!Dppc*: %{!Dmpc*: -Dppc8540}  } } \
-%{mcpu=e6500: -D__PPC_CPU_E6500__}"
+%{mcpu=8540: %{!Dppc*: %{!Dmpc*: -Dppc8540}  } }" 
 
 #undef  SUBSUBTARGET_EXTRA_SPECS
 #define SUBSUBTARGET_EXTRA_SPECS \

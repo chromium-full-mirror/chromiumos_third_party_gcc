@@ -1,5 +1,5 @@
 /* { dg-do compile } */
-/* { dg-options "-O3 -fdump-ipa-inline -fdump-ipa-cp -fno-early-inlining -fdevirtualize" } */
+/* { dg-options "-O3 -fdump-ipa-inline -fdump-ipa-cp -fno-early-inlining" } */
 class wxPaintEvent {  };
 struct wxDCBase
 { 

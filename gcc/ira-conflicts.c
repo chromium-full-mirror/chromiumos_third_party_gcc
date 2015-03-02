@@ -330,8 +330,7 @@ process_regs_for_copy (rtx reg1, rtx reg2, bool constraint_p,
    OP_NUM) which dies in the insn as if there were a move insn between
    them with frequency FREQ.  */
 static void
-process_reg_shuffles (rtx reg, int op_num, int freq, bool *bound_p,
-		      rtx insn)
+process_reg_shuffles (rtx reg, int op_num, int freq, bool *bound_p)
 {
   int i;
   rtx another_reg;
@@ -346,7 +345,7 @@ process_reg_shuffles (rtx reg, int op_num, int freq, bool *bound_p,
 	  || bound_p[i])
 	continue;
 
-      process_regs_for_copy (reg, another_reg, false, insn, freq);
+      process_regs_for_copy (reg, another_reg, false, NULL_RTX, freq);
     }
 }
 
@@ -397,7 +396,7 @@ add_insn_allocno_copies (rtx insn)
 				REG_P (operand)
 				? operand
 				: SUBREG_REG (operand)) != NULL_RTX)
-	    process_regs_for_copy (operand, dup, true, insn,
+	    process_regs_for_copy (operand, dup, true, NULL_RTX,
 				   freq);
 	}
     }
@@ -413,8 +412,7 @@ add_insn_allocno_copies (rtx insn)
 	   the corresponding allocno copies.  The cost will not
 	   correspond to a real move insn cost, so make the frequency
 	   smaller.  */
-	process_reg_shuffles (operand, i, freq < 8 ? 1 : freq / 8,
-			      bound_p, insn);
+	process_reg_shuffles (operand, i, freq < 8 ? 1 : freq / 8, bound_p);
     }
 }
 

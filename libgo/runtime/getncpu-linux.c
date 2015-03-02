@@ -6,7 +6,7 @@
 #include <sched.h>
 
 // CPU_COUNT is only provided by glibc 2.6 or higher
-#ifndef CPU_COUNT
+#if !defined(__GLIBC_PREREQ) || !__GLIBC_PREREQ(2, 6)
 #define CPU_COUNT(set) _CPU_COUNT((unsigned int *)(set), sizeof(*(set))/sizeof(unsigned int))
 static int _CPU_COUNT(unsigned int *set, size_t len) {
 	int cnt;

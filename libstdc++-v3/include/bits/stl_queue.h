@@ -58,9 +58,6 @@
 
 #include <bits/concept_check.h>
 #include <debug/debug.h>
-#if __cplusplus >= 201103L
-# include <bits/uses_allocator.h>
-#endif
 
 namespace std _GLIBCXX_VISIBILITY(default)
 {

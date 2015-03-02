@@ -1,7 +1,7 @@
 /* We shall devirtualize to B::foo since it is the only live candidate of an
    anonymous type.  */
 /* { dg-do compile } */
-/* { dg-options "-O2 -fdump-ipa-whole-program -fdevirtualize"  } */
+/* { dg-options "-O2 -fdump-ipa-whole-program"  } */
 namespace {
 class B {
 public:

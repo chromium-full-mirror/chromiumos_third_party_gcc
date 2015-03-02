@@ -1,5 +1,5 @@
 // { dg-do compile }
-// { dg-options "-O2 -fdevirtualize" }
+// { dg-options "-O2" }
 
 class ert_RefCounter {
  protected:

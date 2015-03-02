@@ -3036,11 +3036,6 @@ intersect_aggregates_with_edge (struct cgraph_edge *cs, int index,
 		intersect_with_agg_replacements (cs->caller, src_idx,
 						 &inter, 0);
 	    }
-	  else
-	    {
-	      inter.release ();
-	      return vNULL;
-	    }
 	}
       else
 	{
@@ -3055,11 +3050,6 @@ intersect_aggregates_with_edge (struct cgraph_edge *cs, int index,
 		inter = copy_plats_to_inter (src_plats, 0);
 	      else
 		intersect_with_plats (src_plats, &inter, 0);
-	    }
-	  else
-	    {
-	      inter.release ();
-	      return vNULL;
 	    }
 	}
     }
@@ -3144,8 +3134,7 @@ find_aggregate_values_for_callers_subset (struct cgraph_node *node,
 					  vec<cgraph_edge_p> callers)
 {
   struct ipa_node_params *dest_info = IPA_NODE_REF (node);
-  struct ipa_agg_replacement_value *res;
-  struct ipa_agg_replacement_value **tail = &res;
+  struct ipa_agg_replacement_value *res = NULL;
   struct cgraph_edge *cs;
   int i, j, count = ipa_get_param_count (dest_info);
 
@@ -3189,15 +3178,14 @@ find_aggregate_values_for_callers_subset (struct cgraph_node *node,
 	  v->offset = item->offset;
 	  v->value = item->value;
 	  v->by_ref = plats->aggs_by_ref;
-	  *tail = v;
-	  tail = &v->next;
+	  v->next = res;
+	  res = v;
 	}
 
     next_param:
       if (inter.exists ())
 	inter.release ();
     }
-  *tail = NULL;
   return res;
 }
 
@@ -3206,8 +3194,7 @@ find_aggregate_values_for_callers_subset (struct cgraph_node *node,
 static struct ipa_agg_replacement_value *
 known_aggs_to_agg_replacement_list (vec<ipa_agg_jump_function> known_aggs)
 {
-  struct ipa_agg_replacement_value *res;
-  struct ipa_agg_replacement_value **tail = &res;
+  struct ipa_agg_replacement_value *res = NULL;
   struct ipa_agg_jump_function *aggjf;
   struct ipa_agg_jf_item *item;
   int i, j;
@@ -3221,10 +3208,9 @@ known_aggs_to_agg_replacement_list (vec<ipa_agg_jump_function> known_aggs)
 	v->offset = item->offset;
 	v->value = item->value;
 	v->by_ref = aggjf->by_ref;
-	*tail = v;
-	tail = &v->next;
+	v->next = res;
+	res = v;
       }
-  *tail = NULL;
   return res;
 }
 

@@ -9764,10 +9764,7 @@ c_parser_omp_variable_list (c_parser *parser,
 
 		  c_parser_consume_token (parser);
 		  if (!c_parser_next_token_is (parser, CPP_COLON))
-		    {
-		      low_bound = c_parser_expression (parser).value;
-		      mark_exp_read (low_bound);
-		    }
+		    low_bound = c_parser_expression (parser).value;
 		  if (c_parser_next_token_is (parser, CPP_CLOSE_SQUARE))
 		    length = integer_one_node;
 		  else
@@ -9780,10 +9777,7 @@ c_parser_omp_variable_list (c_parser *parser,
 			  break;
 			}
 		      if (!c_parser_next_token_is (parser, CPP_CLOSE_SQUARE))
-			{
-			  length = c_parser_expression (parser).value;
-			  mark_exp_read (length);
-			}
+			length = c_parser_expression (parser).value;
 		    }
 		  /* Look for the closing `]'.  */
 		  if (!c_parser_require (parser, CPP_CLOSE_SQUARE,

@@ -2957,7 +2957,7 @@ enum
 struct ashl_lshr_sequence
 {
   char insn_count;
-  signed char amount[6];
+  char amount[6];
   char clobbers_t;
 };
 

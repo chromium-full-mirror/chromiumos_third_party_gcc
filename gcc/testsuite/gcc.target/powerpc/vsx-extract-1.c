@@ -7,4 +7,10 @@
 
 #include <altivec.h>
 
-double get_value (vector double *p) { return vec_extract (*p, 0); }
+#if __LITTLE_ENDIAN__
+#define OFFSET 1
+#else
+#define OFFSET 0
+#endif
+
+double get_value (vector double *p) { return vec_extract (*p, OFFSET); }

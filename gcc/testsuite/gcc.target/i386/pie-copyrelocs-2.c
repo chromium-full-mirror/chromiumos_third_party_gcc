@@ -1,14 +1,13 @@
-/* Check that GOTPCREL isn't used to access glob_a.  */
-/* { dg-do compile { target *-*-linux* } } */
-/* { dg-require-effective-target pie_copyreloc } */
-/* { dg-options "-O2 -fpie" } */
+/* Test if -mno-copyrelocs does the right thing. */
+/* { dg-do compile } */
+/* { dg-options "-O2 -fpie -mno-copyrelocs" } */
 
-int glob_a;
+extern int glob_a;
 
 int foo ()
 {
   return glob_a;
 }
 
-/* glob_a should never be accessed with a GOTPCREL.  */
-/* { dg-final { scan-assembler-not "glob_a@GOTPCREL" { target { ! ia32 } } } } */
+/* glob_a should always be accessed via GOT  */ 
+/* { dg-final { scan-assembler "glob_a\\@GOT" { target { x86_64-*-* } } } } */

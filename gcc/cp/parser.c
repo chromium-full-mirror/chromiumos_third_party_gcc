@@ -8499,7 +8499,12 @@ cp_parser_builtin_offsetof (cp_parser *parser)
     }
 
  success:
-  expr = finish_offsetof (expr);
+  /* If we're processing a template, we can't finish the semantics yet.
+     Otherwise we can fold the entire expression now.  */
+  if (processing_template_decl)
+    expr = build1 (OFFSETOF_EXPR, size_type_node, expr);
+  else
+    expr = finish_offsetof (expr);
 
  failure:
   parser->integral_constant_expression_p = save_ice_p;
@@ -25004,6 +25009,8 @@ cp_parser_commit_to_topmost_tentative_parse (cp_parser* parser)
 static void
 cp_parser_abort_tentative_parse (cp_parser* parser)
 {
+  gcc_assert (parser->context->status != CP_PARSER_STATUS_KIND_COMMITTED
+	      || errorcount > 0);
   cp_parser_simulate_error (parser);
   /* Now, pretend that we want to see if the construct was
      successfully parsed.  */

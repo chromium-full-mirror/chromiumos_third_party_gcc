@@ -78,17 +78,14 @@ Example 1)
 
 In [bb 4] elimination of the comparison would require inversion of the branch
 condition and compensation of other BBs.
-Instead the comparison in [bb 3] can be replaced with the comparison in [bb 5]
-by using a reg-reg move.  In [bb 4] a logical not is used to compensate the
-inverted condition.
+Instead an inverting reg-move can be used:
 
 [bb 3]
 (set (reg:SI 167) (reg:SI 173))
 -> bb 5
 
 [BB 4]
-(set (reg:SI 147 t) (eq:SI (reg:SI 177) (const_int 0)))
-(set (reg:SI 167) (reg:SI 147 t))
+(set (reg:SI 167) (not:SI (reg:SI 177)))
 -> bb 5
 
 [bb 5]
@@ -217,9 +214,9 @@ In order to handle cases such as above the RTL pass does the following:
       and replace the comparisons in the BBs with reg-reg copies to get the
       operands in place (create new pseudo regs).
 
-    - If the cstores differ and the comparison is a test against zero,
-      use reg-reg copies for the dominating cstores and logical not cstores
-      for the subordinate cstores.
+    - If the cstores differ, try to apply the special case
+        (eq (reg) (const_int 0)) -> inverted = (not (reg)).
+      for the subordinate cstore types and eliminate the dominating ones.
 
 - If the comparison types in the BBs are not the same, or the first approach
   doesn't work out for some reason, try to eliminate the comparison before the
@@ -561,8 +558,7 @@ private:
   bool can_extend_ccreg_usage (const bb_entry& e,
 			       const cbranch_trace& trace) const;
 
-  // Create an insn rtx that performs a logical not (test != 0) on the src_reg
-  // and stores the result in dst_reg.
+  // Create an insn rtx that is a negating reg move (not operation).
   rtx make_not_reg_insn (rtx dst_reg, rtx src_reg) const;
 
   // Create an insn rtx that inverts the ccreg.
@@ -896,32 +892,12 @@ sh_treg_combine::can_remove_comparison (const bb_entry& e,
 rtx
 sh_treg_combine::make_not_reg_insn (rtx dst_reg, rtx src_reg) const
 {
-  // On SH we can do only SImode and DImode comparisons.
-  if (! (GET_MODE (src_reg) == SImode || GET_MODE (src_reg) == DImode))
-    return NULL;
-
-  // On SH we can store the ccreg into an SImode or DImode reg only.
-  if (! (GET_MODE (dst_reg) == SImode || GET_MODE (dst_reg) == DImode))
-    return NULL;
-
+  // This will to go through expanders and may output multiple insns
+  // for multi-word regs.
   start_sequence ();
-
-  emit_insn (gen_rtx_SET (VOIDmode, m_ccreg,
-			  gen_rtx_fmt_ee (EQ, SImode, src_reg, const0_rtx)));
-
-  if (GET_MODE (dst_reg) == SImode)
-    emit_move_insn (dst_reg, m_ccreg);
-  else if (GET_MODE (dst_reg) == DImode)
-    {
-      emit_move_insn (gen_lowpart (SImode, dst_reg), m_ccreg);
-      emit_move_insn (gen_highpart (SImode, dst_reg), const0_rtx);
-    }
-  else
-    gcc_unreachable ();
-
+  expand_simple_unop (GET_MODE (dst_reg), NOT, src_reg, dst_reg, 0);
   rtx i = get_insns ();
   end_sequence ();
-
   return i;
 }
 
@@ -1104,12 +1080,7 @@ sh_treg_combine::try_combine_comparisons (cbranch_trace& trace,
   // There is one special case though, where an integer comparison
   //     (eq (reg) (const_int 0))
   // can be inverted with a sequence
-  //     (set (t) (eq (reg) (const_int 0))
-  //     (set (reg) (t))
-  //     (eq (reg) (const_int 0))
-  //
-  // FIXME: On SH2A it might be better to use the nott insn in this case,
-  // i.e. do the try_eliminate_cstores approach instead.
+  //     (eq (not (reg)) (const_int 0))
   if (inv_cstore_count != 0 && cstore_count != 0)
     {
       if (make_not_reg_insn (comp_op0, comp_op0) == NULL_RTX)

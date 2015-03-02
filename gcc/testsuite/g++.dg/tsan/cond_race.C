@@ -1,12 +1,10 @@
 /* { dg-shouldfail "tsan" } */
-/* { dg-additional-options "-ldl" } */
 /* { dg-output "ThreadSanitizer: data race.*" } */
 /* { dg-output "pthread_cond_signal.*" } */
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <pthread.h>
-#include "tsan_barrier.h"
-
-static pthread_barrier_t barrier;
 
 struct Ctx {
   pthread_mutex_t m;
@@ -20,12 +18,10 @@ void *thr(void *p) {
   c->done = true;
   pthread_mutex_unlock(&c->m);
   pthread_cond_signal(&c->c);
-  barrier_wait(&barrier);
   return 0;
 }
 
 int main() {
-  barrier_init(&barrier, 2);
   Ctx *c = new Ctx();
   pthread_mutex_init(&c->m, 0);
   pthread_cond_init(&c->c, 0);
@@ -35,7 +31,6 @@ int main() {
   while (!c->done)
     pthread_cond_wait(&c->c, &c->m);
   pthread_mutex_unlock(&c->m);
-  barrier_wait(&barrier);
   delete c;
   pthread_join(th, 0);
 }

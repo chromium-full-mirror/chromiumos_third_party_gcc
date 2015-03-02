@@ -39,7 +39,6 @@ int main1 (int n)
   return 0;
 }
 
-__attribute__ ((noinline)) 
 int main2 (int n)
 {
   int i;

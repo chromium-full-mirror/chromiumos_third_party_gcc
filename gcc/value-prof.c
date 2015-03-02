@@ -137,7 +137,6 @@ static bool gimple_divmod_fixed_value_transform (gimple_stmt_iterator *);
 static bool gimple_mod_pow2_value_transform (gimple_stmt_iterator *);
 static bool gimple_mod_subtract_transform (gimple_stmt_iterator *);
 static bool gimple_stringops_transform (gimple_stmt_iterator *);
-static bool gimple_ic_transform (gimple_stmt_iterator *);
 
 /* Allocate histogram value.  */
 
@@ -1914,7 +1913,7 @@ gimple_ic_transform_mult_targ (gimple stmt, histogram_value histogram)
 /* Perform indirect call (STMT) to guarded direct function call
    transformation using value profile data.  */
 
-static bool
+bool
 gimple_ic_transform (gimple_stmt_iterator *gsi)
 {
   gimple stmt = gsi_stmt (*gsi);
@@ -2356,10 +2355,7 @@ gimple_find_values_to_profile (histogram_values *values)
     for (gsi = gsi_start_bb (bb); !gsi_end_p (gsi); gsi_next (&gsi))
       gimple_values_to_profile (gsi_stmt (gsi), values);
 
-  if (PARAM_VALUE (PARAM_PROFILE_VALUES_TIME))
-    values->safe_push (gimple_alloc_histogram_value (cfun,
-                                                     HIST_TYPE_TIME_PROFILE,
-                                                     0, 0));
+  values->safe_push (gimple_alloc_histogram_value (cfun, HIST_TYPE_TIME_PROFILE, 0, 0));
 
   FOR_EACH_VEC_ELT (*values, i, hist)
     {

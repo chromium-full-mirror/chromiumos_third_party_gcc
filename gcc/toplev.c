@@ -1574,18 +1574,9 @@ process_options (void)
     warn_stack_protect = 0;
 
   /* Address Sanitizer needs porting to each target architecture.  */
-
   if ((flag_sanitize & SANITIZE_ADDRESS)
-      && !FRAME_GROWS_DOWNWARD)
-    {
-      warning (0,
-	       "-fsanitize=address and -fsanitize=kernel-address "
-	       "are not supported for this target");
-      flag_sanitize &= ~SANITIZE_ADDRESS;
-    }
-
-  if ((flag_sanitize & SANITIZE_USER_ADDRESS)
-      && targetm.asan_shadow_offset == NULL)
+      && (targetm.asan_shadow_offset == NULL
+	  || !FRAME_GROWS_DOWNWARD))
     {
       warning (0, "-fsanitize=address not supported for this target");
       flag_sanitize &= ~SANITIZE_ADDRESS;

@@ -67,9 +67,10 @@ nios2_fallback_frame_state (struct _Unwind_Context *context,
   if (pc[0] == (0x00800004 | (__NR_rt_sigreturn << 6)))
     {
       struct rt_sigframe {
+	char retcode[12];
 	siginfo_t info;
 	struct nios2_ucontext uc;
-      } *rt_ = context->cfa;
+      } *rt_ = context->ra;
       struct nios2_mcontext *regs = &rt_->uc.uc_mcontext;
       int i;
 
