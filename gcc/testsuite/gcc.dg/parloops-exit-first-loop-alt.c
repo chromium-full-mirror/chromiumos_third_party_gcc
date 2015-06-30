@@ -2,7 +2,7 @@
 /* { dg-require-effective-target pthread } */
 /* { dg-options "-O2 -ftree-parallelize-loops=2 -fdump-tree-parloops" } */
 
-/* Variable bound, vector addition.  */
+/* Variable bound, vector addition, signed loop counter, unsigned bound.  */
 
 void
 f (unsigned int n, unsigned int *__restrict__ a, unsigned int *__restrict__ b,
