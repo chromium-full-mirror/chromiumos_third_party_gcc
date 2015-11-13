@@ -24,6 +24,10 @@ typedef unsigned int edit_distance_t;
 const edit_distance_t MAX_EDIT_DISTANCE = UINT_MAX;
 
 extern edit_distance_t
+levenshtein_distance (const char *s, int len_s,
+		      const char *t, int len_t);
+
+extern edit_distance_t
 levenshtein_distance (const char *s, const char *t);
 
 extern edit_distance_t
