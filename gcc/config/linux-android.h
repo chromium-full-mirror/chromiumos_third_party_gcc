@@ -45,8 +45,8 @@
   "%{!fno-pic:%{!fno-PIC:%{!fpic:%{!fPIC: " ANDROID_PIC_DEFAULT "}}}}"
 
 #define ANDROID_CC1PLUS_SPEC						\
-  "%{!fexceptions:%{!fno-exceptions: -fexceptions}} "		\
-  "%{!frtti:%{!fno-rtti: -frtti}}"
+  "%{!fexceptions:%{!fno-exceptions: -fno-exceptions}} "		\
+  "%{!frtti:%{!fno-rtti: -fno-rtti}}"
 
 #define ANDROID_ASM_SPEC \
   "--noexecstack"

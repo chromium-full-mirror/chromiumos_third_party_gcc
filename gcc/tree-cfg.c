@@ -2667,7 +2667,7 @@ reinstall_phi_args (edge new_edge, edge old_edge)
    near its "logical" location.  This is of most help to humans looking
    at debugging dumps.  */
 
-basic_block
+static basic_block
 split_edge_bb_loc (edge edge_in)
 {
   basic_block dest = edge_in->dest;
