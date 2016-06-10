@@ -1,5 +1,5 @@
-! { dg-do compile } 
 ! { dg-additional-options "-fcray-pointer" }
+! See also cray-2.f95.
 
 module test
 contains
@@ -8,8 +8,8 @@ contains
     integer :: i
     real :: pointee
     pointer (ptr, pointee)
-    !$acc declare device_resident (pointee) 
-    !$acc declare device_resident (ptr) 
+    !$acc declare device_resident (pointee)
+    !$acc declare device_resident (ptr)
     !$acc data copy (pointee) ! { dg-error "Cray pointee" }
     !$acc end data
     !$acc data deviceptr (pointee) ! { dg-error "Cray pointee" }
