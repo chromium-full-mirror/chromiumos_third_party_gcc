@@ -34,9 +34,9 @@ test01()
 {
   int v[] = {1, 2, 3, 4};
   std::priority_queue<int, std::vector<int>, CopyCounter> q{v, v+4};
-  VERIFY(count == 2);
+  VERIFY(count == 4);
   q.push(1);
-  VERIFY(count == 3);
+  VERIFY(count == 5);
 }
 
 int
